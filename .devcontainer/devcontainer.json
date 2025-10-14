@@ -1,11 +1,12 @@
 {
-  "name": "SAGE - Docker-in-Docker",
+  "name": "SAGE - Docker-in-Docker only",
   "image": "mcr.microsoft.com/devcontainers/base:latest",
   "features": {
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/sshd:1": {}
   },
   "runArgs": ["--privileged"],
-  "forwardPorts": [8080],
+  "forwardPorts": [8080, 22],
   "remoteUser": "vscode",
   "customizations": {
     "vscode": {
