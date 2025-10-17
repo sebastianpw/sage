@@ -194,18 +194,6 @@ See [docs/INSTALL.md](docs/INSTALL.md) for detailed setup instructions.
 
 ---
 
-## 🗺️ Roadmap
-
-- [ ] Real-time collaborative editing
-- [ ] Video generation pipeline integration
-- [ ] Mobile app (React Native wrapper)
-- [ ] Plugin system for custom AI models
-- [ ] Cloud deployment templates (AWS/GCP/Azure)
-- [ ] Enhanced batch processing with queue management
-- [ ] Multi-user support with role-based permissions
-
----
-
 ## 🤝 Contributing
 
 Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and pull request process.
@@ -215,15 +203,6 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for de
 3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
-
----
-
-## 📖 Documentation
-
-- [Installation Guide](docs/INSTALL.md)
-- [Configuration](docs/CONFIG.md)
-- [API Reference](docs/API.md)
-- [Tutorials](docs/TUTORIALS.md)
 
 ---
 
