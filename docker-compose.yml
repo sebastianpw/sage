@@ -7,46 +7,24 @@ services:
     volumes:
       - .:/var/www/sage:rw
     ports:
-      - "8080:80"   # web
-      - "22:22"     # ssh
+      - "8080:80"
+      - "22:22"
     environment:
       WEB_DOCUMENT_ROOT: /var/www/sage/public
       WEB_DOCUMENT_INDEX: index.php
       PHP_DISPLAY_ERRORS: 1
       PHP_MEMORY_LIMIT: 512M
       COMPOSER_ALLOW_SUPERUSER: 1
-    depends_on:
-      - db
-    networks:
-      - sage-net
-
-  db:
-    image: mariadb:10.11
-    environment:
-      MYSQL_ROOT_PASSWORD: root_pw
-      MYSQL_DATABASE: sage_main
-      MYSQL_USER: sage_user
-      MYSQL_PASSWORD: secret_pw
-    volumes:
-      - db_data:/var/lib/mysql
-    command: bash -c "chmod +x /var/www/sage/container_setup.sh && /var/www/sage/container_setup.sh"
-    networks:
-      - sage-net
-
-  phpmyadmin:
-    image: phpmyadmin:latest
-    environment:
-      PMA_HOST: db
-      PMA_PORT: 3306
-    ports:
-      - "8081:80"
-    depends_on:
-      - db
+      NGINX_ACCESS_LOG: /var/www/sage/logs/access.log
+      NGINX_ERROR_LOG: /var/www/sage/logs/error.log
+    command: >
+      bash -c "
+        sleep 5
+        /var/www/sage/rollout/init_db.sh
+        tail -f /dev/null
+      "
     networks:
       - sage-net
 
 networks:
   sage-net:
-
-volumes:
-  db_data:
