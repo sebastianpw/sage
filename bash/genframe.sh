@@ -2,6 +2,8 @@
 
 # genframe.sh - unified frame generator (Pollinations / Colab)
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # -----------------------------
 # Configuration
 # -----------------------------
@@ -17,7 +19,7 @@ USE_TURBO=false
 NGROK_URL="https://4edd82f5cb83.ngrok-free.app"
 STYLE_FILE="styles.txt"
 OUTPUT_DIR="frames_nodb"
-MAX_RETRIES=10
+MAX_RETRIES=2
 RETRY_DELAY=2
 CONVERT_COLAB_TO_JPEG=true
 

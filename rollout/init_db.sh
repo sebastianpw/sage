@@ -68,7 +68,7 @@ else
 fi
 
 
-
+apt install ffmpeg jq
 
 
 # Start MariaDB manually if not already running
@@ -86,15 +86,12 @@ fi
 
 
 # Set root password and remove default insecure users/databases
-mariadb <<SQL
+
+mariadb -u root <<SQL
 ALTER USER 'root'@'localhost' IDENTIFIED BY 'root_pw';
 DELETE FROM mysql.user WHERE User='';
 DROP DATABASE IF EXISTS test;
 FLUSH PRIVILEGES;
-SQL
-
-# Create Adminer user with full privileges
-mariadb <<SQL
 CREATE USER IF NOT EXISTS 'adminer'@'%' IDENTIFIED BY 'root_pw';
 GRANT ALL PRIVILEGES ON *.* TO 'adminer'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
@@ -116,8 +113,8 @@ echo "Database rollout and phpMyAdmin installation complete."
 # Create symbolic links
 ln -s /var/www/sage/phpmyadmin /var/www/sage/public/admin
 ln -s /var/www/sage/config/config.inc.php /var/www/sage/phpmyadmin/config.inc.php
-
-
+chmod 755 /var/www/sage/phpmyadmin/config.inc.php
+chmod 755 /var/www/sage/config/config.inc.php
 
 
 

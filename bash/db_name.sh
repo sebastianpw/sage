@@ -61,8 +61,8 @@ get_mysql_args_from_url() {
   [ "$port" = "$host" ] && port=""
 
   local args=""
-  [ -n "$user" ] && args="$args -u'$user'"
-  [ -n "$pass" ] && args="$args -p'$pass'"
+  [ -n "$user" ] && args="$args -u $user"
+  [ -n "$pass" ] && args="$args -p$pass"
   [ -n "$host" ] && args="$args -h $host"
   [ -n "$port" ] && args="$args -P $port"
   [ -n "$db" ] && args="$args $db"
@@ -90,6 +90,12 @@ case "$1" in
   both)
     get_dbname_from_url "DATABASE_URL" || echo ""
     get_dbname_from_url "DATABASE_SYS_URL" || echo ""
+    ;;
+  conn)
+    get_mysql_args_from_url "DATABASE_URL" || exit 1
+    ;;
+  main-conn)
+    get_mysql_args_from_url "DATABASE_URL" || exit 1
     ;;
   sys-conn)
     get_mysql_args_from_url "DATABASE_SYS_URL" || exit 1

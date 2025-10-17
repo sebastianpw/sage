@@ -100,7 +100,7 @@ Transform your Android device into a complete AI movie storyboard production stu
 pkg update && pkg upgrade -y
 
 # Install dependencies
-pkg install php mariadb composer git nginx -y
+pkg install php mariadb composer git nginx ffmpeg jq -y
 
 # Clone repository
 git clone https://github.com/petersebring/sage.git
@@ -116,7 +116,7 @@ composer install
 ./bash/restart_servers.sh
 ```
 
-Visit **http://localhost:8080** to access the web interface.
+Visit **http://localhost:8080/setup.php** to access the web interface.
 
 ### Docker Installation (Optional)
 

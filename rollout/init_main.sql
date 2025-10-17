@@ -472,10 +472,6 @@ CREATE TABLE `frames_2_vehicles` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
-DROP VIEW IF EXISTS `frames_bday_draft`;
-CREATE TABLE `frames_bday_draft` (`id` int(11), `map_run_id` int(11), `name` varchar(255), `filename` varchar(255), `prompt` text, `entity_type` varchar(100), `entity_id` int(11), `style` text, `style_id` int(11), `created_at` timestamp, `state_id` int(11), `img2img_frame_id` int(11), `img2img_frame_filename` varchar(100), `img2img_prompt` text, `cnmap` tinyint(1), `cnmap_frame_id` int(11), `cnmap_frame_filename` varchar(100), `cnmap_prompt` text);
-
-
 DROP TABLE IF EXISTS `frames_chains`;
 CREATE TABLE `frames_chains` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -504,18 +500,6 @@ CREATE TABLE `frames_failed` (
   `failed_at` timestamp NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-
-DROP VIEW IF EXISTS `frames_init`;
-CREATE TABLE `frames_init` (`id` int(11), `map_run_id` int(11), `name` varchar(255), `filename` varchar(255), `prompt` text, `entity_type` varchar(100), `entity_id` int(11), `style` text, `style_id` int(11), `created_at` timestamp, `state_id` int(11), `img2img_frame_id` int(11), `img2img_frame_filename` varchar(100), `img2img_prompt` text, `cnmap` tinyint(1), `cnmap_frame_id` int(11), `cnmap_frame_filename` varchar(100), `cnmap_prompt` text);
-
-
-DROP VIEW IF EXISTS `frames_showcase`;
-CREATE TABLE `frames_showcase` (`id` int(11), `map_run_id` int(11), `name` varchar(255), `filename` varchar(255), `prompt` text, `entity_type` varchar(100), `entity_id` int(11), `style` text, `style_id` int(11), `created_at` timestamp, `state_id` int(11), `img2img_frame_id` int(11), `img2img_frame_filename` varchar(100), `img2img_prompt` text, `cnmap` tinyint(1), `cnmap_frame_id` int(11), `cnmap_frame_filename` varchar(100), `cnmap_prompt` text);
-
-
-DROP VIEW IF EXISTS `frames_test`;
-CREATE TABLE `frames_test` (`id` int(11), `map_run_id` int(11), `name` varchar(255), `filename` varchar(255), `prompt` text, `entity_type` varchar(100), `entity_id` int(11), `style` text, `style_id` int(11), `created_at` timestamp, `state_id` int(11), `img2img_frame_id` int(11), `img2img_frame_filename` varchar(100), `img2img_prompt` text, `cnmap` tinyint(1), `cnmap_frame_id` int(11), `cnmap_frame_filename` varchar(100), `cnmap_prompt` text);
 
 
 DROP TABLE IF EXISTS `frames_trashcan`;
@@ -1719,18 +1703,6 @@ CREATE TABLE `weather_conditions` (
   UNIQUE KEY `uq_weather_name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-
-DROP TABLE IF EXISTS `frames_bday_draft`;
-CREATE ALGORITHM=UNDEFINED SQL SECURITY DEFINER VIEW `frames_bday_draft` AS select `starlight_guardians_init`.`frames`.`id` AS `id`,`starlight_guardians_init`.`frames`.`map_run_id` AS `map_run_id`,`starlight_guardians_init`.`frames`.`name` AS `name`,`starlight_guardians_init`.`frames`.`filename` AS `filename`,`starlight_guardians_init`.`frames`.`prompt` AS `prompt`,`starlight_guardians_init`.`frames`.`entity_type` AS `entity_type`,`starlight_guardians_init`.`frames`.`entity_id` AS `entity_id`,`starlight_guardians_init`.`frames`.`style` AS `style`,`starlight_guardians_init`.`frames`.`style_id` AS `style_id`,`starlight_guardians_init`.`frames`.`created_at` AS `created_at`,`starlight_guardians_init`.`frames`.`state_id` AS `state_id`,`starlight_guardians_init`.`frames`.`img2img_frame_id` AS `img2img_frame_id`,`starlight_guardians_init`.`frames`.`img2img_frame_filename` AS `img2img_frame_filename`,`starlight_guardians_init`.`frames`.`img2img_prompt` AS `img2img_prompt`,`starlight_guardians_init`.`frames`.`cnmap` AS `cnmap`,`starlight_guardians_init`.`frames`.`cnmap_frame_id` AS `cnmap_frame_id`,`starlight_guardians_init`.`frames`.`cnmap_frame_filename` AS `cnmap_frame_filename`,`starlight_guardians_init`.`frames`.`cnmap_prompt` AS `cnmap_prompt` from `starlight_guardians_init`.`frames`;
-
-DROP TABLE IF EXISTS `frames_init`;
-CREATE ALGORITHM=UNDEFINED SQL SECURITY DEFINER VIEW `frames_init` AS select `starlight_guardians_init`.`frames`.`id` AS `id`,`starlight_guardians_init`.`frames`.`map_run_id` AS `map_run_id`,`starlight_guardians_init`.`frames`.`name` AS `name`,`starlight_guardians_init`.`frames`.`filename` AS `filename`,`starlight_guardians_init`.`frames`.`prompt` AS `prompt`,`starlight_guardians_init`.`frames`.`entity_type` AS `entity_type`,`starlight_guardians_init`.`frames`.`entity_id` AS `entity_id`,`starlight_guardians_init`.`frames`.`style` AS `style`,`starlight_guardians_init`.`frames`.`style_id` AS `style_id`,`starlight_guardians_init`.`frames`.`created_at` AS `created_at`,`starlight_guardians_init`.`frames`.`state_id` AS `state_id`,`starlight_guardians_init`.`frames`.`img2img_frame_id` AS `img2img_frame_id`,`starlight_guardians_init`.`frames`.`img2img_frame_filename` AS `img2img_frame_filename`,`starlight_guardians_init`.`frames`.`img2img_prompt` AS `img2img_prompt`,`starlight_guardians_init`.`frames`.`cnmap` AS `cnmap`,`starlight_guardians_init`.`frames`.`cnmap_frame_id` AS `cnmap_frame_id`,`starlight_guardians_init`.`frames`.`cnmap_frame_filename` AS `cnmap_frame_filename`,`starlight_guardians_init`.`frames`.`cnmap_prompt` AS `cnmap_prompt` from `starlight_guardians_init`.`frames`;
-
-DROP TABLE IF EXISTS `frames_showcase`;
-CREATE ALGORITHM=UNDEFINED SQL SECURITY DEFINER VIEW `frames_showcase` AS select `starlight_guardians_init`.`frames`.`id` AS `id`,`starlight_guardians_init`.`frames`.`map_run_id` AS `map_run_id`,`starlight_guardians_init`.`frames`.`name` AS `name`,`starlight_guardians_init`.`frames`.`filename` AS `filename`,`starlight_guardians_init`.`frames`.`prompt` AS `prompt`,`starlight_guardians_init`.`frames`.`entity_type` AS `entity_type`,`starlight_guardians_init`.`frames`.`entity_id` AS `entity_id`,`starlight_guardians_init`.`frames`.`style` AS `style`,`starlight_guardians_init`.`frames`.`style_id` AS `style_id`,`starlight_guardians_init`.`frames`.`created_at` AS `created_at`,`starlight_guardians_init`.`frames`.`state_id` AS `state_id`,`starlight_guardians_init`.`frames`.`img2img_frame_id` AS `img2img_frame_id`,`starlight_guardians_init`.`frames`.`img2img_frame_filename` AS `img2img_frame_filename`,`starlight_guardians_init`.`frames`.`img2img_prompt` AS `img2img_prompt`,`starlight_guardians_init`.`frames`.`cnmap` AS `cnmap`,`starlight_guardians_init`.`frames`.`cnmap_frame_id` AS `cnmap_frame_id`,`starlight_guardians_init`.`frames`.`cnmap_frame_filename` AS `cnmap_frame_filename`,`starlight_guardians_init`.`frames`.`cnmap_prompt` AS `cnmap_prompt` from `starlight_guardians_init`.`frames`;
-
-DROP TABLE IF EXISTS `frames_test`;
-CREATE ALGORITHM=UNDEFINED SQL SECURITY DEFINER VIEW `frames_test` AS select `starlight_guardians_init`.`frames`.`id` AS `id`,`starlight_guardians_init`.`frames`.`map_run_id` AS `map_run_id`,`starlight_guardians_init`.`frames`.`name` AS `name`,`starlight_guardians_init`.`frames`.`filename` AS `filename`,`starlight_guardians_init`.`frames`.`prompt` AS `prompt`,`starlight_guardians_init`.`frames`.`entity_type` AS `entity_type`,`starlight_guardians_init`.`frames`.`entity_id` AS `entity_id`,`starlight_guardians_init`.`frames`.`style` AS `style`,`starlight_guardians_init`.`frames`.`style_id` AS `style_id`,`starlight_guardians_init`.`frames`.`created_at` AS `created_at`,`starlight_guardians_init`.`frames`.`state_id` AS `state_id`,`starlight_guardians_init`.`frames`.`img2img_frame_id` AS `img2img_frame_id`,`starlight_guardians_init`.`frames`.`img2img_frame_filename` AS `img2img_frame_filename`,`starlight_guardians_init`.`frames`.`img2img_prompt` AS `img2img_prompt`,`starlight_guardians_init`.`frames`.`cnmap` AS `cnmap`,`starlight_guardians_init`.`frames`.`cnmap_frame_id` AS `cnmap_frame_id`,`starlight_guardians_init`.`frames`.`cnmap_frame_filename` AS `cnmap_frame_filename`,`starlight_guardians_init`.`frames`.`cnmap_prompt` AS `cnmap_prompt` from `starlight_guardians_init`.`frames`;
 
 DROP TABLE IF EXISTS `v_anima_activity`;
 CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_anima_activity` AS select `s`.`id` AS `scene_id`,`s`.`sequence` AS `scene_sequence`,`sp`.`id` AS `scene_part_id`,`sp`.`sequence` AS `part_sequence`,`a`.`id` AS `character_anima_id`,`ch`.`name` AS `character_name`,`a`.`name` AS `anima_name`,`span`.`action_type` AS `action_type`,`span`.`notes` AS `notes` from ((((`scenes` `s` join `scene_parts` `sp` on(`sp`.`scene_id` = `s`.`id`)) join `scene_part_animas` `span` on(`span`.`scene_part_id` = `sp`.`id`)) join `animas` `a` on(`a`.`id` = `span`.`character_anima_id`)) join `characters` `ch` on(`ch`.`id` = `a`.`character_id`)) order by `s`.`sequence`,`sp`.`sequence`,`ch`.`name`,`a`.`name`;
