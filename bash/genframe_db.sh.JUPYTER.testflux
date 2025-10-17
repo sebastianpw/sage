@@ -1,0 +1,365 @@
+#!/bin/bash
+
+# -----------------------------
+# Resolve script directory (key fix)
+# -----------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# -----------------------------
+# Load token
+# -----------------------------
+export PAI_TOKEN=$(cat "$SCRIPT_DIR/../token/.pollinationsaitoken")
+
+# -----------------------------
+# Load project roots (must set FRAMES_ROOT and PROJECT_ROOT)
+# -----------------------------
+if [ -f "$SCRIPT_DIR/load_root.sh" ]; then
+  source "$SCRIPT_DIR/load_root.sh"
+fi
+
+# Fail if required variables not set
+if [ -z "$FRAMES_ROOT" ]; then
+  echo "ERROR: FRAMES_ROOT is not set. Please ensure load_root.sh exports FRAMES_ROOT. Aborting."
+  exit 1
+fi
+
+if [ -z "$PROJECT_ROOT" ]; then
+  echo "ERROR: PROJECT_ROOT is not set. Please ensure load_root.sh exports PROJECT_ROOT. Aborting."
+  exit 1
+fi
+
+# -----------------------------
+# Directories
+# -----------------------------
+FRAMES_DIR="$FRAMES_ROOT"                                  # absolute, safe
+mkdir -p "$FRAMES_DIR"
+
+FRAMES_DIR_REL="${FRAMES_ROOT#$PROJECT_ROOT/public/}"      # relative to public
+
+# -----------------------------
+# Configuration
+# -----------------------------
+#GEN_SOURCE="pollinations"   # "colab" or "pollinations"
+GEN_SOURCE="colab"
+USE_TURBO=false             # Only affects text-to-image (Pollinations)
+
+
+
+
+# DEPR: NGROK_URL="https://90930a4718c0.ngrok-free.app"
+# NGROK_URL is already automatically set and exported by the wrapper script using an API of ngrok for tunnel url
+# echo "Using tunnel: $NGROK_URL"
+
+
+#NGROK_URL="https://624141dc38f9.ngrok-free.app"
+NGROK_URL="https://kionii8cdobg.share.zrok.io"
+
+
+
+
+
+DB_USER="root"
+#DB_NAME=$("$(dirname "$0")/db_name.sh")
+DB_NAME=$("$SCRIPT_DIR/db_name.sh")
+MAX_RETRIES=1
+RETRY_DELAY=2
+
+export FREEIMAGE_KEY=$(cat "$SCRIPT_DIR/../token/.freeimage_key")
+
+# -----------------------------
+# Usage / Arguments
+# -----------------------------
+BASE_PROMPT="$1"
+MAP_RUN_ID="$2"
+ENTITY_TYPE="$3"
+ENTITY_ID="$4"
+LIMIT="$5"
+OFFSET="$6"
+NO_STYLES="$7"
+ADD_TO_PROMPT="$8"
+
+# -----------------------------
+# Default values
+# -----------------------------
+NO_STYLES=${NO_STYLES:-0}
+
+# -----------------------------
+# Validation
+# -----------------------------
+if [ -z "$BASE_PROMPT" ] || [ -z "$MAP_RUN_ID" ] || [ -z "$ENTITY_TYPE" ] || [ -z "$ENTITY_ID" ]; then
+  echo "Usage: $0 \"base prompt\" MAP_RUN_ID \"entity_type\" \"entity_id\" [limit] [offset] [no_styles] [add_to_prompt]"
+  exit 1
+fi
+
+# -----------------------------
+# Load styles (id + prompt) from DB
+# -----------------------------
+mapfile -t styles < <(mysql -u "$DB_USER" "$DB_NAME" -N -e "SELECT id, prompt FROM v_styles_helper;")
+TOTAL_STYLES=${#styles[@]}
+
+START=$((OFFSET > 0 ? OFFSET - 1 : 0))
+END=$((LIMIT > 0 ? START + LIMIT - 1 : TOTAL_STYLES - 1))
+[ "$END" -ge "$TOTAL_STYLES" ] && END=$((TOTAL_STYLES - 1))
+
+# -----------------------------
+# Determine mapping table & check existence
+# -----------------------------
+MAPPING_TABLE="frames_2_${ENTITY_TYPE}"
+TABLE_EXISTS=$(mysql -u "$DB_USER" "$DB_NAME" -N -e "SHOW TABLES LIKE '$MAPPING_TABLE';")
+[ -z "$TABLE_EXISTS" ] && { echo "Mapping table '$MAPPING_TABLE' does not exist!"; exit 1; }
+
+# -----------------------------
+# Fetch img2img info from entity row
+# -----------------------------
+read IMG2IMG_FLAG IMG2IMG_FRAME_ID IMG2IMG_PROMPT < <(
+  mysql -u "$DB_USER" "$DB_NAME" -N -e \
+    "SELECT COALESCE(img2img,0), COALESCE(img2img_frame_id,0), COALESCE(img2img_prompt,'') FROM $ENTITY_TYPE WHERE id=$ENTITY_ID;"
+)
+IMG2IMG_FLAG=${IMG2IMG_FLAG:-0}
+IMG2IMG_FRAME_ID=${IMG2IMG_FRAME_ID:-0}
+IMG2IMG_PROMPT=${IMG2IMG_PROMPT:-''}
+IMG2IMG_FILENAME=""
+
+if [ "$IMG2IMG_FRAME_ID" -gt 0 ]; then
+  IMG2IMG_FILENAME=$(mysql -u "$DB_USER" "$DB_NAME" -N -e "SELECT filename FROM frames WHERE id = $IMG2IMG_FRAME_ID LIMIT 1;" | tr -d '\r')
+fi
+
+# -----------------------------
+# Resolve absolute path for img2img source image using PROJECT_ROOT/public
+# DB filename remains untouched
+# -----------------------------
+if [ -n "$IMG2IMG_FILENAME" ]; then
+    ABS_PATH="$PROJECT_ROOT/public/$IMG2IMG_FILENAME"
+    if [ -f "$ABS_PATH" ]; then
+        IMG2IMG_FILENAME="$ABS_PATH"
+    else
+        echo "WARNING: img2img source image file not found at $ABS_PATH. Falling back to txt2img."
+        IMG2IMG_FILENAME=""
+        IMG2IMG_FRAME_ID=0
+    fi
+fi
+
+# -----------------------------
+# Set up IMAGE_URL for img2img
+# -----------------------------
+if [ -n "$IMG2IMG_FILENAME" ] && [ -f "$IMG2IMG_FILENAME" ]; then
+  echo "Uploading local source image $IMG2IMG_FILENAME to Freeimage.host..."
+  response=$(curl -s -X POST "https://freeimage.host/api/1/upload" \
+    -F "key=$FREEIMAGE_KEY" \
+    -F "action=upload" \
+    -F "source=@$IMG2IMG_FILENAME" \
+    -F "format=json")
+  IMAGE_URL=$(echo "$response" | jq -r '.image.url')
+  if [ -z "$IMAGE_URL" ] || [ "$IMAGE_URL" = "null" ]; then
+    echo "Failed to upload source image. Response: $response"
+    exit 1
+  fi
+  echo "Uploaded source image URL: $IMAGE_URL"
+else
+  IMAGE_URL=""
+  IMG2IMG_FILENAME=""
+fi
+
+# -----------------------------
+# Generate frames
+# -----------------------------
+for ((i=START; i<=END; i++)); do
+  row="${styles[i]}"
+  style_id=$(echo "$row" | awk '{print $1}')
+  style=$(echo "$row" | cut -d' ' -f2-)
+
+  # Build prompt
+  prompt="$BASE_PROMPT"
+  [ "$NO_STYLES" -eq 0 ] && prompt="$prompt, $style"
+  [ -n "$ADD_TO_PROMPT" ] && prompt="$prompt $ADD_TO_PROMPT"
+  [ -n "$IMG2IMG_PROMPT" ] && [ -n "$IMAGE_URL" ] && prompt="$prompt $IMG2IMG_PROMPT"
+
+  # -----------------------------
+  # Thread-safe next frame basename (DB-driven)
+  # -----------------------------
+
+
+frame_basename=$(mysql -u "$DB_USER" "$DB_NAME" -N --batch --skip-column-names -e "
+  UPDATE frame_counter
+  SET next_frame = LAST_INSERT_ID(next_frame + 1);
+  SELECT LPAD(LAST_INSERT_ID(), 7, '0');
+")
+frame_basename="frame$frame_basename"
+
+
+  #outfile="$FRAMES_DIR/$frame_basename.jpg"
+  outfile="$FRAMES_DIR/$frame_basename.png"
+  filename_only="$frame_basename"
+  url_prompt=$(echo "$prompt" | sed -e 's/ /%20/g' -e 's/,/%2C/g')
+
+
+
+
+
+
+
+
+
+
+
+
+
+echo "Generating image $filename_only for prompt: $prompt [style_id=$style_id]"
+
+# ControlNet image variable; set to path or "false" if not used
+CONTROLNET_IMAGE="false"
+#CONTROLNET_IMAGE="pose_05.png"
+
+
+
+# Default ControlNet scale (can be overridden before calling)
+CONTROLNET_SCALE=1.0  
+
+# Determine ControlNet flags
+if [ -n "$CONTROLNET_IMAGE" ] && [ "$CONTROLNET_IMAGE" != "false" ]; then
+  USE_CONTROLNET=true
+  CONTROLNET_PARAM="-F control_image=@$CONTROLNET_IMAGE -F controlnet_scale=$CONTROLNET_SCALE"
+else
+  USE_CONTROLNET=false
+  CONTROLNET_PARAM=""
+fi
+
+
+
+
+
+attempt=1
+while [ $attempt -le $MAX_RETRIES ]; do
+  if [ "$GEN_SOURCE" = "pollinations" ]; then
+    if [ -n "$IMAGE_URL" ]; then
+      # Pollinations image-to-image
+      curl -s -L -H "Authorization: Bearer $PAI_TOKEN" \
+        "https://image.pollinations.ai/prompt/$url_prompt?model=kontext&image=$IMAGE_URL&width=1024&height=1024&nologo=true" \
+        -o "$outfile"
+    else
+      # Pollinations text-to-image
+      model_param=""
+      [ "$USE_TURBO" = true ] && model_param="&model=turbo"
+      curl -s -L -H "Authorization: Bearer $PAI_TOKEN" \
+        "https://image.pollinations.ai/prompt/$url_prompt?width=1024&height=1024&nologo=true$model_param" \
+        -o "$outfile"
+    fi
+  else
+    # Colab/ngrok branch
+    negative_prompt="nudity, curvy, big tits"
+
+
+
+
+# TODO implement seed from entity
+# optional seed; leave empty to get random
+# Optional: set manually, 0 or empty for random
+SEED=0
+
+# If SEED is empty or 0, generate random one
+if [ -z "$SEED" ] || [ "$SEED" -eq 0 ]; then
+  SEED=$(( (RANDOM << 15) | RANDOM ))
+fi
+
+
+
+if [ -n "$IMG2IMG_FILENAME" ]; then
+  # image-to-image
+  curl -s -X POST "$NGROK_URL/generate" \
+    -F "prompt=$prompt" \
+    -F "negative_prompt=$negative_prompt" \
+    -F "height=768" \
+    -F "width=768" \
+    -F "num_inference_steps=80" \
+    -F "guidance_scale=10" \
+    -F "init_image=@$IMG2IMG_FILENAME" \
+    -F "strength=0.7" \
+    -F "use_controlnet=$USE_CONTROLNET" \
+    -F "seed=$SEED" \
+    $CONTROLNET_PARAM \
+    --output "$outfile" 
+else
+
+
+
+
+  # text-to-image only
+curl -s -X POST "$NGROK_URL/generate" \
+  -F "prompt=$prompt" \
+  -F "negative_prompt=$negative_prompt" \
+  -F "height=384" \
+  -F "width=384" \
+  -F "num_inference_steps=20" \
+  -F "guidance_scale=7.5" \
+  -F "seed=$SEED" \
+  --output "$outfile"
+
+
+
+fi
+
+
+
+  fi
+
+
+
+
+
+
+
+    
+
+    # Validate image
+    ffmpeg -v error -i "$outfile" -f null - 2>/dev/null
+    if [ $? -eq 0 ]; then
+      echo "Saved valid image: $outfile"
+
+      # Insert frame into DB
+      SAFE_PROMPT=$(echo "$prompt" | sed "s/'/''/g")
+      SAFE_STYLE=$(echo "$style" | sed "s/'/''/g")
+      DB_IMG2IMG_FRAME_ID="NULL"
+      [ "$IMG2IMG_FRAME_ID" -gt 0 ] && DB_IMG2IMG_FRAME_ID="$IMG2IMG_FRAME_ID"
+      DB_IMG2IMG_PROMPT="NULL"
+      [ -n "$IMG2IMG_PROMPT" ] && DB_IMG2IMG_PROMPT="'$(echo "$IMG2IMG_PROMPT" | sed "s/'/''/g")'"
+
+      FRAME_ID=$(mysql -u "$DB_USER" "$DB_NAME" -N -e "
+INSERT INTO frames
+  (filename, name, prompt, entity_type, entity_id, style, style_id, map_run_id, img2img_frame_id, img2img_prompt)
+VALUES
+  ('$FRAMES_DIR_REL/$filename_only.png',
+   '$filename_only',
+   '$SAFE_PROMPT',
+   '$ENTITY_TYPE',
+   $ENTITY_ID,
+   '$SAFE_STYLE',
+   $style_id,
+   $MAP_RUN_ID,
+   $DB_IMG2IMG_FRAME_ID,
+   $DB_IMG2IMG_PROMPT
+);
+SELECT LAST_INSERT_ID();")
+
+      [ -n "$FRAME_ID" ] && mysql -u "$DB_USER" "$DB_NAME" -e \
+        "INSERT INTO $MAPPING_TABLE (from_id, to_id) VALUES ($FRAME_ID, $ENTITY_ID);"
+
+      break
+    else
+      echo "Broken image. Retry $attempt/$MAX_RETRIES..."
+      rm -f "$outfile"
+      attempt=$((attempt+1))
+      sleep $RETRY_DELAY
+    fi
+  done
+
+  # all retries fail
+  if [ $attempt -gt $MAX_RETRIES ]; then
+    echo "Failed to generate valid image after $MAX_RETRIES attempts."
+
+  fi
+done
+
+# -----------------------------
+# Clear regenerate flag
+# -----------------------------
+mysql -u "$DB_USER" "$DB_NAME" -e "UPDATE $ENTITY_TYPE SET regenerate_images=0 WHERE id=$ENTITY_ID;"

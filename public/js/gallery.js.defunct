@@ -1,0 +1,575 @@
+/* public/js/gallery.js
+   Extracted & adapted from the original inline scripts.
+   - no PHP inside: gallery entity and album selector are autodetected from DOM
+   - requires jQuery to be loaded before this file
+*/
+
+(function(global, $){
+    'use strict';
+
+    // --- runtime detection of galleryEntity and album selector (no PHP) ---
+    function detectGalleryEntity() {
+        const el = document.querySelector('.swiper[id$="Swiper"]');
+        if (el) {
+            const m = el.id.match(/(.+)Swiper$/);
+            if (m) return m[1];
+        }
+        // fallback to first .img-wrapper data-entity
+        const w = document.querySelector('.img-wrapper');
+        if (w && w.dataset && w.dataset.entity) return w.dataset.entity;
+        return 'gallery';
+    }
+
+    function detectAlbumSelector() {
+        const albumEl = document.querySelector('.album');
+        if (!albumEl) return '.album';
+        const classes = Array.from(albumEl.classList).filter(Boolean);
+        if (classes.length === 0) return '.album';
+        // build .class1.class2 selector (space separated classes -> chained selectors)
+        return classes.map(c => '.' + c).join('');
+    }
+
+    const galleryEntity = detectGalleryEntity();
+    const swiperContainer = '#' + galleryEntity + 'Swiper';
+    const albumSelector = detectAlbumSelector();
+
+    /* -------------------------
+       Global utilities
+       ------------------------- */
+    window.importGenerative = window.importGenerative || (async function(entity, entityId, frameId){
+        if (!entity || !entityId || !frameId) {
+            Toast.show('Missing parameters. Import aborted.', 'error');
+            return;
+        }
+        const ajaxUrl = `/import_entity_from_entity.php?ajax=1&source=${encodeURIComponent(entity)}&target=generatives&source_entity_id=${entityId}&frame_id=${frameId}&limit=1&copy_name_desc=1`;
+        try {
+            const resp = await fetch(ajaxUrl, { credentials: 'same-origin' });
+            const text = await resp.text(); let data;
+            try { data = JSON.parse(text); } catch(e) { Toast.show('Import failed: invalid response','error'); console.error(text); return; }
+            if ((data.status && data.status === 'ok') || Array.isArray(data.result)) {
+                const msg = Array.isArray(data.result) ? data.result.join("\n") : (data.message || 'Import triggered');
+                Toast.show(`Import triggered for ${entity} #${entityId}: ${msg}`, 'info');
+            } else {
+                Toast.show(`Import failed for ${entity} #${entityId}`, 'error');
+                console.warn('importGenerative: unexpected payload', data);
+            }
+        } catch (err) {
+            Toast.show('Import failed', 'error'); console.error(err);
+        }
+    });
+
+    window.deleteFrame = window.deleteFrame || (async function(entity, entityId, frameId) {
+        if (!entity || !entityId || !frameId) { alert("Missing parameters. Cannot delete frame."); return; }
+        if (!confirm("Are you sure you want to delete this frame?")) return;
+        try {
+            const response = await fetch(`/delete_frames_from_entity.php?ajax=1&method=single&frame_id=${frameId}`, { method: 'POST', credentials:'same-origin' });
+            const text = await response.text(); let result;
+            try { result = JSON.parse(text); } catch(e){ throw new Error("Invalid server response: "+text); }
+            if (result.status === "ok") {
+                $(`.img-wrapper[data-frame-id="${frameId}"]`).remove();
+                Toast.show('Frame deleted','success');
+            } else {
+                alert("Failed to delete frame: " + (result.message || 'unknown'));
+            }
+        } catch (err) {
+            alert("Delete failed: " + (err.message || err));
+            console.error(err);
+        }
+    });
+
+    // Helper: attach gear menu to a DOM subtree (context can be a jQuery object or DOM element)
+    function attachGearTo(context) {
+        const $root = context instanceof jQuery ? context : $(context);
+        $root.find('.gear-icon').each(function(){
+            try {
+                $(this).off('click.gearmenu');
+                $(this).gearmenu([
+                    {
+                        label: 'Import Generative',
+                        onClick: function() {
+                            const $wrapper = $(this).closest('.img-wrapper');
+                            window.importGenerative($wrapper.data('entity'), $wrapper.data('entity-id'), $wrapper.data('frame-id'));
+                        }
+                    },
+                    {
+                        label: 'Edit / Coordinates',
+                        onClick: function() {
+                            const $wrapper = $(this).closest('.img-wrapper');
+                            const entity = $wrapper.data('entity');
+                            const entityId = $wrapper.data('entity-id');
+                            const frameId = $wrapper.data('frame-id');
+                            const imgSrc = $wrapper.find('img').attr('src');
+                            if (typeof window.openImageEditor === 'function') {
+                                window.openImageEditor({ entity, entityId, frameId, src: imgSrc });
+                            } else {
+                                Toast.show('Image editor not available', 'error');
+                            }
+                        }
+                    },
+                    {
+                        label: 'Delete Frame',
+                        onClick: function() {
+                            const $wrapper = $(this).closest('.img-wrapper');
+                            window.deleteFrame($wrapper.data('entity'), $wrapper.data('entity-id'), $wrapper.data('frame-id'));
+                        }
+                    },
+                    {
+                        label: 'Other Action',
+                        onClick: function() { alert('Other action clicked'); }
+                    }
+                ]);
+            } catch(e) {
+                console.warn('attachGearTo: gearmenu attach error', e);
+            }
+        });
+    }
+
+    /* -------------------------
+       SWIPER, AJAX load + reattach handlers
+       ------------------------- */
+    (function(){
+        let swiper = null;
+
+        function buildAjaxUrl(page) {
+            const form = document.getElementById('galleryFilterForm');
+            const params = new URLSearchParams(new FormData(form));
+            params.set('gallery_ajax', '1');
+            params.set('page', page);
+            params.set('entity', galleryEntity);
+            // Use the same relative path pattern as page script
+            return window.location.pathname.replace(/[^\/]+$/, '') + 'gallery_ajax.php?' + params.toString();
+        }
+
+        function loadPage(page, slideEl) {
+            if (!slideEl) return;
+            if (slideEl.getAttribute('data-loaded') === '1') return;
+            const loadingEl = slideEl.querySelector('.page-loading');
+            if (loadingEl) loadingEl.innerText = 'Loading...';
+            fetch(buildAjaxUrl(page), { credentials: 'same-origin' })
+            .then(r => r.text())
+            .then(text => {
+                let json;
+                try { json = JSON.parse(text); } catch (e) {
+                    console.error('Gallery AJAX expected JSON but got:', text);
+                    if (loadingEl) loadingEl.innerText='Invalid response';
+                    throw e;
+                }
+                let albumDiv = null;
+                try { albumDiv = slideEl.querySelector(albumSelector); } catch (e) { console.warn('album selector invalid', e); }
+                albumDiv = albumDiv || slideEl.querySelector('.slide-inner') || slideEl;
+                try { albumDiv.innerHTML = json.itemsHtml; } catch (e) {
+                    console.error('Failed to inject itemsHtml into albumDiv', albumDiv, e);
+                    if (loadingEl) loadingEl.innerText = 'Injection failed';
+                    throw e;
+                }
+                slideEl.setAttribute('data-loaded', '1');
+                try { $(slideEl).find('.venobox').venobox(); } catch(e){}
+                try { attachGearTo(slideEl); } catch(e){}
+                $(slideEl).find('.show-full-text').off('click').on('click', function(e){
+                    e.stopPropagation();
+                    let fullHtml = $(this).parent().clone();
+                    fullHtml.find('.show-full-text').remove();
+                    $('#modalText').html(fullHtml.html());
+                    $('#fullTextModal').fadeIn(200);
+                });
+                $(slideEl).find('.mapRunSelect').each(function() {
+                    const select = $(this);
+                    const entityId = select.data('entity-id');
+                    $.post(window.location.pathname, { action: 'fetchMapRuns', entity_id: entityId }, function(runData) {
+                        try {
+                            const data = JSON.parse(runData);
+                            select.empty();
+                            data.forEach(run => {
+                                select.append(`<option value="${run.id}" ${run.is_active ? 'selected' : ''}>${run.id} - ${run.note ? run.note : run.created_at}</option>`);
+                            });
+                        } catch(e){}
+                    });
+                });
+            })
+            .catch(err => {
+                console.error('Gallery AJAX error', err);
+                try { if (slideEl.querySelector('.page-loading')) slideEl.querySelector('.page-loading').innerText = 'Failed to load page.'; } catch(e){}
+            });
+        }
+
+        function initSwiper() {
+            if (typeof Swiper === 'undefined') {
+                // If Swiper is not loaded, nothing we can do — keep graceful
+                console.warn('Swiper not available - skipping swiper initialization');
+                return;
+            }
+            if (swiper) { swiper.update(); return; }
+            swiper = new Swiper(swiperContainer, {
+                direction: 'horizontal',
+                slidesPerView: 1,
+                spaceBetween: 0,
+                pagination: { el: '.swiper-pagination', clickable: true },
+                navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' },
+                grabCursor: true,
+                on: {
+                    slideChange: function() {
+                        const slideEl = this.slides[this.activeIndex];
+                        const pageAttr = parseInt(slideEl.dataset.page || (this.activeIndex + 1), 10);
+                        loadPage(pageAttr, slideEl);
+                    }
+                }
+            });
+
+            // Preload adjacent slides
+            swiper.on('slideChangeTransitionEnd', function() {
+                const idx = swiper.activeIndex;
+                [idx-1, idx+1].forEach(i => {
+                    const s = swiper.slides[i];
+                    if (s) {
+                        const p = parseInt(s.dataset.page || i+1, 10);
+                        loadPage(p, s);
+                    }
+                });
+            });
+        }
+
+        $(document).ready(function(){
+            initSwiper();
+
+            // attach gear & venobox to initial content
+            attachGearTo(document);
+            try { $('.venobox').venobox(); } catch(e){}
+
+            // delegated handler for the full-text modal (covers initial and AJAX-injected items)
+            $(document).on('click', '.show-full-text', function(e){
+                e.stopPropagation();
+                const $caption = $(this).closest('.caption');
+                if ($caption.length === 0) return;
+                const fullHtml = $caption.clone();
+                fullHtml.find('.show-full-text').remove();
+                $('#modalText').html(fullHtml.html());
+                $('#fullTextModal').fadeIn(200);
+            });
+
+            // prev/next style buttons (uses select[name="style"])
+            const styleSelect = $('select[name="style"]');
+            const styles = styleSelect.find('option').map((i, el) => $(el).val()).get();
+            $('#prevStyle').off('click').on('click', () => {
+                let idx = styles.indexOf(styleSelect.val());
+                if(idx === -1) idx = 0;
+                idx = (idx - 1 + styles.length) % styles.length;
+                styleSelect.val(styles[idx]).trigger('change');
+            });
+            $('#nextStyle').off('click').on('click', () => {
+                let idx = styles.indexOf(styleSelect.val());
+                if(idx === -1) idx = 0;
+                idx = (idx + 1) % styles.length;
+                styleSelect.val(styles[idx]).trigger('change');
+            });
+
+            // Grid / Pic toggle (robust replacement)
+            $('#toggleView').off('click.gridToggle').on('click.gridToggle', function(e){
+                e.preventDefault();
+
+                // container and button
+                const $container = $('.album-container').first(); // target first gallery instance
+                const $btn = $(this);
+
+                // derive current state: prefer stored window var, else read DOM / hidden input
+                if (typeof window._galleryGridOn === 'undefined') {
+                    const hidden = $('#galleryFilterForm input[name="grid"]').val();
+                    window._galleryGridOn = (hidden === undefined) ? ($container.hasClass('grid-view')) : (hidden === '1');
+                }
+
+                // toggle state boolean
+                window._galleryGridOn = !window._galleryGridOn;
+
+                // Apply visual classes to both outer container and any existing .album nodes
+                if (window._galleryGridOn) {
+                    $container.addClass('grid-view');
+                    $('.album').addClass('grid');
+                    $btn.text('⬜ Pic');
+                    $btn.attr('aria-pressed', 'true');
+                } else {
+                    $container.removeClass('grid-view');
+                    $('.album').removeClass('grid');
+                    $btn.text('⠿ Grid');
+                    $btn.attr('aria-pressed', 'false');
+                }
+
+                // update hidden input so AJAX requests keep the same state
+                $('#galleryFilterForm input[name="grid"]').val(window._galleryGridOn ? '1' : '0');
+
+                // update URL param so paging/AJAX keeps the same state
+                try {
+                    const currentUrl = new URL(window.location.href);
+                    currentUrl.searchParams.set('grid', window._galleryGridOn ? '1' : '0');
+                    window.history.replaceState({}, '', currentUrl.toString());
+                } catch(e) {
+                    // ignore
+                }
+            });
+
+        });
+    })();
+
+    /* -------------------------
+       video modal logic — robust & safe
+       ------------------------- */
+    (function(){
+      function openVideoModal(url, type, poster) {
+        const $modal = $('#videoModal');
+        const video = document.getElementById('videoPlayer');
+
+        // cleanup previous sources
+        try {
+          video.pause();
+        } catch(e){}
+        while (video.firstChild) video.removeChild(video.firstChild);
+
+        // create source element
+        const source = document.createElement('source');
+        source.src = url;
+        if (type && type.toLowerCase().indexOf('webm') !== -1) source.type = 'video/webm';
+        else if (type && type.toLowerCase().indexOf('ogg') !== -1) source.type = 'video/ogg';
+        else source.type = 'video/mp4';
+
+        video.appendChild(source);
+
+        // set poster if provided
+        try {
+          if (poster) {
+            video.setAttribute('poster', poster.charAt(0) === '/' ? poster : '/' + poster);
+          } else {
+            video.removeAttribute('poster');
+          }
+        } catch(e){}
+
+        // load and try play
+        try {
+          video.load();
+          video.currentTime = 0;
+          video.play().catch(()=>{ /* autoplay may be blocked */ });
+        } catch(e) {
+          console.warn('video play failed', e);
+        }
+
+        // show modal
+        $modal.fadeIn(160);
+        // focus the player for keyboard support
+        setTimeout(() => { try { video.focus(); } catch(e){} }, 200);
+      }
+
+      function closeVideoModal() {
+        const video = document.getElementById('videoPlayer');
+        try {
+          video.pause();
+          video.removeAttribute('src');
+          while (video.firstChild) video.removeChild(video.firstChild);
+          video.load && video.load();
+        } catch(e){}
+        $('#videoModal').fadeOut(120);
+      }
+
+      // Delegated click handler for poster or link
+      $(document).on('click', '.play-overlay, a.play-video', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+
+        const $el = $(this);
+        let url = $el.data('video') || $el.attr('href');
+        if (!url) return;
+
+        // normalize url
+        if (url.charAt(0) !== '/' && !url.startsWith('http')) url = '/' + url;
+
+        // type & poster
+        let type = ($el.data('video-type') || (url.split('.').pop() || 'mp4')).toLowerCase();
+        // try to pick poster from thumbnail inside wrapper
+        let poster = null;
+        const $wrapper = $el.closest('.img-wrapper');
+        if ($wrapper && $wrapper.find('img').length) poster = $wrapper.find('img').first().attr('src');
+
+        // Additional guard: if this element also has venobox class, avoid Venobox interference — stop VenoBox default
+        if ($el.hasClass('venobox')) {
+          // additional prevention: remove href to avoid a race where Venobox opens first
+          $el.attr('data-href-fallback', $el.attr('href') || '');
+          $el.removeAttr('href');
+        }
+
+        openVideoModal(url, type, poster);
+      });
+
+      // close modal by clicking the close button or the overlay itself
+      $(document).on('click', '#videoClose', function(e){
+        e.preventDefault(); e.stopPropagation();
+        closeVideoModal();
+      });
+      // close when clicking overlay background (not the inner content)
+      $(document).on('click', '#videoModal', function(e){
+        if (e.target && e.target.id === 'videoModal') closeVideoModal();
+      });
+      // prevent click inside inner box from bubbling to overlay
+      $(document).on('click', '#videoModal .video-modal-inner', function(e){
+        e.stopPropagation();
+      });
+
+      // optional: restore href for anchors after modal closed (if needed)
+      $(document).on('click', '#videoModal', function(){
+        // restore any venobox anchors that we removed href from earlier (rare)
+        $('a.play-video[data-href-fallback]').each(function(){
+          const $a = $(this);
+          const val = $a.attr('data-href-fallback');
+          if (val) $a.attr('href', val);
+          $a.removeAttr('data-href-fallback');
+        });
+      });
+
+    })();
+
+    /* -------------------------
+       Image editor modal logic (requires Cropper & jquery-cropper)
+       ------------------------- */
+    (function(){
+        let cropper = null;
+        let current = { entity: null, entityId: null, frameId: null, src: null, naturalWidth: null, naturalHeight: null };
+
+        function openModal() { $('#imageEditModal').fadeIn(160); }
+        function closeModal() {
+            try { if (cropper) { $('#imageEditImg').cropper('destroy'); cropper = null; } } catch(e){}
+            $('#imageEditImg').attr('src','');
+            $('#imageEditPreviewImg').attr('src','');
+            $('#imageEditModal').fadeOut(120);
+        }
+
+        window.openImageEditor = function(opts) {
+            current.entity = opts.entity;
+            current.entityId = opts.entityId;
+            current.frameId = opts.frameId;
+            current.src = opts.src;
+            $('#imageEditTitle').text('Edit: ' + (opts.frameId ? ('frame #' + opts.frameId) : opts.src));
+            $('#imageEditImg').attr('src', opts.src);
+            $('#imageEditPreviewImg').attr('src', opts.src);
+            $('#imageEditNote').val('');
+            $('#imageEditApplyNow').prop('checked', false);
+            $('#imageEditMode').val('crop');
+
+            $('#imageEditImg').off('load').on('load', function(){
+                try { $('#imageEditImg').cropper('destroy'); } catch(e){}
+                $('#imageEditImg').cropper({
+                    viewMode: 1,
+                    autoCropArea: 0.6,
+                    movable: true,
+                    zoomable: true,
+                    scalable: false,
+                    cropBoxResizable: true,
+                    ready: function(){
+                        current.naturalWidth = this.naturalWidth || this.naturalWidth;
+                        current.naturalHeight = this.naturalHeight || this.naturalHeight;
+                    },
+                    crop: function(e) {
+                        try {
+                            const canvas = $('#imageEditImg').cropper('getCroppedCanvas', { width: 300, height: 300 });
+                            if (canvas) { $('#imageEditPreviewImg').attr('src', canvas.toDataURL()); }
+                        } catch(e){}
+                    }
+                });
+                cropper = $('#imageEditImg').data('cropper') || $('#imageEditImg');
+            });
+
+            openModal();
+        };
+
+        // wire modal buttons
+        $(document).on('click', '#imageEditClose, #imageEditCancelBtn', function(e){
+            e.preventDefault(); closeModal();
+        });
+
+        // Save (without apply) and Save & Apply
+        $(document).on('click', '#imageEditSaveBtn, #imageEditSaveApplyBtn', async function(e){
+            e.preventDefault();
+            const doApply = $(this).attr('id') === 'imageEditSaveApplyBtn' || $('#imageEditApplyNow').is(':checked');
+            if (!current.frameId || !current.entity) { Toast.show('Missing frame info', 'error'); return; }
+            if (!$('#imageEditImg').attr('src')) { Toast.show('No image loaded', 'error'); return; }
+
+            let cropData = null;
+            try {
+                const data = $('#imageEditImg').cropper('getData', true);
+                cropData = {
+                    x: Math.round(data.x || 0),
+                    y: Math.round(data.y || 0),
+                    width: Math.round(data.width || 0),
+                    height: Math.round(data.height || 0),
+                    rotate: data.rotate || 0,
+                    scaleX: data.scaleX || 1,
+                    scaleY: data.scaleY || 1,
+                    imageNaturalWidth: $('#imageEditImg')[0].naturalWidth || current.naturalWidth || null,
+                    imageNaturalHeight: $('#imageEditImg')[0].naturalHeight || current.naturalHeight || null
+                };
+            } catch (err) {
+                console.warn('cropper getData fail', err);
+                cropData = { x:0, y:0, width:0, height:0, imageNaturalWidth: null, imageNaturalHeight: null };
+            }
+
+            const payload = {
+                entity: current.entity,
+                frame_id: current.frameId,
+                entity_id: current.entityId,
+                coords: cropData,
+                mode: $('#imageEditMode').val() || 'crop',
+                tool: 'jquery-cropper',
+                note: $('#imageEditNote').val() || '',
+                apply_immediately: doApply ? 1 : 0
+            };
+
+            try {
+                const resp = await fetch('/save_image_edit.php', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const text = await resp.text();
+                let json;
+                try { json = JSON.parse(text); } catch(e) {
+                    Toast.show('Save failed: invalid response', 'error'); console.error('save_image_edit invalid json', text); return;
+                }
+                if (!json.success) {
+                    Toast.show('Save failed: ' + (json.message || 'unknown'), 'error');
+                    console.warn('save_image_edit error payload', json);
+                    return;
+                }
+
+                // success - update gallery image src in DOM for this frame
+                const derived = json.derived_filename || json.filename || json.new_filename || null;
+                if (derived) {
+                    const $wrapper = $(`.img-wrapper[data-frame-id="${current.frameId}"]`);
+                    const newSrc = (derived.charAt(0) === '/' ? derived : ('/' + derived)) + '?v=' + Date.now();
+                    $wrapper.find('img').each(function(){
+                        $(this).attr('src', newSrc);
+                    });
+                }
+
+                Toast.show('Version created', 'info');
+                closeModal();
+                $(document).trigger('imageEdit.created', [json, current]);
+
+            } catch (err) {
+                console.error('save_image_edit fetch error', err);
+                Toast.show('Save failed', 'error');
+            }
+        });
+
+        // close modal when clicking overlay
+        $(document).on('click', '#imageEditModal', function(e){
+            if (e.target.id === 'imageEditModal') closeModal();
+        });
+
+    })();
+
+    /* -------------------------
+       modal close helper (fullTextModal)
+       ------------------------- */
+    $(document).ready(function(){
+        $('#fullTextModal .close, #fullTextModal').off('click').on('click', function(e){
+            if(e.target !== this) return;
+            $('#fullTextModal').fadeOut(200);
+        });
+    });
+
+})(window, window.jQuery || window.$);

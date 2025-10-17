@@ -1,0 +1,56 @@
+
+/* Import fonts */
+@import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+
+/* FORCED HYBRID DARK MODE */
+html {
+    filter: invert(1) hue-rotate(180deg);
+}
+
+img, video, iframe, svg, canvas {
+    filter: invert(1) hue-rotate(180deg);
+}
+
+/* Lora elegant style */
+.lora-style {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 9px;
+    line-height: 1.7;
+    padding: 30px;
+    background: linear-gradient(145deg, #f7fafc, #e2e8f0);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    color: #2d3748;
+    border-left: 5px solid #4299e1;
+    min-width: 80%;
+}
+
+/* FIXED Orbitron cyberpunk style */
+.orbitron-style {
+    font-family: 'Orbitron', monospace;
+    font-size: 18px;
+    line-height: 1.5;
+    padding: 30px;
+    background: linear-gradient(145deg, #0f0f23, #1a1a2e);
+    border-radius: 12px;
+    box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+    color: #00ffff;
+    border: 2px solid #00ffff;
+    text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+    letter-spacing: 1px;
+    filter: invert(1) hue-rotate(180deg);
+}
+
+
+.icon {
+    filter: invert(1) hue-rotate(180deg);
+    display: inline-block;
+}
+
+@media (prefers-color-scheme: dark) {
+    .icon {
+        filter: none !important;
+    }
+}
+

@@ -1,0 +1,124 @@
+body {
+  font-family: system-ui, sans-serif;
+  margin: 20px;
+  background: #fafafa;
+  color: #333;
+}
+
+h2 {
+  font-weight: 500;
+}
+
+button {
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+button:hover {
+  background: #0056b3;
+}
+button.deleteBtn {
+  background: #dc3545;
+}
+button.deleteBtn:hover {
+  background: #a71d2a;
+}
+button.copyBtn {
+  background: #6c757d;
+}
+button.copyBtn:hover {
+  background: #494f54;
+}
+button.runBtn {
+  background: #28a745;
+}
+button.runBtn:hover {
+  background: #1e7e34;
+}
+
+input[type="text"] {
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  width: 250px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+  background: white;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+th, td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+th {
+  background: #f9f9f9;
+  font-weight: 600;
+  cursor: pointer;
+}
+td[contenteditable="true"] {
+  background: #fdfdfd;
+}
+
+.pagination {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.pagination button {
+  background: #f1f1f1;
+  color: #333;
+  border-radius: 4px;
+}
+.pagination .active {
+  background: #007bff;
+  color: white;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  table, thead, tbody, th, td, tr {
+    display: block;
+  }
+  thead {
+    display: none;
+  }
+  tr {
+    margin-bottom: 15px;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 10px;
+    background: white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  td {
+    border: none;
+    padding: 6px 0;
+    text-align: right;
+    position: relative;
+  }
+  td::before {
+    content: attr(data-label);
+    position: absolute;
+    left: 0;
+    width: 50%;
+    padding-left: 5px;
+    font-weight: 600;
+    text-align: left;
+    color: #555;
+  }
+}
+
+

@@ -1,0 +1,234 @@
+const messagesDiv = document.getElementById("messages");
+const input = document.getElementById("user-input");
+const button = document.getElementById("send-btn");
+const sessionsDiv = document.getElementById("sessions");
+const chatHeader = document.getElementById("chat-header");
+const chatList = document.getElementById("chat-list");
+const toggleBtn = document.getElementById("toggle-chat-list");
+let currentChatId = null;
+
+// Persistent fold state
+if (localStorage.getItem("chatListOpen") === "true") {
+    chatList.style.display = "flex";
+}
+
+toggleBtn.addEventListener("click", () => {
+    if (chatList.style.display === "flex") {
+        chatList.style.display = "none";
+        localStorage.setItem("chatListOpen", "false");
+    } else {
+        chatList.style.display = "flex";
+        localStorage.setItem("chatListOpen", "true");
+    }
+});
+
+// Clipboard copy on double-click
+$(document).on("dblclick", ".message", function() {
+    let text = $(this).text().trim();
+
+    // Remove the trashcan icon before copying
+    text = text.replace(/🗑️/g, "").trim();
+
+    if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            const originalBg = $(this).css("background-color");
+            $(this).css("background-color", "#d0ffd0");
+            setTimeout(() => $(this).css("background-color", originalBg), 300);
+        });
+    } else {
+        const $temp = $("<textarea>").val(text).appendTo("body").select();
+        try { document.execCommand("copy"); } catch {}
+        $temp.remove();
+    }
+});
+
+function appendMessage(text, sender, messageId = null) {
+    const div = document.createElement("div");
+    div.classList.add("message", sender);
+    div.textContent = text;
+
+    // Add delete button if messageId is provided
+    if (messageId) {
+        const deleteBtn = document.createElement("span");
+        deleteBtn.textContent = " 🗑️";
+        deleteBtn.style.cursor = "pointer";
+        deleteBtn.style.marginLeft = "8px";
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (confirm("Delete this message?")) {
+                fetch("chat_ajax.php", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: "delete_message=" + encodeURIComponent(messageId) +
+                          "&chat_session_id=" + encodeURIComponent(currentChatId)
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) div.remove();
+                    else alert("Error deleting message: " + (data.error || "Unknown"));
+                });
+            }
+        };
+        div.appendChild(deleteBtn);
+    }
+
+    messagesDiv.appendChild(div);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+// Clear messages
+function clearMessages() {
+    messagesDiv.innerHTML = "";
+}
+
+// Load chat sessions
+function loadSessions() {
+    fetch("chat_ajax.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "list_chats=1"
+    })
+    .then(res => res.json())
+    .then(data => {
+        sessionsDiv.innerHTML = "";
+        data.sessions.forEach(s => {
+            const btnWrapper = document.createElement("div");
+            btnWrapper.style.display = "flex";
+            btnWrapper.style.alignItems = "center";
+            btnWrapper.style.justifyContent = "space-between";
+
+            const btn = document.createElement("button");
+            btn.textContent = s.created_at + " — " + (s.title || "(untitled)");
+            btn.style.flex = "1";
+            btn.onclick = () => loadChat(s.id);
+
+            btn.ondblclick = () => {
+                const newTitle = prompt("Enter new title:", s.title || "");
+                if (newTitle !== null) {
+                    fetch("chat_ajax.php", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: "update_title=" + encodeURIComponent(newTitle) +
+                              "&chat_session_id=" + encodeURIComponent(s.id)
+                    })
+                    .then(res => res.json())
+                    .then(data => { if (data.success) loadSessions(); });
+                }
+            };
+
+            const copyBtn = document.createElement("button");
+            copyBtn.textContent = "⎘";
+            copyBtn.title = "Fork chat";
+            copyBtn.style.marginLeft = "5px";
+            copyBtn.style.width = "50px";
+            copyBtn.onclick = (e) => {
+                e.stopPropagation();
+                fetch("chat_ajax.php", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: "copy_chat=" + encodeURIComponent(s.id)
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.chat_session_id) {
+                        loadSessions();
+                        loadChat(data.chat_session_id);
+                    }
+                });
+            };
+
+            btnWrapper.appendChild(btn);
+
+            const deleteBtn = document.createElement("button");
+            deleteBtn.textContent = "🗑️";
+            deleteBtn.title = "Delete chat";
+            deleteBtn.style.marginLeft = "5px";
+            deleteBtn.style.width = "50px";
+
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                if (confirm("Delete this chat?")) {
+                    fetch("chat_ajax.php", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: "delete_chat=" + encodeURIComponent(s.id)
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            loadSessions();
+                            if (currentChatId === s.id) clearMessages();
+                        } else {
+                            alert("Error deleting chat: " + (data.error || "Unknown"));
+                        }
+                    });
+                }
+            };
+
+            btnWrapper.appendChild(copyBtn);
+            btnWrapper.appendChild(deleteBtn);
+
+            sessionsDiv.appendChild(btnWrapper);
+        });
+    });
+}
+
+// Load chat messages
+function loadChat(chatId) {
+    fetch("chat_ajax.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "load_chat=" + encodeURIComponent(chatId)
+    })
+    .then(res => res.json())
+    .then(data => {
+        currentChatId = chatId;
+        chatHeader.textContent = "Chat: " + chatId;
+        clearMessages();
+
+        if (data.history) {
+            data.history.forEach(entry =>
+                appendMessage(
+                    entry.content,
+                    entry.role === "user" ? "user" : "bot",
+                    entry.id
+                )
+            );
+        }
+
+        loadSessions();
+    });
+}
+
+// Send a message
+function sendMessage() {
+    const text = input.value.trim();
+    if (!text || !currentChatId) return;
+    appendMessage(text, "user");
+    input.value = "";
+
+    fetch("chat_ajax.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "message=" + encodeURIComponent(text) + "&chat_session_id=" + encodeURIComponent(currentChatId)
+    })
+    .then(res => res.json())
+    .then(data => { if (data.answer) appendMessage(data.answer, "bot"); });
+}
+
+document.getElementById("new-chat-btn").addEventListener("click", () => {
+    fetch("chat_ajax.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "new_chat=1"
+    })
+    .then(res => res.json())
+    .then(data => { loadSessions(); if (data.chat_session_id) loadChat(data.chat_session_id); });
+});
+
+button.addEventListener("click", sendMessage);
+input.addEventListener("keypress", e => { if (e.key === "Enter") sendMessage(); });
+
+loadSessions();
+
+

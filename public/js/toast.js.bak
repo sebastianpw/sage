@@ -1,0 +1,32 @@
+const Toast = {
+  get container() {
+    return document.getElementById('toast-container');
+  },
+
+  show(message, type = '') {
+    const container = this.container;
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    if (type) toast.classList.add(type);
+    toast.textContent = message;
+
+    container.appendChild(toast);
+
+    // Trigger show animation
+    setTimeout(() => toast.classList.add('show'), 10);
+
+    // Remove toast after 3 seconds
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => container.removeChild(toast), 500);
+    }, 3000);
+  },
+
+  simulateAjax() {
+    ['First', 'Second', 'Third', 'Fourth'].forEach((msg, i) => {
+      setTimeout(() => this.show(`${msg} AJAX success`, 'success'), i * 300);
+    });
+  }
+};

@@ -1,18 +1,32 @@
 {
-  "name": "SAGE - Docker-in-Docker only",
-  "image": "mcr.microsoft.com/devcontainers/base:latest",
+  "name": "SAGE - PHP + Nginx + SSHD (Bookworm)",
+  "dockerComposeFile": ["../docker-compose.yml"],
+  "service": "sage",
+  "workspaceFolder": "/var/www/sage",
+  "shutdownAction": "stopCompose",
   "features": {
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
-    "ghcr.io/devcontainers/features/sshd:1": {}
+    "ghcr.io/devcontainers/features/sshd:1": {
+      "version": "latest"
+    }
   },
-  "runArgs": ["--privileged"],
-  "forwardPorts": [8080, 22],
-  "remoteUser": "vscode",
+  "forwardPorts": [8080, 8081],
+  "postCreateCommand": "composer install --no-interaction --optimize-autoloader || true",
   "customizations": {
     "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "bmewburn.vscode-intelephense-client",
+        "felixfbecker.php-debug"
+      ],
       "settings": {
-        "terminal.integrated.shell.linux": "/bin/bash"
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "terminal.integrated.scrollback": 1000000
       }
     }
+  },
+  "hostRequirements": {
+    "cpus": 2,
+    "memory": "8gb",
+    "storage": "32gb"
   }
 }

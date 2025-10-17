@@ -1,0 +1,76 @@
+.img-wrapper {
+    position: relative;
+    overflow: visible;
+}
+
+.gear-icon {
+    display: block;
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 9999;
+    font-size: 20px;
+    color: #fff;
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 3px 5px;
+    border-radius: 3px;
+    pointer-events: auto;
+}
+
+
+
+.gear-menu {
+    position: absolute;
+    top: 25px;
+    right: 0;
+    display: none;
+    min-width: 140px;
+    background: #fff;
+    border: 1px solid #ccc;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    z-index: 10000;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+/*
+.gear-menu {
+    position: absolute;
+    top: 30px;
+    right: 0;
+    display: none;
+    min-width: 140px;
+    background: #fff;
+    border: 1px solid #ccc;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    z-index: 9998;
+    border-radius: 4px;
+    overflow: hidden;
+}
+*/
+
+
+
+	
+.gear-menu button {
+    display: block;
+    width: 100%;
+    padding: 6px 10px;
+    border: none;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.gear-menu button:hover {
+    background-color: #f0f0f0;
+}
+
+.gear-menu button:active {
+    background-color: #e0e0e0;
+}
+
+
+
