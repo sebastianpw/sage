@@ -58,7 +58,7 @@ create_db_if_not_exists() {
 if ! command -v mariadb &> /dev/null && ! command -v mysql &> /dev/null; then
     echo "MariaDB not found, installing..."
     apt update
-    apt install -y mariadb-server
+    DEBIAN_FRONTEND=noninteractive apt install -y mariadb-server
 else
     echo "MariaDB is already installed."
 fi
@@ -126,6 +126,4 @@ mysql -h "$SYS_HOST" -P "${SYS_PORT:-3306}" -u "$SYS_USER" -p"$SYS_PASS" "$SYS_D
 
 echo "Rollout complete."
 
-# then exec default container entrypoint
-exec docker-php-entrypoint "$@"
 

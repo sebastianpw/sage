@@ -17,7 +17,6 @@ services:
       COMPOSER_ALLOW_SUPERUSER: 1
       NGINX_ACCESS_LOG: /var/www/sage/logs/access.log
       NGINX_ERROR_LOG: /var/www/sage/logs/error.log
-    entrypoint: ["/var/www/sage/rollout/init_db.sh"]
     networks:
       - sage-net
 
