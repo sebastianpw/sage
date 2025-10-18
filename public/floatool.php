@@ -260,7 +260,8 @@ $dbname = $spw->getDbName();
 		    window.location.href='view_profile.php';
 
 	    else if(action==='open-database')
-		window.location.href="/adminer/index.php?server=127.0.0.1&username=adminer&db=<?php echo $dbname; ?>"
+		//window.location.href="/adminer/index.php?server=127.0.0.1&username=adminer&db=<?php echo $dbname; ?>"
+		window.location.href="/admin"
 	    else if(action==='open-regen')
 		    window.location.href="regenerate_frames_set.php"
 	    else if(action==='open-styles') window.toggleStylesModal?.();
