@@ -150,8 +150,7 @@ File:
 ./token/.freeimage_key
 ```
 
-- Copy `.freeimage_key.todo` → `.freeimage_key`  
-- Put only your FreeImage API key in the file.  
+- DONE: FreeImage API key is public and no account needed
 
 #### 3. Groq API Key
 
