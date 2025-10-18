@@ -64,7 +64,7 @@ else
 fi
 
 # install packages
-apt install ffmpeg jq
+DEBIAN_FRONTEND=noninteractive apt install ffmpeg jq
 
 # wait a while
 sleep 10
