@@ -103,7 +103,7 @@ pkg update && pkg upgrade -y
 pkg install php mariadb composer git nginx ffmpeg jq -y
 
 # Clone repository
-git clone https://github.com/petersebring/sage.git
+git clone https://github.com/sebastianpw/sage.git
 cd sage
 
 # Install PHP dependencies
