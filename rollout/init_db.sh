@@ -5,6 +5,9 @@
 
 set -e  # stop on errors
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DB_DATADIR=$("$SCRIPT_DIR/../bash/db_name.sh" datadir)
+
 # Load .env.local variables
 ENV_FILE="$(dirname "$0")/../.env.local"
 if [ ! -f "$ENV_FILE" ]; then
@@ -51,13 +54,6 @@ create_db_if_not_exists() {
     mysql -h "$host" -P "$port" -u "$user" -p"$pass" -e "CREATE DATABASE IF NOT EXISTS \`$db\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
 }
 
-
-
-
-
-
-
-
 # Check if MariaDB is installed
 if ! command -v mariadb &> /dev/null && ! command -v mysql &> /dev/null; then
     echo "MariaDB not found, installing..."
@@ -67,22 +63,23 @@ else
     echo "MariaDB is already installed."
 fi
 
-
+# install packages
 apt install ffmpeg jq
 
+# wait a while
+sleep 10
 
 # Start MariaDB manually if not already running
 if ! pgrep -x "mariadbd" > /dev/null; then
     echo "Starting MariaDB server..."
-    mariadbd --skip-networking=0 --skip-grant-tables=0 --user=mysql &
-    sleep 5  # give it a moment to start
+    
+    mariadbd-safe --datadir="$DB_DATADIR" &
+    # Wait a moment to allow MariaDB to initialize
+    sleep 10
+    
 else
     echo "MariaDB already running."
 fi
-
-
-
-
 
 
 # Set root password and remove default insecure users/databases
@@ -96,8 +93,6 @@ CREATE USER IF NOT EXISTS 'adminer'@'%' IDENTIFIED BY 'root_pw';
 GRANT ALL PRIVILEGES ON *.* TO 'adminer'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 SQL
-
-
 
 
 # Install phpMyAdmin
@@ -115,8 +110,6 @@ ln -s /var/www/sage/phpmyadmin /var/www/sage/public/admin
 ln -s /var/www/sage/config/config.inc.php /var/www/sage/phpmyadmin/config.inc.php
 chmod 755 /var/www/sage/phpmyadmin/config.inc.php
 chmod 755 /var/www/sage/config/config.inc.php
-
-
 
 
 # Create main and system databases if needed
