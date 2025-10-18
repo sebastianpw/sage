@@ -125,3 +125,7 @@ echo "Importing system database $SYS_DB..."
 mysql -h "$SYS_HOST" -P "${SYS_PORT:-3306}" -u "$SYS_USER" -p"$SYS_PASS" "$SYS_DB" < "$(dirname "$0")/init_sys.sql"
 
 echo "Rollout complete."
+
+# then exec default container entrypoint
+exec docker-php-entrypoint "$@"
+
