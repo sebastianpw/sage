@@ -5,13 +5,8 @@
 # Always resolve the directory of the current script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-
-# Get MySQL CLI arguments from db_name.sh mian-conn
+# Get MySQL CLI arguments from db_name.sh
 MYSQL_ARGS=$("$SCRIPT_DIR"/db_name.sh main-conn)
-							# Example query: get the last frame number
-#LAST_FRAME=$(mysql $MYSQL_ARGS -N -e "SELECT MAX(frame_number) FROM frames;")
-
-
 
 PROMPT_TYPE="$1"       # e.g., character, anima, background, location
 LIMIT="$2"             # optional, max number of styles to apply per entity
@@ -47,7 +42,7 @@ VIEW_NAME="v_prompts_${PROMPT_TYPE}"
 # Fetch all entities flagged for regeneration
 SQL_QUERY="SELECT id, prompt FROM $VIEW_NAME WHERE regenerate_images=1"
 
-mysql -u $MYSQL_ARGS -N -e "$SQL_QUERY" | while IFS=$'\t' read -r ENTITY_ID ENTITY_PROMPT; do
+mysql $MYSQL_ARGS -N -e "$SQL_QUERY" | while IFS=$'\t' read -r ENTITY_ID ENTITY_PROMPT; do
   # Append add_to_prompt if provided
   if [ -n "$ADD_TO_PROMPT" ]; then
     FULL_PROMPT="$ENTITY_PROMPT $ADD_TO_PROMPT"
@@ -59,8 +54,6 @@ mysql -u $MYSQL_ARGS -N -e "$SQL_QUERY" | while IFS=$'\t' read -r ENTITY_ID ENTI
 
 
   # Get tunnel URL and export
-  NGROK_URL=$("$SCRIPT_DIR/ngrok_tunnel.sh")
-  export NGROK_URL
 
 
 
@@ -71,7 +64,7 @@ mysql -u $MYSQL_ARGS -N -e "$SQL_QUERY" | while IFS=$'\t' read -r ENTITY_ID ENTI
 "$SCRIPT_DIR/genframe_db.sh" "$FULL_PROMPT" "$MAP_RUN_ID" "$PROMPT_TYPE" "$ENTITY_ID" "$LIMIT" "$OFFSET" "$NO_STYLES" "$ADD_TO_PROMPT"
 
 # Update active_map_run_id for this entity
-mysql -u $MYSQL_ARGS -e "
+mysql $MYSQL_ARGS -e "
 UPDATE ${PROMPT_TYPE} 
 SET active_map_run_id = '$MAP_RUN_ID'
 WHERE id = '$ENTITY_ID';
