@@ -36,6 +36,9 @@ class TaskCompletionTrackerDaemon extends AbstractScheduler
                 // First: run comprehensive lock cleanup (finished-run locks, orphaned locks, expired locks)
                 $this->heartbeat->comprehensiveLockCleanup();
 
+                // Defensive: handle runs referring to missing scheduled_tasks (would be hidden by JOIN)
+                $this->cleanupOrphanedTaskRuns();
+
                 // Then inspect running tasks and renew/ensure locks or finalize runs
                 $this->checkRunningTasks();
 
@@ -134,18 +137,8 @@ class TaskCompletionTrackerDaemon extends AbstractScheduler
             return;
         }
 
-        // Check OS-level process: posix_kill(..., 0) returns true if process exists (and we have permission)
-        $isRunning = false;
-        try {
-            $isRunning = posix_kill($pid, 0);
-        } catch (\Throwable $e) {
-            // posix_kill may throw if function not available or permission issues; treat as not running
-            $logger->log('ERROR', [
-                "posix_kill error checking PID $pid for run $runId",
-                "message" => $e->getMessage()
-            ]);
-            $isRunning = false;
-        }
+        // Use robust PID alive check that treats zombies as dead
+        $isRunning = $this->isPidAlive($pid);
 
         // If process is alive, we must ensure the lock remains active (renew or re-create)
         if ($isRunning) {
@@ -222,6 +215,20 @@ class TaskCompletionTrackerDaemon extends AbstractScheduler
             ':status' => $status
         ]);
 
+        // Debug: ensure update succeeded
+        try {
+            $updatedRows = $stmt->rowCount();
+            $err = $stmt->errorInfo();
+            $logger->log('DEBUG', [
+                "Updated task_runs rows",
+                "run_id" => $runId,
+                "rows_updated" => $updatedRows,
+                "error" => $err
+            ]);
+        } catch (\Throwable $e) {
+            $logger->log('ERROR', ["Failed to inspect update result", "run_id" => $runId, "message" => $e->getMessage()]);
+        }
+
         // Update log file sizes
         $this->updateLogSizes($runId, $task['stdout_log'] ?? '', $task['stderr_log'] ?? '');
 
@@ -269,6 +276,7 @@ class TaskCompletionTrackerDaemon extends AbstractScheduler
     protected function markTaskFailed(int $runId, ?int $lockId, int $exitCode): void
     {
         $pdo = $this->spw->getPDO();
+        $logger = $this->spw->getFileLogger();
 
         $stmt = $pdo->prepare("
             UPDATE task_runs
@@ -281,6 +289,20 @@ class TaskCompletionTrackerDaemon extends AbstractScheduler
             ':id' => $runId,
             ':exit_code' => $exitCode
         ]);
+
+        // Debug: ensure update succeeded
+        try {
+            $updatedRows = $stmt->rowCount();
+            $err = $stmt->errorInfo();
+            $logger->log('DEBUG', [
+                "markTaskFailed updated task_runs",
+                "run_id" => $runId,
+                "rows_updated" => $updatedRows,
+                "error" => $err
+            ]);
+        } catch (\Throwable $e) {
+            $logger->log('ERROR', ["Failed to inspect markTaskFailed update", "run_id" => $runId, "message" => $e->getMessage()]);
+        }
 
         if ($lockId) {
             try {
@@ -343,6 +365,7 @@ class TaskCompletionTrackerDaemon extends AbstractScheduler
     protected function updateLogSizes(int $runId, string $stdoutLog, string $stderrLog): void
     {
         $pdo = $this->spw->getPDO();
+        $logger = $this->spw->getFileLogger();
 
         $bytesOut = (!empty($stdoutLog) && file_exists($stdoutLog)) ? filesize($stdoutLog) : 0;
         $bytesErr = (!empty($stderrLog) && file_exists($stderrLog)) ? filesize($stderrLog) : 0;
@@ -358,6 +381,20 @@ class TaskCompletionTrackerDaemon extends AbstractScheduler
             ':bytes_out' => $bytesOut,
             ':bytes_err' => $bytesErr
         ]);
+
+        // Debug: ensure update succeeded
+        try {
+            $updatedRows = $stmt->rowCount();
+            $err = $stmt->errorInfo();
+            $logger->log('DEBUG', [
+                "updateLogSizes updated task_runs",
+                "run_id" => $runId,
+                "rows_updated" => $updatedRows,
+                "error" => $err
+            ]);
+        } catch (\Throwable $e) {
+            $logger->log('ERROR', ["Failed to inspect updateLogSizes result", "run_id" => $runId, "message" => $e->getMessage()]);
+        }
     }
 
     /**
@@ -474,5 +511,83 @@ class TaskCompletionTrackerDaemon extends AbstractScheduler
         }
 
         $lastCleanup = $now;
+    }
+
+    /**
+     * Return true if PID is alive (and not a zombie). Uses /proc when available
+     * and falls back to posix_kill when possible. Treats zombies as NOT alive.
+     */
+    protected function isPidAlive(int $pid): bool
+    {
+        if ($pid <= 0) return false;
+
+        $logger = $this->spw->getFileLogger();
+
+        // Prefer /proc if available (more reliable inside containers)
+        $procStatus = "/proc/{$pid}/status";
+        if (file_exists($procStatus)) {
+            $content = @file_get_contents($procStatus);
+            if ($content !== false) {
+                // Look for "State:\tX" line
+                if (preg_match('/^State:\s+([A-Z])/m', $content, $m)) {
+                    $state = $m[1];
+                    if ($state === 'Z') {
+                        // Zombie / defunct -> treat as dead (parent didn't reap)
+                        $logger->log('DEBUG', [
+                            "PID $pid is a zombie (State=Z). Treating as not running."
+                        ]);
+                        return false;
+                    }
+                    // any other state (R,S,D,T) count as running
+                    return true;
+                }
+            }
+        }
+
+        // Fallback: posix_kill(...,0) where available
+        if (function_exists('posix_kill')) {
+            try {
+                if (@posix_kill($pid, 0)) {
+                    return true;
+                }
+            } catch (\Throwable $e) {
+                $logger->log('ERROR', [
+                    "posix_kill error checking PID $pid",
+                    "message" => $e->getMessage()
+                ]);
+            }
+        }
+
+        // Last resort: check if /proc/$pid exists (already covered), else assume not alive
+        return file_exists("/proc/{$pid}");
+    }
+
+    /**
+     * Find task_runs that reference missing scheduled_tasks and mark them failed/stale.
+     * This is defensive: when JOIN in checkRunningTasks hides those rows entirely.
+     */
+    protected function cleanupOrphanedTaskRuns(): void
+    {
+        $pdo = $this->spw->getPDO();
+        $logger = $this->spw->getFileLogger();
+
+        $stmt = $pdo->query("
+            SELECT tr.id AS run_id, tr.task_id, tr.pid, tr.started_at
+            FROM task_runs tr
+            LEFT JOIN scheduled_tasks st ON tr.task_id = st.id
+            WHERE st.id IS NULL
+              AND tr.status IN ('pending','running')
+        ");
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (empty($rows)) return;
+
+        foreach ($rows as $r) {
+            $logger->log('WARNING', [
+                "Orphaned task_run found (no scheduled_tasks row) - marking failed",
+                "run_id" => $r['run_id'], "task_id" => $r['task_id'], "pid" => $r['pid']
+            ]);
+            // Choose exitCode -3 to indicate orphaned config / missing scheduled_task
+            $this->markTaskFailed((int)$r['run_id'], null, -3);
+        }
     }
 }
