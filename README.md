@@ -116,7 +116,7 @@ composer install
 ./bash/restart_servers.sh
 ```
 
-Visit **http://localhost:8080/setup.php** to access the web interface.
+Visit **http://yourserverdomain:8080/setup.php** to access the web interface.
 
 ### Docker Installation (Optional)
 
@@ -127,7 +127,17 @@ docker-compose up -d
 
 ### Secrets Setup
 
-Before running the project, you need to provide your API tokens and credentials. The repository contains `.todo` placeholder files — you must replace them with your actual keys.
+Before running the project, you need to provide your API tokens and credentials. 
+
+UPDATE:
+The Web UI dashboard now has a menu item:
+
+🔑 API Tokens
+
+Please provide your API keys/tokens there.
+
+Else you can also still use the CLI on your server:
+The repository contains `.todo` placeholder files — you must replace them with your actual keys.
 > **Note:** All API tokens are optional; however, certain features require them: image-to-image generation needs the Pollinations token (or you manually add a kaggle/colab SD service API), GROQ chat models need the Groq token, and Google login requires a valid Google OAuth client secret.
 
 
