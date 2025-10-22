@@ -240,6 +240,123 @@ border-bottom-left-radius: 0;
 
 
 
+
+
+
+<style>
+.token-message {
+    padding: 12px 16px;
+    margin: 12px 0;
+    border-radius: 8px;
+    border-left: 4px solid;
+    background: white;
+    font-size: 14px;
+    white-space: pre-wrap;
+}
+
+.token-message.success {
+    border-color: #10b981;
+    background: #f0fdf4;
+    color: #166534;
+}
+
+.token-message.error {
+    border-color: #ef4444;
+    background: #fef2f2;
+    color: #991b1b;
+}
+
+.token-message.warning {
+    border-color: #f59e0b;
+    background: #fffbeb;
+    color: #92400e;
+}
+
+.token-form-group {
+    margin-bottom: 16px;
+}
+
+.token-form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 600;
+    font-size: 14px;
+    color: #333;
+}
+
+.token-form-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: border-color 0.2s ease;
+    box-sizing: border-box;
+}
+
+.token-form-input:focus {
+    outline: none;
+    border-color: #2563eb;
+}
+
+.token-info-box {
+    background: #f0f0f0;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 16px;
+    
+    width: 327px;
+    max-width: 327px; 
+    overflow: auto;
+}
+
+.token-submit-btn {
+    display: inline-block;
+    padding: 12px 24px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.token-submit-btn:hover {
+    background: #1e40af;
+    transform: translateY(-1px);
+}
+
+.token-code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 12px;
+}
+</style>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <script>
 document.addEventListener("DOMContentLoaded", () => {
     // Iterate all collapsible groups
@@ -286,6 +403,118 @@ document.addEventListener("DOMContentLoaded", () => {
 </div>
 
 <div class="script-list">
+
+
+
+
+
+
+
+
+
+
+
+
+
+<?php
+// Handle token saves
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['action']) && $_POST['action'] === 'save_tokens') {
+    $tokenDir = PROJECT_ROOT . '/token';
+    $results = [];
+    
+    // Ensure token directory exists
+    if (!is_dir($tokenDir)) {
+        @mkdir($tokenDir, 0700, true);
+    }
+    
+    // Define token mappings
+    $tokenMappings = [
+        'groq_api_key' => '.groq_api_key',
+        'freepik_api_key' => '.freepik_api_key',
+        'pollinations_token' => '.pollinationsaitoken'
+    ];
+    
+    foreach ($tokenMappings as $postKey => $filename) {
+        $value = trim($_POST[$postKey] ?? '');
+        
+        // Only write if value is provided (not empty)
+        if ($value !== '') {
+            $filepath = $tokenDir . '/' . $filename;
+            $writeResult = @file_put_contents($filepath, $value);
+            
+            if ($writeResult !== false) {
+                @chmod($filepath, 0600);
+                $results['success'][] = $filename;
+            } else {
+                $results['failed'][] = $filename;
+            }
+        }
+    }
+    
+    // Build message
+    if (!empty($results['success'])) {
+        $msg = "✓ Tokens saved:\n" . implode("\n", $results['success']);
+        if (!empty($results['failed'])) {
+            $msg .= "\n\n⚠ Failed to save:\n" . implode("\n", $results['failed']);
+        }
+        $tokenMessage = ['type' => empty($results['failed']) ? 'success' : 'warning', 'text' => $msg];
+    } elseif (!empty($results['failed'])) {
+        $tokenMessage = ['type' => 'error', 'text' => "✗ Failed to save tokens:\n" . implode("\n", $results['failed'])];
+    } else {
+        $tokenMessage = ['type' => 'warning', 'text' => '⚠ No tokens provided to save'];
+    }
+}
+
+// Read existing tokens for form initialization
+$tokenDir = PROJECT_ROOT . '/token';
+$existingTokens = [
+    'groq_api_key' => '',
+    'freepik_api_key' => '',
+    'pollinations_token' => ''
+];
+
+$tokenFiles = [
+    'groq_api_key' => '.groq_api_key',
+    'freepik_api_key' => '.freepik_api_key',
+    'pollinations_token' => '.pollinationsaitoken'
+];
+
+foreach ($tokenFiles as $key => $filename) {
+    $filepath = $tokenDir . '/' . $filename;
+    if (file_exists($filepath)) {
+        $existingTokens[$key] = trim(file_get_contents($filepath));
+    }
+}
+?>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 <?php /*
@@ -679,6 +908,15 @@ iner&db=<?php echo $dbname; ?>&select=frames&order%5B0
 <a href="adminer/index.php?server=127.0.0.1&username=adminer&db=<?php echo $dbname; ?>&select=sage_todos&order%5B0%5D=id&desc%5B0%5D=1">🎫 SAGE TODOs</a>
 -->
 
+<!--
+<a href="kaggle.php">💻 KAGGLE</a>
+
+
+
+
+<a href="view_zrok.php">🌐 zrok</a>
+-->
+
 
 
 <a href="todo.php">🎫 SAGE TODOs</a>
@@ -718,7 +956,6 @@ iner&db=<?php echo $dbname; ?>&select=frames&order%5B0
 
 
 
-<a href="view_zrok.php">🌐 zrok</a>
 
 
 <a target="_blank" href="https://www.minifier.org/text-to-html-converter">❮❯ Text to HTML</a>
@@ -776,6 +1013,107 @@ iner&db=<?php echo $dbname; ?>&select=frames&order%5B0
 
     </div>
 </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<?php if (isset($tokenMessage)): ?>
+    <div class="token-message <?= htmlspecialchars($tokenMessage['type']) ?>">
+        <?= nl2br(htmlspecialchars($tokenMessage['text'])) ?>
+    </div>
+<?php endif; ?>
+
+<!-- API Tokens Group -->
+<div class="collapsible-group">
+    <div class="group-header">🔑 API Tokens</div>
+    <div class="group-content">
+        <div class="horizontal-line"></div>
+        
+        <div class="token-info-box">
+            💡 <strong>Tokens are saved to:</strong> <span class="token-code"><?= htmlspecialchars(PROJECT_ROOT) ?>/token/</span><br>
+            ℹ️ Only changed fields will be saved. Empty fields won't overwrite existing tokens.
+        </div>
+
+        <form method="post" style="max-width: 600px;">
+            <input type="hidden" name="action" value="save_tokens">
+            
+            <div class="token-form-group">
+                <label>🌸 Pollinations AI Token</label>
+                <input type="password" 
+                       name="pollinations_token" 
+                       class="token-form-input" 
+                       value="<?= htmlspecialchars($existingTokens['pollinations_token']) ?>" 
+                       placeholder="Insert Pollinations AI Token here" />
+            </div>
+            
+            <div class="token-form-group">
+                <label>🤖 Groq API Key</label>
+                <input type="password" 
+                       name="groq_api_key" 
+                       class="token-form-input" 
+                       value="<?= htmlspecialchars($existingTokens['groq_api_key']) ?>" 
+                       placeholder="Insert Groq API Key here" />
+            </div>
+
+            <div class="token-form-group">
+                <label>🎨 Freepik API Key</label>
+                <input type="password" 
+                       name="freepik_api_key" 
+                       class="token-form-input" 
+                       value="<?= htmlspecialchars($existingTokens['freepik_api_key']) ?>" 
+                       placeholder="Insert Freepik API Key here" />
+            </div>
+
+            <button type="submit" class="token-submit-btn">💾 Save Tokens</button>
+        </form>
+        
+        <div class="horizontal-line" style="margin-top: 20px;"></div>
+    </div>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

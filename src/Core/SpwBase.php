@@ -23,6 +23,7 @@ class SpwBase extends AbstractProjectBase
 {
 
     public const CDN_USAGE = false;
+    public const VERSION = '0.1.1';
 
     public static $JQUERY_LOADED = false;
 
