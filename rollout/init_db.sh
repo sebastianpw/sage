@@ -64,11 +64,11 @@ else
 fi
 
 # install packages
-DEBIAN_FRONTEND=noninteractive apt install ffmpeg jq
+DEBIAN_FRONTEND=noninteractive apt install -y ffmpeg jq python3-pip
 
 
 # Install kaggle for the user
-pip install --user --upgrade kaggle
+pip install --user --upgrade --break-system-packages kaggle
 
 # Make sure ~/.local/bin is in PATH
 export PATH="$HOME/.local/bin:$PATH"
