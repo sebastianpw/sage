@@ -5,6 +5,8 @@
 # -----------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+MYSQL_ARGS=$("$SCRIPT_DIR"/db_name.sh main-conn)
+
 # -----------------------------
 # Load token
 # -----------------------------
@@ -46,20 +48,13 @@ USE_TURBO=false             # Only affects text-to-image (Pollinations)
 
 
 
-# DEPR: NGROK_URL="https://90930a4718c0.ngrok-free.app"
-# NGROK_URL is already automatically set and exported by the wrapper script using an API of ngrok for tunnel url
-# echo "Using tunnel: $NGROK_URL"
-
-
-#NGROK_URL="https://624141dc38f9.ngrok-free.app"
-NGROK_URL="https://spi84hlwc2tw.share.zrok.io"
+ZROK_URL=$("$SCRIPT_DIR/zrok_echo.sh")
 
 
 
 
 
 DB_USER="root"
-#DB_NAME=$("$(dirname "$0")/db_name.sh")
 DB_NAME=$("$SCRIPT_DIR/db_name.sh")
 MAX_RETRIES=2
 RETRY_DELAY=2
@@ -94,7 +89,7 @@ fi
 # -----------------------------
 # Load styles (id + prompt) from DB
 # -----------------------------
-mapfile -t styles < <(mysql -u "$DB_USER" "$DB_NAME" -N -e "SELECT id, prompt FROM v_styles_helper;")
+mapfile -t styles < <(mysql $MYSQL_ARGS -N -e "SELECT id, prompt FROM v_styles_helper;")
 TOTAL_STYLES=${#styles[@]}
 
 START=$((OFFSET > 0 ? OFFSET - 1 : 0))
@@ -105,14 +100,14 @@ END=$((LIMIT > 0 ? START + LIMIT - 1 : TOTAL_STYLES - 1))
 # Determine mapping table & check existence
 # -----------------------------
 MAPPING_TABLE="frames_2_${ENTITY_TYPE}"
-TABLE_EXISTS=$(mysql -u "$DB_USER" "$DB_NAME" -N -e "SHOW TABLES LIKE '$MAPPING_TABLE';")
+TABLE_EXISTS=$(mysql $MYSQL_ARGS -N -e "SHOW TABLES LIKE '$MAPPING_TABLE';")
 [ -z "$TABLE_EXISTS" ] && { echo "Mapping table '$MAPPING_TABLE' does not exist!"; exit 1; }
 
 # -----------------------------
 # Fetch img2img info from entity row
 # -----------------------------
 read IMG2IMG_FLAG IMG2IMG_FRAME_ID IMG2IMG_PROMPT < <(
-  mysql -u "$DB_USER" "$DB_NAME" -N -e \
+  mysql $MYSQL_ARGS -N -e \
     "SELECT COALESCE(img2img,0), COALESCE(img2img_frame_id,0), COALESCE(img2img_prompt,'') FROM $ENTITY_TYPE WHERE id=$ENTITY_ID;"
 )
 IMG2IMG_FLAG=${IMG2IMG_FLAG:-0}
@@ -121,7 +116,7 @@ IMG2IMG_PROMPT=${IMG2IMG_PROMPT:-''}
 IMG2IMG_FILENAME=""
 
 if [ "$IMG2IMG_FRAME_ID" -gt 0 ]; then
-  IMG2IMG_FILENAME=$(mysql -u "$DB_USER" "$DB_NAME" -N -e "SELECT filename FROM frames WHERE id = $IMG2IMG_FRAME_ID LIMIT 1;" | tr -d '\r')
+  IMG2IMG_FILENAME=$(mysql $MYSQL_ARGS -N -e "SELECT filename FROM frames WHERE id = $IMG2IMG_FRAME_ID LIMIT 1;" | tr -d '\r')
 fi
 
 # -----------------------------
@@ -187,7 +182,7 @@ for ((i=START; i<=END; i++)); do
   # -----------------------------
 
 
-frame_basename=$(mysql -u "$DB_USER" "$DB_NAME" -N --batch --skip-column-names -e "
+frame_basename=$(mysql $MYSQL_ARGS -N --batch --skip-column-names -e "
   UPDATE frame_counter
   SET next_frame = LAST_INSERT_ID(next_frame + 1);
   SELECT LPAD(LAST_INSERT_ID(), 7, '0');
@@ -270,7 +265,7 @@ if [ -z "$SEED" ] || [ "$SEED" -eq 0 ]; then
   SEED=$(( (RANDOM << 15) | RANDOM ))
 fi
 
-# TODO all prompts use the same sees until seed is stored to make prompts reproduceable
+# TODO all prompts use the same seeds until seed is stored to make prompts reproduceable
 SEED=36
 
 
@@ -279,29 +274,21 @@ SEED=36
 
 if [ -n "$IMG2IMG_FILENAME" ]; then
   # image-to-image
-#  curl -s -X POST "$NGROK_URL/generate" \
-#    -F "prompt=$prompt" \
-#    -F "negative_prompt=$negative_prompt" \
-#    -F "height=768" \
-#    -F "width=768" \
-#    -F "num_inference_steps=80" \
-#    -F "guidance_scale=10" \
-#    -F "init_image=@$IMG2IMG_FILENAME" \
-#    -F "strength=0.7" \
-#    -F "use_controlnet=$USE_CONTROLNET" \
-#    -F "seed=$SEED" \
-#    $CONTROLNET_PARAM \
-#    --output "$outfile" 
-
-
-
-curl -s -X POST "$NGROK_URL/generate" \
+  curl -s -X POST "$ZROK_URL/generate" \
     -F "prompt=$prompt" \
     -F "negative_prompt=$negative_prompt" \
-    -F "num_inference_steps=8" \
+    -F "height=768" \
+    -F "width=768" \
+    -F "num_inference_steps=40" \
+    -F "guidance_scale=7.5" \
     -F "init_image=@$IMG2IMG_FILENAME" \
+    -F "strength=0.7" \
+    -F "use_controlnet=$USE_CONTROLNET" \
     -F "seed=$SEED" \
+    $CONTROLNET_PARAM \
     --output "$outfile" 
+
+
 
 
 
@@ -309,28 +296,19 @@ curl -s -X POST "$NGROK_URL/generate" \
 
 else
   # text-to-image only
-#  curl -s -X POST "$NGROK_URL/generate" \
-#    -F "prompt=$prompt" \
-#    -F "negative_prompt=$negative_prompt" \
-#    -F "height=768" \
-#    -F "width=768" \
-#    -F "num_inference_steps=4" \
-#    -F "guidance_scale=10" \
-#    -F "use_controlnet=$USE_CONTROLNET" \
-#    -F "seed=$SEED" \
-#    $CONTROLNET_PARAM \
-#    --output "$outfile" 
-
-
-# TESTING LCM ADAPTER
-  curl -s -X POST "$NGROK_URL/generate" \
+  curl -s -X POST "$ZROK_URL/generate" \
     -F "prompt=$prompt" \
     -F "negative_prompt=$negative_prompt" \
     -F "height=768" \
     -F "width=768" \
-    -F "num_inference_steps=6" \
+    -F "num_inference_steps=50" \
+    -F "guidance_scale=7.5" \
+    -F "use_controlnet=$USE_CONTROLNET" \
     -F "seed=$SEED" \
-    --output "$outfile"
+    $CONTROLNET_PARAM \
+    --output "$outfile" 
+
+
 
 
 
@@ -362,7 +340,7 @@ fi
       DB_IMG2IMG_PROMPT="NULL"
       [ -n "$IMG2IMG_PROMPT" ] && DB_IMG2IMG_PROMPT="'$(echo "$IMG2IMG_PROMPT" | sed "s/'/''/g")'"
 
-      FRAME_ID=$(mysql -u "$DB_USER" "$DB_NAME" -N -e "
+      FRAME_ID=$(mysql $MYSQL_ARGS -N -e "
 INSERT INTO frames
   (filename, name, prompt, entity_type, entity_id, style, style_id, map_run_id, img2img_frame_id, img2img_prompt)
 VALUES
@@ -379,7 +357,7 @@ VALUES
 );
 SELECT LAST_INSERT_ID();")
 
-      [ -n "$FRAME_ID" ] && mysql -u "$DB_USER" "$DB_NAME" -e \
+      [ -n "$FRAME_ID" ] && mysql $MYSQL_ARGS -e \
         "INSERT INTO $MAPPING_TABLE (from_id, to_id) VALUES ($FRAME_ID, $ENTITY_ID);"
 
       break
@@ -401,4 +379,4 @@ done
 # -----------------------------
 # Clear regenerate flag
 # -----------------------------
-mysql -u "$DB_USER" "$DB_NAME" -e "UPDATE $ENTITY_TYPE SET regenerate_images=0 WHERE id=$ENTITY_ID;"
+mysql $MYSQL_ARGS -e "UPDATE $ENTITY_TYPE SET regenerate_images=0 WHERE id=$ENTITY_ID;"

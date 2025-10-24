@@ -5,6 +5,8 @@
 # -----------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+MYSQL_ARGS=$("$SCRIPT_DIR"/db_name.sh main-conn)
+
 # -----------------------------
 # Load token
 # -----------------------------
@@ -53,20 +55,20 @@ ENTITY_TYPE="controlnet_maps"
 MAPPING_TABLE="frames_2_${ENTITY_TYPE}"
 
 # Check mapping table exists
-TABLE_EXISTS=$(mysql -u "$DB_USER" "$DB_NAME" -N -e "SHOW TABLES LIKE '$MAPPING_TABLE';")
+TABLE_EXISTS=$(mysql $MYSQL_ARGS -N -e "SHOW TABLES LIKE '$MAPPING_TABLE';")
 [ -z "$TABLE_EXISTS" ] && { echo "Mapping table '$MAPPING_TABLE' does not exist!"; exit 1; }
 
 # -----------------------------
 # Fetch img2img source image info
 # -----------------------------
 read IMG2IMG_FRAME_ID IMG2IMG_PROMPT < <(
-  mysql -u "$DB_USER" "$DB_NAME" -N -e \
+  mysql $MYSQL_ARGS -N -e \
     "SELECT COALESCE(img2img_frame_id,0), COALESCE(img2img_prompt,'') FROM $ENTITY_TYPE WHERE id=$ENTITY_ID;"
 )
 
 IMG2IMG_FILENAME=""
 if [ "$IMG2IMG_FRAME_ID" -gt 0 ]; then
-  IMG2IMG_FILENAME=$(mysql -u "$DB_USER" "$DB_NAME" -N -e "SELECT filename FROM frames WHERE id = $IMG2IMG_FRAME_ID LIMIT 1;" | tr -d '\r')
+  IMG2IMG_FILENAME=$(mysql $MYSQL_ARGS -N -e "SELECT filename FROM frames WHERE id = $IMG2IMG_FRAME_ID LIMIT 1;" | tr -d '\r')
 fi
 
 if [ -n "$IMG2IMG_FILENAME" ]; then
@@ -79,7 +81,7 @@ fi
 # -----------------------------
 for MAP_TYPE in "${VALID_TYPES[@]}"; do
 
-  frame_basename=$(mysql -u "$DB_USER" "$DB_NAME" -N -e "
+  frame_basename=$(mysql $MYSQL_ARGS -N -e "
 UPDATE frame_counter SET next_frame = LAST_INSERT_ID(next_frame + 1);
 SELECT CONCAT('frame', LPAD(LAST_INSERT_ID(), 7, '0'));
 ")
@@ -101,7 +103,7 @@ SELECT CONCAT('frame', LPAD(LAST_INSERT_ID(), 7, '0'));
       # Insert into DB
       SAFE_PROMPT="$MAP_TYPE"
       SAFE_STYLE="$MAP_TYPE"
-      FRAME_ID=$(mysql -u "$DB_USER" "$DB_NAME" -N -e "
+      FRAME_ID=$(mysql $MYSQL_ARGS -N -e "
 INSERT INTO frames
   (filename, name, prompt, entity_type, entity_id, style, style_id, map_run_id, img2img_frame_id, img2img_prompt)
 VALUES
@@ -117,7 +119,7 @@ VALUES
    '$(echo "$IMG2IMG_PROMPT" | sed "s/'/''/g")');
 SELECT LAST_INSERT_ID();
 ")
-      [ -n "$FRAME_ID" ] && mysql -u "$DB_USER" "$DB_NAME" -e \
+      [ -n "$FRAME_ID" ] && mysql $MYSQL_ARGS -e \
         "INSERT INTO $MAPPING_TABLE (from_id, to_id) VALUES ($FRAME_ID, $ENTITY_ID);"
 
       break
@@ -138,4 +140,4 @@ done
 # -----------------------------
 # Clear regenerate flag
 # -----------------------------
-mysql -u "$DB_USER" "$DB_NAME" -e "UPDATE $ENTITY_TYPE SET regenerate_images=0 WHERE id=$ENTITY_ID;"
+mysql $MYSQL_ARGS -e "UPDATE $ENTITY_TYPE SET regenerate_images=0 WHERE id=$ENTITY_ID;"

@@ -1084,7 +1084,8 @@ CREATE TABLE `prompt_globals` (
 --
 
 INSERT INTO `prompt_globals` (`id`, `name`, `order`, `active`, `description`, `created_at`, `updated_at`) VALUES
-(1, '', 0, 1, '(dynamic lighting, cel-shading)', '2025-09-07 22:58:45', '2025-10-03 13:27:44');
+(1, '', 0, 1, 'masterpiece, best quality, absurdres, very aesthetic, cinematic lighting, cel-shading, beautiful composition, anime key visual, inspired, what if this were real', '2025-09-07 20:58:45', '2025-10-24 12:23:38');
+
 
 -- --------------------------------------------------------
 
@@ -1331,22 +1332,25 @@ CREATE TABLE `scheduled_tasks` (
 --
 
 
+
+
+
 INSERT INTO `scheduled_tasks` (`id`, `name`, `order`, `script_path`, `args`, `schedule_time`, `schedule_interval`, `schedule_dow`, `last_run`, `active`, `description`, `max_concurrent_runs`, `lock_timeout_minutes`, `require_lock`, `lock_scope`, `created_at`, `updated_at`, `run_now`) VALUES
-(10, 'gfs ⚡ Generatives', 3, '/var/www/sage/bash/genframes_fromdb.sh', 'generatives', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-17 21:48:36', 0, 'Generates frames for entity generatives', 1, 60, 1, 'entity', '2025-08-21 03:23:13', '2025-10-17 23:42:36', 0),
-(11, 'gfs 🦸 Characters', 1, '/var/www/sage/bash/genframes_fromdb.sh', 'characters', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-15 20:57:11', 0, 'Generates frames for entity generatives', 1, 60, 1, 'entity', '2025-08-21 03:23:13', '2025-10-17 23:42:17', 0),
-(12, 'gfs 🐾 Animas', 10, '/var/www/sage/bash/genframes_fromdb.sh', 'animas', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-03 08:50:53', 0, 'Generates frames for entity generatives', 1, 60, 1, 'entity', '2025-08-21 03:23:13', '2025-10-17 22:39:52', 0),
-(13, 'gfs 🗺️ Locations', 10, '/var/www/sage/bash/genframes_fromdb.sh', 'locations', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-03 18:49:44', 0, 'Generates frames for entity generatives', 1, 60, 1, 'entity', '2025-08-21 03:23:13', '2025-10-17 22:39:42', 0),
-(15, 'gfs 🪄 Sketches', 2, '/var/www/sage/bash/genframes_fromdb.sh', 'sketches', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-17 22:19:53', 0, 'Generates frames for entity generatives', 1, 60, 1, 'entity', '2025-08-21 03:23:13', '2025-10-17 23:42:36', 0),
-(16, 'gfs 🏞️ Backgrounds', 9, '/var/www/sage/bash/genframes_fromdb.sh', 'backgrounds', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-03 11:38:09', 0, 'Generates frames for entity generatives', 1, 60, 1, 'entity', '2025-08-21 03:23:13', '2025-10-17 22:39:11', 0),
-(17, 'gfs 🛸 Vehicles', 10, '/var/www/sage/bash/genframes_fromdb.sh', 'vehicles', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-03 08:42:58', 0, 'Generates frames for entity generatives', 1, 60, 1, 'entity', '2025-08-21 03:23:13', '2025-10-17 22:39:31', 0),
-(18, 'gfs 🏺 Artifacts', 9, '/var/www/sage/bash/genframes_fromdb.sh', 'artifacts', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-03 08:36:57', 1, NULL, 1, 60, 1, 'entity', '2025-08-30 22:20:25', '2025-10-17 22:40:03', 0),
-(19, 'gfs 🤸 Character Poses', 8, '/var/www/sage/bash/genframes_fromdb.sh', 'character_poses', NULL, NULL, '0,1,2,3,4,5,6', '2025-09-28 17:41:08', 1, NULL, 1, 60, 1, 'entity', '2025-08-30 22:20:56', '2025-10-17 23:43:01', 0),
-(20, 'gms Controlnet Maps', 7, '/var/www/sage/bash/genmaps_fromdb.sh', 'controlnet_maps', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-11 17:45:15', 1, NULL, 1, 60, 1, 'entity', '2025-09-17 11:13:55', '2025-10-17 23:43:01', 0),
-(22, 'sw 🌠 Toggle Stable Diffusion API: JUPYTER / pollinations.ai✓', 10, '/var/www/sage/bash/switch.sh', '', NULL, NULL, '0,1,2,3,4,5,6', '2025-09-29 23:24:50', 1, NULL, 1, 60, 1, 'entity', '2025-09-21 04:45:01', '2025-10-17 23:42:55', 0),
-(23, 'gfs 🌌 Prompt Matrix Blueprints', 5, '/var/www/sage/bash/genframes_fromdb.sh', 'prompt_matrix_blueprints', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-17 22:42:00', 1, NULL, 1, 60, 1, 'entity', '2025-09-30 01:15:24', '2025-10-17 23:42:52', 0),
-(24, 'gfs 🧩 Composites', 4, '/var/www/sage/bash/genframes_fromdb.sh', 'composites', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-11 18:20:54', 1, NULL, 1, 60, 1, 'entity', '2025-10-04 18:47:41', '2025-10-17 23:42:36', 0),
-(25, 'swenv 🎛️ Switch environments', 9, '/var/www/sage/bash/switchenv.sh', 'nu', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-15 20:11:24', 1, NULL, 1, 60, 1, 'entity', '2025-10-08 14:26:29', '2025-10-17 23:42:55', 0),
-(26, 'anaco ⌨️ Analyze code', 6, '/var/www/sage/bash/analyze_code_src.sh', '', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-15 20:11:24', 1, NULL, 1, 60, 1, 'global', '2025-10-17 23:38:44', '2025-10-17 23:43:01', 0);
+(10, 'gfs ⚡ Generatives', 4, '/var/www/sage/bash/genframes_fromdb.sh', 'generatives', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-24 16:04:47', 0, 'Generates frames for entity generatives', 1, 60, 1, 'entity', '2025-08-21 03:23:13', '2025-10-24 16:04:47', 0),
+(11, 'gfs 🦸 Characters', 9, '/var/www/sage/bash/genframes_fromdb.sh', 'characters', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-24 15:53:12', 0, 'Generates frames for entity generatives', 1, 60, 1, 'entity', '2025-08-21 03:23:13', '2025-10-24 15:53:12', 0),
+(12, 'gfs 🐾 Animas', 10, '/var/www/sage/bash/genframes_fromdb.sh', 'animas', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-24 12:39:46', 0, 'Generates frames for entity generatives', 1, 60, 1, 'entity', '2025-08-21 03:23:13', '2025-10-24 12:39:46', 0),
+(13, 'gfs 🗺️ Locations', 10, '/var/www/sage/bash/genframes_fromdb.sh', 'locations', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-24 13:59:05', 0, 'Generates frames for entity generatives', 1, 60, 1, 'entity', '2025-08-21 03:23:13', '2025-10-24 13:59:05', 0),
+(15, 'gfs 🎨 Sketches', 10, '/var/www/sage/bash/genframes_fromdb.sh', 'sketches', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-24 13:53:01', 0, 'Generates frames for entity generatives', 1, 60, 1, 'entity', '2025-08-21 03:23:13', '2025-10-24 13:53:01', 0),
+(16, 'gfs 🏞️ Backgrounds', 10, '/var/www/sage/bash/genframes_fromdb.sh', 'backgrounds', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-24 12:45:14', 0, 'Generates frames for entity generatives', 1, 60, 1, 'entity', '2025-08-21 03:23:13', '2025-10-24 12:45:14', 0),
+(17, 'gfs 🛸 Vehicles', 10, '/var/www/sage/bash/genframes_fromdb.sh', 'vehicles', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-03 08:42:58', 0, 'Generates frames for entity generatives', 1, 60, 1, 'entity', '2025-08-21 03:23:13', '2025-10-11 18:31:57', 0),
+(18, 'gfs 🏺 Artifacts', 9, '/var/www/sage/bash/genframes_fromdb.sh', 'artifacts', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-03 08:36:57', 1, NULL, 1, 60, 1, 'entity', '2025-08-30 22:20:25', '2025-10-11 18:31:57', 0),
+(19, 'gfs 🤸 Character Poses', 8, '/var/www/sage/bash/genframes_fromdb.sh', 'character_poses', NULL, NULL, '0,1,2,3,4,5,6', '2025-09-28 17:41:08', 1, NULL, 1, 60, 1, 'entity', '2025-08-30 22:20:56', '2025-10-22 17:44:11', 0),
+(20, 'gms Controlnet Maps', 7, '/var/www/sage/bash/genmaps_fromdb.sh', 'controlnet_maps', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-11 17:45:15', 1, NULL, 1, 60, 1, 'entity', '2025-09-17 11:13:55', '2025-10-22 17:44:11', 0),
+(22, 'sw 🌠 Switch to genframe API: pollinations, freepik, jupyter, jupyter_lcm', 2, '/var/www/sage/bash/switch.sh', 'jupyter', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-24 15:52:36', 1, NULL, 1, 60, 1, 'entity', '2025-09-21 04:45:01', '2025-10-24 15:52:36', 0),
+(23, 'gfs 🌌 Prompt Matrix Blueprints', 6, '/var/www/sage/bash/genframes_fromdb.sh', 'prompt_matrix_blueprints', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-03 11:44:24', 1, NULL, 1, 60, 1, 'entity', '2025-09-30 01:15:24', '2025-10-22 17:44:11', 0),
+(24, 'gfs 🧩 Composites', 5, '/var/www/sage/bash/genframes_fromdb.sh', 'composites', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-24 13:08:59', 1, NULL, 1, 60, 1, 'entity', '2025-10-04 18:47:41', '2025-10-24 13:08:59', 0),
+(25, 'swenv 🎛️ Switch environments', 3, '/var/www/sage/bash/switchenv.sh', 'init', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-15 20:11:24', 1, NULL, 1, 60, 1, 'entity', '2025-10-08 14:26:29', '2025-10-22 17:44:11', 0),
+(26, 'zup 🚇 update genframes zrok tunnel url', 1, '/var/www/sage/bash/zrok_update.sh', '', NULL, NULL, '0,1,2,3,4,5,6', '2025-10-24 15:52:32', 1, NULL, 1, 60, 1, 'global', '2025-10-22 17:33:51', '2025-10-24 15:52:32', 0);
 
 
 -- --------------------------------------------------------
@@ -1560,9 +1564,9 @@ INSERT INTO `styles` (`id`, `active`, `visible`, `name`, `order`, `description`,
 (19, 0, 1, 'meina mix', 2, 'meina mix style', '', '', '2025-09-01 10:54:00', '2025-09-24 14:24:33'),
 (20, 0, 1, 'cominoir2', 2, 'cominoir2 style', '', '', '2025-09-01 10:54:00', '2025-09-28 14:42:33'),
 (21, 0, 1, 'LCM SDXL', 2, '', '', '', '2025-09-01 10:54:00', '2025-09-30 11:15:01'),
-(22, 0, 1, 'LCM animagine xl', 2, '', '', '', '2025-09-01 10:54:00', '2025-09-30 22:57:37'),
+(22, 0, 1, 'animagine xl', 2, '', '', '', '2025-09-01 10:54:00', '2025-09-30 22:57:37'),
 (23, 0, 1, 'LCM dreamshaper v7', 2, '', '', '', '2025-09-01 10:54:00', '2025-10-08 10:58:55'),
-(24, 0, 1, 'nanobanana pollinations', 2, '', '', '', '2025-10-08 10:58:40', '2025-10-13 18:25:41');
+(24, 0, 1, 'nanobanana freepik', 2, '', '', '', '2025-10-08 10:58:40', '2025-10-13 18:25:41');
 
 -- --------------------------------------------------------
 

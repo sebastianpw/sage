@@ -534,13 +534,13 @@ foreach ($tokenFiles as $key => $filename) {
 
 
         <!-- Scheduler split button -->
-	<div class="button-group" style="margin-bottom: 15px;">
+	<div class="button-group">
             <a class="gallerylink" href="scheduler_view.php">🌀 Scheduler</a>
 	    <a id="dashboardLogBtn">📓 Logs</a>
 	</div>
 
 
-
+<a style="margin-bottom: 20px;" href="kaggle.php">💻 Notebooks</a>
 
 
 <!-- Log Overlay -->
@@ -908,15 +908,17 @@ iner&db=<?php echo $dbname; ?>&select=frames&order%5B0
 <a href="adminer/index.php?server=127.0.0.1&username=adminer&db=<?php echo $dbname; ?>&select=sage_todos&order%5B0%5D=id&desc%5B0%5D=1">🎫 SAGE TODOs</a>
 -->
 
+
 <!--
-<a href="kaggle.php">💻 KAGGLE</a>
+<a href="kaggle.php">💻 Notebooks</a>
+-->
 
 
-
-
+<!--
 <a href="view_zrok.php">🌐 zrok</a>
 -->
 
+<a href="view_md.php">🎓 Documentation</a>
 
 
 <a href="todo.php">🎫 SAGE TODOs</a>
@@ -937,6 +939,8 @@ iner&db=<?php echo $dbname; ?>&select=frames&order%5B0
 <!--
 <a href="generator_test_client.php">🧑‍💻 Generator Test Client</a> 
 -->
+
+
 
 
 <!--
@@ -1287,6 +1291,7 @@ $(document).ready(function() {
 
 <?php
 /*
+🪩 disco ball
 📸 Camera with flash → action shot, photography
 🎞️ Film frames → film, photos, sequence of images
 📹 Video camera → video, moving images

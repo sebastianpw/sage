@@ -184,13 +184,23 @@ button { padding: 4px 8px; margin: 2px; }
 }
 .lock-badge.active { background: #dc3545; color: #fff; }
 .lock-badge.none { background: #28a745; color: #fff; }
+td[contenteditable="true"][data-field="args"] {
+  background-color: rgba(255, 0, 0, 0.05);  /* very light red nuance */
+  border: 1px solid rgba(200, 0, 0, 0.3);   /* soft, darker red border */
+  border-radius: 3px;                       /* optional: smooth corners */
+}
+td[contenteditable="true"][data-field="args"]:focus {
+  outline: none;
+  background-color: rgba(255, 0, 0, 0.08);
+  border-color: rgba(200, 0, 0, 0.6);
+}
 </style>
 <?php echo $eruda; ?>
 </head>
 <body>
 <?php require "floatool.php"; ?>
 <div style="display: flex; align-items: center; margin-bottom: 15px; gap: 10px;">
-    <a href="dashboard.php" title="Dashboard" style="text-decoration: none; font-size: 24px;">🗂️</a>
+    <a href="dashboard.php" title="Dashboard" style="text-decoration: none; font-size: 24px;">🔮</a>
     <h2 style="margin: 0;">Scheduler</h2>
     <button id="addBtn">Add New</button>
     <button id="logBtn">View Logs</button>

@@ -3,6 +3,12 @@
 require_once "bootstrap.php";            // bootstrap includes AccessManager and starts session as needed
 $spw = \App\Core\SpwBase::getInstance();
 
+$alreadyAdmin = \App\Core\SetupManager::adminExists($pdo);
+
+if (!$alreadyAdmin) {
+    header("Location: setup.php");
+}
+
 $message = '';
 
 // Default redirect shown in the form is rendered by AccessManager::renderHiddenRedirectInput()

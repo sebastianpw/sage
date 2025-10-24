@@ -66,6 +66,17 @@ fi
 # install packages
 DEBIAN_FRONTEND=noninteractive apt install ffmpeg jq
 
+
+# Install kaggle for the user
+pip install --user --upgrade kaggle
+
+# Make sure ~/.local/bin is in PATH
+export PATH="$HOME/.local/bin:$PATH"
+
+# Set Kaggle config
+export KAGGLE_CONFIG_DIR="$HOME/.kaggle"
+
+
 # wait a while
 sleep 10
 

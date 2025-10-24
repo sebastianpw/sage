@@ -47,14 +47,16 @@ USE_TURBO=false             # Only affects text-to-image (Pollinations)
 
 
 
+
 ZROK_URL=$("$SCRIPT_DIR/zrok_echo.sh")
+
 
 
 
 
 DB_USER="root"
 DB_NAME=$("$SCRIPT_DIR/db_name.sh")
-MAX_RETRIES=1
+MAX_RETRIES=2
 RETRY_DELAY=2
 
 export FREEIMAGE_KEY=$(cat "$SCRIPT_DIR/../token/.freeimage_key")
@@ -133,21 +135,29 @@ if [ -n "$IMG2IMG_FILENAME" ]; then
 fi
 
 # -----------------------------
-# Set up IMAGE_URL for img2img
+# Set up IMAGE_URL for img2img (only for pollinations; skip upload on colab/kaggle/ngrok)
 # -----------------------------
+IMAGE_URL=""
 if [ -n "$IMG2IMG_FILENAME" ] && [ -f "$IMG2IMG_FILENAME" ]; then
-  echo "Uploading local source image $IMG2IMG_FILENAME to Freeimage.host..."
-  response=$(curl -s -X POST "https://freeimage.host/api/1/upload" \
-    -F "key=$FREEIMAGE_KEY" \
-    -F "action=upload" \
-    -F "source=@$IMG2IMG_FILENAME" \
-    -F "format=json")
-  IMAGE_URL=$(echo "$response" | jq -r '.image.url')
-  if [ -z "$IMAGE_URL" ] || [ "$IMAGE_URL" = "null" ]; then
-    echo "Failed to upload source image. Response: $response"
-    exit 1
+  if [ "$GEN_SOURCE" = "pollinations" ]; then
+    echo "Uploading local source image $IMG2IMG_FILENAME to Freeimage.host (pollinations mode)..."
+    response=$(curl -s -X POST "https://freeimage.host/api/1/upload" \
+      -F "key=$FREEIMAGE_KEY" \
+      -F "action=upload" \
+      -F "source=@$IMG2IMG_FILENAME" \
+      -F "format=json")
+    IMAGE_URL=$(echo "$response" | jq -r '.image.url')
+    if [ -z "$IMAGE_URL" ] || [ "$IMAGE_URL" = "null" ]; then
+      echo "Failed to upload source image. Response: $response"
+      exit 1
+    fi
+    echo "Uploaded source image URL: $IMAGE_URL"
+  else
+    # Running in colab/ngrok/kaggle mode — the remote endpoint accepts a direct file upload,
+    # so skip the freeimage.host upload to save time.
+    echo "Skipping freeimage.host upload because GEN_SOURCE='$GEN_SOURCE'. Using direct file upload."
+    IMAGE_URL=""
   fi
-  echo "Uploaded source image URL: $IMAGE_URL"
 else
   IMAGE_URL=""
   IMG2IMG_FILENAME=""
@@ -239,8 +249,9 @@ while [ $attempt -le $MAX_RETRIES ]; do
     fi
   else
     # Colab/ngrok branch
-    negative_prompt="nudity, curvy, big tits"
-
+    # negative_prompt="nudity, explicit, nsfw, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name"
+     
+    negative_prompt="nudity, nude, naked, bare, topless, underwear, panties, erotic, sexual, explicit, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name"
 
 
 
@@ -254,38 +265,70 @@ if [ -z "$SEED" ] || [ "$SEED" -eq 0 ]; then
   SEED=$(( (RANDOM << 15) | RANDOM ))
 fi
 
+# TODO all prompts use the same sees until seed is stored to make prompts reproduceable
+SEED=36
+
+
+
 
 
 if [ -n "$IMG2IMG_FILENAME" ]; then
   # image-to-image
+#  curl -s -X POST "$ZROK_URL/generate" \
+#    -F "prompt=$prompt" \
+#    -F "negative_prompt=$negative_prompt" \
+#    -F "height=768" \
+#    -F "width=768" \
+#    -F "num_inference_steps=80" \
+#    -F "guidance_scale=10" \
+#    -F "init_image=@$IMG2IMG_FILENAME" \
+#    -F "strength=0.7" \
+#    -F "use_controlnet=$USE_CONTROLNET" \
+#    -F "seed=$SEED" \
+#    $CONTROLNET_PARAM \
+#    --output "$outfile" 
+
+
+
+curl -s -X POST "$ZROK_URL/generate" \
+    -F "prompt=$prompt" \
+    -F "negative_prompt=$negative_prompt" \
+    -F "guidance_scale=1.5" \
+    -F "num_inference_steps=8" \
+    -F "init_image=@$IMG2IMG_FILENAME" \
+    -F "seed=$SEED" \
+    --output "$outfile" 
+
+
+
+
+
+else
+  # text-to-image only
+#  curl -s -X POST "$ZROK_URL/generate" \
+#    -F "prompt=$prompt" \
+#    -F "negative_prompt=$negative_prompt" \
+#    -F "height=768" \
+#    -F "width=768" \
+#    -F "num_inference_steps=4" \
+#    -F "guidance_scale=10" \
+#    -F "use_controlnet=$USE_CONTROLNET" \
+#    -F "seed=$SEED" \
+#    $CONTROLNET_PARAM \
+#    --output "$outfile" 
+
+
+# TESTING LCM ADAPTER
   curl -s -X POST "$ZROK_URL/generate" \
     -F "prompt=$prompt" \
     -F "negative_prompt=$negative_prompt" \
     -F "height=768" \
     -F "width=768" \
-    -F "num_inference_steps=80" \
-    -F "guidance_scale=10" \
-    -F "init_image=@$IMG2IMG_FILENAME" \
-    -F "strength=0.7" \
-    -F "use_controlnet=$USE_CONTROLNET" \
+    -F "guidance_scale=1.5" \
+    -F "num_inference_steps=6" \
     -F "seed=$SEED" \
-    $CONTROLNET_PARAM \
-    --output "$outfile" 
-else
+    --output "$outfile"
 
-
-
-
-  # text-to-image only
-curl -s -X POST "$ZROK_URL/generate" \
-  -F "prompt=$prompt" \
-  -F "negative_prompt=$negative_prompt" \
-  -F "height=384" \
-  -F "width=384" \
-  -F "num_inference_steps=20" \
-  -F "guidance_scale=7.5" \
-  -F "seed=$SEED" \
-  --output "$outfile"
 
 
 
