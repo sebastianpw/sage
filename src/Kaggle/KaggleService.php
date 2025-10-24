@@ -526,178 +526,6 @@ public function pullKernelToLocal(string $kernelRef): array
     }
 }
 
-/**
- * Fix kernel metadata to ensure GPU and internet are enabled
- * Returns ['success' => bool, 'fixed' => array of fixed fields, 'message' => string]
-public function fixKernelMetadata(string $folderPath): array
-{
-    $metadataPath = rtrim($folderPath, '/') . '/kernel-metadata.json';
-    
-    if (!file_exists($metadataPath)) {
-        return [
-            'success' => false,
-            'fixed' => [],
-            'message' => 'kernel-metadata.json not found in folder'
-        ];
-    }
-
-    $json = @file_get_contents($metadataPath);
-    if ($json === false) {
-        return [
-            'success' => false,
-            'fixed' => [],
-            'message' => 'Failed to read kernel-metadata.json'
-        ];
-    }
-
-    $metadata = json_decode($json, true);
-    if (!is_array($metadata)) {
-        return [
-            'success' => false,
-            'fixed' => [],
-            'message' => 'Invalid JSON in kernel-metadata.json'
-        ];
-    }
-
-    $fixed = [];
-    $modified = false;
-
-    // Ensure enable_gpu is true
-    if (!isset($metadata['enable_gpu']) || $metadata['enable_gpu'] !== true) {
-        $metadata['enable_gpu'] = true;
-        $fixed[] = 'enable_gpu';
-        $modified = true;
-    }
-
-    // Ensure enable_internet is true
-    if (!isset($metadata['enable_internet']) || $metadata['enable_internet'] !== true) {
-        $metadata['enable_internet'] = true;
-        $fixed[] = 'enable_internet';
-        $modified = true;
-    }
-
-    if ($modified) {
-        $newJson = json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        $writeResult = @file_put_contents($metadataPath, $newJson);
-        
-        if ($writeResult === false) {
-            return [
-                'success' => false,
-                'fixed' => [],
-                'message' => 'Failed to write updated kernel-metadata.json'
-            ];
-        }
-
-        return [
-            'success' => true,
-            'fixed' => $fixed,
-            'message' => 'Fixed: ' . implode(', ', $fixed)
-        ];
-    }
-
-    return [
-        'success' => true,
-        'fixed' => [],
-        'message' => 'Metadata already correct'
-    ];
-}
- */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/**
- * Create default kernel metadata for a notebook folder
- * Returns ['success' => bool, 'message' => string]
-public function createDefaultMetadata(string $folderPath): array
-{
-    $folderPath = rtrim($folderPath, '/');
-    $metadataPath = $folderPath . '/kernel-metadata.json';
-    
-    if (file_exists($metadataPath)) {
-        return [
-            'success' => false,
-            'message' => 'Metadata file already exists'
-        ];
-    }
-    
-    // Find the .ipynb file
-    $ipynbFiles = glob($folderPath . '/*.ipynb');
-    if (empty($ipynbFiles)) {
-        return [
-            'success' => false,
-            'message' => 'No .ipynb file found in folder'
-        ];
-    }
-    
-    $notebookFile = basename($ipynbFiles[0]);
-    $slug = basename($folderPath);
-    $title = basename($ipynbFiles[0], '.ipynb');
-    
-    // Get username from token
-    $token = $this->getApiToken();
-    if (!$token) {
-        return [
-            'success' => false,
-            'message' => 'No API token configured'
-        ];
-    }
-    
-    $username = $token['username'];
-    
-    // Create default metadata
-    $metadata = [
-        'id' => $username . '/' . $slug,
-        'title' => $title,
-        'code_file' => $notebookFile,
-        'language' => 'python',
-        'kernel_type' => 'notebook',
-        'is_private' => true,
-        'enable_gpu' => true,
-        'enable_tpu' => false,
-        'enable_internet' => true,
-        'dataset_sources' => [],
-        'competition_sources' => [],
-        'kernel_sources' => [],
-        'model_sources' => []
-    ];
-    
-    $json = json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    $writeResult = @file_put_contents($metadataPath, $json);
-    
-    if ($writeResult === false) {
-        return [
-            'success' => false,
-            'message' => 'Failed to write metadata file'
-        ];
-    }
-    
-    return [
-        'success' => true,
-        'message' => 'Created default metadata with GPU and internet enabled'
-    ];
-}
-
- */
-
-
 
 
 
@@ -883,6 +711,35 @@ public function fixKernelMetadata(string $folderPath): array
     $fixed = [];
     $modified = false;
 
+    // --- NEW: auto-create id from username and title if missing/empty ---
+    $kaggleTokenForId = $this->getApiToken();
+    if ($kaggleTokenForId && isset($kaggleTokenForId['username'])) {
+        $username = $kaggleTokenForId['username'];
+        if (!isset($metadata['id']) || trim((string)$metadata['id']) === '') {
+            // choose title or fallback to folder name
+            $titleForSlug = isset($metadata['title']) && trim((string)$metadata['title']) !== ''
+                ? $metadata['title']
+                : basename(rtrim($folderPath, '/'));
+
+            // slugify: lowercase, replace invalid chars with hyphen, collapse hyphens, trim
+            $slug = strtolower((string)$titleForSlug);
+            // replace any character not a-z, 0-9, hyphen or underscore with hyphen
+            $slug = preg_replace('/[^a-z0-9-_]+/', '-', $slug);
+            // collapse multiple hyphens
+            $slug = preg_replace('/-+/', '-', $slug);
+            // trim leading/trailing hyphens/underscores
+            $slug = trim($slug, '-_');
+            if ($slug === '') {
+                $slug = 'notebook';
+            }
+
+            $metadata['id'] = $username . '/' . $slug;
+            $fixed[] = 'id';
+            $modified = true;
+        }
+    }
+    // --- end NEW block ---
+
     // Ensure enable_gpu is true
     if (!isset($metadata['enable_gpu']) || $metadata['enable_gpu'] !== true) {
         $metadata['enable_gpu'] = true;
@@ -951,6 +808,112 @@ public function fixKernelMetadata(string $folderPath): array
         'message' => 'Metadata already correct'
     ];
 }
+/**
+ * Add Zrok token dataset to kernel metadata
+ * Modified version of fixKernelMetadata that also adds the dataset dependency
+ *
+public function fixKernelMetadata(string $folderPath): array
+{
+    $metadataPath = rtrim($folderPath, '/') . '/kernel-metadata.json';
+    
+    if (!file_exists($metadataPath)) {
+        return [
+            'success' => false,
+            'fixed' => [],
+            'message' => 'kernel-metadata.json not found in folder'
+        ];
+    }
+
+    $json = @file_get_contents($metadataPath);
+    if ($json === false) {
+        return [
+            'success' => false,
+            'fixed' => [],
+            'message' => 'Failed to read kernel-metadata.json'
+        ];
+    }
+
+    $metadata = json_decode($json, true);
+    if (!is_array($metadata)) {
+        return [
+            'success' => false,
+            'fixed' => [],
+            'message' => 'Invalid JSON in kernel-metadata.json'
+        ];
+    }
+
+    $fixed = [];
+    $modified = false;
+
+    // Ensure enable_gpu is true
+    if (!isset($metadata['enable_gpu']) || $metadata['enable_gpu'] !== true) {
+        $metadata['enable_gpu'] = true;
+        $fixed[] = 'enable_gpu';
+        $modified = true;
+    }
+
+    // Ensure enable_internet is true
+    if (!isset($metadata['enable_internet']) || $metadata['enable_internet'] !== true) {
+        $metadata['enable_internet'] = true;
+        $fixed[] = 'enable_internet';
+        $modified = true;
+    }
+
+    // Add Zrok token dataset if we have tokens configured
+    $kaggleToken = $this->getApiToken();
+    $zrokToken = $this->getZrokToken();
+    
+    if ($kaggleToken && $zrokToken) {
+        $username = $kaggleToken['username'];
+        $zrokDatasetRef = $username . '/sage-zrok-token';
+        
+        // Initialize dataset_sources if not exists
+        if (!isset($metadata['dataset_sources'])) {
+            $metadata['dataset_sources'] = [];
+        }
+        
+        // Check if zrok dataset is already in sources
+        $hasZrokDataset = false;
+        foreach ($metadata['dataset_sources'] as $ds) {
+            if (is_string($ds) && stripos($ds, 'sage-zrok-token') !== false) {
+                $hasZrokDataset = true;
+                break;
+            }
+        }
+        
+        if (!$hasZrokDataset) {
+            $metadata['dataset_sources'][] = $zrokDatasetRef;
+            $fixed[] = 'zrok_dataset';
+            $modified = true;
+        }
+    }
+
+    if ($modified) {
+        $newJson = json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        $writeResult = @file_put_contents($metadataPath, $newJson);
+        
+        if ($writeResult === false) {
+            return [
+                'success' => false,
+                'fixed' => [],
+                'message' => 'Failed to write updated kernel-metadata.json'
+            ];
+        }
+
+        return [
+            'success' => true,
+            'fixed' => $fixed,
+            'message' => 'Fixed: ' . implode(', ', $fixed)
+        ];
+    }
+
+    return [
+        'success' => true,
+        'fixed' => [],
+        'message' => 'Metadata already correct'
+    ];
+}
+*/
 
 /**
  * Updated createDefaultMetadata to include Zrok dataset

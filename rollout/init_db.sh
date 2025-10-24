@@ -3,7 +3,42 @@
 # Loads credentials dynamically from ../.env.local
 # Also ensures databases exist
 
-set -e  # stop on errors
+set -euo pipefail
+
+# ===============================
+# SAGE DEV BANNER
+# ===============================
+
+cat << "EOF"
+   _______  _________
+  / __/ _ |/ ___/ __/
+ _\ \/ __ / (_ / _/
+/___/_/ |_\___/___/
+  / _ \/ __/ | / /
+ / // / _/ | |/ /
+/____/___/ |___/
+EOF
+
+RED='\033[0;31m'
+NC='\033[0m' # no color
+
+echo -e "${RED}WARNING: This script will install/uninstall packages and is for GitHub Codespaces / dev containers ONLY!${NC}"
+echo -e "${RED}Do NOT run on a production server unless you know what you are doing.${NC}"
+echo ""
+
+# Ask for explicit confirmation (accept y/Y too)
+read -p "Type YES or y to continue: " confirm
+confirm_lower=$(echo "$confirm" | tr '[:upper:]' '[:lower:]')
+if [ "$confirm_lower" != "yes" ] && [ "$confirm_lower" != "y" ]; then
+  echo "Aborted."
+  exit 1
+fi
+
+
+# ===============================
+# Alright let's go...
+# ===============================
+
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DB_DATADIR=$("$SCRIPT_DIR/../bash/db_name.sh" datadir)
@@ -67,14 +102,70 @@ fi
 DEBIAN_FRONTEND=noninteractive apt install -y ffmpeg jq python3-pip
 
 
-# Install kaggle for the user
-pip install --user --upgrade --break-system-packages kaggle
+# Install kaggle
+#pip install --upgrade --break-system-packages kaggle
 
-# Make sure ~/.local/bin is in PATH
-export PATH="$HOME/.local/bin:$PATH"
 
-# Set Kaggle config
-export KAGGLE_CONFIG_DIR="$HOME/.kaggle"
+# Kaggle system-wide install for Debian Codespace
+
+pip uninstall --break-system-packages  \
+    kaggle \
+    requests \
+    tqdm \
+    python-dateutil \
+    certifi \
+    urllib3 \
+    idna \
+    chardet \
+    python-slugify \
+    pyyaml \
+    tabulate \
+    bleach \
+    webencodings \
+    html5lib \
+    unidecode \
+    google \
+    google-auth \
+    google-auth-oauthlib \
+    google-api-python-client \
+    protobuf \
+    six
+
+
+pip install --break-system-packages --upgrade \
+    kaggle \
+    requests \
+    tqdm \
+    python-dateutil \
+    certifi \
+    urllib3 \
+    idna \
+    chardet \
+    python-slugify \
+    pyyaml \
+    tabulate \
+    bleach \
+    webencodings \
+    html5lib \
+    unidecode \
+    google \
+    google-auth \
+    google-auth-oauthlib \
+    google-api-python-client \
+    protobuf \
+    six
+
+
+
+# add config location
+export KAGGLE_CONFIG_DIR="/var/www/sage/token/.kaggle"
+
+## kaggle --user install etc would be termux only
+#pip install --user --upgrade --break-system-packages kaggle
+## Make sure ~/.local/bin is in PATH
+#export PATH="$HOME/.local/bin:$PATH"
+## Set Kaggle config
+#export KAGGLE_CONFIG_DIR="$HOME/.kaggle"
 
 
 # wait a while
