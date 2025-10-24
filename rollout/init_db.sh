@@ -160,12 +160,27 @@ pip install --break-system-packages --upgrade \
 # add config location
 export KAGGLE_CONFIG_DIR="/var/www/sage/token/.kaggle"
 
+
+
 ## kaggle --user install etc would be termux only
 #pip install --user --upgrade --break-system-packages kaggle
 ## Make sure ~/.local/bin is in PATH
 #export PATH="$HOME/.local/bin:$PATH"
 ## Set Kaggle config
 #export KAGGLE_CONFIG_DIR="$HOME/.kaggle"
+
+
+
+# install zrok
+curl -LO https://github.com/openziti/zrok/releases/download/v1.1.10/zrok_1.1.10_linux_amd64.tar.gz
+
+tar -xzf zrok_1.1.10_linux_amd64.tar.gz
+
+mv zrok /usr/local/bin/
+chmod +x /usr/local/bin/zrok
+
+
+
 
 
 # wait a while
