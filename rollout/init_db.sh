@@ -241,6 +241,9 @@ mysql -h "$MAIN_HOST" -P "${MAIN_PORT:-3306}" -u "$MAIN_USER" -p"$MAIN_PASS" "$M
 echo "Importing system database $SYS_DB..."
 mysql -h "$SYS_HOST" -P "${SYS_PORT:-3306}" -u "$SYS_USER" -p"$SYS_PASS" "$SYS_DB" < "$(dirname "$0")/init_sys.sql"
 
-echo "Rollout complete."
+echo "Rollout complete. (Re)Starting servers. Fasten your seat belt."
 
+("$SCRIPT_DIR/../bash/restart_servers.sh")
+
+echo "done"
 
