@@ -35,7 +35,7 @@ fi
 php-fpm &
 
 # Start NGINX server
-nginx
+nginx &
 
 # Give servers a moment to initialize
 sleep 5
@@ -51,13 +51,9 @@ else
 fi
 
 
-# Final status message
-if [ "${DOCKERIZED:-0}" = "1" ]; then
-    echo "PHP-FPM and NGINX restarted. MariaDB is running in the Docker container; not managed by this script. Ise: docker-compose restart db"
-else
-    echo "PHP-FPM, NGINX, and MariaDB restarted in background."
-fi
-
+echo "PHP-FPM, NGINX, and MariaDB restarted in background."
 echo "NGINX server running at http://localhost:8080"
+
+echo "done"
 
 
