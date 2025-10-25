@@ -62,3 +62,7 @@ echo "To stop:"
 echo "  php $SCRIPT_DIR/../public/scheduler_stop.php"
 echo "  php $SCRIPT_DIR/../public/completion_tracker_stop.php"
 echo "================================================"
+
+exit 0
+
+
