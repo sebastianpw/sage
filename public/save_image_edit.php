@@ -10,6 +10,8 @@ require __DIR__ . '/env_locals.php';
 
 use App\Core\FramesManager;
 
+$projectRoot = \App\Core\SpwBase::getInstance()->getProjectPath();
+
 header('Content-Type: application/json; charset=utf-8');
 
 // Load raw body
@@ -72,7 +74,7 @@ try {
     }
 
     // instantiate ImageEditTool (filesystem-only)
-    $imageEditToolPath = PROJECT_ROOT . '/src/Tools/ImageEditTool.php';
+    $imageEditToolPath = $projectRoot . '/src/Tools/ImageEditTool.php';
     if (!file_exists($imageEditToolPath)) {
         // fallback to legacy path (in case you kept ImageEditTool next to endpoints)
         $imageEditToolPath = __DIR__ . '/ImageEditTool.php';
@@ -82,7 +84,7 @@ try {
         exit;
     }
     require_once $imageEditToolPath;
-    $iet = new ImageEditTool(PROJECT_ROOT);
+    $iet = new ImageEditTool($projectRoot);
 
     // Reserve unique base name from DB (thread-safe)
     try {

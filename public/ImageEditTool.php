@@ -5,27 +5,13 @@
 // Place/require this file where your endpoints need it.
 
 class ImageEditTool {
-    protected string PROJECT_ROOT;
-    protected string FRAMES_ROOT;      // absolute path to frames folder (from load_root.php)
-    protected string $framesDirRel;     // relative frames dir (relative to public/, as you use)
+    protected string $projectRoot;
+    protected string $framesDirRel;
     protected ?string $lastError = null;
 
-    public function __construct(string $projectRoot) {
-        $this->PROJECT_ROOT = rtrim($projectRoot, '/');
-
-        // load_root.php is expected to define PROJECT_ROOT and FRAMES_ROOT
-        if (file_exists(__DIR__ . '/load_root.php')) {
-            require __DIR__ . '/load_root.php';
-        } elseif (file_exists($this->PROJECT_ROOT . '/load_root.php')) {
-            require $this->PROJECT_ROOT . '/load_root.php';
-        }
-
-        // FRAMES_ROOT should be set by load_root.php
-        $this->FRAMES_ROOT = isset(FRAMES_ROOT) ? rtrim(FRAMES_ROOT, '/') : ($this->PROJECT_ROOT . '/public/frames');
-
-        // Make a relative path consistent with how filenames are stored (strip PROJECT_ROOT/public/)
-        $publicPrefix = rtrim($this->PROJECT_ROOT, '/') . '/public/';
-        $this->framesDirRel = str_replace($publicPrefix, '', $this->FRAMES_ROOT) . '/';
+    public function __construct() {
+        $this->projectRoot = \App\Core\SpwBase::getInstance()->getProjectPath();
+	$this->framesDirRel = \App\Core\SpwBase::getInstance()->getFramesDirRel();
     }
 
     public function getLastError(): ?string {
@@ -41,9 +27,9 @@ class ImageEditTool {
         $srcRelTrim = ltrim($srcRel, '/');
 
         $candidates = [
-            $this->PROJECT_ROOT . '/public/' . $srcRelTrim,
-            $this->PROJECT_ROOT . '/' . $srcRelTrim,
-            rtrim($this->FRAMES_ROOT, '/') . '/' . basename($srcRelTrim),
+            $this->projectRoot . '/public/' . $srcRelTrim,
+            $this->projectRoot . '/' . $srcRelTrim,
+            rtrim(\App\Core\SpwBase::getInstance()->getFramesDir(), '/') . '/' . basename($srcRelTrim),
         ];
 
         foreach ($candidates as $cand) {
@@ -126,7 +112,7 @@ class ImageEditTool {
 
         // IMPORTANT: forcedBasename is used exactly as provided (expected to be created by FramesManager)
         $destRel = ($dirnameRel ? ($dirnameRel . '/') : '') . $forcedBasename . '.' . $extension;
-        $destFull = $this->PROJECT_ROOT . '/public/' . ltrim($destRel, '/');
+        $destFull = $this->projectRoot . '/public/' . ltrim($destRel, '/');
 
         $dir = dirname($destFull);
         if (!is_dir($dir)) {
