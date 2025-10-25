@@ -42,7 +42,20 @@ VIEW_NAME="v_prompts_${PROMPT_TYPE}"
 # Fetch all entities flagged for regeneration
 SQL_QUERY="SELECT id, prompt FROM $VIEW_NAME WHERE regenerate_images=1"
 
-mysql $MYSQL_ARGS -N -e "$SQL_QUERY" | while IFS=$'\t' read -r ENTITY_ID ENTITY_PROMPT; do
+# Load all results into arrays first
+declare -a ENTITY_IDS
+declare -a ENTITY_PROMPTS
+
+while IFS=$'\t' read -r id prompt; do
+  ENTITY_IDS+=("$id")
+  ENTITY_PROMPTS+=("$prompt")
+done < <(mysql $MYSQL_ARGS -N -e "$SQL_QUERY")
+
+# Now iterate over the arrays (completely separate from MySQL)
+for i in "${!ENTITY_IDS[@]}"; do
+  ENTITY_ID="${ENTITY_IDS[$i]}"
+  ENTITY_PROMPT="${ENTITY_PROMPTS[$i]}"
+  
   # Append add_to_prompt if provided
   if [ -n "$ADD_TO_PROMPT" ]; then
     FULL_PROMPT="$ENTITY_PROMPT $ADD_TO_PROMPT"
@@ -50,25 +63,17 @@ mysql $MYSQL_ARGS -N -e "$SQL_QUERY" | while IFS=$'\t' read -r ENTITY_ID ENTITY_
     FULL_PROMPT="$ENTITY_PROMPT"
   fi
 
-
-
-
-  # Get tunnel URL and export
-
-
-
   echo "Processing ENTITY_ID=$ENTITY_ID ($PROMPT_TYPE) -> Prompt: $FULL_PROMPT"
 
-
   # Pass BASE_PROMPT and MAP_RUN_ID as the first two parameters and limit, offset, no_styles, and add_to_prompt to generation script
-"$SCRIPT_DIR/genframe_db.sh" "$FULL_PROMPT" "$MAP_RUN_ID" "$PROMPT_TYPE" "$ENTITY_ID" "$LIMIT" "$OFFSET" "$NO_STYLES" "$ADD_TO_PROMPT"
+  "$SCRIPT_DIR/genframe_db.sh" "$FULL_PROMPT" "$MAP_RUN_ID" "$PROMPT_TYPE" "$ENTITY_ID" "$LIMIT" "$OFFSET" "$NO_STYLES" "$ADD_TO_PROMPT"
 
-# Update active_map_run_id for this entity
-mysql $MYSQL_ARGS -e "
-UPDATE ${PROMPT_TYPE} 
-SET active_map_run_id = '$MAP_RUN_ID'
-WHERE id = '$ENTITY_ID';
-"
+  # Update active_map_run_id for this entity
+  mysql $MYSQL_ARGS -e "
+  UPDATE ${PROMPT_TYPE} 
+  SET active_map_run_id = '$MAP_RUN_ID'
+  WHERE id = '$ENTITY_ID';
+  "
 
 done
 
