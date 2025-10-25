@@ -180,7 +180,8 @@ mv zrok /usr/local/bin/
 chmod +x /usr/local/bin/zrok
 
 
-
+# install cloudflared for exposing codespace nginx
+("$SCRIPT_DIR/init_cloudflared.sh")
 
 
 # wait a while

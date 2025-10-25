@@ -54,6 +54,8 @@ fi
 echo "PHP-FPM, NGINX, and MariaDB restarted in background."
 echo "NGINX server running at http://localhost:8080"
 
-echo "done"
+sleep 10
+
+"$SCRIPT_DIR/cloudflared_tunnel.sh"
 
 
