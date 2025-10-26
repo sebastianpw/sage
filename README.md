@@ -109,8 +109,14 @@ cd sage
 # Install PHP dependencies
 composer install
 
+
 # Setup database
+
+** ONLY USE THIS IN DEV ENV **
+** (like a new GitHub codespace) **
+
 ./rollout/init_db.sh
+
 
 # Start services
 ./bash/restart_servers.sh
@@ -118,11 +124,11 @@ composer install
 
 Visit **http://yourserverdomain:8080/setup.php** to access the web interface.
 
-### Docker Installation (Optional)
 
-```bash
-docker-compose up -d
-```
+### First steps
+
+Go to: 
+Dashboard > Tools > Documentation > SAGE.md
 
 
 ### Secrets Setup
