@@ -158,15 +158,16 @@ File:
 - Copy `.pollinationsaitoken.todo` → `.pollinationsaitoken`  
 - Put only the token value in the file (no extra spaces or newlines).  
 
-#### 2. FreeImage API Key
+#### 2. Freepik API Key
 
 File:
 
 ```
-./token/.freeimage_key
+./token/.freepik_api_key
 ```
 
-- DONE: FreeImage API key is public and no account needed
+- Copy `.freepik_api_key.todo` → `.freepik_api_key`
+- Put only the token value in the file (no extra spaces or newlines).
 
 #### 3. Groq API Key
 
