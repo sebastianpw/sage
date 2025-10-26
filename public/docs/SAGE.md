@@ -8,7 +8,7 @@
 - SAGE can use services like **Pollinations** or **Freepik**, as well as virtual notebooks.
 - Make sure to add your **(free) API keys** under:
   `Dashboard > 🔑 API Tokens`
-- Check: `Dashboard > Tools > Notebooks`. Make sure tonALWAYS manually stop notebooks in your kaggle account "View active events" to only use GPU hours when you are really generating images
+- Check: `Dashboard > Tools > Notebooks`. Make sure to ALWAYS manually stop notebooks in your kaggle account "View active events" on kaggle.com (after a complete image generation session with multiple image generations) to only use GPU hours when you are really generating images
 
 ## 3. Genframe Settings
 - SAGE scheduler depends on **correct genframe settings** to work with any image service.
@@ -21,9 +21,9 @@
 
 ## 5. Styles
 - SAGE uses one or more **style settings** for image generation.
-- At least **one style must be activated**.
+- At least **one style must be activated** for image generation.
 - Note: `visible` flag controls gallery visibility.
-- Check: `floatool > styles`.
+- Check: floatool > styles (🎨) **Access Floatool**: **  [☰]   ** OR **[    ☰ 🔮  🛢️  👤🎨♻️⚙️📓️]**
 
 ## 6. Composites
 - Generated from **up to 3 source images**.
