@@ -8,7 +8,7 @@ SAGE comes with local preconfigured fully functional jupyter notebooks already!
 **SAGE's Image Generation Options:**
 - **Kaggle Notebooks** (this module) - Free GPU-powered Stable Diffusion with full model control (tgis module)
 - **Pollinations** - External free API for quick image generation, no setup for txt2img, needs free API key for img2img
-- **Freepik** — free external API (for Composite nanobana feature, needs API key)
+- **Freepik** — free external API (recommended for Composite nanobana feature, needs free API key)
 
 You can switch between these options at any time using **Dashboard → Scheduler → "switch genframe to..."**
 
@@ -127,7 +127,7 @@ Genframe is SAGE's term for the image generation backend. SAGE supports multiple
 
 - **notebooks [jupyter OR jupyter_lcm]**: Your Kaggle notebooks via Zrok tunnel (full model control, free GPU)
 - **pollinations**: External free API (instant, no setup, limited models)
-- **freepik**: External paid API (advanced features, requires API key)
+- **freepik**: External free API (advanced features, requires API key)
 
 **When to set it:**
 - First time using any generation service
