@@ -93,7 +93,7 @@ Transform your Android device into a complete AI movie storyboard production stu
 - Composer
 - Git
 
-### Termux Quick Start
+### Quick Start
 
 ```bash
 # Update packages
