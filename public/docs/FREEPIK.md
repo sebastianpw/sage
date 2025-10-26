@@ -4,6 +4,8 @@
 
 This short guide explains how to create a Freepik account and connect it with your SAGE Dashboard.
 
+** Please note that Freepik is currently only used for Composites. Conposites can have up to 3 source images. Image generation uses nanobana.**
+
 ---
 
 ## Step 1 — Create your Freepik account
