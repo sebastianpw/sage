@@ -1,0 +1,18 @@
+{
+  "title": "sage-t2i-i2i-cetus-coda",
+  "code_file": "sage-t2i-i2i-cetus-coda.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "keywords": [],
+  "dataset_sources": [
+    "spw800621/cetus-mix-codaedition",
+    "spw800621/controlnet-openpose"
+  ],
+  "kernel_sources": [],
+  "competition_sources": [],
+  "model_sources": []
+}
