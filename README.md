@@ -195,7 +195,7 @@ File:
 
 ### Kaggle and Google Colab Notebooks
 
-Some advanced AI image generation models and workflows use Kaggle and Google Colab notebooks (free tier). These notebooks are **not yet included in the repository** but will be provided asap in ./notebooks. They can be used for alternative img2txt and img2img generations. Controlnet and upscale has these as a dependency.
+Some advanced AI image generation models and workflows use Kaggle and Google Colab notebooks (free tier). They can be used for alternative img2txt and img2img generations.
 
 
 
@@ -206,7 +206,6 @@ Some advanced AI image generation models and workflows use Kaggle and Google Col
 - *Database connection failed*: Check MariaDB service is running with `mysqld`
 - *Composer errors*: Ensure PHP 8.3+ is installed with `php -v`
 
-See [docs/INSTALL.md](docs/INSTALL.md) for detailed setup instructions.
 
 ---
 
@@ -239,6 +238,9 @@ SAGE aims to unify **AI generation**, **automation**, and **storytelling** into 
 ## 🙏 Acknowledgments
 
 - pollinations.ai
+- kaggle.com
+- freepik.com
+- groq.com
 - Black Forest Labs
 - Stable Diffusion community
 - Symfony framework contributors
