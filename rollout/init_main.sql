@@ -53,10 +53,10 @@ INSERT INTO `angles` (`id`, `name`, `description`, `created_at`, `updated_at`) V
 
 CREATE TABLE `animas` (
   `id` int(11) NOT NULL,
-  `character_id` int(11) NOT NULL,
   `name` varchar(255) DEFAULT NULL,
   `description` text DEFAULT NULL,
   `order` int(11) NOT NULL DEFAULT 0 COMMENT 'Display order for interface/menu',
+  `character_id` int(11) DEFAULT NULL,
   `traits` text DEFAULT NULL,
   `abilities` text DEFAULT NULL,
   `quirks` text DEFAULT NULL,
@@ -3670,7 +3670,7 @@ CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW 
 --
 DROP TABLE IF EXISTS `v_gallery_animas`;
 
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_animas`  AS SELECT `f`.`id` AS `frame_id`, `a`.`id` AS `entity_id`, `f`.`filename` AS `filename`, `f`.`prompt` AS `prompt`, `f`.`style` AS `style`, `a`.`id` AS `anima_id`, `a`.`name` AS `anima_name`, `a`.`traits` AS `traits`, `a`.`abilities` AS `abilities`, `c`.`id` AS `character_id`, `c`.`name` AS `character_name`, `c`.`role` AS `character_role` FROM ((((`frames` `f` join `frames_2_animas` `m` on(`m`.`from_id` = `f`.`id`)) join `animas` `a` on(`a`.`id` = `m`.`to_id`)) join `characters` `c` on(`c`.`id` = `a`.`character_id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) WHERE `s`.`visible` = 1 ORDER BY `s`.`order` ASC, `f`.`created_at` DESC ;
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_animas`  AS SELECT `f`.`id` AS `frame_id`, `a`.`id` AS `entity_id`, `f`.`filename` AS `filename`, `f`.`prompt` AS `prompt`, `f`.`style` AS `style`, `a`.`id` AS `anima_id`, `a`.`name` AS `anima_name`, `a`.`traits` AS `traits`, `a`.`abilities` AS `abilities`, `c`.`id` AS `character_id`, `c`.`name` AS `character_name`, `c`.`role` AS `character_role` FROM ((((`frames` `f` join `frames_2_animas` `m` on(`m`.`from_id` = `f`.`id`)) join `animas` `a` on(`a`.`id` = `m`.`to_id`)) left join `characters` `c` on(`c`.`id` = `a`.`character_id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) WHERE `s`.`visible` = 1 ORDER BY `s`.`order` ASC, `f`.`created_at` DESC ;
 
 -- --------------------------------------------------------
 
