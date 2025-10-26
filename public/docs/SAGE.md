@@ -37,6 +37,7 @@
 ## 8. Generatives
 - Uses **img2img**.
 - Ensure the selected notebook **supports img2img**.
+- pollinations.ai API does support img2img but only with a (free) api key
 
 ## 9. ControlNet
 - Still in development.
