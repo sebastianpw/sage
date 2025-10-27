@@ -1029,6 +1029,15 @@ CREATE TABLE `poses` (
   `active` tinyint(1) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+
+INSERT INTO `poses` (`id`, `name`, `description`, `category`, `created_at`, `updated_at`, `active`) VALUES
+(1, 'Standing', 'Full-body standing pose, neutral stance, relaxed arms by sides, facing forward', 'Full body', '2025-08-23 23:20:43', '2025-08-23 23:20:43', 1),
+(2, 'Running', 'Full-body running pose, dynamic motion, legs extended, arms pumping, leaning forward', 'Full body', '2025-08-23 23:20:43', '2025-08-23 23:20:43', 1),
+(3, 'Fight Pose', 'Full-body combat-ready pose, slightly crouched, fists raised, focused expression', 'Full body', '2025-08-23 23:20:43', '2025-08-23 23:20:43', 1),
+(5, 'Laughing', 'Full-body pose, joyful expression, mouth open in laughter, body relaxed, arms slightly extended', 'Full body', '2025-08-23 23:20:43', '2025-08-23 23:20:43', 1),
+(6, 'Sitting', 'Full-body sitting pose, upright on a chair or surface, hands on knees or lap, neutral expression', 'Full body', '2025-08-23 23:20:43', '2025-08-23 23:20:43', 1);
+
+
 -- --------------------------------------------------------
 
 --
