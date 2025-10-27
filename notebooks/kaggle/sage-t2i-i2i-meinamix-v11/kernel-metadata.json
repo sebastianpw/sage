@@ -1,0 +1,18 @@
+{
+  "title": "sage-t2i-i2i-meinamix-v11",
+  "code_file": "sage-t2i-i2i-meinamix-v11.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "keywords": [],
+  "dataset_sources": [
+    "spw800621/controlnet-openpose",
+    "spw800621/meinamix-v11"
+  ],
+  "kernel_sources": [],
+  "competition_sources": [],
+  "model_sources": []
+}
