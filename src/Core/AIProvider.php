@@ -17,16 +17,9 @@ class AIProvider
     // Known Groq model identifiers
     private const GROQ_MODELS = [
         'llama-3.3-70b-versatile',
-        'meta-llama/llama-guard-4-12b',
-        'playai-tts',
         'openai/gpt-oss-120b',
-        'meta-llama/llama-prompt-guard-2-86m',
         'allam-2-7b',
         'moonshotai/kimi-k2-instruct-0905',
-        'whisper-large-v3-turbo',
-        'whisper-large-v3',
-        'playai-tts-arabic',
-        'meta-llama/llama-prompt-guard-2-22m',
         'qwen/qwen3-32b',
         'llama-3.1-8b-instant',
         'groq/compound',
@@ -80,61 +73,36 @@ class AIProvider
 
         // Pollinations groups: mirror the options previously in ChatUI
         $pollinations_main = [
-            ['id'=>'deepseek','name'=>'DeepSeek V3.1'],
-            ['id'=>'deepseek-reasoning','name'=>'DeepSeek R1 (Reasoning)'],
             ['id'=>'mistral','name'=>'Mistral Small 3.1 24B'],
-            ['id'=>'nova-fast','name'=>'Amazon Nova Micro'],
             ['id'=>'openai','name'=>'OpenAI GPT-5 Mini'],
             ['id'=>'openai-fast','name'=>'OpenAI GPT-5 Nano'],
             ['id'=>'openai-large','name'=>'OpenAI GPT-5 Chat'],
             ['id'=>'openai-reasoning','name'=>'OpenAI o4-mini (Reasoning)'],
-            ['id'=>'openai-audio','name'=>'OpenAI GPT-4o Audio'],
             ['id'=>'qwen-coder','name'=>'Qwen 2.5 Coder 32B'],
             ['id'=>'roblox-rp','name'=>'Llama 3.1 8B Instruct'],
         ];
 
         $pollinations_community = [
-            ['id'=>'bidara','name'=>'BIDARA (NASA)'],
             ['id'=>'chickytutor','name'=>'ChickyTutor Language'],
-            ['id'=>'midijourney','name'=>'MIDIjourney'],
             ['id'=>'rtist','name'=>'Rtist'],
         ];
 
         // Gemini groups: mirror the options previously in ChatUI
         $gemini_text = [
             ['id'=>'gemini-2.5-pro','name'=>'Gemini 2.5 Pro (Stable)'],
-            ['id'=>'gemini-2.5-pro-preview-03-25','name'=>'Gemini 2.5 Pro Preview 03-25'],
-            ['id'=>'gemini-2.5-pro-preview-05-06','name'=>'Gemini 2.5 Pro Preview 05-06'],
-            ['id'=>'gemini-2.5-pro-preview-06-05','name'=>'Gemini 2.5 Pro Preview 06-05'],
             ['id'=>'gemini-2.5-flash','name'=>'Gemini 2.5 Flash (Stable)'],
-            ['id'=>'gemini-2.5-flash-preview-05-20','name'=>'Gemini 2.5 Flash Preview 05-20'],
             ['id'=>'gemini-2.5-flash-lite','name'=>'Gemini 2.5 Flash-Lite (Stable)'],
-            ['id'=>'gemini-2.5-flash-lite-preview-06-17','name'=>'Gemini 2.5 Flash-Lite Preview 06-17'],
             ['id'=>'gemini-2.0-flash','name'=>'Gemini 2.0 Flash'],
-            ['id'=>'gemini-2.0-flash-001','name'=>'Gemini 2.0 Flash 001'],
             ['id'=>'gemini-2.0-flash-lite','name'=>'Gemini 2.0 Flash-Lite'],
-            ['id'=>'gemini-2.0-flash-lite-001','name'=>'Gemini 2.0 Flash-Lite 001'],
             ['id'=>'gemini-2.0-pro-exp','name'=>'Gemini 2.0 Pro Experimental'],
-            ['id'=>'gemini-2.0-flash-live-001','name'=>'Gemini 2.0 Flash 001 Live'],
-            ['id'=>'gemini-live-2.5-flash-preview','name'=>'Gemini Live 2.5 Flash Preview'],
-            ['id'=>'gemini-2.5-flash-live-preview','name'=>'Gemini 2.5 Flash Live Preview'],
-            ['id'=>'gemini-2.5-flash-native-audio-latest','name'=>'Gemini 2.5 Flash Native Audio Latest'],
-            ['id'=>'gemini-2.5-flash-native-audio-preview-09-2025','name'=>'Gemini 2.5 Flash Native Audio Preview 09-2025'],
         ];
 
-        $gemini_embedding = [
-            ['id'=>'gemini-embedding-001','name'=>'Gemini Embedding 001'],
-            ['id'=>'gemini-embedding-exp','name'=>'Gemini Embedding Experimental'],
-            ['id'=>'gemini-embedding-exp-03-07','name'=>'Gemini Embedding Experimental 03-07'],
-            ['id'=>'embedding-gecko-001','name'=>'Embedding Gecko'],
-        ];
 
         return [
             'Groq API' => $groq,
             'Pollinations API - Main' => $pollinations_main,
             'Pollinations API - Community' => $pollinations_community,
             'Gemini Text / Coding Models' => $gemini_text,
-            'Gemini Embedding Models' => $gemini_embedding,
         ];
     }
 
