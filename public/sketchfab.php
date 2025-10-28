@@ -18,8 +18,13 @@
     .model-item:hover { background: #f0f0f0; }
     button { margin-right: 8px; }
 </style>
-
-<script src="https://static.sketchfab.com/api/sketchfab-viewer-1.12.1.js"></script>
+<?php if (\App\Core\SpwBase::CDN_USAGE): ?>
+    <!-- Sketchfab Viewer API (via CDN) -->
+    <script src="https://static.sketchfab.com/api/sketchfab-viewer-1.12.1.js"></script>
+<?php else: ?>
+    <!-- Sketchfab Viewer API (via local copy) -->
+    <script src="/vendor/sketchfab/sketchfab-viewer-1.12.1.js"></script>
+<?php endif; ?>
 <?php echo $eruda; ?>
 </head>
 <body>

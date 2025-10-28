@@ -776,7 +776,18 @@ function attachGearTo(context) {
 
 
 
-
+{
+    label: '✏️ Edit Image',
+    onClick: function() {
+        const $w = $(this).closest('.img-wrapper');
+        ImageEditorModal.open({
+            entity: $w.data('entity'),
+            entityId: $w.data('entity-id'),
+            frameId: $w.data('frame-id'),
+            src: $w.find('img').attr('src')
+        });
+    }
+},
 
 
 
@@ -1224,6 +1235,8 @@ $('#toggleView').off('click.gridToggle').on('click.gridToggle', function(e){
 
 
 <!-- Image editor scripts and logic -->
+
+<script src="/js/image_editor_modal.js"></script>
 
 <?php if (\App\Core\SpwBase::CDN_USAGE): ?>
     <!-- CropperJS CSS via CDN -->

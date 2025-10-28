@@ -74,6 +74,7 @@ class ChatUiAjax
         
         // Set model if provided, otherwise use default
         if ($model !== null) {
+            $session->setTitle($model);
             $session->setModel($model);
         }
 

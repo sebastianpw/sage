@@ -9,7 +9,13 @@
 
 <?php echo \App\Core\SpwBase::getInstance()->getJquery(); ?>
 
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<?php if (\App\Core\SpwBase::CDN_USAGE): ?>
+    <!-- Font Awesome CSS via CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<?php else: ?>
+    <!-- Font Awesome CSS via local copy -->
+    <link rel="stylesheet" href="/vendor/font-awesome/css/all.min.css">
+<?php endif; ?>
 
 <style>
     body {

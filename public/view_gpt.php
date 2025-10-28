@@ -118,10 +118,25 @@ function renderContentWithCodeBlocks(string $text): string {
 
 ?>
 
+<?php /*
 <!-- Prism CSS: GitHub Dark / Tomorrow -->
 <link href="https://cdn.jsdelivr.net/npm/prismjs/themes/prism-tomorrow.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/prismjs/plugins/toolbar/prism-toolbar.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/prismjs/plugins/copy-to-clipboard/prism-copy-to-clipboard.css" rel="stylesheet">
+ */ ?>
+
+<?php if (\App\Core\SpwBase::CDN_USAGE): ?>
+    <!-- Prism CSS (via CDN) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs/themes/prism-tomorrow.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs/plugins/toolbar/prism-toolbar.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs/plugins/copy-to-clipboard/prism-copy-to-clipboard.css">
+<?php else: ?>
+    <!-- Prism CSS (via local copy) -->
+    <link rel="stylesheet" href="/vendor/prismjs/themes/prism-tomorrow.min.css">
+    <link rel="stylesheet" href="/vendor/prismjs/plugins/toolbar/prism-toolbar.css">
+    <link rel="stylesheet" href="/vendor/prismjs/plugins/copy-to-clipboard/prism-copy-to-clipboard.css">
+<?php endif; ?>
+
 
 <style>
 html, body {
@@ -248,8 +263,7 @@ html, body {
 		(function(){
 
 
-
-
+<?php if (\App\Core\SpwBase::CDN_USAGE): ?>
 const scripts = [
     "https://cdn.jsdelivr.net/npm/prismjs/prism.js",
     "https://cdn.jsdelivr.net/npm/prismjs/components/prism-markup.min.js",
@@ -264,6 +278,35 @@ const scripts = [
     "https://cdn.jsdelivr.net/npm/prismjs/plugins/toolbar/prism-toolbar.min.js",
     "https://cdn.jsdelivr.net/npm/prismjs/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"
 ];
+
+
+
+
+
+<?php else: ?>
+const scripts = [
+    "/vendor/prismjs/prism.js",
+    "/vendor/prismjs/components/prism-markup.min.js",
+    "/vendor/prismjs/components/prism-markup-templating.min.js",
+    "/vendor/prismjs/components/prism-css.min.js",
+    "/vendor/prismjs/components/prism-javascript.min.js",
+    "/vendor/prismjs/components/prism-php.min.js",
+    "/vendor/prismjs/components/prism-bash.min.js",
+    "/vendor/prismjs/components/prism-json.min.js",
+    "/vendor/prismjs/components/prism-python.min.js",
+    "/vendor/prismjs/components/prism-sql.min.js",
+    "/vendor/prismjs/plugins/toolbar/prism-toolbar.min.js",
+    "/vendor/prismjs/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"
+];
+
+
+
+
+
+
+<?php endif; ?>
+
+
 
 
 

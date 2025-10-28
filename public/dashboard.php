@@ -16,6 +16,13 @@ require 'sage_entities_items_array.php';
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Starlight Guardians Dashboard</title>
 <link rel="manifest" href="/site.webmanifest">
+<?php if (\App\Core\SpwBase::CDN_USAGE): ?>
+    <!-- Font Awesome CSS via CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<?php else: ?>
+    <!-- Font Awesome CSS via local copy -->
+    <link rel="stylesheet" href="/vendor/font-awesome/css/all.min.css">
+<?php endif; ?>
 <style>
     body {
         font-family: Arial, sans-serif;
@@ -427,11 +434,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['action']) && $_POST[
         @mkdir($tokenDir, 0700, true);
     }
     
-    // Define token mappings
+    // Define token mappings (POST key => filename)
     $tokenMappings = [
         'groq_api_key' => '.groq_api_key',
         'freepik_api_key' => '.freepik_api_key',
-        'pollinations_token' => '.pollinationsaitoken'
+        'pollinations_token' => '.pollinationsaitoken',
+        'google_api_key' => '.gemini_api_key'
     ];
     
     foreach ($tokenMappings as $postKey => $filename) {
@@ -470,13 +478,15 @@ $tokenDir = PROJECT_ROOT . '/token';
 $existingTokens = [
     'groq_api_key' => '',
     'freepik_api_key' => '',
-    'pollinations_token' => ''
+    'pollinations_token' => '',
+    'google_api_key' => '' 
 ];
 
 $tokenFiles = [
     'groq_api_key' => '.groq_api_key',
     'freepik_api_key' => '.freepik_api_key',
-    'pollinations_token' => '.pollinationsaitoken'
+    'pollinations_token' => '.pollinationsaitoken',
+    'google_api_key' => '.gemini_api_key' 
 ];
 
 foreach ($tokenFiles as $key => $filename) {
@@ -486,9 +496,6 @@ foreach ($tokenFiles as $key => $filename) {
     }
 }
 ?>
-
-
-
 
 
 
@@ -842,27 +849,23 @@ iner&db=<?php echo $dbname; ?>&select=frames&order%5B0
     <div class="group-content">
 	<div class="horizontal-line"></div>
 
-
-
 <!--
+
 <a href="adminer/index.php?server=127.0.0.1&username=adm
 iner&db=<?php echo $dbname; ?>&select=frames&order%5B0
 %5D=id&desc%5B0%5D=1">🌄 Frames</a>
 
                                                   <a href="adminer/index.php?server=127.0.0.1&username=adminer&db=<?php echo $dbname; ?>&select=styles&order%5B0  %5D=id&desc%5B0%5D=1">🖌️ Styles</a>
+
 -->
-
-
 
 
 <a target="_blank" href="/admin/">🛢️ phpMyAdmin</a>
 
-<!--
 	<a href="/adminer/index.php?server=127.0.0.1&username=adminer&db=<?php echo $dbname; ?>">🛢️ adminer</a>
 
 	<a href="/adminer/index.php?server=127.0.0.1&username=adminer&db=<?php echo $dbname; ?>&sql=">▶️ Run SQL</a>
 	<a href="/adminer/index.php?server=127.0.0.1&username=adminer&db=<?php echo $dbname; ?>&dump=">💾 SQL Table Dump</a>
--->
 
         <a href="sql_table_structure_dump.php">🏗️ SQL Table Structure</a>
         <a href="sql_dump.php">🗄️ SQL Dump</a>
@@ -1083,12 +1086,28 @@ iner&db=<?php echo $dbname; ?>&select=frames&order%5B0
                        placeholder="Insert Freepik API Key here" />
             </div>
 
+            <!-- New Google API Key Field -->
+            <div class="token-form-group">
+                <label><i class="fab fa-google"></i> Google AI Studio API Key</label>
+                <input type="password" 
+                       name="google_api_key" 
+                       class="token-form-input" 
+                       value="<?= htmlspecialchars($existingTokens['google_api_key'] ?? '') ?>" 
+                       placeholder="Insert Google Gemini API Key here" />
+            </div>
+
             <button type="submit" class="token-submit-btn">💾 Save Tokens</button>
         </form>
         
         <div class="horizontal-line" style="margin-top: 20px;"></div>
     </div>
 </div>
+
+
+
+
+
+
 
 
 

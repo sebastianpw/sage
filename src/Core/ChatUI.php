@@ -450,6 +450,78 @@ class ChatUI
 CSS;
     }
 
+
+
+private function getHTML(): string
+{
+    // Build model options from AIProvider catalog
+    $catalog = \App\Core\AIProvider::getModelCatalog();
+    $defaultModel = 'groq/compound';
+    $modelOptionsHtml = '';
+    foreach ($catalog as $groupLabel => $models) {
+        $modelOptionsHtml .= '<optgroup label="' . htmlspecialchars($groupLabel, ENT_QUOTES) . "\">\n";
+        foreach ($models as $m) {
+            $id = htmlspecialchars($m['id'], ENT_QUOTES);
+            $name = htmlspecialchars($m['name'], ENT_QUOTES);
+            $sel = ($id === $defaultModel) ? ' selected' : '';
+            $modelOptionsHtml .= "  <option value=\"{$id}\"{$sel}>{$name}</option>\n";
+        }
+        $modelOptionsHtml .= "</optgroup>\n";
+    }
+
+    // Return full HTML. Heredoc used so $modelOptionsHtml is interpolated.
+    return <<<HTML
+<div class="chat-shell">
+  <!-- Mobile menu toggle -->
+  <button id="mobile-toggle" class="mobile-toggle">☰</button>
+
+  <!-- Sidebar with session list -->
+  <div id="sidebar" class="sidebar">
+    <div class="top">
+      <!-- Model Selector -->
+      <div class="model-selector-wrapper">
+        <label class="model-selector-label" for="model-selector">AI Model</label>
+        <select id="model-selector">
+{$modelOptionsHtml}
+        </select>
+      </div>
+
+      <!-- New Chat Button -->
+      <button id="new-chat-btn" class="new-chat-btn">+ New Chat</button>
+    </div>
+    <div id="sessions" class="sessions">
+      <!-- Session items will be loaded here by JavaScript -->
+    </div>
+  </div>
+
+  <!-- Main chat area -->
+  <div class="main">
+    <div class="header">
+      <h2 id="chat-header">Select a chat</h2>
+      <div class="controls">
+        <span id="current-model-display" style="font-size: 12px; color: var(--muted); font-weight: normal;"></span>
+      </div>
+    </div>
+
+    <div id="messages">
+      <!-- Messages will be inserted here -->
+    </div>
+
+    <div class="input-area">
+      <textarea 
+        id="user-input" 
+        placeholder="Type a message... (Shift+Enter for new line, Enter to send)"
+        rows="1"
+      ></textarea>
+      <button id="send-btn">Send</button>
+    </div>
+  </div>
+</div>
+HTML;
+}
+
+/*
+
     private function getHTML(): string
     {
         return <<<'HTML'
@@ -497,7 +569,41 @@ CSS;
             <option value="chickytutor">ChickyTutor Language</option>
             <option value="midijourney">MIDIjourney</option>
             <option value="rtist">Rtist</option>
-          </optgroup>
+	  </optgroup>
+
+
+
+  <optgroup label="Gemini Text / Coding Models">
+    <option value="gemini-2.5-pro">Gemini 2.5 Pro (Stable)</option>
+    <option value="gemini-2.5-pro-preview-03-25">Gemini 2.5 Pro Preview 03-25</option>
+    <option value="gemini-2.5-pro-preview-05-06">Gemini 2.5 Pro Preview 05-06</option>
+    <option value="gemini-2.5-pro-preview-06-05">Gemini 2.5 Pro Preview 06-05</option>
+    <option value="gemini-2.5-flash">Gemini 2.5 Flash (Stable)</option>
+    <option value="gemini-2.5-flash-preview-05-20">Gemini 2.5 Flash Preview 05-20</option>
+    <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (Stable)</option>
+    <option value="gemini-2.5-flash-lite-preview-06-17">Gemini 2.5 Flash-Lite Preview 06-17</option>
+    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+    <option value="gemini-2.0-flash-001">Gemini 2.0 Flash 001</option>
+    <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite</option>
+    <option value="gemini-2.0-flash-lite-001">Gemini 2.0 Flash-Lite 001</option>
+    <option value="gemini-2.0-pro-exp">Gemini 2.0 Pro Experimental</option>
+    <option value="gemini-2.0-flash-live-001">Gemini 2.0 Flash 001 Live</option>
+    <option value="gemini-live-2.5-flash-preview">Gemini Live 2.5 Flash Preview</option>
+    <option value="gemini-2.5-flash-live-preview">Gemini 2.5 Flash Live Preview</option>
+    <option value="gemini-2.5-flash-native-audio-latest">Gemini 2.5 Flash Native Audio Latest</option>
+    <option value="gemini-2.5-flash-native-audio-preview-09-2025">Gemini 2.5 Flash Native Audio Preview 09-2025</option>
+  </optgroup>
+  <optgroup label="Gemini Embedding Models">
+    <option value="gemini-embedding-001">Gemini Embedding 001</option>
+    <option value="gemini-embedding-exp">Gemini Embedding Experimental</option>
+    <option value="gemini-embedding-exp-03-07">Gemini Embedding Experimental 03-07</option>
+    <option value="embedding-gecko-001">Embedding Gecko</option>
+  </optgroup>
+
+
+
+
+
         </select>
       </div>
       
@@ -534,6 +640,12 @@ CSS;
 </div>
 HTML;
     }
+
+ */
+
+
+
+
 
     private function getScripts(): string
     {
