@@ -861,12 +861,12 @@ iner&db=<?php echo $dbname; ?>&select=frames&order%5B0
 
 
 <a target="_blank" href="/admin/">🛢️ phpMyAdmin</a>
-
+<!--
 	<a href="/adminer/index.php?server=127.0.0.1&username=adminer&db=<?php echo $dbname; ?>">🛢️ adminer</a>
 
 	<a href="/adminer/index.php?server=127.0.0.1&username=adminer&db=<?php echo $dbname; ?>&sql=">▶️ Run SQL</a>
 	<a href="/adminer/index.php?server=127.0.0.1&username=adminer&db=<?php echo $dbname; ?>&dump=">💾 SQL Table Dump</a>
-
+-->
         <a href="sql_table_structure_dump.php">🏗️ SQL Table Structure</a>
         <a href="sql_dump.php">🗄️ SQL Dump</a>
     </div>
