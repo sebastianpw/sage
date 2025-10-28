@@ -1093,7 +1093,7 @@ CREATE TABLE `prompt_globals` (
 --
 
 INSERT INTO `prompt_globals` (`id`, `name`, `order`, `active`, `description`, `created_at`, `updated_at`) VALUES
-(1, '', 0, 1, 'masterpiece, best quality, absurdres, very aesthetic, cinematic lighting, cel-shading, beautiful composition, anime key visual, inspired, what if this were real', '2025-09-07 20:58:45', '2025-10-24 12:23:38');
+(1, '', 0, 1, 'masterpiece, best quality, cinematic lighting, anime key visual, masterpiece', '2025-09-07 20:58:45', '2025-10-24 12:23:38');
 
 
 -- --------------------------------------------------------
