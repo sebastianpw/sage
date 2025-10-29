@@ -4,7 +4,7 @@
 // Usage:
 //   php public/analyze_code.php            # analyze entire src/ (default)
 //   php public/analyze_code.php path/to/file.php
-//   php public/analyze_code.php src        # analyze all php/js/sh files under src/
+//   php public/analyze_code.php src        # analyze all php/js/sh/py files under src/
 
 require __DIR__ . '/error_reporting.php';
 require __DIR__ . '/bootstrap.php';
@@ -38,7 +38,7 @@ function resolvePath(string $raw, \App\Core\SpwBase $spw) {
 
 /**
  * Iterate files under $dir and call $cb for each file whose extension is in $extensions.
- * $extensions is an array of allowed extensions without dot, e.g. ['php','js','sh']
+ * $extensions is an array of allowed extensions without dot, e.g. ['php','js','sh','py']
  */
 function iterateFilesUnder(string $dir, array $extensions, callable $cb) {
     $ri = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir));
@@ -90,10 +90,10 @@ if ($resolved === false) {
 
 if (is_dir($resolved)) {
     echo "Directory detected: {$resolved}\n";
-    echo "Scanning for PHP/JS/SH files under the directory and analyzing each...\n";
+    echo "Scanning for PHP/JS/SH/PY files under the directory and analyzing each...\n";
 
     $count = 0;
-    iterateFilesUnder($resolved, ['php','js','sh'], function($filePath) use ($ci, &$count) {
+    iterateFilesUnder($resolved, ['php','js','sh','py'], function($filePath) use ($ci, &$count) {
         try {
             $ci->analyzeFile($filePath);
             $count++;

@@ -5,6 +5,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DB_DATADIR=$("$SCRIPT_DIR/db_name.sh" datadir)
 
 
+check_wake_lock() {
+    if command -v termux-wake-lock >/dev/null 2>&1; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+
 # Stop running PHP built-in servers
 pkill -f "php -S" 2>/dev/null
 
@@ -43,19 +52,30 @@ sleep 5
 # PHP scheduler startup
 "$SCRIPT_DIR/scheduler_startup.sh" &
 
-# Termux wake-lock if not running in Docker
-if [ "${DOCKERIZED:-0}" != "1" ]; then
-    termux-wake-lock
-else
-    :  # No-op for Docker environment
-fi
-
 
 echo "PHP-FPM, NGINX, and MariaDB restarted in background."
 echo "NGINX server running at http://localhost:8080"
 
 sleep 10
 
-"$SCRIPT_DIR/cloudflared_tunnel.sh"
+"$SCRIPT_DIR/../pyapi/run_server.sh"
+
+
+check_wake_lock() {
+    if command -v termux-wake-lock >/dev/null 2>&1; then
+        echo "✅ termux-wake-lock is available"
+        return 0
+    else
+        echo "⚠ termux-wake-lock is not available"
+        return 1
+    fi
+}
+
+if check_wake_lock; then
+    termux-wake-lock
+    echo "Wake lock acquired!"
+else
+    "$SCRIPT_DIR/cloudflared_tunnel.sh"
+fi
 
 

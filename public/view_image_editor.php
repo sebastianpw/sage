@@ -376,5 +376,5 @@ body { margin: 0; padding: 0; background: #0a0a0a; color: #fff; font-family: -ap
 
 <?php
 $content = ob_get_clean();
-$spw->renderLayout($content, $pageTitle);
+$spw->renderLayout($content.$eruda, $pageTitle);
 ?>

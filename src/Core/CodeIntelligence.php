@@ -12,7 +12,7 @@ class CodeIntelligence
     private ModelRateLimiter $rateLimiter;
 
     private const CHUNK_CHARS = 20000;
-    private const ANALYZER_MODEL = 'qwen2.5-coder-32b-instruct'; // 'qwen/qwen3-32b';
+    private const ANALYZER_MODEL = 'qwen/Qwen2.5-Coder-14B-Instruct-AWQ'; //'qwen2.5-coder-32b-instruct'; // 'qwen/qwen3-32b';
     //private const ANALYZER_MODEL = 'qwen/qwen3-32b';
 
     public function __construct(SpwBase $spw, AIProvider $ai, ModelRateLimiter $rateLimiter)
@@ -151,6 +151,7 @@ class CodeIntelligence
             'php' => 'PHP',
             'js' => 'JavaScript',
             'sh' => 'Shell',
+            'py' => 'Python',
             default => 'Unknown'
         };
     }
@@ -165,7 +166,7 @@ class CodeIntelligence
         }
 
         $rii = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root));
-        $allowed = ['php','js','sh'];
+        $allowed = ['php','js','sh','py'];
 
         foreach ($rii as $file) {
             if ($file->isFile()) {
@@ -203,6 +204,7 @@ class CodeIntelligence
             'php' => 'PHP',
             'js'  => 'JavaScript',
             'sh'  => 'Shell script',
+            'py' => 'Python',
             default => 'text',
         };
 

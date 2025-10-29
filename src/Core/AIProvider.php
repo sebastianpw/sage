@@ -29,6 +29,8 @@ class AIProvider
         'openai/gpt-oss-20b',
         'meta-llama/llama-4-maverick-17b-128e-instruct',
     ];
+
+    public const ZROK_TUNNEL_URL = 'https://09ceendk3mfk.share.zrok.io';
     
     private ?FileLogger $logger = null;
     
@@ -98,12 +100,26 @@ class AIProvider
         ];
 
 
+        $qwen_local = [
+            ['id'=>'qwen/qwen2-7b-instruct-awq','name'=>'Qwen 2 7B Instruct (AWQ)'],
+            ['id'=>'qwen/Qwen2.5-7B-Instruct-AWQ','name'=>'Qwen 2.5 7B Instruct (AWQ)'],
+            ['id'=>'qwen/Qwen2.5-14B-Instruct-AWQ','name'=>'Qwen 2.5 14B Instruct (AWQ)'],
+            ['id'=>'qwen/Qwen2.5-32B-Instruct-AWQ','name'=>'Qwen 2.5 32B Instruct (AWQ)'],
+            ['id'=>'qwen/Qwen2.5-Coder-14B-Instruct-AWQ','name'=>'Qwen 2.5 Coder 14B Instruct (AWQ)'],
+            ['id'=>'internlm/internlm2-chat-7b-4bits','name'=>'InternLM2 Chat 7B 4-bit'],
+            ['id'=>'internlm/internlm2-chat-20b-4bits','name'=>'InternLM2 Chat 20B 4-bit'],
+            ['id'=>'internlm/internlm2_5-20b-chat-4bit-awq','name'=>'InternLM2.5 Chat 20B 4-bit AWQ'],
+        ];
+
         return [
             'Groq API' => $groq,
             'Pollinations API - Main' => $pollinations_main,
             'Pollinations API - Community' => $pollinations_community,
             'Gemini Text / Coding Models' => $gemini_text,
+            'Qwen / InternLM (Local via zrok)' => $qwen_local,
         ];
+
+
     }
 
 
@@ -124,17 +140,19 @@ class AIProvider
             'message_count' => count($messages),
             'options' => $options
         ]);
-        
+
         // Route to appropriate provider based on model
         if ($this->isGroqModel($model)) {
             return $this->sendToGroqApi($model, $messages, $options);
         } elseif ($this->isGoogleModel($model)) {
             return $this->sendToGoogleApi($model, $messages, $options);
+        } elseif ($this->isQwenLocalModel($model)) {
+            return $this->sendToQwenLocal($model, $messages, $options);
         } else {
             return $this->sendToPollinationsApi($model, $messages, $options);
         }
     }
-    
+        
     /**
      * Convenience method: Send a simple text prompt to a model
      * 
@@ -197,6 +215,34 @@ class AIProvider
         }
         return false;
     }
+
+
+    /**
+     * Detect Qwen / InternLM local models.
+     */
+    private function isQwenLocalModel(string $model): bool
+    {
+        $m = strtolower($model);
+
+        // Must be either a Qwen model with "awq" or any InternLM model
+        if ((strpos($m, 'qwen') !== false && strpos($m, 'awq') !== false)
+            || strpos($m, 'internlm') !== false
+        ) {
+            return true;
+        }
+
+        // Optional: exact match check against a constant array
+        foreach (self::QWEN_MODELS as $qm) {
+            if (strcasecmp($qm, $model) === 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+
+
     
     // ============================================================================
     // GROQ API PROVIDER
@@ -319,6 +365,71 @@ class AIProvider
         
         return $this->readTokenFromHome(['.pollinationsaitoken']);
     }
+
+
+    // ============================================================================
+    // QWEN / COLAB FASTAPI PROVIDER
+    // ============================================================================
+
+    private function sendToQwenLocal(string $model, array $messages, array $options): string
+    {
+        $endpoint = self::ZROK_TUNNEL_URL . '/v1/chat/completions'; // append route for your FastAPI endpoint
+        $apiKey = $this->getQwenApiKey();
+
+        if (empty($apiKey)) {
+            throw new \RuntimeException('No Qwen API key found. Set QWEN_API_KEY or place token in ~/.qwentoken');
+        }
+
+        $payload = [
+            'model' => $model,
+            'messages' => $messages,
+        ];
+
+        // Optional parameters
+        if (isset($options['temperature'])) {
+            $payload['temperature'] = $options['temperature'];
+        }
+        if (isset($options['max_tokens'])) {
+            $payload['max_tokens'] = $options['max_tokens'];
+        }
+
+        $payloadJson = json_encode($payload, JSON_UNESCAPED_UNICODE);
+
+        $headers = [
+            'Content-Type: application/json',
+            'Accept: application/json',
+            'User-Agent: spw-aiprovider/1.0',
+            'Authorization: Bearer ' . $apiKey,
+        ];
+
+        $response = $this->executeCurlRequest($endpoint, $payloadJson, $headers, 'Qwen');
+
+        $data = json_decode($response, true);
+        if (is_array($data) && isset($data['choices'][0]['message']['content'])) {
+            return $data['choices'][0]['message']['content'];
+        }
+
+        $jsonCandidate = $this->extractFirstJsonObject($response);
+        if ($jsonCandidate !== null) {
+            return $jsonCandidate;
+        }
+
+        throw new \RuntimeException('Qwen FastAPI endpoint returned a response but no usable content found. Response start: ' . mb_substr($response, 0, 2000));
+    }
+
+    private function getQwenApiKey(): ?string
+    {
+        $envKey = getenv('QWEN_API_KEY') ?: (isset($_SERVER['QWEN_API_KEY']) ? $_SERVER['QWEN_API_KEY'] : null);
+
+        if ($envKey) {
+            return $envKey;
+        }
+
+        return $this->readTokenFromHome(['.qwentoken']);
+    }
+
+
+
 
     // ============================================================================
     // GOOGLE GEMINI (Generative Language) PROVIDER
