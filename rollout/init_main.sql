@@ -4221,6 +4221,225 @@ ALTER TABLE `task_runs`
   ADD CONSTRAINT `task_runs_ibfk_2` FOREIGN KEY (`lock_id`) REFERENCES `task_locks` (`id`) ON DELETE SET NULL;
 COMMIT;
 
+
+
+
+-- v_gallery_characters
+CREATE OR REPLACE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER
+VIEW `v_gallery_characters` AS
+SELECT
+    `f`.`id` AS `frame_id`,
+    `f`.`map_run_id` AS `map_run_id`,
+    `c`.`id` AS `entity_id`,
+    `f`.`filename` AS `filename`,
+    `f`.`prompt` AS `prompt`,
+    `f`.`style` AS `style`,
+    `c`.`id` AS `character_id`,
+    `c`.`name` AS `character_name`,
+    `c`.`role` AS `character_role`,
+    'characters' AS `entity_type`
+FROM
+    (((`frames` `f`
+    JOIN `frames_2_characters` `m` ON (`f`.`id` = `m`.`from_id`))
+    JOIN `characters` `c` ON (`m`.`to_id` = `c`.`id`))
+    JOIN `styles` `s` ON (`f`.`style_id` = `s`.`id`))
+WHERE
+    `s`.`visible` = 1
+ORDER BY
+    `s`.`order`,
+    `f`.`created_at` DESC;
+
+-- v_gallery_animas
+CREATE OR REPLACE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER
+VIEW `v_gallery_animas` AS
+SELECT
+    `f`.`id` AS `frame_id`,
+    `a`.`id` AS `entity_id`,
+    `f`.`filename` AS `filename`,
+    `f`.`prompt` AS `prompt`,
+    `f`.`style` AS `style`,
+    `a`.`id` AS `anima_id`,
+    `a`.`name` AS `anima_name`,
+    `a`.`traits` AS `traits`,
+    `a`.`abilities` AS `abilities`,
+    `c`.`id` AS `character_id`,
+    `c`.`name` AS `character_name`,
+    `c`.`role` AS `character_role`,
+    'animas' AS `entity_type`
+FROM
+    ((((`frames` `f`
+    JOIN `frames_2_animas` `m` ON (`m`.`from_id` = `f`.`id`))
+    JOIN `animas` `a` ON (`a`.`id` = `m`.`to_id`))
+    LEFT JOIN `characters` `c` ON (`c`.`id` = `a`.`character_id`))
+    JOIN `styles` `s` ON (`f`.`style_id` = `s`.`id`))
+WHERE
+    `s`.`visible` = 1
+ORDER BY
+    `s`.`order`,
+    `f`.`created_at` DESC;
+
+-- v_gallery_backgrounds
+CREATE OR REPLACE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER
+VIEW `v_gallery_backgrounds` AS
+SELECT
+    `f`.`id` AS `frame_id`,
+    `b`.`id` AS `entity_id`,
+    `f`.`filename` AS `filename`,
+    `f`.`prompt` AS `prompt`,
+    `f`.`style` AS `style`,
+    `b`.`id` AS `background_id`,
+    `b`.`name` AS `background_name`,
+    `b`.`type` AS `background_type`,
+    `l`.`id` AS `location_id`,
+    `l`.`name` AS `location_name`,
+    'backgrounds' AS `entity_type`
+FROM
+    ((((`frames` `f`
+    JOIN `frames_2_backgrounds` `m` ON (`f`.`id` = `m`.`from_id`))
+    JOIN `backgrounds` `b` ON (`m`.`to_id` = `b`.`id`))
+    LEFT JOIN `locations` `l` ON (`b`.`location_id` = `l`.`id`))
+    JOIN `styles` `s` ON (`f`.`style_id` = `s`.`id`))
+WHERE
+    `s`.`visible` = 1
+ORDER BY
+    `f`.`created_at` DESC;
+
+-- v_gallery_locations
+CREATE OR REPLACE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER
+VIEW `v_gallery_locations` AS
+SELECT
+    `f`.`id` AS `frame_id`,
+    `l`.`id` AS `entity_id`,
+    `f`.`filename` AS `filename`,
+    `f`.`prompt` AS `prompt`,
+    `f`.`style` AS `style`,
+    `l`.`id` AS `location_id`,
+    `l`.`name` AS `location_name`,
+    `l`.`type` AS `location_type`,
+    'locations' AS `entity_type`
+FROM
+    (((`frames` `f`
+    JOIN `frames_2_locations` `m` ON (`f`.`id` = `m`.`from_id`))
+    JOIN `locations` `l` ON (`m`.`to_id` = `l`.`id`))
+    JOIN `styles` `s` ON (`f`.`style_id` = `s`.`id`))
+WHERE
+    `s`.`visible` = 1
+ORDER BY
+    `f`.`created_at` DESC;
+
+
+
+-- Dump for `v_gallery_wall_of_images` (view)
+-- Updated: 2025-10-31
+
+CREATE ALGORITHM=UNDEFINED 
+DEFINER=`adminer`@`localhost` 
+SQL SECURITY DEFINER
+VIEW `v_gallery_wall_of_images` AS
+
+SELECT 
+    'animas' AS `entity_type`,
+    `v_gallery_animas`.`frame_id` AS `frame_id`,
+    `v_gallery_animas`.`entity_id` AS `entity_id`,
+    `v_gallery_animas`.`filename` AS `filename`,
+    `v_gallery_animas`.`prompt` AS `prompt`,
+    `v_gallery_animas`.`anima_name` AS `entity_name`
+FROM `v_gallery_animas`
+
+UNION ALL
+
+SELECT 
+    'artifacts' AS `entity_type`,
+    `v_gallery_artifacts`.`frame_id` AS `frame_id`,
+    `v_gallery_artifacts`.`entity_id` AS `entity_id`,
+    `v_gallery_artifacts`.`filename` AS `filename`,
+    `v_gallery_artifacts`.`prompt` AS `prompt`,
+    `v_gallery_artifacts`.`artifact_name` AS `entity_name`
+FROM `v_gallery_artifacts`
+
+UNION ALL
+
+SELECT 
+    'backgrounds' AS `entity_type`,
+    `v_gallery_backgrounds`.`frame_id` AS `frame_id`,
+    `v_gallery_backgrounds`.`entity_id` AS `entity_id`,
+    `v_gallery_backgrounds`.`filename` AS `filename`,
+    `v_gallery_backgrounds`.`prompt` AS `prompt`,
+    `v_gallery_backgrounds`.`background_name` AS `entity_name`
+FROM `v_gallery_backgrounds`
+
+UNION ALL
+
+SELECT 
+    'characters' AS `entity_type`,
+    `v_gallery_characters`.`frame_id` AS `frame_id`,
+    `v_gallery_characters`.`entity_id` AS `entity_id`,
+    `v_gallery_characters`.`filename` AS `filename`,
+    `v_gallery_characters`.`prompt` AS `prompt`,
+    `v_gallery_characters`.`character_name` AS `entity_name`
+FROM `v_gallery_characters`
+
+UNION ALL
+
+SELECT 
+    'composites' AS `entity_type`,
+    `v_gallery_composites`.`frame_id` AS `frame_id`,
+    `v_gallery_composites`.`entity_id` AS `entity_id`,
+    `v_gallery_composites`.`filename` AS `filename`,
+    `v_gallery_composites`.`prompt` AS `prompt`,
+    `v_gallery_composites`.`composite_name` AS `entity_name`
+FROM `v_gallery_composites`
+
+UNION ALL
+
+SELECT 
+    'generatives' AS `entity_type`,
+    `v_gallery_generatives`.`frame_id` AS `frame_id`,
+    `v_gallery_generatives`.`entity_id` AS `entity_id`,
+    `v_gallery_generatives`.`filename` AS `filename`,
+    `v_gallery_generatives`.`prompt` AS `prompt`,
+    `v_gallery_generatives`.`name` AS `entity_name`
+FROM `v_gallery_generatives`
+
+UNION ALL
+
+SELECT 
+    'locations' AS `entity_type`,
+    `v_gallery_locations`.`frame_id` AS `frame_id`,
+    `v_gallery_locations`.`entity_id` AS `entity_id`,
+    `v_gallery_locations`.`filename` AS `filename`,
+    `v_gallery_locations`.`prompt` AS `prompt`,
+    `v_gallery_locations`.`location_name` AS `entity_name`
+FROM `v_gallery_locations`
+
+UNION ALL
+
+SELECT 
+    'sketches' AS `entity_type`,
+    `v_gallery_sketches`.`frame_id` AS `frame_id`,
+    `v_gallery_sketches`.`entity_id` AS `entity_id`,
+    `v_gallery_sketches`.`filename` AS `filename`,
+    `v_gallery_sketches`.`prompt` AS `prompt`,
+    `v_gallery_sketches`.`name` AS `entity_name`
+FROM `v_gallery_sketches`
+
+UNION ALL
+
+SELECT 
+    'vehicles' AS `entity_type`,
+    `v_gallery_vehicles`.`frame_id` AS `frame_id`,
+    `v_gallery_vehicles`.`entity_id` AS `entity_id`,
+    `v_gallery_vehicles`.`filename` AS `filename`,
+    `v_gallery_vehicles`.`prompt` AS `prompt`,
+    `v_gallery_vehicles`.`vehicle_name` AS `entity_name`
+FROM `v_gallery_vehicles`;
+
+
+
+
+
+
+
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
