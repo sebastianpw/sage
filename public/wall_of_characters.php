@@ -11,7 +11,7 @@ $entity = "wall_of_characters";
 $gallery = new \App\Gallery\WallOfCharactersGallery($spw->getMysqli(), $spw);
 
 $spw->renderLayout(
-    $eruda . $gallery->render(),
+    $gallery->render(),
     "Wall of Images",
     $spw->getProjectPath() . '/templates/gallery.php'
 );

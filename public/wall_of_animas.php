@@ -11,7 +11,7 @@ $entity = "wall_of_animas";
 $gallery = new \App\Gallery\WallOfAnimasGallery($spw->getMysqli(), $spw);
 
 $spw->renderLayout(
-    $eruda . $gallery->render(),
+    $gallery->render(),
     "Wall of Images",
     $spw->getProjectPath() . '/templates/gallery.php'
 );
