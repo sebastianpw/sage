@@ -355,7 +355,7 @@ class WallOfImagesGallery extends AbstractGallery {
                 const params = new URLSearchParams();
                 params.set('ajax_gallery', '1');
                 params.set('page', page);
-                params.set('entity', 'wall_of_images');
+                params.set('entity', '<?php echo $this->getGalleryEntity(); ?>');
                 return 'ajax_gallery.php?' + params.toString();
             }
 
@@ -457,7 +457,7 @@ photoswipeLightbox.pswp.ui.registerElement({
                         window.deleteFrame(entity, entityId, frameId);
                         // close Photoswipe and then optionally redirect (keep behavior consistent)
                         try { pswp.close(); } catch(e){}
-                        setTimeout(()=>{ window.location.href = '<?= htmlspecialchars($entityUrl ?? "wall_of_images.php") ?>'; }, 800);
+                        setTimeout(()=>{ window.location.href = '<?= htmlspecialchars($entityUrl ?? $this->getGalleryUrl()) ?>'; }, 800);
                     }
                 }
             }
