@@ -88,7 +88,7 @@ window.ImageEditorModal = (function() {
     `;
     
     const styles = `<style>
-.ie-modal{position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;display:flex;align-items:center;justify-content:center}
+.ie-modal{position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999999;display:flex;align-items:center;justify-content:center}
 .ie-modal-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85)}
 .ie-modal-container{position:relative;background:#1a1a1a;border-radius:8px;width:95%;max-width:1400px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.5)}
 .ie-modal-header{padding:15px 20px;border-bottom:1px solid #333;display:flex;justify-content:space-between;align-items:center}

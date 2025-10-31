@@ -5,6 +5,7 @@ require __DIR__ . '/env_locals.php';
 require __DIR__ . '/../vendor/autoload.php';
 
 use App\Entity\GeneratorConfig;
+use App\Core\AIProvider;
 
 $em = $spw->getEntityManager();
 $repo = $em->getRepository(GeneratorConfig::class);
@@ -106,6 +107,9 @@ if ($action === 'toggle' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Fetch all configs for user
 $configs = $repo->findBy(['userId' => $userId], ['createdAt' => 'DESC']);
+
+// Get all available models
+$availableModels = AIProvider::getAllModels();
 
 // Edit mode
 $editConfig = null;
@@ -250,7 +254,13 @@ $defaultTemplate = json_encode([
                 </div>
                 <div>
                     <label>Model</label>
-                    <input type="text" name="model" value="<?=htmlspecialchars($editConfig->getModel())?>">
+                    <select name="model" required>
+                        <?php foreach ($availableModels as $modelKey): ?>
+                            <option value="<?=htmlspecialchars($modelKey)?>" <?=$modelKey === $editConfig->getModel() ? 'selected' : ''?>>
+                                <?=htmlspecialchars($modelKey)?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
             </div>
 
@@ -276,7 +286,13 @@ $defaultTemplate = json_encode([
                 </div>
                 <div>
                     <label>Model</label>
-                    <input type="text" name="model" value="openai">
+                    <select name="model" required>
+                        <?php foreach ($availableModels as $modelKey): ?>
+                            <option value="<?=htmlspecialchars($modelKey)?>">
+                                <?=htmlspecialchars($modelKey)?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
             </div>
 

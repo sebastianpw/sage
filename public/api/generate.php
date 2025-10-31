@@ -1,9 +1,7 @@
 <?php
-// public/api/generate.php
-
+// /api/generate.php
 require_once __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../env_locals.php';
-require __DIR__ . '/../../vendor/autoload.php';
 
 use App\Entity\GeneratorConfig;
 use App\Service\GeneratorService;
@@ -13,7 +11,6 @@ use App\Service\Schema\ResponseNormalizer;
 header('Content-Type: application/json; charset=utf-8');
 
 try {
-    // Auth check
     $userId = $_SESSION['user_id'] ?? null;
     if (!$userId) {
         http_response_code(401);
@@ -21,32 +18,58 @@ try {
         exit;
     }
 
-    // Required: config_id
-    $configId = $_REQUEST['config_id'] ?? $_REQUEST['configId'] ?? null;
+    // Get request data
+    $input = $_SERVER['REQUEST_METHOD'] === 'POST' 
+        ? json_decode(file_get_contents('php://input'), true) ?? $_POST
+        : $_GET;
+
+    $configId = $input['config_id'] ?? null;
     if (!$configId) {
         http_response_code(400);
-        echo json_encode(['ok' => false, 'error' => 'Missing config_id parameter']);
+        echo json_encode(['ok' => false, 'error' => 'Missing config_id']);
         exit;
     }
 
-    // Load config
-    $spw = \App\Core\SpwBase::getInstance();
     $em = $spw->getEntityManager();
-    
-    $config = $em->getRepository(GeneratorConfig::class)
-        ->findOneBy(['configId' => $configId, 'active' => true]);
+    $repo = $em->getRepository(GeneratorConfig::class);
+    $config = $repo->findOneBy(['configId' => $configId, 'userId' => $userId, 'active' => true]);
 
     if (!$config) {
         http_response_code(404);
-        echo json_encode(['ok' => false, 'error' => "Generator config '{$configId}' not found"]);
+        echo json_encode(['ok' => false, 'error' => 'Generator not found or inactive']);
         exit;
     }
 
-    // Collect parameters (everything except config_id, model, temperature, max_tokens)
-    $params = $_REQUEST;
-    unset($params['config_id'], $params['configId'], $params['PHPSESSID']);
+    // Info mode - return config structure only
+    if (isset($input['_info'])) {
+        echo json_encode([
+            'ok' => true,
+            'config' => [
+                'config_id' => $config->getConfigId(),
+                'title' => $config->getTitle(),
+                'model' => $config->getModel(),
+                'parameters' => $config->getParameters(),
+                'output_schema' => $config->getOutputSchema(),
+            ]
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
 
-    // Extract AI options
+    // Generate mode
+    $validator = new SchemaValidator();
+    $normalizer = new ResponseNormalizer();
+    $service = new GeneratorService(
+        $spw->getAIProvider(),
+        $validator,
+        $normalizer,
+        $spw->getFileLogger()
+    );
+
+    // Extract parameters (remove internal keys)
+    $params = $input;
+    unset($params['config_id'], $params['_info']);
+
+    // AI options
     $aiOptions = [];
     if (isset($params['temperature'])) {
         $aiOptions['temperature'] = (float)$params['temperature'];
@@ -56,37 +79,16 @@ try {
         $aiOptions['max_tokens'] = (int)$params['max_tokens'];
         unset($params['max_tokens']);
     }
-    if (isset($params['model'])) {
-        // Allow per-request model override
-        $config->setModel($params['model']);
-        unset($params['model']);
-    }
-
-    // Generate
-    $service = new GeneratorService(
-        $spw->getAIProvider(),
-        new SchemaValidator(),
-        new ResponseNormalizer(),
-        $spw->getFileLogger()
-    );
 
     $result = $service->generate($config, $params, $aiOptions);
 
-    echo json_encode($result->toArray(), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-    exit;
+    echo json_encode($result->toArray(), JSON_UNESCAPED_UNICODE);
 
 } catch (\Throwable $e) {
     http_response_code(500);
-    $err = [
+    echo json_encode([
         'ok' => false,
         'error' => $e->getMessage(),
         'trace' => $e->getTraceAsString()
-    ];
-    
-    if (isset($spw)) {
-        $spw->getFileLogger()->error(['Generator API error' => ['message' => $e->getMessage()]]);
-    }
-    
-    echo json_encode($err, JSON_UNESCAPED_UNICODE);
-    exit;
+    ], JSON_UNESCAPED_UNICODE);
 }

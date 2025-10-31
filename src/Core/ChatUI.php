@@ -1,4 +1,5 @@
 <?php
+// src/Core/ChatUI.php
 
 namespace App\Core;
 
@@ -446,31 +447,50 @@ class ChatUI
   cursor: pointer;
   font-size: 18px;
 }
+
+/* --- Add this to getStyles() --- */
+.flash-copy {
+  transition: background 160ms ease, transform 180ms ease;
+  background-color: var(--copy-flash, #e6ffea) !important;
+  transform: scale(1.01);
+  box-shadow: 0 6px 18px rgba(30,50,60,0.12);
+  border-radius: 10px;
+}
+
+.flash-copy-fail {
+  transition: background 160ms ease, transform 180ms ease;
+  background-color: var(--copy-fail, #ffd6d6) !important;
+  transform: scale(1.01);
+  box-shadow: 0 6px 18px rgba(60,30,30,0.12);
+  border-radius: 10px;
+}
+
+
 </style>
 CSS;
     }
 
 
 
-private function getHTML(): string
-{
-    // Build model options from AIProvider catalog
-    $catalog = \App\Core\AIProvider::getModelCatalog();
-    $defaultModel = 'groq/compound';
-    $modelOptionsHtml = '';
-    foreach ($catalog as $groupLabel => $models) {
-        $modelOptionsHtml .= '<optgroup label="' . htmlspecialchars($groupLabel, ENT_QUOTES) . "\">\n";
-        foreach ($models as $m) {
-            $id = htmlspecialchars($m['id'], ENT_QUOTES);
-            $name = htmlspecialchars($m['name'], ENT_QUOTES);
-            $sel = ($id === $defaultModel) ? ' selected' : '';
-            $modelOptionsHtml .= "  <option value=\"{$id}\"{$sel}>{$name}</option>\n";
+    private function getHTML(): string
+    {
+        // Build model options from AIProvider catalog
+        $catalog = \App\Core\AIProvider::getModelCatalog();
+        $defaultModel = 'groq/compound';
+        $modelOptionsHtml = '';
+        foreach ($catalog as $groupLabel => $models) {
+            $modelOptionsHtml .= '<optgroup label="' . htmlspecialchars($groupLabel, ENT_QUOTES) . "\">\n";
+            foreach ($models as $m) {
+                $id = htmlspecialchars($m['id'], ENT_QUOTES);
+                $name = htmlspecialchars($m['name'], ENT_QUOTES);
+                $sel = ($id === $defaultModel) ? ' selected' : '';
+                $modelOptionsHtml .= "  <option value=\"{$id}\"{$sel}>{$name}</option>\n";
+            }
+            $modelOptionsHtml .= "</optgroup>\n";
         }
-        $modelOptionsHtml .= "</optgroup>\n";
-    }
 
-    // Return full HTML. Heredoc used so $modelOptionsHtml is interpolated.
-    return <<<HTML
+        // Return full HTML. Heredoc used so $modelOptionsHtml is interpolated.
+        return <<<HTML
 <div class="chat-shell">
   <!-- Mobile menu toggle -->
   <button id="mobile-toggle" class="mobile-toggle">☰</button>
@@ -510,128 +530,7 @@ private function getHTML(): string
     <div class="input-area">
       <textarea 
         id="user-input" 
-        placeholder="Type a message... (Shift+Enter for new line, Enter to send)"
-        rows="1"
-      ></textarea>
-      <button id="send-btn">Send</button>
-    </div>
-  </div>
-</div>
-HTML;
-}
-
-/*
-
-    private function getHTML(): string
-    {
-        return <<<'HTML'
-<div class="chat-shell">
-  <!-- Mobile menu toggle -->
-  <button id="mobile-toggle" class="mobile-toggle">☰</button>
-
-  <!-- Sidebar with session list -->
-  <div id="sidebar" class="sidebar">
-    <div class="top">
-      <!-- Model Selector -->
-      <div class="model-selector-wrapper">
-        <label class="model-selector-label" for="model-selector">AI Model</label>
-        <select id="model-selector">
-          <optgroup label="Groq API">
-  <option value="allam-2-7b">Allam 2 7B</option>
-  <option value="groq/compound" selected>Groq Compound</option>
-  <option value="groq/compound-mini">Groq Compound Mini</option>
-  <option value="llama-3.1-8b-instant">Llama 3.1 8B Instant</option>
-  <option value="llama-3.3-70b-versatile">Llama 3.3 70B Versatile</option>
-  <option value="meta-llama/llama-4-maverick-17b-128e-instruct">Llama 4 Maverick 17B 128E Instruct</option>
-  <option value="meta-llama/llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B 16E Instruct</option>
-  <option value="meta-llama/llama-guard-4-12b">Llama Guard 4 12B</option>
-  <option value="moonshotai/kimi-k2-instruct">Moonshot Kimi K2 Instruct</option>
-  <option value="moonshotai/kimi-k2-instruct-0905">Moonshot Kimi K2 Instruct 0905</option>
-  <option value="openai/gpt-oss-20b">OpenAI GPT OSS 20B</option>
-  <option value="openai/gpt-oss-120b">OpenAI GPT OSS 120B</option>
-  <option value="qwen/qwen3-32b">Qwen 3 32B (Groq)</option>
-</optgroup>
-          <optgroup label="Pollinations API - Main">
-            <option value="deepseek">DeepSeek V3.1</option>
-            <option value="deepseek-reasoning">DeepSeek R1 (Reasoning)</option>
-            <option value="mistral">Mistral Small 3.1 24B</option>
-            <option value="nova-fast">Amazon Nova Micro</option>
-            <option value="openai">OpenAI GPT-5 Mini</option>
-            <option value="openai-fast">OpenAI GPT-5 Nano</option>
-            <option value="openai-large">OpenAI GPT-5 Chat</option>
-            <option value="openai-reasoning">OpenAI o4-mini (Reasoning)</option>
-            <option value="openai-audio">OpenAI GPT-4o Audio</option>
-            <option value="qwen-coder">Qwen 2.5 Coder 32B</option>
-            <option value="roblox-rp">Llama 3.1 8B Instruct</option>
-          </optgroup>
-          <optgroup label="Pollinations API - Community">
-            <option value="bidara">BIDARA (NASA)</option>
-            <option value="chickytutor">ChickyTutor Language</option>
-            <option value="midijourney">MIDIjourney</option>
-            <option value="rtist">Rtist</option>
-	  </optgroup>
-
-
-
-  <optgroup label="Gemini Text / Coding Models">
-    <option value="gemini-2.5-pro">Gemini 2.5 Pro (Stable)</option>
-    <option value="gemini-2.5-pro-preview-03-25">Gemini 2.5 Pro Preview 03-25</option>
-    <option value="gemini-2.5-pro-preview-05-06">Gemini 2.5 Pro Preview 05-06</option>
-    <option value="gemini-2.5-pro-preview-06-05">Gemini 2.5 Pro Preview 06-05</option>
-    <option value="gemini-2.5-flash">Gemini 2.5 Flash (Stable)</option>
-    <option value="gemini-2.5-flash-preview-05-20">Gemini 2.5 Flash Preview 05-20</option>
-    <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (Stable)</option>
-    <option value="gemini-2.5-flash-lite-preview-06-17">Gemini 2.5 Flash-Lite Preview 06-17</option>
-    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-    <option value="gemini-2.0-flash-001">Gemini 2.0 Flash 001</option>
-    <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite</option>
-    <option value="gemini-2.0-flash-lite-001">Gemini 2.0 Flash-Lite 001</option>
-    <option value="gemini-2.0-pro-exp">Gemini 2.0 Pro Experimental</option>
-    <option value="gemini-2.0-flash-live-001">Gemini 2.0 Flash 001 Live</option>
-    <option value="gemini-live-2.5-flash-preview">Gemini Live 2.5 Flash Preview</option>
-    <option value="gemini-2.5-flash-live-preview">Gemini 2.5 Flash Live Preview</option>
-    <option value="gemini-2.5-flash-native-audio-latest">Gemini 2.5 Flash Native Audio Latest</option>
-    <option value="gemini-2.5-flash-native-audio-preview-09-2025">Gemini 2.5 Flash Native Audio Preview 09-2025</option>
-  </optgroup>
-  <optgroup label="Gemini Embedding Models">
-    <option value="gemini-embedding-001">Gemini Embedding 001</option>
-    <option value="gemini-embedding-exp">Gemini Embedding Experimental</option>
-    <option value="gemini-embedding-exp-03-07">Gemini Embedding Experimental 03-07</option>
-    <option value="embedding-gecko-001">Embedding Gecko</option>
-  </optgroup>
-
-
-
-
-
-        </select>
-      </div>
-      
-      <!-- New Chat Button -->
-      <button id="new-chat-btn" class="new-chat-btn">+ New Chat</button>
-    </div>
-    <div id="sessions" class="sessions">
-      <!-- Session items will be loaded here by JavaScript -->
-    </div>
-  </div>
-
-  <!-- Main chat area -->
-  <div class="main">
-    <div class="header">
-      <h2 id="chat-header">Select a chat</h2>
-      <div class="controls">
-        <span id="current-model-display" style="font-size: 12px; color: var(--muted); font-weight: normal;"></span>
-      </div>
-    </div>
-
-    <div id="messages">
-      <!-- Messages will be inserted here -->
-    </div>
-
-    <div class="input-area">
-      <textarea 
-        id="user-input" 
-        placeholder="Type a message... (Shift+Enter for new line, Enter to send)"
+        placeholder="Type a message..."
         rows="1"
       ></textarea>
       <button id="send-btn">Send</button>
@@ -641,17 +540,11 @@ HTML;
 HTML;
     }
 
- */
-
-
-
-
-
     private function getScripts(): string
     {
         return <<<'JAVASCRIPT'
 <script>
-/* Embedded Chat UI JavaScript - Auto-expanding textarea, double-click copy, abort control */
+/* Embedded Chat UI JavaScript - Auto-expanding textarea, triple-backtick parsing to <pre><code>, double-click copy, abort control */
 (() => {
   // Elements
   const sessionsDiv = document.getElementById('sessions');
@@ -708,6 +601,55 @@ HTML;
     if (!userInput) return;
     userInput.style.height = 'auto';
     userInput.style.height = Math.min(userInput.scrollHeight, 200) + 'px';
+  }
+
+  // Render text with triple-backtick code block parsing
+  // Returns a DocumentFragment containing text nodes and <pre><code class="language-..."> elements
+  function renderContentWithCodeBlocks(text) {
+    const frag = document.createDocumentFragment();
+    if (!text) return frag;
+
+    // Normalize CRLF to LF for predictable regex behavior
+    const normalized = text.replace(/\r\n/g, '\n');
+
+    // Pattern: ```optionalLang\n...code...\n```
+    const pattern = /```([a-zA-Z0-9_-]+)?\s*\n([\s\S]*?)```/g;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = pattern.exec(normalized)) !== null) {
+      const matchStart = match.index;
+      const matchEnd = pattern.lastIndex;
+
+      // Text before the code block
+      if (matchStart > lastIndex) {
+        const beforeText = normalized.slice(lastIndex, matchStart);
+        // keep newlines as text nodes (CSS uses pre-wrap in .message)
+        frag.appendChild(document.createTextNode(beforeText));
+      }
+
+      // Code block
+      const lang = (match[1] || 'plaintext').toLowerCase();
+      const codeText = match[2];
+
+      const pre = document.createElement('pre');
+      const codeEl = document.createElement('code');
+      codeEl.className = 'language-' + lang;
+      // use textContent to escape the code safely
+      codeEl.textContent = codeText;
+      pre.appendChild(codeEl);
+      frag.appendChild(pre);
+
+      lastIndex = matchEnd;
+    }
+
+    // Trailing text after last match
+    if (lastIndex < normalized.length) {
+      const trailing = normalized.slice(lastIndex);
+      frag.appendChild(document.createTextNode(trailing));
+    }
+
+    return frag;
   }
 
   // Rename helper (used by dblclick and double-tap)
@@ -825,15 +767,12 @@ HTML;
           const prev = lastSessionTouch;
           const delta = now - prev.time;
           if (prev.id === sessionId && delta > 40 && delta < 350) {
-            // treat as double-tap -> rename
             ev.preventDefault();
             this._suppressClick = true;
             renameSession(sessionId, title);
-            // reset lastSessionTouch to avoid triple-trigger
             lastSessionTouch = { id: null, time: 0 };
             return;
           }
-          // otherwise store this touch for potential double-tap
           lastSessionTouch = { id: sessionId, time: now };
         });
 
@@ -889,7 +828,9 @@ HTML;
     el.className = 'message ' + (role === 'user' ? 'user' : 'assistant');
 
     const p = document.createElement('div');
-    p.innerText = text;
+    // Render fenced code blocks into <pre><code> nodes safely
+    const contentFrag = renderContentWithCodeBlocks(text);
+    p.appendChild(contentFrag);
     el.appendChild(p);
 
     if (id) {
@@ -917,6 +858,22 @@ HTML;
     }
 
     messagesDiv.appendChild(el);
+    // If Prism is present, highlight the newly added element
+    try {
+      if (typeof Prism !== 'undefined') {
+        if (Prism.highlightElement) {
+          // highlight each <code> inside the new element
+          el.querySelectorAll('pre code, code').forEach((c) => {
+            try { Prism.highlightElement(c); } catch (e) { /* ignore */ }
+          });
+        } else if (Prism.highlightAllUnder) {
+          Prism.highlightAllUnder(el);
+        }
+      }
+    } catch (e) {
+      console.warn('Prism highlight failed for appended message', e);
+    }
+
     scrollToBottom();
   }
 
@@ -1082,6 +1039,24 @@ HTML;
       }
     });
   }
+
+
+  // Textarea: auto-expand on input
+if (userInput) {
+  userInput.addEventListener('input', autoExpandTextarea);
+  
+  // Enter inserts a newline. Send only via Send button or Ctrl/⌘+Enter.
+  userInput.addEventListener('keydown', e => {
+    // Send on Ctrl+Enter (Windows/Linux) or Meta+Enter (Mac). Let plain Enter create newline.
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+}
+
+
+/*
   
   // Textarea: auto-expand on input
   if (userInput) {
@@ -1094,7 +1069,10 @@ HTML;
         sendMessage();
       }
     });
-  }
+}
+ */
+
+
 
   // --- Double-click & double-tap to copy ---
   (function installCopyHandlers() {
@@ -1138,6 +1116,112 @@ HTML;
       }
     }
 
+
+
+
+
+
+function flashMessage(msg, color = null) {
+  try {
+    // If caller provided a specific color, treat as "failure" flash class
+    if (color) {
+      // set a CSS variable for immediate custom color, then toggle fail class
+      msg.style.setProperty('--copy-fail', color);
+      msg.classList.add('flash-copy-fail');
+      setTimeout(() => {
+        msg.classList.remove('flash-copy-fail');
+        // cleanup variable after transition
+        setTimeout(() => msg.style.removeProperty('--copy-fail'), 180);
+      }, 360);
+    } else {
+      // success flash
+      msg.classList.add('flash-copy');
+      setTimeout(() => {
+        msg.classList.remove('flash-copy');
+      }, 360);
+    }
+  } catch (e) {
+    // fallback to inline background color if class toggling fails
+    const origBg = msg.style.background;
+    msg.style.transition = 'background 120ms ease';
+    msg.style.background = color || '#e6ffea';
+    setTimeout(() => {
+      msg.style.background = origBg || '';
+      setTimeout(() => { msg.style.transition = ''; }, 180);
+    }, 360);
+  }
+}
+
+
+
+
+/*
+    function flashMessage(msg, color = '#e6ffea') {
+  const origBg = msg.style.background;
+  // immediate visual feedback
+  msg.style.transition = 'background 120ms ease';
+  msg.style.background = color;
+  // revert after short delay
+  setTimeout(() => {
+    msg.style.background = origBg || '';
+    // clear transition after a small delay so future flashes aren't affected
+    setTimeout(() => { msg.style.transition = ''; }, 180);
+  }, 260);
+    }
+
+ */
+
+
+// desktop dblclick
+messagesDiv.addEventListener('dblclick', async (ev) => {
+  const msg = ev.target.closest && ev.target.closest('.message');
+  if (!msg) return;
+
+  // immediate visual feedback
+  flashMessage(msg);
+
+  const txt = extractTextFromMessage(msg);
+  const ok = await copyText(txt);
+  if (!ok) {
+    // flash failure color briefly if copy failed
+    flashMessage(msg, '#ffd6d6');
+  } else {
+    // optionally log success (no delay needed — flash already shown)
+    console.log('Copied to clipboard');
+  }
+});
+
+
+
+
+// mobile double-tap
+messagesDiv.addEventListener('touchend', async (ev) => {
+  const now = Date.now();
+  const target = ev.target.closest && ev.target.closest('.message');
+  if (!target) { lastTouch = now; return; }
+
+  const delta = now - lastTouch;
+  lastTouch = now;
+  if (delta > 40 && delta < 350) {
+    ev.preventDefault();
+
+    // immediate visual feedback
+    flashMessage(target);
+
+    const txt = extractTextFromMessage(target);
+    const ok = await copyText(txt);
+    if (ok) {
+      console.log('Copied to clipboard');
+    } else {
+      flashMessage(target, '#ffd6d6');
+    }
+  }
+});
+
+
+
+    /*
+
     function flashMessage(msg) {
       const origBg = msg.style.background;
       msg.style.transition = 'background 180ms ease';
@@ -1146,7 +1230,8 @@ HTML;
         msg.style.background = origBg || ''; 
         setTimeout(() => { msg.style.transition = ''; }, 200); 
       }, 420);
-    }
+  }
+     
 
     // desktop dblclick
     messagesDiv.addEventListener('dblclick', async (ev) => {
@@ -1181,7 +1266,14 @@ HTML;
           console.log('Copy failed');
         }
       }
-    });
+  });
+
+     */
+
+
+
+
+
   })();
   // --- end copy handlers ---
 

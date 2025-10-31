@@ -30,9 +30,62 @@ class AIProvider
         'meta-llama/llama-4-maverick-17b-128e-instruct',
     ];
 
-    public const ZROK_TUNNEL_URL = 'https://09ceendk3mfk.share.zrok.io';
+
+    private const QWEN_MODELS = [
+        'qwen/qwen2-7b-instruct-awq',
+        'qwen/Qwen2.5-7B-Instruct-AWQ',
+        'qwen/Qwen2.5-14B-Instruct-AWQ',
+        'qwen/Qwen2.5-32B-Instruct-AWQ',
+        'qwen/Qwen2.5-Coder-14B-Instruct-AWQ',
+        'internlm/internlm2-chat-7b-4bits',
+        'internlm/internlm2-chat-20b-4bits',
+        'internlm/internlm2_5-20b-chat-4bit-awq',
+    ];
+
+    private const POLLINATIONS_MODELS = [
+        'mistral',
+        'openai',
+        'openai-fast',
+        'openai-large',
+        'openai-reasoning',
+        'qwen-coder',
+        'roblox-rp',
+    ];
+
+    private const POLLINATIONS_COMMUNITY_MODELS = [
+        'chickytutor',
+        'rtist',
+    ];
+
+    private const GEMINI_MODELS = [
+        'gemini-2.5-pro',
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-2.0-flash',
+        'gemini-2.0-flash-lite',
+        'gemini-2.0-pro-exp',
+    ];
+
     
     private ?FileLogger $logger = null;
+
+
+
+
+    public static function getAllModels(): array
+        {
+            $allConstants = array_merge(
+                self::GROQ_MODELS,
+                self::GEMINI_MODELS,
+                self::POLLINATIONS_MODELS,
+                self::POLLINATIONS_COMMUNITY_MODELS,
+                self::QWEN_MODELS
+            );
+
+            return $allConstants;
+        }
+
+
     
     public function __construct(?FileLogger $logger = null)
     {
@@ -73,6 +126,24 @@ class AIProvider
             return ['id' => $m, 'name' => $humanize($m)];
         }, self::GROQ_MODELS);
 
+
+        $qwen_local = array_map(function ($m) use ($humanize) {
+            return ['id' => $m, 'name' => $humanize($m)];
+        }, self::QWEN_MODELS);
+
+
+        $pollinations_main = array_map(function ($m) use ($humanize) {
+            return ['id' => $m, 'name' => $humanize($m)];
+        }, self::POLLINATIONS_MODELS);
+
+
+        $pollinations_community = array_map(function ($m) use ($humanize) {
+            return ['id' => $m, 'name' => $humanize($m)];
+        }, self::POLLINATIONS_COMMUNITY_MODELS);
+
+
+        /*
+
         // Pollinations groups: mirror the options previously in ChatUI
         $pollinations_main = [
             ['id'=>'mistral','name'=>'Mistral Small 3.1 24B'],
@@ -88,7 +159,11 @@ class AIProvider
             ['id'=>'chickytutor','name'=>'ChickyTutor Language'],
             ['id'=>'rtist','name'=>'Rtist'],
         ];
+         */
 
+
+
+        /*
         // Gemini groups: mirror the options previously in ChatUI
         $gemini_text = [
             ['id'=>'gemini-2.5-pro','name'=>'Gemini 2.5 Pro (Stable)'],
@@ -98,8 +173,18 @@ class AIProvider
             ['id'=>'gemini-2.0-flash-lite','name'=>'Gemini 2.0 Flash-Lite'],
             ['id'=>'gemini-2.0-pro-exp','name'=>'Gemini 2.0 Pro Experimental'],
         ];
+         */
 
 
+        $gemini_text = array_map(function ($m) use ($humanize) {
+            return ['id' => $m, 'name' => $humanize($m)];
+        }, self::GEMINI_MODELS);
+
+
+
+
+
+/*
         $qwen_local = [
             ['id'=>'qwen/qwen2-7b-instruct-awq','name'=>'Qwen 2 7B Instruct (AWQ)'],
             ['id'=>'qwen/Qwen2.5-7B-Instruct-AWQ','name'=>'Qwen 2.5 7B Instruct (AWQ)'],
@@ -110,6 +195,7 @@ class AIProvider
             ['id'=>'internlm/internlm2-chat-20b-4bits','name'=>'InternLM2 Chat 20B 4-bit'],
             ['id'=>'internlm/internlm2_5-20b-chat-4bit-awq','name'=>'InternLM2.5 Chat 20B 4-bit AWQ'],
         ];
+ */
 
         return [
             'Groq API' => $groq,
@@ -371,9 +457,16 @@ class AIProvider
     // QWEN / COLAB FASTAPI PROVIDER
     // ============================================================================
 
+    private function getZrokTunnelUrl(): string
+    {
+        $scriptPath = \App\Core\SpwBase::getInstance()->getProjectPath() . '/bash/zrok_echo.sh';
+$output = trim(shell_exec('sh ' . escapeshellarg($scriptPath) . ' 2>&1'));
+        return $output;
+    }
+
     private function sendToQwenLocal(string $model, array $messages, array $options): string
     {
-        $endpoint = self::ZROK_TUNNEL_URL . '/v1/chat/completions'; // append route for your FastAPI endpoint
+        $endpoint = $this->getZrokTunnelUrl() . '/v1/chat/completions'; // append route for your FastAPI endpoint
         $apiKey = $this->getQwenApiKey();
 
         if (empty($apiKey)) {

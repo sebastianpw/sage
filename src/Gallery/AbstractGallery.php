@@ -732,7 +732,7 @@ function attachGearTo(context) {
                 
                 
                 {
-                    label: 'Import2Generative',
+                    label: '⚡ Import2Generative',
                     onClick: function() {
                         const $wrapper = $(this).closest('.img-wrapper');
                         window.importGenerative($wrapper.data('entity'), $wrapper.data('entity-id'), $wrapper.data('frame-id'));
@@ -793,7 +793,7 @@ function attachGearTo(context) {
 
                 
                 {
-                    label: 'Assign2Composite',
+                    label: '🧩 Assign2Composite',
                     onClick: function() {
                         const $wrapper = $(this).closest('.img-wrapper');
                         window.assignToComposite($wrapper.data('entity'), $wrapper.data('entity-id'), $wrapper.data('frame-id'));
@@ -803,14 +803,14 @@ function attachGearTo(context) {
 
 
 {
-    label: 'Import2ControlNetMap',
+    label: '☠️ Import2CNetMap',
     onClick: function() {
         const $wrapper = $(this).closest('.img-wrapper');
         window.importControlNetMap($wrapper.data('entity'), $wrapper.data('entity-id'), $wrapper.data('frame-id'));
     }
 },
 {
-                    label: 'Use Prompt Matrix',
+                    label: '🌌 Use Prompt Matrix',
                     onClick: function() {
                         const $wrapper = $(this).closest('.img-wrapper');
                         window.usePromptMatrix($wrapper.data('entity'), $wrapper.data('entity-id'), $wrapper.data('frame-id'));
@@ -850,7 +850,7 @@ function attachGearTo(context) {
 
 
 
-
+/*
                 {
                     label: 'Edit / Coordinates',
                     onClick: function() {
@@ -865,9 +865,12 @@ function attachGearTo(context) {
                             Toast.show('Image editor not available', 'error');
                         }
                     }
-                },
+        },
+*/
+
+
                 {
-                    label: 'Delete Frame',
+                    label: '🗑️ Delete Frame',
                     onClick: function() {
                         const $wrapper = $(this).closest('.img-wrapper');
                         window.deleteFrame($wrapper.data('entity'), $wrapper.data('entity-id'), $wrapper.data('frame-id'));
@@ -1639,6 +1642,10 @@ protected function renderSequel(): string {
 	return 'gallery_' . $this->getGalleryEntity() . '.php';
     }
 
+    protected function showFloatool() {
+        return true;
+    }
+
     protected function renderJsCss(): string {
         ob_start();
 ?>
@@ -1697,7 +1704,9 @@ protected function renderSequel(): string {
 
         <div id="toast-container"></div>
 <?php
-	require $this->spw->getPublicPath() .  "/floatool.php";
+    if ($this->showFloatool()) {
+        require $this->spw->getPublicPath() .  "/floatool.php";
+    }
         return ob_get_clean();
     }
 }
