@@ -168,15 +168,18 @@ SQL
 
 
 # Install phpMyAdmin
+PHP_MYADMIN_DIR="$SCRIPT_DIR/../phpmyadmin"
 
-PHP_MYADMIN_DIR="$(dirname "$0")/../phpmyadmin"
+if [ ! -d "$PHP_MYADMIN_DIR" ] || [ -z "$(ls -A "$PHP_MYADMIN_DIR" 2>/dev/null)" ]; then
+    echo "Installing phpMyAdmin (manual tarball)…"
 
-if [ ! -d "$PHP_MYADMIN_DIR" ]; then
-    echo "Installing phpMyAdmin..."
-    composer create-project phpmyadmin/phpmyadmin "$PHP_MYADMIN_DIR" \
-        --no-dev --prefer-dist 2>/dev/null || true
+    TAG="5_2_1"
+    URL="https://github.com/phpmyadmin/phpmyadmin/archive/refs/tags/RELEASE_${TAG}.tar.gz"
+
+    rm -rf "$PHP_MYADMIN_DIR"
+    mkdir -p "$PHP_MYADMIN_DIR"
+    curl -L "$URL" | tar xz --strip-components=1 -C "$PHP_MYADMIN_DIR"
 fi
-
 
 echo "Database rollout and phpMyAdmin installation complete."
 
@@ -193,11 +196,11 @@ create_db_if_not_exists "$SYS_USER" "$SYS_PASS" "$SYS_HOST" "$SYS_PORT" "$SYS_DB
 
 # Import main database
 echo "Importing main database $MAIN_DB..."
-mysql -h "$MAIN_HOST" -P "${MAIN_PORT:-3306}" -u "$MAIN_USER" -p"$MAIN_PASS" "$MAIN_DB" < "$(dirname "$0")/init_main.sql"
+mysql -h "$MAIN_HOST" -P "${MAIN_PORT:-3306}" -u "$MAIN_USER" -p"$MAIN_PASS" "$MAIN_DB" < "$SCRIPT_DIR/init_main.sql"
 
 # Import system database
 echo "Importing system database $SYS_DB..."
-mysql -h "$SYS_HOST" -P "${SYS_PORT:-3306}" -u "$SYS_USER" -p"$SYS_PASS" "$SYS_DB" < "$(dirname "$0")/init_sys.sql"
+mysql -h "$SYS_HOST" -P "${SYS_PORT:-3306}" -u "$SYS_USER" -p"$SYS_PASS" "$SYS_DB" < "$SCRIPT_DIR/init_sys.sql"
 
 
 cat << "EOF"
