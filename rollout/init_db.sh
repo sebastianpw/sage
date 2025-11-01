@@ -107,7 +107,7 @@ DEBIAN_FRONTEND=noninteractive apt install -y ffmpeg jq python3-pip
 
 
 # Setup Kaggle FastAPI module venv
-PYAPI_DIR=$("$SCRIPT_DIR/../pyapi")
+PYAPI_DIR="$SCRIPT_DIR/../pyapi"
 
 cd "$PYAPI_DIR" || { echo "Could not cd into $PYAPI_DIR"; exit 1; }
 
@@ -122,7 +122,8 @@ fi
 
 
 # add kaggle config location
-export KAGGLE_CONFIG_DIR=$("$SCRIPT_DIR/../token/.kaggle")
+export KAGGLE_CONFIG_DIR="$SCRIPT_DIR/../token/.kaggle"
+
 
 # install zrok
 curl -LO https://github.com/openziti/zrok/releases/download/v1.1.10/zrok_1.1.10_linux_amd64.tar.gz
