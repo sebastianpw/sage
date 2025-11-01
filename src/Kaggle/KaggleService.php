@@ -73,6 +73,7 @@ class KaggleService
         $candidates = [];
         $candidates[] = $this->primaryConfigDir;
 
+        /*
         $candidates[] = $this->projectRoot . '/.local/.config/kaggle';
         if (!empty($this->kaggleBin)) {
             $binDir = dirname($this->kaggleBin);
@@ -84,6 +85,7 @@ class KaggleService
             $candidates[] = $home . '/.config/kaggle';
             $candidates[] = $home . '/.kaggle';
         }
+         */
 
         $unique = [];
         foreach ($candidates as $c) {

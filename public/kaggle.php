@@ -781,7 +781,8 @@ tr:hover {
             </div>
 
             <div class="card-content" id="content-notebooks">
-                <?php if (empty($kaggle->getKaggleBinaryPath())): ?>
+                <?php /*if (empty($kaggle->getKaggleBinaryPath())): */ ?>
+                <?php if (false): ?>
                     <div class="empty-state"><p>⚠️ Kaggle CLI binary not found on this host.</p></div>
                 <?php elseif (empty($unifiedNotebooks)): ?>
                     <div class="empty-state"><p>📭 No notebooks found for user <?= htmlspecialchars($token['username'] ?? '') ?></p></div>
