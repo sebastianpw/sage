@@ -102,74 +102,27 @@ fi
 DEBIAN_FRONTEND=noninteractive apt install -y ffmpeg jq python3-pip
 
 
-# Install kaggle
-#pip install --upgrade --break-system-packages kaggle
-
-
-# Kaggle system-wide install for Debian Codespace
-
-pip uninstall --break-system-packages  \
-    kaggle \
-    requests \
-    tqdm \
-    python-dateutil \
-    certifi \
-    urllib3 \
-    idna \
-    chardet \
-    python-slugify \
-    pyyaml \
-    tabulate \
-    bleach \
-    webencodings \
-    html5lib \
-    unidecode \
-    google \
-    google-auth \
-    google-auth-oauthlib \
-    google-api-python-client \
-    protobuf \
-    six
-
-
-pip install --break-system-packages --upgrade \
-    kaggle \
-    requests \
-    tqdm \
-    python-dateutil \
-    certifi \
-    urllib3 \
-    idna \
-    chardet \
-    python-slugify \
-    pyyaml \
-    tabulate \
-    bleach \
-    webencodings \
-    html5lib \
-    unidecode \
-    google \
-    google-auth \
-    google-auth-oauthlib \
-    google-api-python-client \
-    protobuf \
-    six
+# Install venv PyAPI with kaggle service
 
 
 
-# add config location
-export KAGGLE_CONFIG_DIR="/var/www/sage/token/.kaggle"
+# Setup Kaggle FastAPI module venv
+PYAPI_DIR=$("$SCRIPT_DIR/../pyapi")
+
+cd "$PYAPI_DIR" || { echo "Could not cd into $PYAPI_DIR"; exit 1; }
+
+if [ ! -d "venv" ]; then
+    echo "Creating Python venv for FastAPI Kaggle wrapper..."
+    python3 -m venv venv
+    "$PYAPI_DIR/venv/bin/pip" install -r requirements.txt
+    echo "venv created and dependencies installed."
+else
+    echo "Python venv already exists. Skipping setup."
+fi
 
 
-
-## kaggle --user install etc would be termux only
-#pip install --user --upgrade --break-system-packages kaggle
-## Make sure ~/.local/bin is in PATH
-#export PATH="$HOME/.local/bin:$PATH"
-## Set Kaggle config
-#export KAGGLE_CONFIG_DIR="$HOME/.kaggle"
-
-
+# add kaggle config location
+export KAGGLE_CONFIG_DIR=$("$SCRIPT_DIR/../token/.kaggle")
 
 # install zrok
 curl -LO https://github.com/openziti/zrok/releases/download/v1.1.10/zrok_1.1.10_linux_amd64.tar.gz
