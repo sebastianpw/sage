@@ -168,12 +168,13 @@ SQL
 
 
 # Install phpMyAdmin
-PHP_MYADMIN_DIR="$(dirname "$0")/../phpmyadmin"
 
+PHP_MYADMIN_DIR="$(dirname "$0")/../phpmyadmin"
 if [ ! -d "$PHP_MYADMIN_DIR" ]; then
     echo "Installing phpMyAdmin..."
-    composer create-project phpmyadmin/phpmyadmin "$PHP_MYADMIN_DIR" --no-dev --prefer-dist
+    composer create-project phpmyadmin/phpmyadmin "$PHP_MYADMIN_DIR" --no-dev --prefer-dist 2>/dev/null
 fi
+
 
 echo "Database rollout and phpMyAdmin installation complete."
 
