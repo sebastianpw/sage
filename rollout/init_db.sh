@@ -180,26 +180,7 @@ SQL
 
 
 # Install phpMyAdmin
-PHP_MYADMIN_DIR="$SCRIPT_DIR/../phpmyadmin"
-
-if [ ! -d "$PHP_MYADMIN_DIR" ] || [ -z "$(ls -A "$PHP_MYADMIN_DIR" 2>/dev/null)" ]; then
-    echo "Installing phpMyAdmin (manual tarball)…"
-
-    TAG="5.2.1"
-    URL="https://files.phpmyadmin.net/phpMyAdmin/${TAG}/phpMyAdmin-${TAG}-all-languages.tar.gz"
-
-    rm -rf "$PHP_MYADMIN_DIR"
-    mkdir -p "$PHP_MYADMIN_DIR"
-    curl -L "$URL" | tar xz --strip-components=1 -C "$PHP_MYADMIN_DIR"
-fi
-
-echo "Database rollout and phpMyAdmin installation complete."
-
-# Create symbolic links
-ln -s /var/www/sage/phpmyadmin /var/www/sage/public/admin
-ln -s /var/www/sage/config/config.inc.php /var/www/sage/phpmyadmin/config.inc.php
-chmod 755 /var/www/sage/phpmyadmin/config.inc.php
-chmod 755 /var/www/sage/config/config.inc.php
+$("$SCRIPT_DIR/init_phpmyadmin.sh")
 
 
 
