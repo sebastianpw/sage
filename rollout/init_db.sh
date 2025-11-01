@@ -131,9 +131,6 @@ chown www-data:www-data "$KAGGLE_TOKEN_DIR"
 # TODO: in prod assign proper user and rights
 chmod 777 "$KAGGLE_TOKEN_DIR"
 
-# secure directory permissions
-chmod 700 "$KAGGLE_TOKEN_DIR"
-
 # export kaggle config location
 export KAGGLE_CONFIG_DIR="$KAGGLE_TOKEN_DIR"
 
