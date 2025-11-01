@@ -121,8 +121,19 @@ else
 fi
 
 
-# add kaggle config location
-export KAGGLE_CONFIG_DIR="$SCRIPT_DIR/../token/.kaggle"
+# ensure kaggle token config dir exists
+KAGGLE_TOKEN_DIR="$SCRIPT_DIR/../token/.kaggle"
+
+mkdir -p "$KAGGLE_TOKEN_DIR"
+
+# set owner for PHP / nginx (adjust if your user differs)
+chown www-data:www-data "$KAGGLE_TOKEN_DIR"
+
+# secure directory permissions
+chmod 700 "$KAGGLE_TOKEN_DIR"
+
+# export kaggle config location
+export KAGGLE_CONFIG_DIR="$KAGGLE_TOKEN_DIR"
 
 
 # install zrok
