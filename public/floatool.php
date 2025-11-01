@@ -18,7 +18,6 @@ $generators = $userId ? $repo->findBy(['userId' => $userId, 'active' => true], [
     <div class="floatool-buttons">
         <button data-action="open-dashboard">🔮</button>
         <button data-action="open-database">🛢️</button>
-        <button data-action="open-profile">👤</button>
         <button data-action="open-styles">🎨</button>
         <button data-action="open-regen">♻️</button>
         <button data-action="open-chat">💬</button>
@@ -586,8 +585,6 @@ $generators = $userId ? $repo->findBy(['userId' => $userId, 'active' => true], [
             const action = btn.getAttribute('data-action');
             if(action==='open-dashboard') 
                 window.location.href='dashboard.php';
-            else if(action==='open-profile')
-                window.location.href='view_profile.php';
             else if(action==='open-database')
                 window.location.href="/admin/"
             else if(action==='open-regen')

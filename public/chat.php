@@ -23,14 +23,6 @@ $userId = isset($_SESSION['user_id']) ? intval($_SESSION['user_id']) : 0;
 $ui = new ChatUI($userId);
 $uiHtml = $ui->render();
 
-// Optional eruda dev snippet (if present in your environment)
-$erudaHtml = '';
-if (file_exists(__DIR__ . '/eruda_var.php')) {
-    // include file to set $eruda variable if it exists
-    require_once __DIR__ . '/eruda_var.php';
-    $erudaHtml = isset($eruda) ? $eruda : '';
-}
-
 // Prism CSS (CDN or local fallback)
 $prismCss = '';
 if ($cdn) {
@@ -214,7 +206,7 @@ $prismLoaderScript = <<<JS
 JS;
 
 // Assemble final content. Keep original ChatUI HTML intact, but prepend Prism CSS & dark overrides
-$content = $erudaHtml . $prismCss . $darkOverrides . $uiHtml . $prismLoaderScript;
+$content = $prismCss . $darkOverrides . $uiHtml . $prismLoaderScript;
 
 // Render via layout (preserve original template path usage)
 $spw->renderLayout($content, "Chat", $spw->getProjectPath() . '/templates/chat.php');

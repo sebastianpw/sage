@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Wall of Images</title>
+
+  <!-- Font Awesome (spinner) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
+
+  <style>
+    /* Reset */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html,body { height: 100%; width: 100%; }
+    body {
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background: #0b0b0c;
+      color: #e9eef4;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overflow: hidden;
+      touch-action: none; /* allow pointer events for gestures */
+    }
+
+    /* Wall container (grid) */
+    .wall {
+      height: 100vh;
+      width: 100vw;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr); /* default portrait 3 columns */
+      grid-template-rows: repeat(3, 1fr);
+      gap: 0;
+    }
+
+    /* Landscape variant applied via JS toggling .landscape on body */
+    body.landscape .wall {
+      grid-template-columns: repeat(4, 1fr); /* 4 columns */
+      grid-template-rows: repeat(2, 1fr);     /* 2 rows */
+    }
+
+    .cell {
+      position: relative;
+      overflow: hidden;
+      background: #111;
+      touch-action: none; /* allow two-finger gestures on images */
+    }
+
+    /* hide the ninth when in landscape (we do this by a class on the 9th cell from JS too) */
+    .cell.hidden { display: none; }
+
+    .cell .frame {
+      width: 100%;
+      height: 100%;
+      display: block;
+      position: absolute;
+      left: 0;
+      top: 0;
+      will-change: transform;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    .cell img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover; /* keep seam tight */
+      display: block;
+      transform-origin: center center;
+      pointer-events: none; /* pointer handling done on .frame wrapper */
+    }
+
+    /* hover zoom desktop */
+    @media (hover: hover) {
+      .cell:hover img { transform: scale(1.02); transition: transform .6s cubic-bezier(.2,.9,.25,1); }
+    }
+
+    /* Loading overlay */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, rgba(11,11,12,0.92), rgba(11,11,12,0.82));
+      z-index: 9999;
+      transition: opacity .45s ease, visibility .45s;
+    }
+    .overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+    .loader { text-align: center; color: #d7e6f3; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+    .spinner { font-size: 38px; display:block; margin-bottom:10px; opacity:.95; }
+    .msg { font-size: 14px; opacity: .95; margin-bottom:6px; }
+    .progress { font-weight:600; font-size:13px; letter-spacing:.04em; color:#bcd0e8; }
+
+    /* small chrome */
+    .credit { position: fixed; top: 12px; right: 14px; font-size:12px; color:rgba(255,255,255,0.75); z-index:6000; background:rgba(0,0,0,.2); padding:6px 10px; border-radius:999px; }
+    .hint { position: fixed; left: 12px; bottom: 12px; z-index:6000; font-size:12px; color: rgba(255,255,255,0.66); background: rgba(0,0,0,0.22); padding:6px 10px; border-radius:999px; }
+
+    /* If viewport very tall/narrow allow scroll */
+    @media (max-aspect-ratio: 3/4) {
+      body { overflow: auto; }
+      .wall { height: auto; min-height: 100vh; grid-auto-rows: minmax(120px, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="credit">Minimal Wall • pinch zoom</div>
+  <div class="hint">Double-tap/fullscreen: double-click • Pinch to zoom tiles</div>
+
+  <div id="overlay" class="overlay" aria-hidden="false">
+    <div class="loader" role="status" aria-live="polite">
+      <i class="fa-solid fa-spinner fa-spin spinner" aria-hidden="true"></i>
+      <div class="msg">Building the wall — please be patient.</div>
+      <div class="progress" id="progress">0 / 9 (0%)</div>
+    </div>
+  </div>
+
+  <main class="wall" id="wall" aria-hidden="true"></main>
+
+  <script>
+  (function () {
+    const images = [
+      'wall/01.jpg','wall/02.jpg','wall/03.jpg',
+      'wall/04.jpg','wall/05.jpg','wall/06.jpg',
+      'wall/07.jpg','wall/08.jpg','wall/09.jpg'
+    ];
+
+    const wall = document.getElementById('wall');
+    const overlay = document.getElementById('overlay');
+    const progressEl = document.getElementById('progress');
+
+    // Create 9 cells
+    images.forEach((src, i) => {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.index = i;
+      cell.setAttribute('role','img');
+      cell.setAttribute('aria-label', `Wall tile ${i+1}`);
+
+      // frame is the gesture target and transform container
+      const frame = document.createElement('div');
+      frame.className = 'frame';
+      frame.dataset.index = i;
+
+      const img = document.createElement('img');
+      img.alt = `Wall image ${i+1}`;
+      img.draggable = false;
+      img.decoding = 'async';
+
+      frame.appendChild(img);
+      cell.appendChild(frame);
+      wall.appendChild(cell);
+    });
+
+    const cellNodes = Array.from(document.querySelectorAll('.cell'));
+
+    // Preload images with progress
+    let loaded = 0, errored = 0;
+    function updateProgress() {
+      const total = images.length;
+      const done = loaded + errored;
+      const pct = Math.round(done / total * 100);
+      progressEl.textContent = `${done} / ${total} (${pct}%)`;
+    }
+
+    const loadPromises = images.map((src, idx) => new Promise((resolve) => {
+      const img = new Image();
+      img.src = src;
+      img.decoding = 'async';
+      img.onload = () => {
+        loaded++;
+        updateProgress();
+        const cell = cellNodes[idx];
+        const frame = cell.querySelector('.frame');
+        const imgEl = frame.querySelector('img');
+        imgEl.src = src;
+        imgEl.loading = 'eager';
+        resolve({status:'ok', src});
+      };
+      img.onerror = () => {
+        errored++;
+        updateProgress();
+        const cell = cellNodes[idx];
+        const frame = cell.querySelector('.frame');
+        frame.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="72" height="72" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"><path d="M12 2v20M2 12h20"/></svg>';
+        resolve({status:'err', src});
+      };
+    }));
+
+    Promise.all(loadPromises).then(() => {
+      setTimeout(() => {
+        overlay.classList.add('hidden');
+        overlay.setAttribute('aria-hidden','true');
+        wall.setAttribute('aria-hidden','false');
+        document.body.style.background = '#030303';
+      }, 220);
+    });
+
+    // Responsive layout: portrait -> 3x3 show all; landscape -> 4x2 show first 8 only
+    function applyLayout() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const isLandscape = w > h;
+      document.body.classList.toggle('landscape', isLandscape);
+
+      // hide or show the 9th tile (index 8)
+      const ninth = cellNodes[8];
+      if (ninth) {
+        if (isLandscape) {
+          ninth.classList.add('hidden');
+          ninth.setAttribute('aria-hidden','true');
+        } else {
+          ninth.classList.remove('hidden');
+          ninth.removeAttribute('aria-hidden');
+        }
+      }
+    }
+
+    window.addEventListener('resize', applyLayout, {passive:true});
+    window.addEventListener('orientationchange', applyLayout, {passive:true});
+    applyLayout();
+
+    // Fullscreen toggle on double-click / double-tap (dblclick)
+    wall.addEventListener('dblclick', async () => {
+      try {
+        if (!document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+        } else {
+          await document.exitFullscreen();
+        }
+      } catch (_) {}
+    });
+
+    // Basic pinch-to-zoom and pan per tile using pointer events
+    // Each frame keeps its own transform state
+    function makeGestureable(frame) {
+      const img = frame.querySelector('img');
+      if (!img) return;
+
+      let pointers = new Map(); // pointerId -> {x,y}
+      let initialDistance = 0;
+      let initialCenter = null;
+      let startScale = 1;
+      let currentScale = 1;
+      let startTranslate = {x:0,y:0};
+      let currentTranslate = {x:0,y:0};
+      let lastPanPoint = null;
+      let isPinching = false;
+
+      function getPos(e) {
+        return { x: e.clientX, y: e.clientY };
+      }
+      function distance(a,b) {
+        const dx = a.x - b.x, dy = a.y - b.y;
+        return Math.hypot(dx,dy);
+      }
+      function centerPoint(a,b) {
+        return { x: (a.x + b.x)/2, y: (a.y + b.y)/2 };
+      }
+
+      function setTransform() {
+        // limit scale between 1 and 4
+        currentScale = Math.max(1, Math.min(currentScale, 4));
+        // subtle translate clamp: allow some overflow but prevent runaway
+        const maxOffset = 2000; // very permissive; browser will crop anyway
+        currentTranslate.x = Math.max(-maxOffset, Math.min(maxOffset, currentTranslate.x));
+        currentTranslate.y = Math.max(-maxOffset, Math.min(maxOffset, currentTranslate.y));
+        frame.style.transform = `translate(${currentTranslate.x}px, ${currentTranslate.y}px) scale(${currentScale})`;
+      }
+
+      frame.addEventListener('pointerdown', (ev) => {
+        frame.setPointerCapture(ev.pointerId);
+        pointers.set(ev.pointerId, getPos(ev));
+
+        if (pointers.size === 2) {
+          // start pinch
+          const pts = Array.from(pointers.values());
+          initialDistance = distance(pts[0], pts[1]);
+          initialCenter = centerPoint(pts[0], pts[1]);
+          startScale = currentScale;
+          // convert center into local coordinates and pre-calculate translate to zoom towards focal point
+          isPinching = true;
+        } else if (pointers.size === 1) {
+          lastPanPoint = getPos(ev);
+        }
+      }, {passive:false});
+
+      frame.addEventListener('pointermove', (ev) => {
+        if (!pointers.has(ev.pointerId)) return;
+        pointers.set(ev.pointerId, getPos(ev));
+
+        if (pointers.size === 2) {
+          const pts = Array.from(pointers.values());
+          const nowDist = distance(pts[0], pts[1]);
+          const nowCenter = centerPoint(pts[0], pts[1]);
+          if (initialDistance > 0) {
+            const scaleFactor = nowDist / initialDistance;
+            const newScale = startScale * scaleFactor;
+
+            // compute how center shift should translate the image to keep the gesture centered
+            // delta between new center and initial center:
+            const deltaCenter = { x: nowCenter.x - initialCenter.x, y: nowCenter.y - initialCenter.y };
+
+            // Adjust translate so zoom focuses on the gesture center (approximation)
+            // Map client coords into element-centered coords:
+            // We'll adjust translate by the center delta scaled by current scale to provide natural feeling.
+            currentScale = newScale;
+            currentTranslate.x = startTranslate.x + deltaCenter.x;
+            currentTranslate.y = startTranslate.y + deltaCenter.y;
+
+            setTransform();
+          }
+        } else if (pointers.size === 1 && lastPanPoint && currentScale > 1) {
+          const p = getPos(ev);
+          const dx = p.x - lastPanPoint.x;
+          const dy = p.y - lastPanPoint.y;
+          lastPanPoint = p;
+          currentTranslate.x += dx;
+          currentTranslate.y += dy;
+          setTransform();
+        }
+      }, {passive:false});
+
+      frame.addEventListener('pointerup', (ev) => {
+        pointers.delete(ev.pointerId);
+        frame.releasePointerCapture(ev.pointerId);
+
+        if (pointers.size < 2) {
+          // finish pinch
+          isPinching = false;
+          startScale = currentScale;
+          startTranslate = { ...currentTranslate };
+          lastPanPoint = null;
+        }
+      });
+
+      frame.addEventListener('pointercancel', (ev) => {
+        pointers.delete(ev.pointerId);
+        frame.releasePointerCapture(ev.pointerId);
+        isPinching = false;
+        lastPanPoint = null;
+      });
+
+      // Double-tap to reset zoom for this tile
+      let lastTap = 0;
+      frame.addEventListener('click', (ev) => {
+        const now = Date.now();
+        if (now - lastTap < 350) {
+          // double tap -> reset transform
+          currentScale = 1;
+          currentTranslate = {x:0,y:0};
+          startScale = 1;
+          startTranslate = {x:0,y:0};
+          frame.style.transition = 'transform 220ms ease';
+          setTransform();
+          setTimeout(()=> frame.style.transition = '', 240);
+        }
+        lastTap = now;
+      });
+
+      // Prevent context menu on long press
+      frame.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
+
+    // Attach gestureability to each frame
+    const frames = Array.from(document.querySelectorAll('.frame'));
+    frames.forEach(makeGestureable);
+
+    // Accessibility: allow keyboard focus
+    cellNodes.forEach(c => c.tabIndex = 0);
+
+    // Initial progress display
+    updateProgress();
+
+    // allow clicking overlay to dismiss
+    overlay.addEventListener('click', () => {
+      overlay.classList.add('hidden');
+      overlay.setAttribute('aria-hidden','true');
+      wall.setAttribute('aria-hidden','false');
+    });
+
+    // Esc to exit fullscreen
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "name": "Chat App",
+  "short_name": "Chat",
+  "description": "Quick access to chat",
+  "start_url": "/chat.php",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/chat-android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/chat-android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
