@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= $title ?? '' ?></title>
+<link rel="manifest" href="/chat-manifest.json">
 <link rel="stylesheet" href="gallery.css">
 
 <?php if (\App\Core\SpwBase::CDN_USAGE): ?>

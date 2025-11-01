@@ -196,6 +196,7 @@ class WallOfImagesGallery extends AbstractGallery {
         }
 
         ob_start();
+        require 'modal_frame_details.php';
         ?>
         <div class="wall-container" style="padding-top: <?= self::TOP_PADDING ?>px; background: #000;">
 
@@ -393,7 +394,9 @@ class WallOfImagesGallery extends AbstractGallery {
                             const frameId = wrapper.dataset.frameId;
                             
                             if (entity && entityId && frameId) {
-                                window.open(`view_frame.php?entity=${entity}&entity_id=${entityId}&frame_id=${frameId}`,'_blank');
+                                showFrameDetailsModal(frameId, 0.7);
+                                
+                                //window.open(`view_frame.php?entity=${entity}&entity_id=${entityId}&frame_id=${frameId}`,'_blank');
                                 //window.location.href = `view_frame.php?entity=${entity}&entity_id=${entityId}&frame_id=${frameId}`;
                             }
                         }
