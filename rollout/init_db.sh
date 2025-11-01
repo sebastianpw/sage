@@ -178,14 +178,15 @@ FLUSH PRIVILEGES;
 SQL
 
 
+
 # Install phpMyAdmin
 PHP_MYADMIN_DIR="$SCRIPT_DIR/../phpmyadmin"
 
 if [ ! -d "$PHP_MYADMIN_DIR" ] || [ -z "$(ls -A "$PHP_MYADMIN_DIR" 2>/dev/null)" ]; then
     echo "Installing phpMyAdmin (manual tarball)…"
 
-    TAG="5_2_1"
-    URL="https://github.com/phpmyadmin/phpmyadmin/archive/refs/tags/RELEASE_${TAG}.tar.gz"
+    TAG="5.2.1"
+    URL="https://files.phpmyadmin.net/phpMyAdmin/${TAG}/phpMyAdmin-${TAG}-all-languages.tar.gz"
 
     rm -rf "$PHP_MYADMIN_DIR"
     mkdir -p "$PHP_MYADMIN_DIR"
@@ -199,6 +200,7 @@ ln -s /var/www/sage/phpmyadmin /var/www/sage/public/admin
 ln -s /var/www/sage/config/config.inc.php /var/www/sage/phpmyadmin/config.inc.php
 chmod 755 /var/www/sage/phpmyadmin/config.inc.php
 chmod 755 /var/www/sage/config/config.inc.php
+
 
 
 # Create main and system databases if needed
