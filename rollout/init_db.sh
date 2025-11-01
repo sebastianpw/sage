@@ -99,7 +99,7 @@ else
 fi
 
 # install packages
-DEBIAN_FRONTEND=noninteractive apt install -y ffmpeg jq python3-pip
+DEBIAN_FRONTEND=noninteractive apt install -y ffmpeg jq python3-venv python3-pip
 
 
 # Install venv PyAPI with kaggle service
