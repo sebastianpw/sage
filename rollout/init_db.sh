@@ -126,10 +126,10 @@ KAGGLE_TOKEN_DIR="$SCRIPT_DIR/../token/.kaggle"
 
 mkdir -p "$KAGGLE_TOKEN_DIR"
 
-# set owner for PHP / nginx (adjust if your user differs)
-chown www-data:www-data "$KAGGLE_TOKEN_DIR"
+# set owner for PHP / nginx
+#chown www-data:www-data "$KAGGLE_TOKEN_DIR"
 # TODO: in prod assign proper user and rights
-chmod 777 "$KAGGLE_TOKEN_DIR"
+chmod 777 "$KAGGLE_TOKEN_DIR" 2>/dev/null || true
 
 # export kaggle config location
 export KAGGLE_CONFIG_DIR="$KAGGLE_TOKEN_DIR"
