@@ -233,6 +233,8 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for de
 
 SAGE aims to unify **AI generation**, **automation**, and **storytelling** into a single semantic framework. The goal is to empower creators and developers to orchestrate complex multimedia narratives with reproducible, auditable pipelines — directly from mobile devices when needed.
 
+The project's complete architectural blueprint and semantic design philosophy are detailed in the [SAGE_SYS.md](SAGE_SYS.md).
+
 ---
 
 ## 🙏 Acknowledgments
