@@ -29,7 +29,6 @@ Transform your Android device into a complete AI movie storyboard production stu
 ### 🎨 AI Content Generation
 - **Stable Diffusion XL** with txt2img/img2img pipelines
 - Supports **ControlNet**, **LCM (Latent Conditioning Mixing)** for multi-image consistency and VRAM efficiency
-- Currently in dev: **IP-Adapter** and **AnimateDiff** support
 - **Multi-image conditioning** including multi-source img2img
 - Integration with **Pollinations.ai**, **Groq**, **Colab**, and **Kaggle**
 
@@ -77,7 +76,7 @@ Transform your Android device into a complete AI movie storyboard production stu
 | **Backend** | PHP 8.3, Symfony Components, Composer |
 | **Frontend** | HTML5, JavaScript, jQuery, SwiperJS, PhotoSwipe, ScrollMagic |
 | **Database** | MariaDB 10.x / MySQL 8.x |
-| **AI Models** | Stable Diffusion XL, ControlNet, IP-Adapter, AnimateDiff, LCM |
+| **AI Models** | Stable Diffusion XL, ControlNet, LCM |
 | **Deployment** | Termux (Android), Debian (proot), Docker |
 | **Orchestration** | PHP scheduler + Bash scripts |
 | **APIs** | OpenAI, Pollinations.ai, custom endpoints |

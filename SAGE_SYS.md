@@ -42,7 +42,6 @@
     - Stable Diffusion variants
     - LCM
     - Flux Schnell
-    - AnimateDiff
     - ControlNet
     - IPAdapter
     - MV-Adapter
@@ -168,7 +167,7 @@ A persistent, floating toolbox providing quick, context-aware navigation and acc
 - **3D Model Viewer:** An integrated `Babylon.js` 3D viewer.
 - **Reference Library:** Sketchfab integration for 3D model references.
 ### Video Production
-- **Animation Generation:** Leverages models like AnimateDiff and external APIs to create video clips from entities.
+- **Animation Generation:** External APIs to create video clips from entities.
 - **Content Organization:** Manages and presents generated videos in a dedicated playlist interface.
 ### Automation
 - **AI To-Do Management:** Intelligent prioritization of development and creative tasks.
