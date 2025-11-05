@@ -664,3 +664,35 @@ function removeModel() {
 	renderer.render( scene, camera );
 
 }
+
+
+// This exposes necessary variables for the exporter
+
+window.mannequinEditorState = {
+    models: models,
+    model: model,
+    scene: scene,
+    camera: camera,
+    renderer: renderer,
+    controls: controls  // Added for camera control restoration
+};
+
+// Also expose them directly as backup
+window.models = models;
+window.model = model;
+window.scene = scene;
+window.camera = camera;
+window.renderer = renderer;
+window.controls = controls;  // Added for camera control restoration
+
+console.log('[Posture Editor] Variables exposed:', {
+    models: !!models,
+    model: !!model,
+    scene: !!scene,
+    camera: !!camera,
+    renderer: !!renderer,
+    controls: !!controls
+});
+
+
+
