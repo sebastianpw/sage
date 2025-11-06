@@ -528,7 +528,13 @@ class AIProvider
     
     private function sendToPollinationsApi(string $model, array $messages, array $options): string
     {
-        $endpoint = getenv('POLLINATIONS_ENDPOINT') ?: 'https://enter.pollinations.ai/api/generate/v1/chat/completions';
+
+        if ($this->isPollinationsFreeModel($model)) {
+            $endpoint = 'https://text.pollinations.ai/v1/chat/completions';
+        } else {
+            $endpoint = 'https://enter.pollinations.ai/api/generate/v1/chat/completions';
+        }
+
         $apiKey = $this->getPollinationsApiKey();
 
         $isFreeModel = $this->isPollinationsFreeModel($model);
