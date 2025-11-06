@@ -2836,15 +2836,6 @@ ALTER TABLE `frame_counter`
 ALTER TABLE `generatives`
   ADD PRIMARY KEY (`id`);
 
---
--- Indizes für die Tabelle `generator_config`
---
-ALTER TABLE `generator_config`
-  ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `config_id` (`config_id`),
-  ADD KEY `user_id` (`user_id`),
-  ADD KEY `active` (`active`),
-  ADD KEY `idx_user_active` (`user_id`,`active`);
 
 --
 -- Indizes für die Tabelle `image_edits`
