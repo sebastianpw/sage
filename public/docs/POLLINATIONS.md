@@ -6,7 +6,7 @@ This guide will help you generate a Pollinations.ai API token and integrate it w
 ---
 
 ## Step 1: Access Pollinations.ai
-1. Open your web browser and go to: [https://auth.pollinations.ai](https://auth.pollinations.ai)  
+1. Open your web browser and go to: [https://enter.pollinations.ai](https://enter.pollinations.ai)  
 2. **Log in with your GitHub account**.
 
 ---

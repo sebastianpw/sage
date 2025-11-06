@@ -4,7 +4,7 @@
 
 This short guide explains how to create a Freepik account and connect it with your SAGE Dashboard.
 
-** Please note that Freepik can do txt2img and img2img and is recommended to be used only for Composites as it is currently the only available free option in SAGE for Composites with more than one source image. It has a usage limit of about up to 100 images per day. Composites can have up to 3 source images in the free freepik version. Image generation uses nanobanana. **
+** Please note that Freepik can do txt2img and img2img and is recommended to be used only for Composites as it is currently the only available free option besides Pollinations in SAGE for Composites with more than one source image. It has a usage limit of about up to 100 images per day. Composites can have up to 3 source images in the free freepik version. Image generation uses nanobanana. **
 
 ---
 

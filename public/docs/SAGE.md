@@ -32,7 +32,7 @@
 
 ## 7. Composites
 - Generated from **up to 3 source images**.
-- Only works with **Freepik genframe option**.
+- Only works with **Pollinations or Freepik genframe option**.
 
 ## 8. Generatives
 - Uses **img2img**.
@@ -40,8 +40,7 @@
 - pollinations.ai API does support img2img but only with a (free) api key
 
 ## 9. ControlNet
-- Still in development.
-- **Not currently usable**.
+- Create images using an assigned ControlNet image.
 
 ## 10. Chat
 - Use **multiple chat models**.
