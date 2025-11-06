@@ -15,8 +15,8 @@ class TodoPrioritizer
     private AIProvider $aiProvider;
     private $fileLogger;
     
-    // Default model for task prioritization
-    private const DEFAULT_MODEL = 'qwen/qwen3-32b';//'qwen2.5-coder-32b-instruct';
+    // Note: Default model is now managed by AIProvider
+    // Access via: AIProvider::getDefaultModel()
     
     public function __construct(?AIProvider $aiProvider = null, $fileLogger = null)
     {
@@ -29,22 +29,22 @@ class TodoPrioritizer
     /**
      * Analyze all tasks and suggest priority reordering
      */
-    public function analyzeTasks(): array
+    public function analyzeTasks(?string $model = null): array
     {
         try {
             // Get all tasks
             $stmt = $this->pdo->query("SELECT * FROM sage_todos ORDER BY `order` ASC");
             $tasks = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-            
+
             if (empty($tasks)) {
                 return ['error' => 'No tasks found'];
             }
 
             // Build analysis prompt
             $prompt = $this->buildAnalysisPrompt($tasks);
-            
-            // Get model from env or use default
-            $model = getenv('POLLINATIONS_MODEL') ?: self::DEFAULT_MODEL;
+
+            // Use provided model, or fall back to env or default
+            $model = $model ?: AIProvider::getDefaultModel();
             
             // Call AI via AIProvider
             $systemPrompt = 'You are a technical project manager specializing in AI/ML systems. Always return valid JSON responses.';
@@ -280,7 +280,7 @@ class TodoPrioritizer
         $prompt .= $this->formatTasksForPrompt($tasks);
         $prompt .= "\n\nReturn format: {\"blocking_tasks\": [1, 5, 67], \"reason\": \"These tasks prevent other work\"}";
         
-        $model = getenv('POLLINATIONS_MODEL') ?: self::DEFAULT_MODEL;
+        $model = $model ?: AIProvider::getDefaultModel();
         $systemPrompt = 'You are a technical project manager specializing in AI/ML systems. Always return valid JSON responses.';
         
         try {
@@ -307,7 +307,7 @@ class TodoPrioritizer
         $prompt .= $this->formatTasksForPrompt($tasks);
         $prompt .= "\n\nReturn format: {\"suggested_tasks\": [{\"id\": 1, \"title\": \"task name\", \"reason\": \"why this task\"}]}";
         
-        $model = getenv('POLLINATIONS_MODEL') ?: self::DEFAULT_MODEL;
+        $model = $model ?: AIProvider::getDefaultModel();
         $systemPrompt = 'You are a technical project manager specializing in AI/ML systems. Always return valid JSON responses.';
         
         try {

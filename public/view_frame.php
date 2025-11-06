@@ -11,9 +11,9 @@ $mysqli = $spw->getMysqli();
 // Get parameter
 $frameId = isset($_GET['frame_id']) ? (int)$_GET['frame_id'] : 0;
 $isModalView = isset($_GET['view']) && $_GET['view'] === 'modal';
-$zoomLevel = isset($_GET['zoom']) ? (float)$_GET['zoom'] : 0.5;
+$zoomLevel = isset($_GET['zoom']) ? (float)$_GET['zoom'] : 0.55;
 if ($zoomLevel <= 0.1 || $zoomLevel > 5) {
-    $zoomLevel = 0.5; // Sanity check for a reasonable range
+    $zoomLevel = 0.55; // Sanity check for a reasonable range
 }
 
 $frameDetails = new FrameDetails($mysqli);

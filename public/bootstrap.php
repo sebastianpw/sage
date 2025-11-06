@@ -1,7 +1,10 @@
 <?php
 
 date_default_timezone_set('UTC');
-
+/*
+curl_setopt($ch, CURLOPT_TIMEOUT, 300);          // total seconds allowed
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);   // seconds to wait for connection
+ */
 if (!defined('PUBLIC_PATH_REL')) {
     define('PUBLIC_PATH_REL', '/public');
 }

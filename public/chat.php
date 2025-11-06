@@ -205,8 +205,54 @@ $prismLoaderScript = <<<JS
 </script>
 JS;
 
+
+
+// --- Tiny preload: accept session_id=HEX in URL and call SPWChat.loadChat(hex) ---
+$preloadScript = '';
+if (!empty($_GET['session_id'])) {
+    $raw = (string) $_GET['session_id'];
+    // accept only reasonable hex strings (adjust length if your session_id is longer)
+    if (preg_match('/^[0-9a-fA-F]{8,64}$/', $raw)) {
+        $hexJs = json_encode($raw);
+        $preloadScript = <<<JS
+<script>
+(function(){
+  const preloadId = {$hexJs};
+  if (!preloadId) return;
+  const maxWait = 5000; // ms
+  const interval = 150; // ms
+  let waited = 0;
+  function tryLoad() {
+    if (window.SPWChat && typeof window.SPWChat.loadChat === 'function') {
+      try { window.SPWChat.loadChat(preloadId); } catch(e) { /* ignore */ }
+      return true;
+    }
+    return false;
+  }
+  function poll() {
+    if (tryLoad()) return;
+    waited += interval;
+    if (waited >= maxWait) return;
+    setTimeout(poll, interval);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', poll);
+  } else {
+    poll();
+  }
+})();
+</script>
+JS;
+    }
+}
+
+// later, where you build the page content (keep this as in your original file)
+// e.g. $content = $prismCss . $darkOverrides . $uiHtml . $prismLoaderScript . $preloadScript;
+
+
+
 // Assemble final content. Keep original ChatUI HTML intact, but prepend Prism CSS & dark overrides
-$content = $prismCss . $darkOverrides . $uiHtml . $prismLoaderScript;
+$content = $prismCss . $darkOverrides . $uiHtml . $prismLoaderScript . $preloadScript;
 
 // Render via layout (preserve original template path usage)
 $spw->renderLayout($content, "Chat", $spw->getProjectPath() . '/templates/chat.php');

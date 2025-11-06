@@ -12,7 +12,8 @@ class CodeIntelligence
     private ModelRateLimiter $rateLimiter;
 
     private const CHUNK_CHARS = 20000;
-    private const ANALYZER_MODEL = 'qwen/Qwen2.5-Coder-14B-Instruct-AWQ'; //'qwen2.5-coder-32b-instruct'; // 'qwen/qwen3-32b';
+    private const ANALYZER_MODEL = 'qwen/qwen3-32b';
+    //private const ANALYZER_MODEL = 'qwen/Qwen2.5-Coder-14B-Instruct-AWQ'; //'qwen2.5-coder-32b-instruct'; // 'qwen/qwen3-32b';
     //private const ANALYZER_MODEL = 'qwen/qwen3-32b';
 
     public function __construct(SpwBase $spw, AIProvider $ai, ModelRateLimiter $rateLimiter)

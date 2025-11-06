@@ -72,24 +72,15 @@ if (isset($_POST['action'])) {
         $totalPages = ceil($totalRows / $limit);
 
 
-
-$sql = "SELECT e.*, f.filename AS img2img_filename
-        FROM `$entity` e
-        LEFT JOIN frames f ON f.id = e.img2img_frame_id";
-if ($search !== '') $sql .= " WHERE e.id = :id OR e.name LIKE :search";
-$sql .= " ORDER BY `order` ASC, e.id ASC LIMIT :limit OFFSET :offset";
-
-
-
-
-
-/*
-        $sql = "SELECT * FROM `$entity`";
-        if ($search !== '') $sql .= " WHERE id = :id OR name LIKE :search";
-	$sql .= " ORDER BY `order` ASC, id ASC LIMIT :limit OFFSET :offset";
-*/
-
-
+        // MODIFIED SQL: Added LEFT JOIN for controlnet map image
+        $sql = "SELECT e.*, 
+                       f_i2i.filename AS img2img_filename,
+                       f_cnmap.filename AS cnmap_filename
+                FROM `$entity` e
+                LEFT JOIN frames f_i2i ON f_i2i.id = e.img2img_frame_id
+                LEFT JOIN frames f_cnmap ON f_cnmap.id = e.cnmap_frame_id";
+        if ($search !== '') $sql .= " WHERE e.id = :id OR e.name LIKE :search";
+        $sql .= " ORDER BY `order` ASC, e.id ASC LIMIT :limit OFFSET :offset";
 
 
         $stmt = $pdo->prepare($sql);
@@ -181,6 +172,61 @@ $sql .= " ORDER BY `order` ASC, e.id ASC LIMIT :limit OFFSET :offset";
             $ord = (int)$item['order'];
             $stmt->execute(['order'=>$ord, 'id'=>$id]);
         }
+        exit('success');
+    }
+    
+    // UPDATED ACTION: Remove an image reference from an entity comprehensively
+    if ($action == 'remove_image') {
+        $id = (int)$_POST['id'];
+        $image_type = $_POST['image_type']; // 'img2img' or 'cnmap'
+
+        $allowed_types = ['img2img', 'cnmap'];
+        if (!in_array($image_type, $allowed_types)) {
+            exit('Invalid image type');
+        }
+
+        // Define all possible columns for each type based on provided structure
+        $column_map = [
+            'img2img' => [
+                'img2img', 
+                'img2img_frame_id', 
+                'img2img_frame_filename', 
+                'img2img_prompt'
+            ],
+            'cnmap' => [
+                'cnmap', 
+                'cnmap_frame_id', 
+                'cnmap_frame_filename', 
+                'cnmap_prompt'
+            ]
+        ];
+
+        $columns_to_clear = $column_map[$image_type];
+
+        // Get the actual columns that exist in the current entity's table
+        $table_columns = $pdo->query("SHOW COLUMNS FROM `$entity`")->fetchAll(PDO::FETCH_COLUMN);
+        
+        // Find the intersection: which of our target columns actually exist?
+        $valid_columns_to_update = array_intersect($columns_to_clear, $table_columns);
+        
+        if (empty($valid_columns_to_update)) {
+            exit('No relevant columns found to update.');
+        }
+        
+        $set_clauses = [];
+        foreach ($valid_columns_to_update as $col) {
+            // The tinyint flags get set to 0, everything else gets set to NULL
+            if ($col === 'img2img' || $col === 'cnmap') {
+                $set_clauses[] = "`$col` = 0";
+            } else {
+                $set_clauses[] = "`$col` = NULL";
+            }
+        }
+
+        $sql = "UPDATE `$entity` SET " . implode(', ', $set_clauses) . " WHERE id = :id";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute(['id' => $id]);
+
         exit('success');
     }
 
@@ -442,18 +488,44 @@ rowsHtml += `<tr data-id="${row.id}" class="${localStorage.getItem(ENTITY + 'row
                         <option>Loading...</option>
                      </select>`;
 
-        if (row['img2img_filename']) {
-            rowsHtml += `<div style="width: 100%; margin-top: 10px; text-align: center;">
-                            <a class="pswp-gallery-item" 
+        // MODIFIED JS: Add previews for both img2img and cnmap
+        let hasImg2Img = row['img2img_filename'];
+        let hasCnMap = row['cnmap_filename'];
+
+        if (hasImg2Img || hasCnMap) {
+            rowsHtml += `<div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:10px; justify-content:center;">`;
+            
+            if (hasImg2Img) {
+                rowsHtml += `<a class="pswp-gallery-item" 
+                               data-entity-id="${row.id}"
+                               data-image-type="img2img"
                                data-pswp-src="${row['img2img_filename']}" 
                                data-pswp-width="768" 
                                data-pswp-height="768"
+                               title="Img2Img Preview (Dbl-click to remove)"
                                href="${row['img2img_filename']}">
                                 <img src="${row['img2img_filename']}" 
-                                     style="width:150px;height:150px;object-fit:cover;border:1px solid #ccc;border-radius:4px;margin-left:5px;" />
-                            </a>
-                         </div>`;
+                                     style="width:70px;height:70px;object-fit:cover;border:2px solid #a55;border-radius:4px;" />
+                            </a>`;
+            }
+
+            if (hasCnMap) {
+                rowsHtml += `<a class="pswp-gallery-item" 
+                               data-entity-id="${row.id}"
+                               data-image-type="cnmap"
+                               data-pswp-src="${row['cnmap_filename']}" 
+                               data-pswp-width="768" 
+                               data-pswp-height="768"
+                               title="ControlNet Map Preview (Dbl-click to remove)"
+                               href="${row['cnmap_filename']}">
+                                <img src="${row['cnmap_filename']}" 
+                                     style="width:70px;height:70px;object-fit:cover;border:2px solid #55a;border-radius:4px;" />
+                            </a>`;
+            }
+
+            rowsHtml += `</div>`;
         }
+
 
         rowsHtml += `</td>`;
         
@@ -707,6 +779,35 @@ $(document).ready(function(){
         initSlides();
     });
     $('#searchInput').on('keyup', e=> { if(e.key==='Enter') initSlides(); });
+    
+    // NEW EVENT HANDLER: Double-click to remove an image
+    $(document).on('dblclick', 'a.pswp-gallery-item[data-image-type]', function(e) {
+        e.preventDefault();
+        e.stopPropagation(); // Stop event from bubbling up, important for complex UIs
+
+        const link = $(this);
+        const entityId = link.data('entity-id');
+        const imageType = link.data('image-type');
+        const typeLabel = imageType === 'img2img' ? 'Img2Img preview' : 'ControlNet Map';
+
+        if (confirm(`Do you really want to remove the ${typeLabel} for this entry?`)) {
+            $.post('sql_crud_<?php echo $entity; ?>.php', {
+                action: 'remove_image',
+                id: entityId,
+                image_type: imageType
+            }, function(res) {
+                if (res === 'success') {
+                    Toast.show(`${typeLabel} removed.`, 'success');
+                    // Reload the current slide to reflect the change
+                    loadTable('', '', $('#searchInput').val(), currentPage);
+                } else {
+                    Toast.show(`Failed to remove ${typeLabel}.`, 'error');
+                    console.error('Server response:', res);
+                }
+            });
+        }
+    });
+
 
     // inline editing
     $(document).on('blur','td[contenteditable="true"]', function(){

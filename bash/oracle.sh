@@ -8,8 +8,10 @@ if [ -z "$1" ]; then
   exit 1
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 NUM_CHARS=$1
-CSV_FILE="unicode_rows.csv"
+CSV_FILE="$SCRIPT_DIR/unicode_rows.csv"
 HEX_DIGITS=(0 1 2 3 4 5 6 7 8 9 A B C D E F)
 
 # Read CSV into array

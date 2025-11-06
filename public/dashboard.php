@@ -63,6 +63,7 @@ require 'sage_entities_items_array.php';
         padding: 20px;
         max-width: 900px;
         margin: auto;
+        margin-bottom: 70px;
     }
 
     /* Card-style buttons */
@@ -241,6 +242,44 @@ border-bottom-left-radius: 0;
     background: #b42318; color: #fff; border: none; padding: 5px 10px;
     cursor: pointer;
 }
+
+
+.footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: #f9f9f9;
+    padding: 10px 0;
+    box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.footer a {
+    display: block; /* Changed from block to inline-block */
+    padding: 15px 25px;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    text-decoration: none;
+    color: #333;
+    font-weight: bold;
+    transition: all 0.2s ease;
+    width: 90%;
+    max-width: 900px;
+    box-sizing: border-box;
+    margin: 0 auto; /* This will center the button horizontally */
+}
+
+.footer a:hover {
+    background: #e0e0e0;
+    border-color: #999;
+}
+
+
 </style>
 
 
@@ -422,34 +461,35 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
-
 <?php
 // Handle token saves
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['action']) && $_POST['action'] === 'save_tokens') {
     $tokenDir = PROJECT_ROOT . '/token';
     $results = [];
-    
+
     // Ensure token directory exists
     if (!is_dir($tokenDir)) {
         @mkdir($tokenDir, 0700, true);
     }
-    
+
     // Define token mappings (POST key => filename)
     $tokenMappings = [
         'groq_api_key' => '.groq_api_key',
         'freepik_api_key' => '.freepik_api_key',
         'pollinations_token' => '.pollinationsaitoken',
-        'google_api_key' => '.gemini_api_key'
+        'google_api_key' => '.gemini_api_key',
+        'mistral_api_key' => '.mistral_api_key', // Add Mistral token
+        'cohere_api_key' => '.cohere_api_key'    // Add Cohere token
     ];
-    
+
     foreach ($tokenMappings as $postKey => $filename) {
         $value = trim($_POST[$postKey] ?? '');
-        
+
         // Only write if value is provided (not empty)
         if ($value !== '') {
             $filepath = $tokenDir . '/' . $filename;
             $writeResult = @file_put_contents($filepath, $value);
-            
+
             if ($writeResult !== false) {
                 @chmod($filepath, 0600);
                 $results['success'][] = $filename;
@@ -458,7 +498,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['action']) && $_POST[
             }
         }
     }
-    
+
     // Build message
     if (!empty($results['success'])) {
         $msg = "✓ Tokens saved:\n" . implode("\n", $results['success']);
@@ -479,14 +519,18 @@ $existingTokens = [
     'groq_api_key' => '',
     'freepik_api_key' => '',
     'pollinations_token' => '',
-    'google_api_key' => '' 
+    'google_api_key' => '',
+    'mistral_api_key' => '', // Add Mistral token
+    'cohere_api_key' => ''   // Add Cohere token
 ];
 
 $tokenFiles = [
     'groq_api_key' => '.groq_api_key',
     'freepik_api_key' => '.freepik_api_key',
     'pollinations_token' => '.pollinationsaitoken',
-    'google_api_key' => '.gemini_api_key' 
+    'google_api_key' => '.gemini_api_key',
+    'mistral_api_key' => '.mistral_api_key', // Add Mistral token
+    'cohere_api_key' => '.cohere_api_key'   // Add Cohere token
 ];
 
 foreach ($tokenFiles as $key => $filename) {
@@ -496,6 +540,7 @@ foreach ($tokenFiles as $key => $filename) {
     }
 }
 ?>
+
 
 
 
@@ -547,7 +592,7 @@ foreach ($tokenFiles as $key => $filename) {
 	</div>
 
 
-<a style="margin-bottom: 20px;" href="kaggle.php">💻 Notebooks</a>
+<a href="kaggle.php">💻 Notebooks</a>
 
 
 <!-- Log Overlay -->
@@ -576,6 +621,15 @@ foreach ($tokenFiles as $key => $filename) {
 
 -->
 
+
+
+
+
+
+
+
+    <!-- AI-Powered Search Component -->
+    <?php require 'ai_search.php'; ?>
 
 
 
@@ -801,7 +855,7 @@ iner&db=<?php echo $dbname; ?>&select=frames&order%5B0
 <a href="wall_of_images.php">🎇 Wall of Frames</a>
 
 
-<a href="view_storyboards_v2.php">📖 Storyboards</a>
+<a href="view_storyboards.php">📖 Storyboards</a>
 
 
 <?php /*
@@ -927,12 +981,6 @@ iner&db=<?php echo $dbname; ?>&select=frames&order%5B0
 <a href="todo.php">🎫 SAGE TODOs</a>
 
 
-<a href="view_gpt.php">🏴‍☠️ GPT conversations</a>
-
-
-<a href="codeboard.php">⌨️ SAGE codeboard</a>
-
-
 <!--
 <a href="generator_admin.php">🤖 Generator Admin</a>
 -->
@@ -943,6 +991,14 @@ iner&db=<?php echo $dbname; ?>&select=frames&order%5B0
 <a href="generator_test_client.php">🧑‍💻 Generator Test Client</a> 
 -->
 
+<a href="view_style_profiles_admin.php">💐 Style Profiles Admin</a>
+
+
+
+<a href="view_gpt.php">🏴‍☠️ GPT conversations</a>
+
+
+<a href="codeboard.php">⌨️ SAGE codeboard</a>
 
 
 
@@ -1047,12 +1103,16 @@ iner&db=<?php echo $dbname; ?>&select=frames&order%5B0
     </div>
 <?php endif; ?>
 
+
+
+
+
 <!-- API Tokens Group -->
 <div class="collapsible-group">
     <div class="group-header">🔑 API Tokens</div>
     <div class="group-content">
         <div class="horizontal-line"></div>
-        
+
         <div class="token-info-box">
             💡 <strong>Tokens are saved to:</strong> <span class="token-code"><?= htmlspecialchars(PROJECT_ROOT) ?>/token/</span><br>
             ℹ️ Only changed fields will be saved. Empty fields won't overwrite existing tokens.
@@ -1060,86 +1120,70 @@ iner&db=<?php echo $dbname; ?>&select=frames&order%5B0
 
         <form method="post" style="max-width: 600px;">
             <input type="hidden" name="action" value="save_tokens">
-            
+
             <div class="token-form-group">
                 <label>🌸 Pollinations AI Token</label>
-                <input type="password" 
-                       name="pollinations_token" 
-                       class="token-form-input" 
-                       value="<?= htmlspecialchars($existingTokens['pollinations_token']) ?>" 
+                <input type="password"
+                       name="pollinations_token"
+                       class="token-form-input"
+                       value="<?= htmlspecialchars($existingTokens['pollinations_token']) ?>"
                        placeholder="Insert Pollinations AI Token here" />
             </div>
-            
+
             <div class="token-form-group">
                 <label>🤖 Groq API Key</label>
-                <input type="password" 
-                       name="groq_api_key" 
-                       class="token-form-input" 
-                       value="<?= htmlspecialchars($existingTokens['groq_api_key']) ?>" 
+                <input type="password"
+                       name="groq_api_key"
+                       class="token-form-input"
+                       value="<?= htmlspecialchars($existingTokens['groq_api_key']) ?>"
                        placeholder="Insert Groq API Key here" />
             </div>
 
             <div class="token-form-group">
                 <label>🎨 Freepik API Key</label>
-                <input type="password" 
-                       name="freepik_api_key" 
-                       class="token-form-input" 
-                       value="<?= htmlspecialchars($existingTokens['freepik_api_key']) ?>" 
+                <input type="password"
+                       name="freepik_api_key"
+                       class="token-form-input"
+                       value="<?= htmlspecialchars($existingTokens['freepik_api_key']) ?>"
                        placeholder="Insert Freepik API Key here" />
             </div>
 
             <!-- New Google API Key Field -->
             <div class="token-form-group">
                 <label><i class="fab fa-google"></i> Google AI Studio API Key</label>
-                <input type="password" 
-                       name="google_api_key" 
-                       class="token-form-input" 
-                       value="<?= htmlspecialchars($existingTokens['google_api_key'] ?? '') ?>" 
+                <input type="password"
+                       name="google_api_key"
+                       class="token-form-input"
+                       value="<?= htmlspecialchars($existingTokens['google_api_key'] ?? '') ?>"
                        placeholder="Insert Google Gemini API Key here" />
+            </div>
+
+            <!-- New Mistral API Key Field -->
+            <div class="token-form-group">
+                <label>🧠 Mistral API Key</label>
+                <input type="password"
+                       name="mistral_api_key"
+                       class="token-form-input"
+                       value="<?= htmlspecialchars($existingTokens['mistral_api_key'] ?? '') ?>"
+                       placeholder="Insert Mistral API Key here" />
+            </div>
+
+            <!-- New Cohere API Key Field -->
+            <div class="token-form-group">
+                <label>🤖 Cohere API Key</label>
+                <input type="password"
+                       name="cohere_api_key"
+                       class="token-form-input"
+                       value="<?= htmlspecialchars($existingTokens['cohere_api_key'] ?? '') ?>"
+                       placeholder="Insert Cohere API Key here" />
             </div>
 
             <button type="submit" class="token-submit-btn">💾 Save Tokens</button>
         </form>
-        
+
         <div class="horizontal-line" style="margin-top: 20px;"></div>
     </div>
 </div>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1235,7 +1279,6 @@ $(document).ready(function() {
 
 
 
-<a href="chat.php">💬 AI Chat</a>
 
 
 
@@ -1305,6 +1348,13 @@ $(document).ready(function() {
 
 
 </script>
+
+
+
+<div class="footer">
+    <a href="chat.php">💬 AI Chat</a>
+</div>
+
 
 
 </body>

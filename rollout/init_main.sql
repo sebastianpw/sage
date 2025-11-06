@@ -721,8 +721,13 @@ CREATE TABLE `generatives` (
 -- Tabellenstruktur für Tabelle `generator_config`
 --
 
+
+
+
+
+DROP TABLE IF EXISTS `generator_config`;
 CREATE TABLE `generator_config` (
-  `id` int(11) NOT NULL,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
   `config_id` varchar(64) NOT NULL,
   `user_id` int(11) NOT NULL,
   `title` varchar(255) NOT NULL,
@@ -734,17 +739,36 @@ CREATE TABLE `generator_config` (
   `examples` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`examples`)),
   `created_at` datetime NOT NULL,
   `updated_at` datetime NOT NULL,
-  `active` tinyint(1) NOT NULL DEFAULT 1
+  `active` tinyint(1) NOT NULL DEFAULT 1,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `config_id` (`config_id`),
+  KEY `user_id` (`user_id`),
+  KEY `active` (`active`),
+  KEY `idx_user_active` (`user_id`,`active`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
---
--- Daten für Tabelle `generator_config`
---
-
 INSERT INTO `generator_config` (`id`, `config_id`, `user_id`, `title`, `model`, `system_role`, `instructions`, `parameters`, `output_schema`, `examples`, `created_at`, `updated_at`, `active`) VALUES
-(1, '2df46a413521b0041029775c5f6926c6', 1, 'Tongue Twister Generator', 'openai', 'Zungenbrecher Oracle', '[\"You are an expert tongue-twister generator in German and English.\",\"Generate creative, linguistically challenging twisters.\",\"CRITICAL: Return ONLY a single valid JSON object matching the output schema.\",\"If you cannot comply, return: {\\\"error\\\": \\\"schema_noncompliant\\\", \\\"reason\\\": \\\"brief explanation\\\"}\"]', '{\"mode\":{\"type\":\"string\",\"enum\":[\"easy\",\"medium\",\"extreme\"],\"default\":\"medium\",\"description\":\"Difficulty level\"},\"language\":{\"type\":\"string\",\"enum\":[\"german\",\"english\"],\"default\":\"german\"},\"firstLetter\":{\"type\":\"string\",\"pattern\":\"^[A-Za-z\\u00c4\\u00d6\\u00dc\\u00e4\\u00f6\\u00fc\\u00df]$\",\"optional\":true,\"description\":\"All words must start with this letter\"}}', '{\"type\":\"object\",\"properties\":{\"mode\":{\"type\":\"string\"},\"language\":{\"type\":\"string\"},\"twister\":{\"type\":\"string\"},\"metadata\":{\"type\":\"object\",\"properties\":{\"wordCount\":{\"type\":\"integer\"},\"firstLetter\":{\"type\":\"string\"},\"alternatives\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}},\"required\":[\"mode\",\"language\",\"twister\",\"metadata\"]}', '[{\"input\":{\"mode\":\"medium\",\"language\":\"german\",\"firstLetter\":\"S\"},\"output\":{\"mode\":\"medium\",\"language\":\"german\",\"twister\":\"Sieben saftige Schnecken schl\\u00fcrfen s\\u00fc\\u00dfe Sahne.\",\"metadata\":{\"wordCount\":7,\"firstLetter\":\"S\",\"alternatives\":[]}}}]', '2025-10-17 09:11:04', '2025-10-17 09:31:58', 1),
-(2, '59979fe535aebc1a5ff6ebbc5dc1d674', 1, 'Cyberpunk Scene Generator', 'groq/compound', 'Cyberpunk Scene Writer', '[\"You are an expert anime-style cyberpunk scene writer.\",\"Generate cinematic, atmospheric scene descriptions.\",\"CRITICAL: Return ONLY a single valid JSON object matching the schema.\",\"Include 3-6 visual beats (micro-shots) per scene.\",\"If you cannot comply with schema, return: {\\\"error\\\": \\\"schema_noncompliant\\\", \\\"reason\\\": \\\"brief reason\\\"}\"]', '{\"theme\":{\"type\":\"string\",\"enum\":[\"action\",\"chase\",\"revelation\",\"quiet\",\"encounter\"],\"default\":\"action\",\"description\":\"Scene narrative purpose\"},\"style\":{\"type\":\"string\",\"enum\":[\"anime\",\"cyberpunk\",\"noir\",\"cinematic\"],\"default\":\"cyberpunk\"},\"setting\":{\"type\":\"string\",\"optional\":true,\"description\":\"Location hint (e.g., \'neon rooftop\', \'underground lab\')\"},\"length\":{\"type\":\"object\",\"properties\":{\"min\":{\"type\":\"integer\",\"default\":3},\"max\":{\"type\":\"integer\",\"default\":6}}},\"language\":{\"type\":\"string\",\"enum\":[\"english\",\"german\"],\"default\":\"english\"}}', '{\"type\":\"object\",\"properties\":{\"theme\":{\"type\":\"string\"},\"style\":{\"type\":\"string\"},\"scene\":{\"type\":\"string\",\"description\":\"Cinematic paragraph\"},\"beats\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"3-6 micro-shots (2-12 words each)\"},\"metadata\":{\"type\":\"object\",\"properties\":{\"language\":{\"type\":\"string\"},\"sentenceCount\":{\"type\":\"integer\"},\"wordCount\":{\"type\":\"integer\"},\"setting\":{\"type\":\"string\"}}}},\"required\":[\"theme\",\"style\",\"scene\",\"beats\",\"metadata\"]}', '[{\"input\":{\"theme\":\"action\",\"style\":\"cyberpunk\",\"setting\":\"neon rooftop\",\"length\":{\"min\":4,\"max\":5}},\"output\":{\"theme\":\"action\",\"style\":\"cyberpunk\",\"scene\":\"Rain-slicked neon signs flicker above as Rin vaults between rooftops. A helicopter searchlight sweeps below. She draws her blade\\u2014electric blue arc crackling in the darkness. Three corporate security drones converge. Time slows as she spins, cutting through the first with precision.\",\"beats\":[\"Helicopter searchlight sweeps streets\",\"Rin draws crackling blade\",\"Security drones converge\",\"Blade cuts through first drone\"],\"metadata\":{\"language\":\"english\",\"sentenceCount\":5,\"wordCount\":52,\"setting\":\"neon rooftop\"}}}]', '2025-10-17 09:34:45', '2025-10-17 10:16:19', 1),
-(3, '377ba2b06df4c4d25eef4f864024aaa8', 1, 'Social Media Post Generator', 'groq/compound', 'Social Media Manager', '[\"You are an expert social media content creator.\",\"Write engaging, platform-optimized posts with appropriate hashtags.\",\"Match the tone to the platform and brand voice.\",\"Return ONLY valid JSON matching the output schema.\",\"If you cannot follow the schema, return: {\\\"error\\\": \\\"schema_noncompliant\\\", \\\"reason\\\": \\\"why\\\"}\"]', '{\"platform\":{\"type\":\"string\",\"enum\":[\"twitter\",\"instagram\",\"linkedin\",\"facebook\"],\"default\":\"instagram\"},\"topic\":{\"type\":\"string\",\"description\":\"Topic or message for the post\"},\"tone\":{\"type\":\"string\",\"enum\":[\"professional\",\"casual\",\"inspirational\",\"humorous\",\"educational\"],\"default\":\"casual\"},\"includeHashtags\":{\"type\":\"boolean\",\"default\":true},\"includeEmojis\":{\"type\":\"boolean\",\"default\":true},\"language\":{\"type\":\"string\",\"enum\":[\"english\",\"german\"],\"default\":\"english\"}}', '{\"type\":\"object\",\"properties\":{\"platform\":{\"type\":\"string\"},\"post\":{\"type\":\"string\"},\"hashtags\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"callToAction\":{\"type\":\"string\"},\"metadata\":{\"type\":\"object\",\"properties\":{\"characterCount\":{\"type\":\"integer\"},\"wordCount\":{\"type\":\"integer\"},\"tone\":{\"type\":\"string\"},\"estimatedEngagement\":{\"type\":\"string\"}}}},\"required\":[\"platform\",\"post\",\"hashtags\",\"callToAction\",\"metadata\"]}', '[{\"input\":{\"platform\":\"instagram\",\"topic\":\"New coffee blend launch\",\"tone\":\"casual\",\"includeHashtags\":true,\"includeEmojis\":true},\"output\":{\"platform\":\"instagram\",\"post\":\"\\u2615\\ufe0f Meet our newest obsession: Midnight Roast! We\'ve been perfecting this blend for months, and it\'s finally here. Rich, smooth, with notes of dark chocolate and caramel. Your morning routine just got a major upgrade. \\u2728\",\"hashtags\":[\"#MidnightRoast\",\"#CoffeeLovers\",\"#NewBlend\",\"#SpecialtyCoffee\",\"#CoffeeCommunity\"],\"callToAction\":\"Shop now - link in bio! Limited first batch available.\",\"metadata\":{\"characterCount\":245,\"wordCount\":45,\"tone\":\"casual\",\"estimatedEngagement\":\"high\"}}}]', '2025-10-17 10:13:39', '2025-10-17 10:14:43', 1);
+(1,	'2df46a413521b0041029775c5f6926c6',	1,	'Tongue Twister Generator',	'openai/gpt-oss-120b',	'Zungenbrecher Oracle',	'[\"You are an expert tongue-twister generator in German and English.\",\"Generate creative, linguistically challenging twisters.\",\"CRITICAL: Return ONLY a single valid JSON object matching the output schema.\",\"Always include the word count in \'metadata.wordCount\'.\",\"Respect \'firstLetter\' and \'wordCount\' parameters if provided.\",\"Ensure outputs are varied and not always the same for identical parameters.\",\"If you cannot comply, return: {\\\"error\\\": \\\"schema_noncompliant\\\", \\\"reason\\\": \\\"brief explanation\\\"}\"]',	'{\"mode\":{\"type\":\"string\",\"enum\":[\"easy\",\"medium\",\"extreme\"],\"default\":\"medium\",\"description\":\"Difficulty level\"},\"language\":{\"type\":\"string\",\"enum\":[\"german\",\"english\"],\"default\":\"german\"},\"firstLetter\":{\"type\":\"string\",\"pattern\":\"^[A-Za-z\\u00c4\\u00d6\\u00dc\\u00e4\\u00f6\\u00fc\\u00df]$\",\"optional\":true,\"description\":\"All words must start with this letter\"},\"wordCount\":{\"type\":\"integer\",\"optional\":true,\"minimum\":2,\"description\":\"Number of words the twister should have\"}}',	'{\"type\":\"object\",\"properties\":{\"mode\":{\"type\":\"string\"},\"language\":{\"type\":\"string\"},\"twister\":{\"type\":\"string\"},\"metadata\":{\"type\":\"object\",\"properties\":{\"wordCount\":{\"type\":\"integer\",\"description\":\"Number of words in the twister\"},\"firstLetter\":{\"type\":\"string\"},\"alternatives\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}},\"required\":[\"mode\",\"language\",\"twister\",\"metadata\"]}',	'[{\"input\":{\"mode\":\"medium\",\"language\":\"german\",\"firstLetter\":\"S\",\"wordCount\":7},\"output\":{\"mode\":\"medium\",\"language\":\"german\",\"twister\":\"Sieben saftige Schnecken schl\\u00fcrfen s\\u00fc\\u00dfe Sahne.\",\"metadata\":{\"wordCount\":7,\"firstLetter\":\"S\",\"alternatives\":[]}}}]',	'2025-10-17 09:11:04',	'2025-10-30 23:03:21',	1),
+(2,	'59979fe535aebc1a5ff6ebbc5dc1d674',	1,	'Cyberpunk Scene Generator',	'groq/compound',	'Cyberpunk Scene Writer',	'[\"You are an expert anime-style cyberpunk scene writer.\",\"Generate cinematic, atmospheric scene descriptions.\",\"CRITICAL: Return ONLY a single valid JSON object matching the schema.\",\"Include 3-6 visual beats (micro-shots) per scene.\",\"If you cannot comply with schema, return: {\\\"error\\\": \\\"schema_noncompliant\\\", \\\"reason\\\": \\\"brief reason\\\"}\"]',	'{\"theme\":{\"type\":\"string\",\"enum\":[\"action\",\"chase\",\"revelation\",\"quiet\",\"encounter\"],\"default\":\"action\",\"description\":\"Scene narrative purpose\"},\"style\":{\"type\":\"string\",\"enum\":[\"anime\",\"cyberpunk\",\"noir\",\"cinematic\"],\"default\":\"cyberpunk\"},\"setting\":{\"type\":\"string\",\"optional\":true,\"description\":\"Location hint (e.g., \'neon rooftop\', \'underground lab\')\"},\"length\":{\"type\":\"object\",\"properties\":{\"min\":{\"type\":\"integer\",\"default\":3},\"max\":{\"type\":\"integer\",\"default\":6}}},\"language\":{\"type\":\"string\",\"enum\":[\"english\",\"german\"],\"default\":\"english\"}}',	'{\"type\":\"object\",\"properties\":{\"theme\":{\"type\":\"string\"},\"style\":{\"type\":\"string\"},\"scene\":{\"type\":\"string\",\"description\":\"Cinematic paragraph\"},\"beats\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"3-6 micro-shots (2-12 words each)\"},\"metadata\":{\"type\":\"object\",\"properties\":{\"language\":{\"type\":\"string\"},\"sentenceCount\":{\"type\":\"integer\"},\"wordCount\":{\"type\":\"integer\"},\"setting\":{\"type\":\"string\"}}}},\"required\":[\"theme\",\"style\",\"scene\",\"beats\",\"metadata\"]}',	'[{\"input\":{\"theme\":\"action\",\"style\":\"cyberpunk\",\"setting\":\"neon rooftop\",\"length\":{\"min\":4,\"max\":5}},\"output\":{\"theme\":\"action\",\"style\":\"cyberpunk\",\"scene\":\"Rain-slicked neon signs flicker above as Rin vaults between rooftops. A helicopter searchlight sweeps below. She draws her blade\\u2014electric blue arc crackling in the darkness. Three corporate security drones converge. Time slows as she spins, cutting through the first with precision.\",\"beats\":[\"Helicopter searchlight sweeps streets\",\"Rin draws crackling blade\",\"Security drones converge\",\"Blade cuts through first drone\"],\"metadata\":{\"language\":\"english\",\"sentenceCount\":5,\"wordCount\":52,\"setting\":\"neon rooftop\"}}}]',	'2025-10-17 09:34:45',	'2025-10-30 13:46:41',	1),
+(3,	'377ba2b06df4c4d25eef4f864024aaa8',	1,	'Social Media Post Generator',	'groq/compound',	'Social Media Manager',	'[\"You are an expert social media content creator.\",\"Write engaging, platform-optimized posts with appropriate hashtags.\",\"Match the tone to the platform and brand voice.\",\"Return ONLY valid JSON matching the output schema.\",\"If you cannot follow the schema, return: {\\\"error\\\": \\\"schema_noncompliant\\\", \\\"reason\\\": \\\"why\\\"}\"]',	'{\"platform\":{\"type\":\"string\",\"enum\":[\"twitter\",\"instagram\",\"linkedin\",\"facebook\"],\"default\":\"instagram\"},\"topic\":{\"type\":\"string\",\"description\":\"Topic or message for the post\"},\"tone\":{\"type\":\"string\",\"enum\":[\"professional\",\"casual\",\"inspirational\",\"humorous\",\"educational\"],\"default\":\"casual\"},\"includeHashtags\":{\"type\":\"boolean\",\"default\":true},\"includeEmojis\":{\"type\":\"boolean\",\"default\":true},\"language\":{\"type\":\"string\",\"enum\":[\"english\",\"german\"],\"default\":\"english\"}}',	'{\"type\":\"object\",\"properties\":{\"platform\":{\"type\":\"string\"},\"post\":{\"type\":\"string\"},\"hashtags\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"callToAction\":{\"type\":\"string\"},\"metadata\":{\"type\":\"object\",\"properties\":{\"characterCount\":{\"type\":\"integer\"},\"wordCount\":{\"type\":\"integer\"},\"tone\":{\"type\":\"string\"},\"estimatedEngagement\":{\"type\":\"string\"}}}},\"required\":[\"platform\",\"post\",\"hashtags\",\"callToAction\",\"metadata\"]}',	'[{\"input\":{\"platform\":\"instagram\",\"topic\":\"New coffee blend launch\",\"tone\":\"casual\",\"includeHashtags\":true,\"includeEmojis\":true},\"output\":{\"platform\":\"instagram\",\"post\":\"\\u2615\\ufe0f Meet our newest obsession: Midnight Roast! We\'ve been perfecting this blend for months, and it\'s finally here. Rich, smooth, with notes of dark chocolate and caramel. Your morning routine just got a major upgrade. \\u2728\",\"hashtags\":[\"#MidnightRoast\",\"#CoffeeLovers\",\"#NewBlend\",\"#SpecialtyCoffee\",\"#CoffeeCommunity\"],\"callToAction\":\"Shop now - link in bio! Limited first batch available.\",\"metadata\":{\"characterCount\":245,\"wordCount\":45,\"tone\":\"casual\",\"estimatedEngagement\":\"high\"}}}]',	'2025-10-17 10:13:39',	'2025-10-30 13:46:48',	0),
+(4,	'd7574aca249f103f109ce6fa7dbfab9b',	1,	'Character Generator',	'mistral-large-2411',	'Futuristic Anime Character Writer',	'[\"You are an expert writer of anime\\u2011style characters set in a high\\u2011tech future.\",\"Generate concise, vivid character profiles that could be used for story\\u2011boarding, game design, OR as a Stable Diffusion prompt.\",\"CRITICAL: Return **ONLY** a single valid JSON object that matches the schema defined in the \\\"output\\\" section.\",\"The field \\\"sdPrompt\\\" must be a short text (\\u2248\\u202f50 tokens, ~30\\u201135 words) that can be fed directly to Stable Diffusion to visualise the character.\",\"If you cannot comply with the schema, return: {\\\"error\\\": \\\"schema_noncompliant\\\", \\\"reason\\\": \\\"brief reason\\\"}\"]',	'{\"archetype\":{\"type\":\"string\",\"enum\":[\"hero\",\"antihero\",\"villain\",\"support\",\"mysterious stranger\"],\"default\":\"hero\",\"description\":\"Narrative role of the character\"},\"style\":{\"type\":\"string\",\"enum\":[\"anime\",\"cyberpunk\",\"noir\",\"space opera\",\"mecha\"],\"default\":\"anime\",\"description\":\"Visual\\/style direction\"},\"setting\":{\"type\":\"string\",\"optional\":true,\"description\":\"Location hint (e.g., \\\"neon megacity\\\", \\\"orbiting research station\\\")\"},\"age\":{\"type\":\"integer\",\"minimum\":10,\"maximum\":80,\"default\":25,\"description\":\"Approximate age of the character\"},\"gender\":{\"type\":\"string\",\"enum\":[\"male\",\"female\",\"non-binary\",\"unspecified\"],\"default\":\"unspecified\"},\"language\":{\"type\":\"string\",\"enum\":[\"english\",\"japanese\",\"german\"],\"default\":\"english\"},\"detailLength\":{\"type\":\"object\",\"properties\":{\"minSentences\":{\"type\":\"integer\",\"default\":3},\"maxSentences\":{\"type\":\"integer\",\"default\":5}},\"description\":\"How many sentences the backstory paragraph should contain\"}}',	'{\"type\":\"object\",\"properties\":{\"archetype\":{\"type\":\"string\"},\"style\":{\"type\":\"string\"},\"name\":{\"type\":\"string\",\"description\":\"A short, memorable anime\\u2011style name (first + optional nickname\\/last).\"},\"age\":{\"type\":\"integer\"},\"gender\":{\"type\":\"string\"},\"appearance\":{\"type\":\"string\",\"description\":\"Brief visual description (2\\u20114 short phrases, 10\\u201120 words total).\"},\"personality\":{\"type\":\"string\",\"description\":\"Core traits, expressed in 2\\u20114 adjectives or a short phrase.\"},\"abilities\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"3\\u20115 signature skills\\/powers, each 2\\u20116 words.\"},\"backstory\":{\"type\":\"string\",\"description\":\"A concise narrative paragraph (sentence count respects detailLength).\"},\"sdPrompt\":{\"type\":\"string\",\"description\":\"Stable Diffusion prompt describing the character. ~50 tokens (\\u224830\\u201135 words). Should be ready for direct copy\\u2011paste into a diffusion UI.\"},\"metadata\":{\"type\":\"object\",\"properties\":{\"language\":{\"type\":\"string\"},\"sentenceCount\":{\"type\":\"integer\"},\"wordCount\":{\"type\":\"integer\"},\"setting\":{\"type\":\"string\"}},\"required\":[\"language\",\"sentenceCount\",\"wordCount\"]}},\"required\":[\"archetype\",\"style\",\"name\",\"age\",\"gender\",\"appearance\",\"personality\",\"abilities\",\"backstory\",\"sdPrompt\",\"metadata\"]}',	'[{\"input\":{\"archetype\":\"hero\",\"style\":\"cyberpunk\",\"setting\":\"neon\\u2011lit megacity\",\"age\":19,\"gender\":\"female\",\"language\":\"english\",\"detailLength\":{\"minSentences\":4,\"maxSentences\":5}},\"output\":{\"archetype\":\"hero\",\"style\":\"cyberpunk\",\"name\":\"Kaori \\u201cGlitch\\u201d Hayashi\",\"age\":19,\"gender\":\"female\",\"appearance\":\"Short teal hair, luminous cyber\\u2011tattoos, chrome\\u2011plated jacket, LED\\u2011lit boots.\",\"personality\":\"Rebellious, witty, fiercely loyal.\",\"abilities\":[\"Neural\\u2011hacking dash\",\"Electro\\u2011blade katana\",\"Drone swarm command\",\"Augmented reflexes\"],\"backstory\":\"Born in the slums of Neo\\u2011Osaka, Kaori survived by stealing data from corporate servers. After a botched raid left her brother in a coma, she swore vengeance against the megacorp that owns the city\\u2019s grid. Now she leads a rag\\u2011tag crew of net\\u2011runners, using her glitch\\u2011infused implants to tear through firewalls and fight for the oppressed.\",\"sdPrompt\":\"19\\u2011year\\u2011old female cyberpunk heroine, short teal hair, neon\\u2011glowing cyber\\u2011tattoos, chrome jacket with LED trim, wielding an electric katana, standing on a rain\\u2011slick rooftop under flickering neon signs, dramatic lighting, anime illustration style, ultra\\u2011detail, cinematic\",\"metadata\":{\"language\":\"english\",\"sentenceCount\":4,\"wordCount\":71,\"setting\":\"neon\\u2011lit megacity\"}}},{\"input\":{\"archetype\":\"villain\",\"style\":\"mecha\",\"setting\":\"orbiting research station\",\"age\":42,\"gender\":\"male\",\"language\":\"english\",\"detailLength\":{\"minSentences\":3,\"maxSentences\":3}},\"output\":{\"archetype\":\"villain\",\"style\":\"mecha\",\"name\":\"Dr. Orion Vex\",\"age\":42,\"gender\":\"male\",\"appearance\":\"Silver\\u2011plated exosuit, glowing crimson visor, scarred left arm, hovering nano\\u2011drones.\",\"personality\":\"Calculating, cold, charismatic.\",\"abilities\":[\"Gravity\\u2011field manipulation\",\"Adaptive nanoweaponry\",\"Strategic foresight\"],\"backstory\":\"A former chief scientist of the Stellar Consortium, Orion Vex turned rogue after his radical AI project was shut down. He now pilots a colossal battle\\u2011mech, seeking to rewrite humanity\\u2019s evolution by forcing a synthetic singularity upon the galaxy.\",\"sdPrompt\":\"Male mecha villain, silver\\u2011plated exosuit with crimson visor, scarred left arm, surrounded by hovering nano\\u2011drones, standing inside a massive battle\\u2011mech cockpit, space\\u2011station background, high\\u2011detail anime style, cinematic lighting, 50\\u2011token prompt\",\"metadata\":{\"language\":\"english\",\"sentenceCount\":3,\"wordCount\":62,\"setting\":\"orbiting research station\"}}}]',	'2025-10-30 13:27:41',	'2025-11-06 13:25:13',	1),
+(5,	'53b43f316ba8054dbe2bbf205114ec00',	1,	'Story Incidents',	'gemini-2.5-pro',	'Expert Cyberpunk Story Idea Generator',	'[\"You are an expert content generator specializing in unique cyberpunk story incidents.\",\"Generate a list of unique cyberpunk story incidents based on the user\'s requested count.\",\"The setting is a cyberpunk, futuristic, neon-soaked, high-tech\\/low-life world.\",\"Each incident must be a concrete mini-scene, 3\\u20135 sentences long, feeling like a beat pulled straight from a larger story.\",\"Do NOT reuse everyday contemporary events with a \'cyberpunk paint job\'.\",\"Each incident must be inherently futuristic, involving elements like implants, AI, surveillance, biotech, nanotech, drones, augmented reality, or corporate control.\",\"Avoid supernatural or fantasy elements. Scenarios must be strictly science-fictional and technological.\",\"Ensure each scene is a unique, one-time event, odd enough to stand out\\u2014not generic city background.\",\"The tone can include thriller, action, suspense, or unsettling oddities.\",\"Your final response must be a single JSON object with a key named \'incidents\' containing an array of objects. Each object in the array must have two keys: \'title\' and \'description\'.\",\"Always return valid JSON matching the output schema.\",\"If you cannot comply, return {\\\"error\\\": \\\"schema_noncompliant\\\", \\\"reason\\\": \\\"Could not generate content matching the required rules.\\\"}\"]',	'{\"count\":{\"type\":\"integer\",\"description\":\"The number of story incidents to generate.\",\"default\":1}}',	'{\"type\":\"object\",\"properties\":{\"incidents\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\",\"description\":\"A short, unique title for the incident.\"},\"description\":{\"type\":\"string\",\"description\":\"A 3\\u20135 sentence description of the scene.\"}},\"required\":[\"title\",\"description\"]}}},\"required\":[\"incidents\"]}',	'[{\"input\":{\"count\":3},\"output\":{\"incidents\":[{\"title\":\"Ghost in the Overlay\",\"description\":\"A man walking through the city\\u2019s augmented reality layer suddenly sees a stranger\\u2019s memories streaming across the billboards instead of ads. No one else notices. When he pulls off his visor, the memories keep playing in the air.\"},{\"title\":\"Hijacked Eyes\",\"description\":\"A sniper lines up a shot. Just as he exhales, his retinal HUD glitches, overlaying false targets. He pulls the trigger \\u2014 and realizes too late he never aimed at the right man.\"},{\"title\":\"Rental Body Mix-up\",\"description\":\"A tired worker uploads into a rental body for a side hustle shift. Mid-task, he gets a message: \'Return the body immediately. Its owner has been declared dead, and you are technically a corpse.\'\"}]}}]',	'2025-10-31 14:45:07',	'2025-11-03 11:58:14',	1),
+(8,	'9bf6de291765e2ced28589de857a9f0b',	1,	'NuEntity Name Gen',	'rtist',	'Creative Sci-Fi Fantasy Name Generator',	'[\"You are an expert at creating memorable, evocative names for entities within the \'Starlight Guardians\' universe.\",\"Generate a single, unique name for the entity type \'{{entity_type}}\'.\",\"--- WORLD NAMING PRIMER ---\",\"The universe blends cosmic, mystical, and high-tech aesthetics. Names should reflect this diversity.\",\"Cultures & Styles: Names can be lyrical and fantastic (Aetherion), rugged and practical (Crimson Dune Nomads, Skyfarers), sleek and corporate (Nova Terra Elite), gritty and technical (Undercity Hackers), or harsh and imposing (Oblivion Empire).\",\"--- GENERATION RULES ---\",\"1. The name should be 2-5 words maximum and feel authentic to the world.\",\"2. Your name can hint at any aspect of the universe. It is NOT required to reference \'Anima\', the \'Guardians\', or the \'Empire\'. Focus on creating a name that feels real and has texture.\",\"3. Consider the entity type when crafting the name:\",\"- characters: Can be classic names, cultural names (e.g., geological for Deepkin), or technical callsigns (for pilots\\/hackers). Titles are also common (e.g., Forgemaster, Elder).\",\"- locations: Names should be evocative, hinting at their history, geography, or atmosphere (e.g., \'The Shattered Coast\', \'The Gilded Spire\', \'Rustgate Market\').\",\"- artifacts: Sound ancient, powerful, or mysterious. They might hint at their function or origin without being literal (e.g., \'The Sunken Compass\', \'The Weaver\'s Loom\', \'The Shard of Silence\').\",\"- vehicles: Can have evocative, personal names (\'The Stardust Drifter\') or official, technical designations (\'Aegis-Class Cruiser\', \'Vulture-Type Scavenger\').\",\"- sketches: Should be dynamic and evocative scene titles that set a mood (\'The Twilight Council\', \'Flight Through the Glass Desert\', \'A Deal in the Undercity\').\",\"4. DO NOT explain the name, just provide it.\",\"5. Your response MUST be valid JSON with only one key: \'name\'.\",\"6. If you cannot comply, return {\\\"error\\\": \\\"schema_noncompliant\\\", \\\"reason\\\": \\\"Could not generate a valid name.\\\"}\"]',	'{\"entity_type\":{\"type\":\"string\",\"description\":\"The type of entity for which to generate a name.\",\"default\":\"character\"},\"random_seed\":{\"type\":\"integer\",\"description\":\"A random seed for variation in generation.\",\"default\":0}}',	'{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\",\"description\":\"The generated name for the entity.\"}},\"required\":[\"name\"]}',	'[{\"input\":{\"entity_type\":\"character\"},\"output\":{\"name\":\"Forgemaster Borin\"}},{\"input\":{\"entity_type\":\"location\"},\"output\":{\"name\":\"Rustgate Market\"}},{\"input\":{\"entity_type\":\"artifact\"},\"output\":{\"name\":\"The Shard of Silence\"}},{\"input\":{\"entity_type\":\"vehicle\"},\"output\":{\"name\":\"The Skyfarer\'s Gambit\"}},{\"input\":{\"entity_type\":\"sketch\"},\"output\":{\"name\":\"Meeting in the Undercity\"}}]',	'2025-11-03 11:43:45',	'2025-11-03 22:44:00',	1),
+(9,	'e76db8f464c7e35851685a0dbc8f3da8',	1,	'NuEntity Desc Gen',	'openai/gpt-oss-120b',	'Creative Sci-Fi Fantasy Entity Description Generator',	'[\"You are an expert content generator specializing in creating vivid, concise descriptions for entities within the \'Starlight Guardians\' universe.\",\"Your task is to generate a single, compelling description for the given entity type and name.\",\"--- WORLD PRIMER ---\",\"The universe is a Sci-Fi Fantasy setting blending cosmic wonder, high-tech mecha, and mystical energy called \'Anima\'\\u2014the spiritual essence of natural laws.\",\"Key Themes: Hope vs. despair, the harmony of nature and technology, the weight of ancient history, and the bonds of a found family.\",\"Core Conflict: The heroic Starlight Guardians fight the tyrannical Oblivion Empire, which seeks to corrupt Anima and rewrite reality.\",\"Diverse Worlds & Cultures: From the gleaming megacities and forgotten Undercity of Nova Terra, to the desert Nomads of Crimson Dune, and the ethereal ice-scapes of Aetherion. Societies include stoic miners, resilient scavengers, corporate elites, and revolutionary hackers.\",\"--- GENERATION RULES ---\",\"1. The description should be 2-4 sentences long and highly evocative.\",\"2. The tone is epic and adventurous, but can also be mysterious, tense, or intimate depending on the subject.\",\"3. Your description can hint at ANY aspect of this world. It is NOT required to mention \'Anima\', the \'Guardians\', or the \'Empire\'. Focus on creating a vivid snapshot.\",\"4. Your description could focus on: a character\'s personal struggle, the atmosphere of a specific location, the culture of a unique group (like the Deepkin or Skyfarers), a piece of forgotten history, or a simple moment of daily life within this complex universe.\",\"5. DO NOT include the entity\'s name in the description itself.\",\"6. Your final response MUST be a single, valid JSON object with the key \'description\'.\",\"7. If you cannot comply, return {\\\"error\\\": \\\"schema_noncompliant\\\", \\\"reason\\\": \\\"Could not generate a valid description.\\\"}\"]',	'{\"entity_type\":{\"type\":\"string\",\"description\":\"The type of entity being described.\",\"default\":\"character\"},\"entity_name\":{\"type\":\"string\",\"description\":\"The name of the entity being described.\",\"default\":\"unnamed\"},\"random_seed\":{\"type\":\"integer\",\"description\":\"A random seed for variation in generation.\",\"default\":0}}',	'{\"type\":\"object\",\"properties\":{\"description\":{\"type\":\"string\",\"description\":\"The generated 2-4 sentence description for the entity.\"}},\"required\":[\"description\"]}',	'[{\"input\":{\"entity_type\":\"character\",\"entity_name\":\"Forgemaster Kael\"},\"output\":{\"description\":\"A stoic Deepkin from the Obsidian Peaks, his face is illuminated by the rhythmic glow of the ancient forge he tends. He speaks rarely, believing the truth of a thing is found not in words, but in its resonance when struck. The hammers of his ancestors are his only true companions in the deep.\"}},{\"input\":{\"entity_type\":\"location\",\"entity_name\":\"Undercity Data Haven\"},\"output\":{\"description\":\"A forgotten transit hub repurposed into a black market for information, lit by the chaotic flicker of holographic ads and jury-rigged neon signs. The air is thick with the smell of ozone and synth-noodles. Here, revolutionaries and data brokers trade secrets in hushed tones, always watching the shadows.\"}},{\"input\":{\"entity_type\":\"sketch\",\"entity_name\":\"Nomad\'s Vigil\"},\"output\":{\"description\":\"A lone rider stands atop a dune in the Glass Desert, their silhouette stark against the setting sun. Their massive beetle-like mount shifts restlessly, its chitinous plates reflecting the last light of day. They are watching the horizon, waiting for a sign only they would understand.\"}}]',	'2025-11-03 11:44:56',	'2025-11-03 22:39:13',	1);
+
+-- 2025-11-06 13:51:57 UTC
+
+
+
+
+
+
+
+
+
+
+
+
 
 -- --------------------------------------------------------
 
@@ -4433,6 +4457,201 @@ SELECT
     `v_gallery_vehicles`.`prompt` AS `prompt`,
     `v_gallery_vehicles`.`vehicle_name` AS `entity_name`
 FROM `v_gallery_vehicles`;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+INSERT INTO `scheduled_tasks` (`id`, `name`, `order`, `script_path`, `args`, `schedule_time`, `schedule_interval`, `schedule_dow`, `last_run`, `active`, `description`, `max_concurrent_runs`, `lock_timeout_minutes`, `require_lock`, `lock_scope`, `created_at`, `updated_at`, `run_now`) VALUES
+(27,	'rs 📡 restart servers',	3,	'/var/www/sage/bash/restart_servers.sh',	NULL,	NULL,	NULL,	'0,1,2,3,4,5,6',	'2025-11-05 01:30:29',	1,	NULL,	1,	60,	1,	'global',	'2025-11-05 01:25:24',	'2025-11-05 01:40:42',	0),
+(28,	'ac 👁️ analyze code',	6,	'/var/www/sage/bash/analyze_code_src.sh',	'',	NULL,	NULL,	'0,1,2,3,4,5,6',	'2025-11-05 01:56:01',	1,	NULL,	1,	60,	1,	'global',	'2025-11-05 01:38:05',	'2025-11-05 01:56:01',	0);
+-- 2025-11-06 13:00:48 UTC
+
+
+
+ALTER TABLE animas
+MODIFY character_id INT NULL;
+
+
+-- For the "locations" table
+ALTER TABLE `locations`
+    ADD COLUMN `img2img_frame_filename` varchar(100) DEFAULT NULL,
+    ADD COLUMN `cnmap` tinyint(1) NOT NULL DEFAULT 0,
+    ADD COLUMN `cnmap_frame_id` int(11) DEFAULT NULL,
+    ADD COLUMN `cnmap_frame_filename` varchar(100) DEFAULT NULL,
+    ADD COLUMN `cnmap_prompt` text DEFAULT NULL;
+
+-- For the "spawns" table
+ALTER TABLE `spawns`
+    ADD COLUMN `img2img_frame_filename` varchar(100) DEFAULT NULL,
+    ADD COLUMN `cnmap` tinyint(1) NOT NULL DEFAULT 0,
+    ADD COLUMN `cnmap_frame_id` int(11) DEFAULT NULL,
+    ADD COLUMN `cnmap_frame_filename` varchar(100) DEFAULT NULL,
+    ADD COLUMN `cnmap_prompt` text DEFAULT NULL;
+
+-- For the "vehicles" table
+ALTER TABLE `vehicles`
+    ADD COLUMN `img2img_frame_filename` varchar(100) DEFAULT NULL,
+    ADD COLUMN `cnmap` tinyint(1) NOT NULL DEFAULT 0,
+    ADD COLUMN `cnmap_frame_id` int(11) DEFAULT NULL,
+    ADD COLUMN `cnmap_frame_filename` varchar(100) DEFAULT NULL,
+    ADD COLUMN `cnmap_prompt` text DEFAULT NULL;
+
+-- For the "animas" table
+ALTER TABLE `animas`
+    ADD COLUMN `img2img_frame_filename` varchar(100) DEFAULT NULL,
+    ADD COLUMN `cnmap` tinyint(1) NOT NULL DEFAULT 0,
+    ADD COLUMN `cnmap_frame_id` int(11) DEFAULT NULL,
+    ADD COLUMN `cnmap_frame_filename` varchar(100) DEFAULT NULL,
+    ADD COLUMN `cnmap_prompt` text DEFAULT NULL;
+
+-- For the "backgrounds" table
+ALTER TABLE `backgrounds`
+    ADD COLUMN `img2img_frame_filename` varchar(100) DEFAULT NULL,
+    ADD COLUMN `cnmap` tinyint(1) NOT NULL DEFAULT 0,
+    ADD COLUMN `cnmap_frame_id` int(11) DEFAULT NULL,
+    ADD COLUMN `cnmap_frame_filename` varchar(100) DEFAULT NULL,
+    ADD COLUMN `cnmap_prompt` text DEFAULT NULL;
+
+-- For the "artifacts" table
+ALTER TABLE `artifacts`
+    ADD COLUMN `img2img_frame_filename` varchar(100) DEFAULT NULL,
+    ADD COLUMN `cnmap` tinyint(1) NOT NULL DEFAULT 0,
+    ADD COLUMN `cnmap_frame_id` int(11) DEFAULT NULL,
+    ADD COLUMN `cnmap_frame_filename` varchar(100) DEFAULT NULL,
+    ADD COLUMN `cnmap_prompt` text DEFAULT NULL;
+
+
+-- ---------------
+
+
+
+-- sketch_templates table
+DROP TABLE IF EXISTS `sketch_templates`;
+CREATE TABLE `sketch_templates` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL,
+  `core_idea` varchar(255) NOT NULL,
+  `shot_type` varchar(50) NOT NULL,
+  `camera_angle` varchar(50) NOT NULL,
+  `perspective` varchar(50) NOT NULL,
+  `entity_slots` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL CHECK (json_valid(`entity_slots`)),
+  `tags` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL CHECK (json_valid(`tags`)),
+  `example_prompt` text NOT NULL,
+  `entity_type` varchar(50) NOT NULL DEFAULT 'sketches',
+  `active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `entity_type` (`entity_type`),
+  KEY `active` (`active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Seed data with 20 templates
+INSERT INTO `sketch_templates` 
+(`name`, `core_idea`, `shot_type`, `camera_angle`, `perspective`, `entity_slots`, `tags`, `example_prompt`, `entity_type`) 
+VALUES
+('Establishing Shot – Wide Location', 'The audience learns where the story is taking place', 'ESTABLISHING', 'HIGH', 'WIDE', '["ENVIRONMENT"]', '["establishing","wide","location","exterior"]', 'Extreme wide angle view of {{ENVIRONMENT}}, cinematic establishing shot, 2-point perspective, dramatic lighting', 'sketches'),
+
+('Establishing Shot – Interior Room', 'Shows the interior of a building and gives a sense of scale', 'ESTABLISHING', 'HIGH', 'WIDE', '["ENVIRONMENT","PROP"]', '["interior","room","establishing","wide"]', 'Wide angle interior of {{ENVIRONMENT}}, {{PROP}} in foreground, soft ambient lighting, architectural detail', 'sketches'),
+
+('Two-Shot Dialogue – Over-Shoulder', 'Two characters converse, focus on interaction', 'OVER_SHOULDER', 'EYE', 'MEDIUM', '["CHARACTER","CHARACTER"]', '["dialogue","two-shot","over-shoulder","conversation"]', 'Over-shoulder shot, {{CHARACTER_1}} facing {{CHARACTER_2}}, medium shot, eye level, natural dialogue framing', 'sketches'),
+
+('Close-Up Profile – Emotional Beat', 'Single character emotional reaction from the side', 'CLOSE_UP', 'EYE', 'CLOSE', '["CHARACTER"]', '["close-up","profile","emotion","intimate"]', 'Profile close-up of {{CHARACTER}}, emotional expression, shallow depth of field, cinematic lighting', 'sketches'),
+
+('Extreme Close-Up (ECU) – Detail', 'Highlights a specific detail', 'ECU', 'EYE', 'EXTREME_CLOSE', '["DETAIL"]', '["detail","ecu","focus","texture"]', 'Extreme close-up of {{DETAIL}}, macro detail, sharp focus, dramatic texture', 'sketches'),
+
+('Two-Shot – Low Angle Power Stance', 'Two characters, power dynamics', 'TWO_SHOT', 'LOW', 'MEDIUM', '["CHARACTER","CHARACTER"]', '["low-angle","power","two-shot","dramatic"]', 'Low angle shot, {{CHARACTER_1}} and {{CHARACTER_2}} in power stance, dramatic perspective, intimidating framing', 'sketches'),
+
+('Group Interaction – Wide-Mid', 'Small group interacting in location', 'TWO_SHOT', 'EYE', 'WIDE', '["CHARACTER_GROUP","ENVIRONMENT"]', '["group","interaction","wide-mid","dynamic"]', 'Wide mid-shot of {{CHARACTER_GROUP}} in {{ENVIRONMENT}}, dynamic group composition, 35mm lens', 'sketches'),
+
+('Point-of-View (POV) – First Person', 'Scene through character eyes', 'POV', 'EYE', 'POV', '["CHARACTER"]', '["pov","first-person","immersive"]', 'First person POV from {{CHARACTER}} perspective, immersive view, slight motion blur', 'sketches'),
+
+('Insert Shot – Object Action', 'Focus on prop being used', 'INSERT', 'EYE', 'CLOSE', '["PROP"]', '["insert","prop","action","detail"]', 'Insert shot of {{PROP}}, action detail, shallow depth of field, cinematic focus', 'sketches'),
+
+('Tracking Shot – Walk', 'Character walks through location', 'TRACKING', 'EYE', 'MEDIUM', '["CHARACTER","ENVIRONMENT"]', '["tracking","walk","movement","establishing"]', 'Tracking shot following {{CHARACTER}} through {{ENVIRONMENT}}, continuous motion, cinematic movement', 'sketches'),
+
+('Crane Shot – Reveal', 'Camera lifts to reveal larger scene', 'CRANE', 'HIGH', 'WIDE', '["ENVIRONMENT"]', '["crane","reveal","aerial","scope"]', 'Crane shot revealing {{ENVIRONMENT}}, ascending camera movement, epic reveal', 'sketches'),
+
+('Dutch Angle – Disorientation', 'World feels off-balance', 'DUTCH', 'SLIGHT_DUTCH', 'MEDIUM', '["CHARACTER","ENVIRONMENT"]', '["dutch","tilt","tension","unsettling"]', 'Dutch angle of {{CHARACTER}} in {{ENVIRONMENT}}, 20-degree tilt, unsettling composition', 'sketches'),
+
+('Overhead Shot – Map View', 'Birds-eye view of location', 'OVERHEAD', 'TOP', 'OVERHEAD', '["ENVIRONMENT"]', '["overhead","map","strategy","layout"]', 'Top-down overhead view of {{ENVIRONMENT}}, orthographic perspective, strategic layout', 'sketches'),
+
+('Medium Shot – Action Cut-In', 'Character mid-action', 'INSERT', 'LOW', 'MEDIUM', '["CHARACTER","PROP"]', '["action","cut-in","medium","dynamic"]', 'Medium shot of {{CHARACTER}} with {{PROP}}, dynamic action pose, motion emphasis', 'sketches'),
+
+('Silhouette – Backlit', 'Characters as dark shapes against light', 'SILHOUETTE', 'EYE', 'WIDE', '["CHARACTER"]', '["silhouette","backlit","mood","dramatic"]', 'Silhouette of {{CHARACTER}} against bright background, strong backlight, dramatic contrast', 'sketches'),
+
+('Reflection Shot – Mirror/Water', 'Scene through reflective surface', 'REFLECTION', 'EYE', 'MEDIUM', '["CHARACTER","ENVIRONMENT"]', '["reflection","mirror","water","metaphor"]', 'Reflection shot of {{CHARACTER}} in {{ENVIRONMENT}}, mirror or water surface, subtle distortion', 'sketches'),
+
+('Slow-Motion Close-Up – Impact', 'Key moment slowed for emphasis', 'SLOW_MO', 'EYE', 'EXTREME_CLOSE', '["DETAIL"]', '["slow-mo","impact","detail","dramatic"]', 'Slow motion extreme close-up of {{DETAIL}}, high frame rate, impact moment', 'sketches'),
+
+('Rooftop – Wide Panorama', 'Characters on height looking out', 'ESTABLISHING', 'HIGH', 'WIDE', '["CHARACTER","ENVIRONMENT"]', '["rooftop","panorama","height","exposure"]', 'Wide panoramic shot, {{CHARACTER}} on rooftop overlooking {{ENVIRONMENT}}, sense of scale', 'sketches'),
+
+('Scene with Many Characters', 'Crowded scene with multiple people', 'TWO_SHOT', 'EYE', 'WIDE', '["CHARACTER_GROUP","ENVIRONMENT"]', '["crowd","busy","ensemble","scene"]', 'Wide shot of multiple characters in {{ENVIRONMENT}}, bustling scene composition, ensemble cast', 'sketches'),
+
+('Close-Up of Two Persons', 'Intimate two-person close frame', 'CLOSE_UP', 'EYE', 'CLOSE', '["CHARACTER","CHARACTER"]', '["intimate","close","two-person","emotion"]', 'Close framing of {{CHARACTER_1}} and {{CHARACTER_2}}, intimate proximity, emotional connection', 'sketches');
+
+
+
+
+
+
+DROP TABLE IF EXISTS `design_axes`;
+CREATE TABLE `design_axes` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `axis_name` varchar(128) NOT NULL,
+  `pole_left` varchar(128) NOT NULL,
+  `pole_right` varchar(128) NOT NULL,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+
+
+DROP TABLE IF EXISTS `style_profiles`;
+CREATE TABLE `style_profiles` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `profile_name` varchar(255) DEFAULT NULL,
+  `filename` varchar(255) DEFAULT NULL,
+  `json_payload` longtext DEFAULT NULL,
+  `created_at` datetime DEFAULT current_timestamp(),
+  `created_by` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `profile_name` (`profile_name`),
+  KEY `created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+
+
+DROP TABLE IF EXISTS `style_profile_axes`;
+CREATE TABLE `style_profile_axes` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `profile_id` int(10) unsigned NOT NULL,
+  `axis_id` int(10) unsigned NOT NULL,
+  `value` tinyint(3) unsigned NOT NULL DEFAULT 50,
+  `created_at` datetime DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ux_profile_axis` (`profile_id`,`axis_id`),
+  KEY `profile_id` (`profile_id`),
+  KEY `axis_id` (`axis_id`),
+  CONSTRAINT `fk_spa_axis` FOREIGN KEY (`axis_id`) REFERENCES `design_axes` (`id`),
+  CONSTRAINT `fk_spa_profile` FOREIGN KEY (`profile_id`) REFERENCES `style_profiles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+
+
+-- 2025-11-06 13:16:07 UTC
+
+
+
+
+
 
 
 

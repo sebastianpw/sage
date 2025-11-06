@@ -4,76 +4,115 @@
 require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
 
-// Handle CRUD operations
-if ($_POST) {
+// Handle AJAX requests
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+    header('Content-Type: application/json');
+    
     try {
-        if (isset($_POST['action'])) {
-            switch ($_POST['action']) {
-                case 'create':
-                    $name = trim($_POST['name']);
-                    $description = trim($_POST['description'] ?? '');
-                    $order = (int)($_POST['order'] ?? 100);
-                    
-                    if (empty($name)) {
-                        throw new Exception('Task name is required');
+        $action = $_POST['action'] ?? '';
+        
+        switch ($action) {
+            case 'create':
+                $name = trim($_POST['name']);
+                $description = trim($_POST['description'] ?? '');
+                $order = (int)($_POST['order'] ?? 100);
+                
+                if (empty($name)) {
+                    throw new Exception('Task name is required');
+                }
+                
+                $stmt = $pdoSys->prepare("INSERT INTO sage_todos (name, description, `order`, status, created_at, updated_at) VALUES (?, ?, ?, 'pending', NOW(), NOW())");
+                $stmt->execute([$name, $description, $order]);
+                
+                $newId = $pdoSys->lastInsertId();
+                
+                // Fetch the newly created task
+                $stmt = $pdoSys->prepare("SELECT * FROM sage_todos WHERE id = ?");
+                $stmt->execute([$newId]);
+                $newTask = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Task created successfully',
+                    'task' => $newTask
+                ]);
+                exit;
+                
+            case 'update':
+                $id = (int)$_POST['id'];
+                $name = trim($_POST['name']);
+                $description = trim($_POST['description'] ?? '');
+                $order = (int)($_POST['order'] ?? 100);
+                $status = $_POST['status'] ?? 'pending';
+                
+                if (empty($name)) {
+                    throw new Exception('Task name is required');
+                }
+                
+                $stmt = $pdoSys->prepare("UPDATE sage_todos SET name = ?, description = ?, `order` = ?, status = ?, updated_at = NOW() WHERE id = ?");
+                $stmt->execute([$name, $description, $order, $status, $id]);
+                
+                // Fetch the updated task
+                $stmt = $pdoSys->prepare("SELECT * FROM sage_todos WHERE id = ?");
+                $stmt->execute([$id]);
+                $updatedTask = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Task updated successfully',
+                    'task' => $updatedTask
+                ]);
+                exit;
+                
+            case 'delete':
+                $id = (int)$_POST['id'];
+                
+                $stmt = $pdoSys->prepare("DELETE FROM sage_todos WHERE id = ?");
+                $stmt->execute([$id]);
+                
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Task deleted successfully',
+                    'id' => $id
+                ]);
+                exit;
+                
+            case 'bulk_reorder':
+                $orders = json_decode($_POST['orders'], true);
+                if ($orders) {
+                    $pdoSys->beginTransaction();
+                    foreach ($orders as $item) {
+                        $stmt = $pdoSys->prepare("UPDATE sage_todos SET `order` = ?, updated_at = NOW() WHERE id = ?");
+                        $stmt->execute([$item['order'], $item['id']]);
                     }
-                    
-                    $stmt = $pdoSys->prepare("INSERT INTO sage_todos (name, description, `order`, status, created_at, updated_at) VALUES (?, ?, ?, 'pending', NOW(), NOW())");
-                    $stmt->execute([$name, $description, $order]);
-                    
-                    $_SESSION['message'] = 'Task created successfully';
-                    header('Location: ' . $_SERVER['PHP_SELF']);
+                    $pdoSys->commit();
+                    echo json_encode(['success' => true, 'message' => 'Order saved successfully']);
                     exit;
-                    break;
-                    
-                case 'update':
-                    $id = (int)$_POST['id'];
-                    $name = trim($_POST['name']);
-                    $description = trim($_POST['description'] ?? '');
-                    $order = (int)($_POST['order'] ?? 100);
-                    $status = $_POST['status'] ?? 'pending';
-                    
-                    if (empty($name)) {
-                        throw new Exception('Task name is required');
-                    }
-                    
-                    $stmt = $pdoSys->prepare("UPDATE sage_todos SET name = ?, description = ?, `order` = ?, status = ?, updated_at = NOW() WHERE id = ?");
-                    $stmt->execute([$name, $description, $order, $status, $id]);
-                    
-                    $_SESSION['message'] = 'Task updated successfully';
-                    header('Location: ' . $_SERVER['PHP_SELF']);
-                    exit;
-                    break;
-                    
-                case 'delete':
-                    $id = (int)$_POST['id'];
-                    
-                    $stmt = $pdoSys->prepare("DELETE FROM sage_todos WHERE id = ?");
-                    $stmt->execute([$id]);
-                    
-                    $_SESSION['message'] = 'Task deleted successfully';
-                    header('Location: ' . $_SERVER['PHP_SELF']);
-                    exit;
-                    break;
-                    
-                case 'bulk_reorder':
-                    $orders = json_decode($_POST['orders'], true);
-                    if ($orders) {
-                        $pdoSys->beginTransaction();
-                        foreach ($orders as $item) {
-                            $stmt = $pdoSys->prepare("UPDATE sage_todos SET `order` = ?, updated_at = NOW() WHERE id = ?");
-                            $stmt->execute([$item['order'], $item['id']]);
-                        }
-                        $pdoSys->commit();
-                        echo json_encode(['success' => true]);
-                        exit;
-                    }
-                    break;
-            }
+                }
+                break;
+                
+            case 'get_stats':
+                $stmt = $pdoSys->query("SELECT * FROM sage_todos ORDER BY `order` ASC");
+                $todos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                $stats = ['immediate' => 0, 'high' => 0, 'medium' => 0, 'low' => 0];
+                foreach ($todos as $todo) {
+                    $priority = getPriorityLevel($todo['order']);
+                    $stats[$priority]++;
+                }
+                $stats['total'] = count($todos);
+                
+                echo json_encode([
+                    'success' => true,
+                    'stats' => $stats
+                ]);
+                exit;
         }
     } catch (Exception $e) {
-        $_SESSION['error'] = $e->getMessage();
-        header('Location: ' . $_SERVER['PHP_SELF']);
+        echo json_encode([
+            'success' => false,
+            'error' => $e->getMessage()
+        ]);
         exit;
     }
 }
@@ -146,43 +185,62 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Task Dashboard with CRUD</title>
 
-
 <?php echo \App\Core\SpwBase::getInstance()->getJquery(); ?>
 
-
 <?php if (\App\Core\SpwBase::CDN_USAGE): ?>
-    <!-- SortableJS via CDN -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 <?php else: ?>
-    <!-- SortableJS via local copy -->
     <script src="/vendor/sortable/Sortable.min.js"></script>
 <?php endif; ?>
 
-
-
     <link rel="stylesheet" href="/css/todo.css">
+    
+    <style>
+        .toast-notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background: #4CAF50;
+            color: white;
+            border-radius: 4px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 10000;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .toast-notification.error {
+            background: #f44336;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .task-card.updating {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+    </style>
 </head>
 <body>
 <?php require "floatool.php"; echo $eruda; ?>
 
-    <?php if (isset($_SESSION['message'])): ?>
-        <div class="message success">
-            <?= htmlspecialchars($_SESSION['message']) ?>
-            <?php unset($_SESSION['message']); ?>
-        </div>
-    <?php endif; ?>
-
-    <?php if (isset($_SESSION['error'])): ?>
-        <div class="message error">
-            <?= htmlspecialchars($_SESSION['error']) ?>
-            <?php unset($_SESSION['error']); ?>
-        </div>
-    <?php endif; ?>
-
     <div class="dashboard">
+        
         <div class="header">
             <a href="dashboard.php" class="back-link" title="Dashboard">🔮</a>
             <h2 style="padding-bottom: 5px;">🎫 SAGE TODOs</h2>
+            <select id="modelSelect" class="model-select">
+                <option value="">Loading models...</option>
+            </select>
             <button class="btn" id="analyzeBtn" onclick="analyzeTasks()">
                 <span class="btn-text">🧠 Analyze</span>
             </button>
@@ -197,33 +255,10 @@ try {
             </button>
         </div>
 
-        <!--
-        <div class="crud-controls">
-            <button class="btn success" onclick="openCreateModal()">
-                <span class="btn-text">➕ Add New</span>
-            </button>
-            <button class="btn success" onclick="toggleSortMode()">
-                <span class="btn-text" id="sortModeText">🔄 Enable Drag & Drop</span>
-            </button>
-            <button class="btn secondary" onclick="saveSortOrder()">
-                <span class="btn-text">💾 Save Order</span>
-            </button>
-        </div>
-        -->
-
         <div class="ai-controls" style="display: none;">
             <h3>🤖 AI-Powered Task Management</h3>
             <button class="btn" id="analyzeBtn" onclick="analyzeTasks()">
                 <span class="btn-text">🧠 Analyze All Tasks</span>
-            </button>
-            <button style="display:none;" class="btn secondary" id="blockingBtn" onclick="findBlockingTasks()">
-                <span class="btn-text">🚧 Find Blocking Tasks</span>
-            </button>
-            <button style="display:none;" class="btn secondary" id="nextTasksBtn" onclick="suggestNextTasks()">
-                <span class="btn-text">📋 Suggest Next 5 Tasks</span>
-            </button>
-            <button style="display:none;" class="btn secondary" id="immediateBtn" onclick="showImmediate()">
-                <span class="btn-text">🚨 Show Critical Tasks</span>
             </button>
         </div>
 
@@ -231,8 +266,6 @@ try {
             <h4>AI Analysis Results</h4>
             <div id="analysisContent"></div>
         </div>
-
-
 
         <div class="filters" style="font-size: 0.5em;">
             <input type="text" class="search-box" id="searchBox" placeholder="🔍 Search TODOs...">
@@ -298,12 +331,11 @@ try {
             </div>
         </div>
 
-        <div class="last-updated">
+        <div class="last-updated" id="lastUpdated">
             Last updated: <?= date('Y-m-d H:i:s') ?>
         </div>
         
-        
-                <div class="stats-grid">
+        <div class="stats-grid" id="statsGrid">
             <div class="stat-card">
                 <div class="stat-number immediate"><?= $stats['immediate'] ?></div>
                 <div class="stat-label">Immediate (1-10)</div>
@@ -325,8 +357,6 @@ try {
                 <div class="stat-label">Total Tasks</div>
             </div>
         </div>
-        
-        
     </div>
 
     <!-- Create/Edit Modal -->
@@ -336,7 +366,7 @@ try {
                 <h2 id="modalTitle">Add New Task</h2>
                 <span class="close" onclick="closeModal()">&times;</span>
             </div>
-            <form id="taskForm" method="POST">
+            <form id="taskForm">
                 <input type="hidden" id="taskId" name="id">
                 <input type="hidden" id="taskAction" name="action" value="create">
                 
@@ -373,493 +403,671 @@ try {
         </div>
     </div>
 
-
 <script>
-        let currentFilters = { priority: 'all', area: 'all' };
-        let searchQuery = '';
-        let sortMode = false;
-        let sortable = null;
+let currentFilters = { priority: 'all', area: 'all' };
+let searchQuery = '';
+let sortMode = false;
+let sortable = null;
+let taskData = <?= json_encode($processedTodos) ?>;
 
-        // Task data for editing
-        const taskData = <?= json_encode($processedTodos) ?>;
+// Toast notification function
+function showToast(message, isError = false) {
+    const toast = document.createElement('div');
+    toast.className = 'toast-notification' + (isError ? ' error' : '');
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'slideIn 0.3s ease-out reverse';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
 
-        function filterTasks() {
-            const cards = document.querySelectorAll('.task-card');
+// Update last updated timestamp
+function updateLastUpdated() {
+    const now = new Date();
+    const formatted = now.getFullYear() + '-' + 
+        String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+        String(now.getDate()).padStart(2, '0') + ' ' + 
+        String(now.getHours()).padStart(2, '0') + ':' + 
+        String(now.getMinutes()).padStart(2, '0') + ':' + 
+        String(now.getSeconds()).padStart(2, '0');
+    document.getElementById('lastUpdated').textContent = 'Last updated: ' + formatted;
+}
 
-            cards.forEach(card => {
-                const priority = card.dataset.priority;
-                const area = card.dataset.area;
-                const searchText = card.dataset.search;
-
-                const priorityMatch = currentFilters.priority === 'all' || priority === currentFilters.priority;
-                const areaMatch = currentFilters.area === 'all' || area === currentFilters.area;
-                const searchMatch = searchQuery === '' || searchText.includes(searchQuery.toLowerCase());
-
-                if (priorityMatch && areaMatch && searchMatch) {
-                    card.style.display = 'block';
-                } else {
-                    card.style.display = 'none';
-                }
-            });
+// Update statistics
+function updateStats() {
+    $.ajax({
+        url: '',
+        method: 'POST',
+        data: { action: 'get_stats' },
+        dataType: 'json',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        success: function(response) {
+            if (response.success) {
+                const stats = response.stats;
+                const statsHtml = `
+                    <div class="stat-card">
+                        <div class="stat-number immediate">${stats.immediate}</div>
+                        <div class="stat-label">Immediate (1-10)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number high">${stats.high}</div>
+                        <div class="stat-label">High (11-25)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number medium">${stats.medium}</div>
+                        <div class="stat-label">Medium (26-50)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number low">${stats.low}</div>
+                        <div class="stat-label">Low (51+)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${stats.total}</div>
+                        <div class="stat-label">Total Tasks</div>
+                    </div>
+                `;
+                document.getElementById('statsGrid').innerHTML = statsHtml;
+            }
         }
+    });
+}
 
-        function toggleSortMode() {
-            sortMode = !sortMode;
-            const button = document.getElementById('sortModeText');
-            const taskGrid = document.getElementById('taskGrid');
+// Helper functions for priority and area
+function getPriorityLevel(order) {
+    if (order <= 10) return 'immediate';
+    if (order <= 25) return 'high';
+    if (order <= 50) return 'medium';
+    return 'low';
+}
 
-            if (sortMode) {
-                button.textContent = '🔒 -Drag';
-                taskGrid.classList.add('sortable-enabled');
+function guessArea(name, description = '') {
+    const text = (name + ' ' + description).toLowerCase();
+    
+    if (text.includes('ui') || text.includes('interface') || text.includes('button') || text.includes('menu')) return 'UI';
+    if (text.includes('gallery')) return 'Gallery';
+    if (text.includes('generate') || text.includes('generation') || text.includes('prompt') || text.includes('seed')) return 'Generation';
+    if (text.includes('model') || text.includes('img2img') || text.includes('sd')) return 'Models';
+    if (text.includes('pose') || text.includes('skeleton') || text.includes('openpose')) return 'Pose/Skeleton';
+    if (text.includes('database') || text.includes('sql') || text.includes('table') || text.includes('crud')) return 'DB';
+    if (text.includes('scheduler') || text.includes('script') || text.includes('shell')) return 'Scheduler';
+    if (text.includes('gear')) return 'GearMenu';
+    if (text.includes('workflow')) return 'Workflow';
+    if (text.includes('bug') || text.includes('fix') || text.includes('error')) return 'Bugs';
+    if (text.includes('character') || text.includes('logo') || text.includes('theatrical')) return 'Assets';
+    if (text.includes('langchain') || text.includes('3d') || text.includes('sketchfab')) return 'Integrations';
+    
+    return 'General';
+}
 
-                sortable = Sortable.create(taskGrid, {
-                    animation: 150,
-                    ghostClass: 'sortable-ghost',
-                    handle: '.drag-handle',
-                    onEnd: function(evt) {
-                        console.log('Item moved from', evt.oldIndex, 'to', evt.newIndex);
-                        updateOrderAfterDrag();
+// Create task card HTML
+function createTaskCardHTML(task) {
+    const priority = getPriorityLevel(task.order);
+    const area = guessArea(task.title, task.description);
+    const descriptionTruncated = task.description.length > 200 ? 
+        task.description.substring(0, 200) + '...' : task.description;
+    
+    return `
+        <div class="task-card ${priority}" 
+             data-id="${task.id}"
+             data-priority="${priority}" 
+             data-area="${area}"
+             data-order="${task.order}"
+             data-search="${(task.title + ' ' + task.description).toLowerCase()}">
+            
+            <div class="task-header">
+                <div class="task-title">
+                    <span class="drag-handle">⋮⋮</span>
+                    ${escapeHtml(task.title)}
+                    ${task.regenerate_images > 0 ? '<span class="regen-indicator">REGEN</span>' : ''}
+                </div>
+                <div class="task-actions">
+                    <button class="btn secondary" onclick="editTask(${task.id})">✏️</button>
+                    <button class="btn" onclick="deleteTask(${task.id})">🗑️</button>
+                </div>
+            </div>
+            
+            ${task.description ? `
+                <div class="task-description">
+                    ${escapeHtml(descriptionTruncated)}
+                </div>
+            ` : ''}
+            
+            <div class="task-meta">
+                <span class="task-badge priority-${priority}">${priority.charAt(0).toUpperCase() + priority.slice(1)}</span>
+                <span class="task-badge area-badge">${area}</span>
+                <span class="task-badge order-badge">Order: ${task.order}</span>
+            </div>
+        </div>
+    `;
+}
+
+// HTML escape function
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Insert task in correct order position
+function insertTaskInOrder(task) {
+    const taskGrid = document.getElementById('taskGrid');
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = createTaskCardHTML(task);
+    const newCard = tempDiv.firstElementChild;
+    
+    // Get all current cards
+    const allCards = Array.from(taskGrid.querySelectorAll('.task-card'));
+    
+    // If grid is empty, just append
+    if (allCards.length === 0) {
+        taskGrid.appendChild(newCard);
+        filterTasks();
+        return;
+    }
+    
+    // Find the correct position based on order value
+    let inserted = false;
+    for (let i = 0; i < allCards.length; i++) {
+        const cardOrder = parseInt(allCards[i].dataset.order);
+        if (task.order < cardOrder) {
+            taskGrid.insertBefore(newCard, allCards[i]);
+            inserted = true;
+            break;
+        }
+    }
+    
+    // If not inserted yet, append at the end
+    if (!inserted) {
+        taskGrid.appendChild(newCard);
+    }
+    
+    // Apply filters to show/hide appropriately
+    filterTasks();
+}
+
+// Filter tasks
+function filterTasks() {
+    const cards = document.querySelectorAll('.task-card');
+
+    cards.forEach(card => {
+        const priority = card.dataset.priority;
+        const area = card.dataset.area;
+        const searchText = card.dataset.search;
+
+        const priorityMatch = currentFilters.priority === 'all' || priority === currentFilters.priority;
+        const areaMatch = currentFilters.area === 'all' || area === currentFilters.area;
+        const searchMatch = searchQuery === '' || searchText.includes(searchQuery.toLowerCase());
+
+        if (priorityMatch && areaMatch && searchMatch) {
+            card.style.display = 'block';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+// Toggle sort mode
+function toggleSortMode() {
+    sortMode = !sortMode;
+    const button = document.getElementById('sortModeText');
+    const taskGrid = document.getElementById('taskGrid');
+
+    if (sortMode) {
+        button.textContent = '🔒 -Drag';
+        taskGrid.classList.add('sortable-enabled');
+
+        sortable = Sortable.create(taskGrid, {
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            handle: '.drag-handle',
+            onEnd: function(evt) {
+                updateOrderAfterDrag();
+            }
+        });
+    } else {
+        button.textContent = '🔄 +Drag';
+        taskGrid.classList.remove('sortable-enabled');
+        if (sortable) {
+            sortable.destroy();
+            sortable = null;
+        }
+    }
+}
+
+// Update order after drag
+function updateOrderAfterDrag() {
+    const cards = Array.from(document.querySelectorAll('.task-card:not([style*="display: none"])'));
+    cards.forEach((card, index) => {
+        card.dataset.order = index + 1;
+        const orderBadge = card.querySelector('.order-badge');
+        if (orderBadge) {
+            orderBadge.textContent = 'Order: ' + (index + 1);
+        }
+    });
+}
+
+// Save sort order
+function saveSortOrder() {
+    if (!sortMode) {
+        showToast('Enable drag & drop mode first to reorder tasks', true);
+        return;
+    }
+
+    const allCards = Array.from(document.querySelectorAll('.task-card'));
+    const visibleCards = allCards.filter(card => card.style.display !== 'none');
+
+    const orders = visibleCards.map((card, index) => ({
+        id: parseInt(card.dataset.id),
+        order: index + 1
+    }));
+
+    $.ajax({
+        url: '',
+        method: 'POST',
+        data: {
+            action: 'bulk_reorder',
+            orders: JSON.stringify(orders)
+        },
+        dataType: 'json',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        success: function(response) {
+            if (response.success) {
+                showToast('Task order saved successfully!');
+                updateLastUpdated();
+                updateStats();
+                
+                // Update taskData array
+                orders.forEach(orderItem => {
+                    const task = taskData.find(t => t.id === orderItem.id);
+                    if (task) {
+                        task.order = orderItem.order;
                     }
                 });
             } else {
-                button.textContent = '🔄 +Drag';
-                taskGrid.classList.remove('sortable-enabled');
-                if (sortable) {
-                    sortable.destroy();
-                    sortable = null;
-                }
+                showToast('Failed to save order: ' + (response.error || 'Unknown error'), true);
             }
+        },
+        error: function(xhr) {
+            console.error('Save order failed:', xhr.responseText);
+            showToast('Failed to save order. Check console for details.', true);
         }
+    });
+}
 
-        function updateOrderAfterDrag() {
-            const cards = Array.from(document.querySelectorAll('.task-card:not([style*="display: none"])'));
-            cards.forEach((card, index) => {
-                card.dataset.order = index + 1;
-                const orderBadge = card.querySelector('.order-badge');
-                if (orderBadge) {
-                    orderBadge.textContent = 'Order: ' + (index + 1);
-                }
-            });
-        }
+// Open create modal
+function openCreateModal() {
+    document.getElementById('modalTitle').textContent = 'Add New Task';
+    document.getElementById('taskAction').value = 'create';
+    document.getElementById('taskForm').reset();
+    document.getElementById('taskId').value = '';
+    document.getElementById('taskOrder').value = Math.max(...taskData.map(t => t.order), 0) + 1;
+    document.getElementById('taskModal').style.display = 'block';
+}
 
-        function saveSortOrder() {
-            if (!sortMode) {
-                alert('Enable drag & drop mode first to reorder tasks');
-                return;
-            }
+// Edit task
+function editTask(id) {
+    const task = taskData.find(t => t.id == id);
+    if (!task) return;
 
-            // Get ALL visible cards in their current order
-            const allCards = Array.from(document.querySelectorAll('.task-card'));
-            const visibleCards = allCards.filter(card => card.style.display !== 'none');
+    document.getElementById('modalTitle').textContent = 'Edit Task';
+    document.getElementById('taskAction').value = 'update';
+    document.getElementById('taskId').value = task.id;
+    document.getElementById('taskName').value = task.title;
+    document.getElementById('taskDescription').value = task.description;
+    document.getElementById('taskOrder').value = task.order;
+    document.getElementById('taskStatus').value = task.status;
+    document.getElementById('taskModal').style.display = 'block';
+}
 
-            // Create the new order array with the dragged items
-            const orders = visibleCards.map((card, index) => ({
-                id: parseInt(card.dataset.id),
-                order: index + 1
-            }));
+// Delete task
+function deleteTask(id) {
+    const task = taskData.find(t => t.id == id);
+    if (!task) return;
 
-            console.log('Saving order:', orders);
-
-            $.post('', {
-                action: 'bulk_reorder',
-                orders: JSON.stringify(orders)
-            }, function(response) {
+    if (confirm('Are you sure you want to delete "' + task.title + '"?')) {
+        const card = document.querySelector(`[data-id="${id}"]`);
+        if (card) card.classList.add('updating');
+        
+        $.ajax({
+            url: '',
+            method: 'POST',
+            data: {
+                action: 'delete',
+                id: id
+            },
+            dataType: 'json',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            success: function(response) {
                 if (response.success) {
-                    alert('Task order saved successfully!');
-                    location.reload();
+                    // Remove from DOM
+                    if (card) card.remove();
+                    
+                    // Remove from taskData
+                    taskData = taskData.filter(t => t.id !== id);
+                    
+                    showToast('Task deleted successfully');
+                    updateLastUpdated();
+                    updateStats();
                 } else {
-                    alert('Failed to save order: ' + (response.message || 'Unknown error'));
+                    if (card) card.classList.remove('updating');
+                    showToast('Failed to delete task: ' + (response.error || 'Unknown error'), true);
                 }
-            }, 'json').fail(function(xhr) {
-                console.error('Save order failed:', xhr.responseText);
-                alert('Failed to save order. Check console for details.');
-            });
-        }
-
-        function openCreateModal() {
-            document.getElementById('modalTitle').textContent = 'Add New Task';
-            document.getElementById('taskAction').value = 'create';
-            document.getElementById('taskForm').reset();
-            document.getElementById('taskId').value = '';
-            document.getElementById('taskOrder').value = Math.max(...taskData.map(t => t.order)) + 1;
-            document.getElementById('taskModal').style.display = 'block';
-        }
-
-        function editTask(id) {
-            const task = taskData.find(t => t.id == id);
-            if (!task) return;
-
-            document.getElementById('modalTitle').textContent = 'Edit Task';
-            document.getElementById('taskAction').value = 'update';
-            document.getElementById('taskId').value = task.id;
-            document.getElementById('taskName').value = task.title;
-            document.getElementById('taskDescription').value = task.description;
-            document.getElementById('taskOrder').value = task.order;
-            document.getElementById('taskStatus').value = task.status;
-            document.getElementById('taskModal').style.display = 'block';
-        }
-
-        function deleteTask(id) {
-            const task = taskData.find(t => t.id == id);
-            if (!task) return;
-
-            if (confirm('Are you sure you want to delete "' + task.title + '"?')) {
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.innerHTML = '<input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="' + id + '">';
-                document.body.appendChild(form);
-                form.submit();
+            },
+            error: function(xhr) {
+                if (card) card.classList.remove('updating');
+                console.error('Delete failed:', xhr.responseText);
+                showToast('Failed to delete task. Check console for details.', true);
             }
-        }
+        });
+    }
+}
 
-        function closeModal() {
-            document.getElementById('taskModal').style.display = 'none';
-        }
+// Close modal
+function closeModal() {
+    document.getElementById('taskModal').style.display = 'none';
+}
 
-        function showLoading(buttonId) {
-            const btn = document.getElementById(buttonId);
-            const textSpan = btn.querySelector('.btn-text');
-            const originalText = textSpan.textContent;
-            textSpan.innerHTML = '<span class="loading">⟳</span> Processing...';
-            btn.disabled = true;
-            return originalText;
-        }
-
-        function hideLoading(buttonId, originalText) {
-            const btn = document.getElementById(buttonId);
-            const textSpan = btn.querySelector('.btn-text');
-            textSpan.textContent = originalText;
-            btn.disabled = false;
-        }
-
-        function showAnalysisPanel(content) {
-            const panel = document.getElementById('analysisPanel');
-            const contentDiv = document.getElementById('analysisContent');
-            contentDiv.innerHTML = content;
-            panel.style.display = 'block';
-            panel.scrollIntoView({ behavior: 'smooth' });
-        }
-
-        // Enhanced AJAX request function with debugging
-        function makeAjaxRequest(action, extraData = {}) {
-            console.log('Making AJAX request:', { action, extraData });
-
-            const postData = { action, ...extraData };
-            console.log('POST data:', postData);
-
-            return $.ajax({
-                url: 'todo_prioritizer_ajax.php',
-                method: 'POST',
-                data: postData,
-                dataType: 'json',
-                timeout: 30000, // 30 second timeout
-                beforeSend: function(xhr) {
-                    console.log('AJAX request starting...');
-                }
-            }).done(function(response, textStatus, xhr) {
-                console.log('AJAX success:', {
-                    response,
-                    textStatus,
-                    status: xhr.status,
-                    headers: xhr.getAllResponseHeaders()
-                });
-                return response;
-            }).fail(function(xhr, textStatus, errorThrown) {
-                console.error('AJAX failed:', {
-                    status: xhr.status,
-                    statusText: xhr.statusText,
-                    responseText: xhr.responseText,
-                    textStatus,
-                    errorThrown,
-                    headers: xhr.getAllResponseHeaders()
-                });
-
-                // Try to parse error response
-                try {
-                    const errorResponse = JSON.parse(xhr.responseText);
-                    console.error('Parsed error response:', errorResponse);
-                } catch (e) {
-                    console.error('Could not parse error response as JSON');
-                }
-
-                throw new Error(`AJAX failed: ${textStatus} - ${errorThrown}`);
-            });
-        }
-
-        function testConnection() {
-            console.log('Testing connection...');
-
-            makeAjaxRequest('test_connection')
-                .then(function(response) {
-                    console.log('Connection test successful:', response);
-                    alert('Connection test successful! ' + response.message);
-                })
-                .catch(function(error) {
-                    console.error('Connection test failed:', error);
-                    alert('Connection test failed: ' + error.message);
-                });
-        }
-
-        // AI Functions - keeping only the main analyze function
-        function analyzeTasks() {
-            const originalText = showLoading('analyzeBtn');
-            console.log('Starting task analysis...');
-
-            makeAjaxRequest('analyze_tasks')
-                .then(function(response) {
-                    console.log('Task analysis response:', response);
-                    hideLoading('analyzeBtn', originalText);
-
-                    if (response.error) {
-                        console.error('Analysis error:', response.error);
-                        alert('Error: ' + response.error);
-                        return;
+// Handle form submission
+document.getElementById('taskForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const data = {};
+    formData.forEach((value, key) => data[key] = value);
+    
+    const isCreate = data.action === 'create';
+    const submitBtn = this.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving...';
+    
+    $.ajax({
+        url: '',
+        method: 'POST',
+        data: data,
+        dataType: 'json',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        success: function(response) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Save Task';
+            
+            if (response.success) {
+                closeModal();
+                showToast(response.message);
+                updateLastUpdated();
+                
+                const task = response.task;
+                const processedTask = {
+                    id: task.id,
+                    title: task.name,
+                    description: task.description || '',
+                    priority: getPriorityLevel(task.order),
+                    area: guessArea(task.name, task.description),
+                    order: task.order,
+                    status: task.status,
+                    created_at: task.created_at,
+                    regenerate_images: task.regenerate_images || 0
+                };
+                
+                if (isCreate) {
+                    // Add new task to DOM in correct position
+                    taskData.push(processedTask);
+                    insertTaskInOrder(processedTask);
+                } else {
+                    // Update taskData first
+                    const index = taskData.findIndex(t => t.id === task.id);
+                    if (index !== -1) {
+                        taskData[index] = processedTask;
                     }
-
-                    let html = '<div class="suggestion-item">';
-                    html += '<h5>AI Analysis:</h5>';
-                    html += '<p>' + (response.analysis || 'Analysis completed') + '</p>';
-                    html += '</div>';
-
-                    if (response.suggestions && response.suggestions.length > 0) {
-                        console.log('Found suggestions:', response.suggestions);
-                        html += '<h5>Suggested Priority Changes:</h5>';
-                        response.suggestions.forEach(function(suggestion) {
-                            html += '<div class="suggestion-item">';
-                            html += '<strong>Task ID ' + suggestion.id + '</strong><br>';
-                            html += 'Current Order: ' + suggestion.current_order + ' → Suggested: ' + suggestion.new_order + '<br>';
-                            html += '<em>' + suggestion.reason + '</em>';
-                            html += '</div>';
-                        });
-
-                        html += '<button class="btn" onclick="applySuggestions(' + JSON.stringify(response.suggestions).replace(/"/g, '&quot;') + ')">Apply All Suggestions</button>';
-                    } else {
-                        console.log('No suggestions found');
+                    
+                    // Remove old card
+                    const oldCard = document.querySelector(`[data-id="${task.id}"]`);
+                    if (oldCard) {
+                        oldCard.remove();
                     }
-
-                    showAnalysisPanel(html);
-                })
-                .catch(function(error) {
-                    console.error('Analysis failed:', error);
-                    hideLoading('analyzeBtn', originalText);
-                    alert('Analysis failed: ' + error.message);
-                });
+                    
+                    // Insert updated card in correct position
+                    insertTaskInOrder(processedTask);
+                }
+                
+                updateStats();
+                filterTasks();
+            } else {
+                showToast('Failed to save task: ' + (response.error || 'Unknown error'), true);
+            }
+        },
+        error: function(xhr) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Save Task';
+            console.error('Save failed:', xhr.responseText);
+            showToast('Failed to save task. Check console for details.', true);
         }
+    });
+});
 
-        function applySuggestions(suggestions) {
-            if (!confirm('Apply all suggested priority changes? This will update your database.')) {
+// Show loading
+function showLoading(buttonId) {
+    const btn = document.getElementById(buttonId);
+    const textSpan = btn.querySelector('.btn-text');
+    const originalText = textSpan.textContent;
+    textSpan.innerHTML = '<span class="loading">⟳</span> Processing...';
+    btn.disabled = true;
+    return originalText;
+}
+
+// Hide loading
+function hideLoading(buttonId, originalText) {
+    const btn = document.getElementById(buttonId);
+    const textSpan = btn.querySelector('.btn-text');
+    textSpan.textContent = originalText;
+    btn.disabled = false;
+}
+
+// Show analysis panel
+function showAnalysisPanel(content) {
+    const panel = document.getElementById('analysisPanel');
+    const contentDiv = document.getElementById('analysisContent');
+    contentDiv.innerHTML = content;
+    panel.style.display = 'block';
+    panel.scrollIntoView({ behavior: 'smooth' });
+}
+
+// Make AJAX request
+function makeAjaxRequest(action, extraData = {}) {
+    console.log('Making AJAX request:', { action, extraData });
+
+    const postData = { action, ...extraData };
+
+    return $.ajax({
+        url: 'todo_prioritizer_ajax.php',
+        method: 'POST',
+        data: postData,
+        dataType: 'json',
+        timeout: 300000
+    });
+}
+
+// Analyze tasks
+function analyzeTasks() {
+    const originalText = showLoading('analyzeBtn');
+    const selectedModel = document.getElementById('modelSelect').value;
+    
+    makeAjaxRequest('analyze_tasks', { model: selectedModel })
+        .then(function(response) {
+            hideLoading('analyzeBtn', originalText);
+
+            if (response.error) {
+                showToast('Error: ' + response.error, true);
                 return;
             }
 
-            $.post('todo_prioritizer_ajax.php', {
-                action: 'apply_suggestions',
-                suggestions: JSON.stringify(suggestions)
-            }, function(response) {
-                if (response.error) {
-                    alert('Error: ' + response.error);
-                    return;
-                }
+            let html = '<div class="suggestion-item">';
+            html += '<h5>AI Analysis:</h5>';
+            html += '<p>' + (response.analysis || 'Analysis completed') + '</p>';
+            html += '</div>';
 
-                alert('Applied ' + response.applied + ' of ' + response.total + ' suggestions. Refreshing page...');
-                location.reload();
-            }, 'json').fail(function() {
-                alert('Request failed. Please try again.');
-            });
-        }
-
-        // Legacy AI functions using the original simple AJAX calls
-        function findBlockingTasks() {
-            const originalText = showLoading('blockingBtn');
-
-            $.post('todo_prioritizer_ajax.php', {
-                action: 'identify_blocking'
-            }, function(response) {
-                hideLoading('blockingBtn', originalText);
-
-                if (response.error) {
-                    alert('Error: ' + response.error);
-                    return;
-                }
-
-                // Clear previous AI highlighting
-                document.querySelectorAll('.task-card').forEach(card => {
-                    card.classList.remove('ai-suggested');
-                    const aiBadge = card.querySelector('.ai-badge');
-                    if (aiBadge) aiBadge.remove();
+            if (response.suggestions && response.suggestions.length > 0) {
+                html += '<h5>Suggested Priority Changes:</h5>';
+                html += '<div class="suggestion-item">';
+                html += '<label><input type="checkbox" id="checkAllSuggestions" onchange="toggleAllSuggestions(this.checked)"> <strong>Check All</strong></label>';
+                html += '</div>';
+                
+                response.suggestions.forEach(function(suggestion, index) {
+                    // Store suggestion in a global array instead of in the DOM
+                    if (!window.aiSuggestions) window.aiSuggestions = [];
+                    window.aiSuggestions[index] = suggestion;
+                    
+                    html += '<div class="suggestion-item">';
+                    html += '<label>';
+                    html += '<input type="checkbox" class="suggestion-checkbox" data-suggestion-index="' + index + '" checked> ';
+                    html += '<strong>Task ID ' + suggestion.id + '</strong><br>';
+                    html += '</label>';
+                    html += 'Current Order: ' + suggestion.current_order + ' → Suggested: ' + suggestion.new_order + '<br>';
+                    html += '<em>' + suggestion.reason + '</em>';
+                    html += '</div>';
                 });
 
-                let html = '<div class="suggestion-item blocking">';
-                html += '<h5>Blocking Tasks Identified:</h5>';
-                html += '<p>' + (response.reason || 'Analysis completed') + '</p>';
+                html += '<button class="btn" onclick="applySelectedSuggestions()">Apply Selected Suggestions</button>';
+            }
 
-                if (response.blocking_tasks && response.blocking_tasks.length > 0) {
-                    html += '<p>Blocking task IDs: ' + response.blocking_tasks.join(', ') + '</p>';
+            showAnalysisPanel(html);
+        })
+        .catch(function(error) {
+            hideLoading('analyzeBtn', originalText);
+            showToast('Analysis failed: ' + error.message, true);
+        });
+}
 
-                    // Highlight blocking tasks
-                    response.blocking_tasks.forEach(function(taskId) {
-                        const card = document.querySelector('[data-id="' + taskId + '"]');
-                        if (card) {
-                            card.classList.add('ai-suggested');
-                            const meta = card.querySelector('.task-meta');
-                            const badge = document.createElement('span');
-                            badge.className = 'task-badge ai-badge';
-                            badge.textContent = 'BLOCKING';
-                            meta.appendChild(badge);
-                        }
-                    });
-                } else {
-                    html += '<p>No blocking tasks identified.</p>';
-                }
+// Toggle all suggestions
+function toggleAllSuggestions(checked) {
+    document.querySelectorAll('.suggestion-checkbox').forEach(function(checkbox) {
+        checkbox.checked = checked;
+    });
+}
 
-                html += '</div>';
-                showAnalysisPanel(html);
-            }, 'json').fail(function() {
-                hideLoading('blockingBtn', originalText);
-                alert('Request failed. Please try again.');
-            });
+// Apply selected suggestions
+function applySelectedSuggestions() {
+    const selectedSuggestions = [];
+    document.querySelectorAll('.suggestion-checkbox:checked').forEach(function(checkbox) {
+        const index = parseInt(checkbox.dataset.suggestionIndex);
+        if (window.aiSuggestions && window.aiSuggestions[index]) {
+            selectedSuggestions.push(window.aiSuggestions[index]);
+        }
+    });
+    
+    if (selectedSuggestions.length === 0) {
+        showToast('Please select at least one suggestion to apply.', true);
+        return;
+    }
+    
+    if (!confirm('Apply ' + selectedSuggestions.length + ' selected priority changes? This will update your database.')) {
+        return;
+    }
+
+    $.post('todo_prioritizer_ajax.php', {
+        action: 'apply_suggestions',
+        suggestions: JSON.stringify(selectedSuggestions)
+    }, function(response) {
+        if (response.error) {
+            showToast('Error: ' + response.error, true);
+            return;
         }
 
-        function suggestNextTasks() {
-            const originalText = showLoading('nextTasksBtn');
+        showToast('Applied ' + response.applied + ' of ' + response.total + ' suggestions. Reloading...');
+        setTimeout(() => location.reload(), 1500);
+    }, 'json').fail(function() {
+        showToast('Request failed. Please try again.', true);
+    });
+}
 
-            $.post('todo_prioritizer_ajax.php', {
-                action: 'suggest_next',
-                count: 5
-            }, function(response) {
-                hideLoading('nextTasksBtn', originalText);
-
-                if (response.error) {
-                    alert('Error: ' + response.error);
-                    return;
-                }
-
-                // Clear previous AI highlighting
-                document.querySelectorAll('.task-card').forEach(card => {
-                    card.classList.remove('ai-suggested');
-                    const aiBadge = card.querySelector('.ai-badge');
-                    if (aiBadge) aiBadge.remove();
+// Load models
+function loadModels() {
+    makeAjaxRequest('get_models')
+        .then(function(response) {
+            const select = document.getElementById('modelSelect');
+            select.innerHTML = '';
+            
+            if (response.models) {
+                Object.keys(response.models).forEach(function(groupName) {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = groupName;
+                    
+                    response.models[groupName].forEach(function(model) {
+                        const option = document.createElement('option');
+                        option.value = model.id;
+                        option.textContent = model.name;
+                        
+                        if (model.id === response.default_model) {
+                            option.selected = true;
+                        }
+                        
+                        optgroup.appendChild(option);
+                    });
+                    
+                    select.appendChild(optgroup);
                 });
-
-                let html = '<div class="suggestion-item">';
-                html += '<h5>AI Recommended Next Tasks:</h5>';
-
-                if (response.suggested_tasks && response.suggested_tasks.length > 0) {
-                    response.suggested_tasks.forEach(function(task) {
-                        html += '<div class="suggestion-item">';
-                        html += '<strong>' + task.title + '</strong><br>';
-                        html += '<em>' + task.reason + '</em>';
-                        html += '</div>';
-
-                        // Highlight suggested tasks
-                        const card = document.querySelector('[data-id="' + task.id + '"]');
-                        if (card) {
-                            card.classList.add('ai-suggested');
-                            const meta = card.querySelector('.task-meta');
-                            const badge = document.createElement('span');
-                            badge.className = 'task-badge ai-badge';
-                            badge.textContent = 'SUGGESTED';
-                            meta.appendChild(badge);
-                        }
-                    });
-                } else {
-                    html += '<p>No task suggestions available.</p>';
-                }
-
-                html += '</div>';
-                showAnalysisPanel(html);
-            }, 'json').fail(function() {
-                hideLoading('nextTasksBtn', originalText);
-                alert('Request failed. Please try again.');
-            });
-        }
-
-        function showImmediate() {
-            const originalText = showLoading('immediateBtn');
-
-            $.post('todo_prioritizer_ajax.php', {
-                action: 'get_immediate'
-            }, function(response) {
-                hideLoading('immediateBtn', originalText);
-
-                if (response.error) {
-                    alert('Error: ' + response.error);
-                    return;
-                }
-
-                let html = '<div class="suggestion-item">';
-                html += '<h5>Critical Tasks (Order 1-10):</h5>';
-
-                if (response.tasks && response.tasks.length > 0) {
-                    response.tasks.forEach(function(task) {
-                        html += '<div class="suggestion-item">';
-                        html += '<strong>Order ' + task.order + ': ' + task.name + '</strong><br>';
-                        if (task.description) {
-                            html += '<em>' + task.description.substring(0, 100) + '...</em>';
-                        }
-                        html += '</div>';
-                    });
-                } else {
-                    html += '<p>No critical tasks found.</p>';
-                }
-
-                html += '</div>';
-                showAnalysisPanel(html);
-            }, 'json').fail(function() {
-                hideLoading('immediateBtn', originalText);
-                alert('Request failed. Please try again.');
-            });
-        }
-
-        // Setup filters
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const filterType = btn.dataset.filter;
-                const filterValue = btn.dataset.value;
-
-                // Update active state
-                document.querySelectorAll(`[data-filter="${filterType}"]`).forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-
-                // Update filters
-                currentFilters[filterType] = filterValue;
-                filterTasks();
-            });
-        });
-
-        // Setup search
-        document.getElementById('searchBox').addEventListener('input', (e) => {
-            searchQuery = e.target.value;
-            filterTasks();
-        });
-
-        // Close modal when clicking outside
-        window.onclick = function(event) {
-            const modal = document.getElementById('taskModal');
-            if (event.target == modal) {
-                closeModal();
             }
-        }
-
-        // Close modal on Escape key
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape') {
-                closeModal();
-            }
+        })
+        .catch(function(error) {
+            console.error('Failed to load models:', error);
+            document.getElementById('modelSelect').innerHTML = '<option value="">Error loading models</option>';
         });
+}
 
-        // Add debugging and connection test functionality
-        console.log('Debug JavaScript loaded successfully');
+// Setup filters
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const filterType = btn.dataset.filter;
+        const filterValue = btn.dataset.value;
 
-        // Test basic functionality on page load
-        $(document).ready(function() {
-            console.log('Page ready, task management system initialized');
-            console.log('Available tasks:', taskData.length);
-            // Uncomment the next line to test connection immediately on page load
-            // testConnection();
-        });
+        document.querySelectorAll(`[data-filter="${filterType}"]`).forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        currentFilters[filterType] = filterValue;
+        filterTasks();
+    });
+});
+
+// Setup search
+document.getElementById('searchBox').addEventListener('input', (e) => {
+    searchQuery = e.target.value;
+    filterTasks();
+});
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('taskModal');
+    if (event.target == modal) {
+        closeModal();
+    }
+}
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeModal();
+    }
+});
+
+// Initialize on page load
+$(document).ready(function() {
+    console.log('Page ready, task management system initialized');
+    console.log('Available tasks:', taskData.length);
+    loadModels();
+});
+</script>
+
+
+<script>
+window.addEventListener('DOMContentLoaded', () => {
+    const preloadId = <?= (int)($_GET['id'] ?? 0) ?>;
+    if (preloadId > 0) {
+        editTask(preloadId);
+    }
+});
 </script>
 
 
 </body>
 </html>
-

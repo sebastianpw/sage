@@ -278,6 +278,80 @@ class KaggleService
     // REMOTE KERNELS (migrated to use KaggleAPI)
     // =============================================================================
 
+
+    public function listRemoteKernels(string $username)
+    {
+        // request more than 1 result (null = no limit)
+        $res = $this->kaggleClient->listKernels(null, false, $username, null, null, null, 'hotness', null);
+
+        if ($res === false) {
+            return ['__error' => $this->kaggleClient->getLastError(), 'cmd' => 'API: /kaggle/kernels/list', 'hint' => 'Check if PyAPI server is running at ' . $this->apiBaseUrl];
+        }
+
+        if (!isset($res['status']) || $res['status'] !== 'success') {
+            return ['__error' => 'Unexpected API status', 'raw' => $res, 'cmd' => 'API: /kaggle/kernels/list'];
+        }
+
+        $csvData = $res['data'] ?? '';
+        if (trim($csvData) === '') {
+            // nothing returned
+            return [];
+        }
+
+        // Normalize line endings and split
+        $lines = preg_split("/\r\n|\n|\r/", $csvData);
+
+        // Clean: remove empty lines and separator lines like "------" or "======" possibly separated by commas
+        $cleanLines = [];
+        foreach ($lines as $line) {
+            $trim = trim($line, " \t\n\r\0\x0B\xEF\xBB\xBF"); // also trim BOM
+            if ($trim === '') continue;
+            // skip rows that are just dashes/equals or dashes separated by commas
+            if (preg_match('/^[-=]{2,}(?:\s*[,;]\s*[-=]{2,})*$/', $trim)) continue;
+            $cleanLines[] = $line;
+        }
+
+        if (count($cleanLines) <= 1) {
+            // only header (or nothing) after cleaning -> no kernels
+            return [];
+        }
+
+        // Feed cleaned content into fgetcsv
+        $stream = fopen('php://temp', 'r+');
+        fwrite($stream, implode("\n", $cleanLines));
+        rewind($stream);
+
+        $headers = null;
+        $items = [];
+        while (($row = fgetcsv($stream, 0, ",", '"', "\\")) !== false) {
+            if ($headers === null) {
+                $headers = $row;
+                continue;
+            }
+            if ($row === [null] || count($row) === 0) continue;
+
+            // skip rows where the first column is empty or contains only dashes (safety)
+            $first = isset($row[0]) ? trim((string)$row[0]) : '';
+            if ($first === '' || preg_match('/^[-\s]+$/', $first)) continue;
+
+            $item = [];
+            foreach ($row as $k => $v) {
+                $key = $headers[$k] ?? $k;
+                $item[$key] = $v;
+            }
+            $items[] = $item;
+        }
+        fclose($stream);
+
+        if (empty($items)) {
+            // fallback: return raw cleaned csv so you can inspect it in the UI/logs
+            return ['__raw_cleaned' => implode("\n", $cleanLines), 'cmd' => 'API: /kaggle/kernels/list'];
+        }
+
+        return $items;
+    }
+
+/*
     public function listRemoteKernels(string $username)
     {
         // Use the API client which mirrors the CLI parameters
@@ -327,6 +401,8 @@ class KaggleService
             'hint' => 'Check PyAPI server logs'
         ];
     }
+ */
+
 
     public function pushAndRunKernelFolder(string $folderPath): array
     {

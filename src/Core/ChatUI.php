@@ -476,7 +476,7 @@ CSS;
     {
         // Build model options from AIProvider catalog
         $catalog = \App\Core\AIProvider::getModelCatalog();
-        $defaultModel = 'groq/compound';
+        $defaultModel = \App\Core\AIProvider::DEFAULT_MODEL;
         $modelOptionsHtml = '';
         foreach ($catalog as $groupLabel => $models) {
             $modelOptionsHtml .= '<optgroup label="' . htmlspecialchars($groupLabel, ENT_QUOTES) . "\">\n";
@@ -1056,21 +1056,26 @@ if (userInput) {
 }
 
 
-/*
-  
-  // Textarea: auto-expand on input
-  if (userInput) {
-    userInput.addEventListener('input', autoExpandTextarea);
-    
-    // Enter to send, Shift+Enter for new line
-    userInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-      }
-    });
-}
- */
+
+
+
+
+
+
+// Close sidebar on mobile when clicking outside
+document.addEventListener('click', (e) => {
+    if (window.innerWidth <= 920 && sidebar.classList.contains('mobile-open')) {
+        const isClickInsideSidebar = sidebar.contains(e.target);
+        const isClickOnToggle = mobileToggle.contains(e.target);
+        
+        if (!isClickInsideSidebar && !isClickOnToggle) {
+            sidebar.classList.remove('mobile-open');
+        }
+    }
+});
+
+
+
 
 
 
@@ -1155,21 +1160,6 @@ function flashMessage(msg, color = null) {
 
 
 
-/*
-    function flashMessage(msg, color = '#e6ffea') {
-  const origBg = msg.style.background;
-  // immediate visual feedback
-  msg.style.transition = 'background 120ms ease';
-  msg.style.background = color;
-  // revert after short delay
-  setTimeout(() => {
-    msg.style.background = origBg || '';
-    // clear transition after a small delay so future flashes aren't affected
-    setTimeout(() => { msg.style.transition = ''; }, 180);
-  }, 260);
-    }
-
- */
 
 
 // desktop dblclick
@@ -1218,57 +1208,6 @@ messagesDiv.addEventListener('touchend', async (ev) => {
   }
 });
 
-
-
-    /*
-
-    function flashMessage(msg) {
-      const origBg = msg.style.background;
-      msg.style.transition = 'background 180ms ease';
-      msg.style.background = '#e6ffea';
-      setTimeout(() => { 
-        msg.style.background = origBg || ''; 
-        setTimeout(() => { msg.style.transition = ''; }, 200); 
-      }, 420);
-  }
-     
-
-    // desktop dblclick
-    messagesDiv.addEventListener('dblclick', async (ev) => {
-      const msg = ev.target.closest && ev.target.closest('.message');
-      if (!msg) return;
-      const txt = extractTextFromMessage(msg);
-      const ok = await copyText(txt);
-      if (ok) {
-        flashMessage(msg);
-        console.log('Copied to clipboard');
-      } else {
-        console.log('Copy failed');
-      }
-    });
-
-    // mobile double-tap
-    messagesDiv.addEventListener('touchend', async (ev) => {
-      const now = Date.now();
-      const target = ev.target.closest && ev.target.closest('.message');
-      if (!target) { lastTouch = now; return; }
-
-      const delta = now - lastTouch;
-      lastTouch = now;
-      if (delta > 40 && delta < 350) {
-        ev.preventDefault();
-        const txt = extractTextFromMessage(target);
-        const ok = await copyText(txt);
-        if (ok) {
-          flashMessage(target);
-          console.log('Copied to clipboard');
-        } else {
-          console.log('Copy failed');
-        }
-      }
-  });
-
-     */
 
 
 

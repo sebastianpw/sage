@@ -649,7 +649,7 @@ window.assignControlNetMap = window.assignControlNetMap || (async function(entit
         return;
     }
 
-    if (!targetEntity || !['characters','generatives'].includes(targetEntity)) {
+    if (!targetEntity || !['characters','generatives','sketches'].includes(targetEntity)) {
         Toast.show('Invalid target entity.', 'error');
         return;
     }
@@ -836,7 +836,14 @@ function attachGearTo(context) {
             const $wrapper = $(this).closest('.img-wrapper');
             window.assignControlNetMap($wrapper.data('entity'), $wrapper.data('entity-id'), $wrapper.data('frame-id'), 'generatives');
         }
-},
+    },
+    {
+        label: 'Assign2Sketch',
+        onClick: function() {
+            const $wrapper = $(this).closest('.img-wrapper');
+            window.assignControlNetMap($wrapper.data('entity'), $wrapper.data('entity-id'), $wrapper.data('frame-id'), 'sketches');
+        }
+    },
 
 <?php } ?>
 

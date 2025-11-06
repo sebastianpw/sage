@@ -10,6 +10,41 @@ $em = $spw->getEntityManager();
 $repo = $em->getRepository(GeneratorConfig::class);
 $userId = $_SESSION['user_id'] ?? null;
 $generators = $userId ? $repo->findBy(['userId' => $userId, 'active' => true], ['title' => 'ASC']) : [];
+
+// --- DYNAMIC LAB MENU ---
+
+// Master list of entity icons
+$entityIcons = [
+    'characters'      => '🦸',
+//    'character_poses' => '🤸',
+    'animas'          => '🐾',
+    'locations'       => '🗺️',
+    'backgrounds'     => '🏞️',
+    'artifacts'       => '🏺',
+    'vehicles'        => '🛸',
+//    'scene_parts'     => '🎬',
+//    'controlnet_maps' => '☠️', 
+//    'spawns'          => '🌱',
+    'generatives'     => '⚡',
+    'sketches'        => '🪄',
+//    'prompt_matrix_blueprints' => '🌌',
+    'composites'      => '🧩',
+//    'pastebin'        => '📋',
+//    'sage_todos'      => '🎫',
+//    'meta_entities'   => '📦'
+];
+
+// Dynamically build the lab menu entities from the master list
+$labEntities = [];
+foreach ($entityIcons as $type => $icon) {
+    // Create a user-friendly name from the entity type string
+    $name = ucwords(str_replace('_', ' ', $type));
+    $labEntities[] = [
+        'type' => $type,
+        'name' => $name,
+        'icon' => $icon,
+    ];
+}
 ?>
 
 <!-- Floating Toolbar -->
@@ -22,7 +57,8 @@ $generators = $userId ? $repo->findBy(['userId' => $userId, 'active' => true], [
         <button data-action="open-regen">♻️</button>
         <button data-action="open-chat">💬</button>
         <button data-action="open-generators">⚗️</button>
-        <button data-action="open-other">⚙️</button>
+        <button data-action="open-lab">💫</button>
+        <button data-action="open-other">🌀</button>
         <button data-action="open-logs">📓️</button>
     </div>
 </div>
@@ -65,6 +101,19 @@ $generators = $userId ? $repo->findBy(['userId' => $userId, 'active' => true], [
     <?php endif; ?>
 </div>
 
+<!-- Lab flyout menu -->
+<div id="floatoolLabMenu" class="floatool-gear-menu" style="display:none;">
+    <a style="border-bottom: 1px solid #ddd;font-weight:bold;pointer-events:none;background:#f8f9fa" href="#">💫 Quick Forms</a>
+    <?php foreach ($labEntities as $entity): ?>
+        <a href="#" 
+           class="lab-entity-link" 
+           data-entity-type="<?= htmlspecialchars($entity['type']) ?>"
+           onclick="openEntityForm(this); return false;">
+            <?= htmlspecialchars($entity['icon']) ?> <?= htmlspecialchars($entity['name']) ?>
+        </a>
+    <?php endforeach; ?>
+</div>
+
 <!-- Generator Dialog Modal -->
 <div id="generatorDialogOverlay" class="generator-dialog-overlay" style="display:none;">
     <div class="generator-dialog">
@@ -95,13 +144,6 @@ $generators = $userId ? $repo->findBy(['userId' => $userId, 'active' => true], [
         </div>
     </div>
 </div>
-
-<?php /*
-<!-- Mobile: Generator Quick Access Button -->
-<div id="mobileGeneratorButton" class="mobile-generator-button" style="display:none;">
-    <button onclick="showMobileGeneratorMenu()">⚡ Generate</button>
-</div>
-*/ ?>
 
 <style>
     #floatool {
@@ -463,13 +505,13 @@ $generators = $userId ? $repo->findBy(['userId' => $userId, 'active' => true], [
     }
 </style>
 
-
 <script>
 (function() {
     const floatool = document.getElementById('floatool');
     const handle = floatool.querySelector('.floatool-handle');
     const gearMenu = document.getElementById('floatoolGearMenu');
     const generatorMenu = document.getElementById('floatoolGeneratorMenu');
+    const labMenu = document.getElementById('floatoolLabMenu');
     const mobileGenButton = document.getElementById('mobileGeneratorButton');
     let isDragging = false, offsetX, offsetY;
     let currentTargetField = null;
@@ -501,16 +543,13 @@ $generators = $userId ? $repo->findBy(['userId' => $userId, 'active' => true], [
     handle.addEventListener('touchstart', startDrag, { passive: false });
 
     function startDrag(e){
-        e.preventDefault(); // Prevent text selection
-        isDragging = false; // Reset - we'll set to true only if actually dragging
-        
+        e.preventDefault();
+        isDragging = false;
         const rect = floatool.getBoundingClientRect();
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
         offsetX = clientX - rect.left;
         offsetY = clientY - rect.top;
-        
-        // Track initial position to detect if it's a click or drag
         window.floatoolDragStart = { x: clientX, y: clientY, time: Date.now() };
     }
 
@@ -519,21 +558,15 @@ $generators = $userId ? $repo->findBy(['userId' => $userId, 'active' => true], [
 
     function drag(e){
         if(!window.floatoolDragStart) return;
-        
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        
-        // Check if moved more than 5px - then it's a drag
         const dx = Math.abs(clientX - window.floatoolDragStart.x);
         const dy = Math.abs(clientY - window.floatoolDragStart.y);
-        
         if (dx > 5 || dy > 5) {
             isDragging = true;
             floatool.style.cursor = "grabbing";
         }
-        
         if(!isDragging) return;
-        
         e.preventDefault();
         const x = clientX - offsetX;
         const y = clientY - offsetY;
@@ -541,9 +574,9 @@ $generators = $userId ? $repo->findBy(['userId' => $userId, 'active' => true], [
         floatool.style.top = y + "px";
         floatool.style.right = "auto";
         floatool.style.bottom = "auto";
-
         if(gearMenu.style.display === 'flex') updateGearMenuPosition();
         if(generatorMenu.style.display === 'flex') updateGeneratorMenuPosition();
+        if(labMenu.style.display === 'flex') updateLabMenuPosition();
     }
 
     document.addEventListener('mouseup', endDrag);
@@ -551,15 +584,11 @@ $generators = $userId ? $repo->findBy(['userId' => $userId, 'active' => true], [
 
     function endDrag(e){
         if(!window.floatoolDragStart) return;
-        
         const wasDragging = isDragging;
         const dragTime = Date.now() - window.floatoolDragStart.time;
-        
-        // If we didn't drag (or dragged less than 5px and released quickly), treat as click
         if (!wasDragging && dragTime < 300) {
             toggleFloatool();
         }
-        
         if(wasDragging) {
             floatool.style.cursor = "grab";
             localStorage.setItem('spw-floatool-pos', JSON.stringify({
@@ -569,7 +598,6 @@ $generators = $userId ? $repo->findBy(['userId' => $userId, 'active' => true], [
                 bottom: floatool.style.bottom
             }));
         }
-        
         isDragging = false;
         window.floatoolDragStart = null;
     }
@@ -591,13 +619,12 @@ $generators = $userId ? $repo->findBy(['userId' => $userId, 'active' => true], [
                 window.location.href="regenerate_frames_set.php"
             else if(action==='open-styles') window.toggleStylesModal?.();
             else if(action==='open-logs') window.toggleLogsModal?.();
-
             else if(action==='open-chat') 
                 window.location.href='chat.php';
-
             else if(action==='open-generators') {
                 e.stopPropagation();
                 gearMenu.style.display = 'none';
+                labMenu.style.display = 'none';
                 if(generatorMenu.style.display === 'flex'){
                     generatorMenu.style.display = 'none';
                 } else {
@@ -605,9 +632,21 @@ $generators = $userId ? $repo->findBy(['userId' => $userId, 'active' => true], [
                     generatorMenu.style.display = 'flex';
                 }
             }
+            else if(action==='open-lab') {
+                e.stopPropagation();
+                gearMenu.style.display = 'none';
+                generatorMenu.style.display = 'none';
+                if(labMenu.style.display === 'flex'){
+                    labMenu.style.display = 'none';
+                } else {
+                    updateLabMenuPosition();
+                    labMenu.style.display = 'flex';
+                }
+            }
             else if(action==='open-other') {
                 e.stopPropagation();
                 generatorMenu.style.display = 'none';
+                labMenu.style.display = 'none';
                 if(gearMenu.style.display === 'flex'){
                     gearMenu.style.display = 'none';
                 } else {
@@ -621,17 +660,21 @@ $generators = $userId ? $repo->findBy(['userId' => $userId, 'active' => true], [
     document.addEventListener('click', () => {
         gearMenu.style.display='none';
         generatorMenu.style.display='none';
+        labMenu.style.display='none';
     });
     document.addEventListener('touchstart', (e) => {
         if (!e.target.closest('.floatool-gear-menu') && !e.target.closest('#floatool')) {
             gearMenu.style.display='none';
             generatorMenu.style.display='none';
+            labMenu.style.display='none';
         }
     });
     gearMenu.addEventListener('click', e=>e.stopPropagation());
     generatorMenu.addEventListener('click', e=>e.stopPropagation());
+    labMenu.addEventListener('click', e=>e.stopPropagation());
     gearMenu.addEventListener('touchstart', e=>e.stopPropagation());
     generatorMenu.addEventListener('touchstart', e=>e.stopPropagation());
+    labMenu.addEventListener('touchstart', e=>e.stopPropagation());
 
     function updateGearMenuPosition(){
         const rect = floatool.getBoundingClientRect();
@@ -660,6 +703,31 @@ $generators = $userId ? $repo->findBy(['userId' => $userId, 'active' => true], [
             generatorMenu.style.transform = 'none';
         }
     }
+    
+    function updateLabMenuPosition(){
+        const rect = floatool.getBoundingClientRect();
+        if (window.innerWidth <= 768) {
+            labMenu.style.left = '50%';
+            labMenu.style.transform = 'translateX(-50%)';
+            labMenu.style.bottom = '70px';
+            labMenu.style.top = 'auto';
+        } else {
+            labMenu.style.left = (rect.left + 100) + "px";
+            labMenu.style.top  = (rect.top - 20) + "px";
+            labMenu.style.transform = 'none';
+        }
+    }
+
+    window.openEntityForm = function(element) {
+        const entityType = element.getAttribute('data-entity-type');
+        if (!entityType) {
+            console.error('No data-entity-type attribute found on the element.');
+            return;
+        }
+        const url = `/entity_form.php?entity_type=${encodeURIComponent(entityType)}`;
+        labMenu.style.display = 'none';
+        window.location.href = url;
+    };
 
     document.addEventListener('focusin', (e) => {
         const target = e.target;
@@ -864,7 +932,6 @@ $generators = $userId ? $repo->findBy(['userId' => $userId, 'active' => true], [
         }
         document.body.removeChild(textarea);
     }
-
 })();
 </script>
 
@@ -919,6 +986,3 @@ $(document).ready(function() {
     };
 });
 </script>
-
-
-

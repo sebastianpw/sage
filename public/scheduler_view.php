@@ -198,7 +198,7 @@ td[contenteditable="true"][data-field="args"]:focus {
 <?php echo $eruda; ?>
 </head>
 <body>
-<?php require "floatool.php"; ?>
+<?php //require "floatool.php"; ?>
 <div style="display: flex; align-items: center; margin-bottom: 15px; gap: 10px;">
     <a href="dashboard.php" title="Dashboard" style="text-decoration: none; font-size: 24px;">🔮</a>
     <h2 style="margin: 0;">Scheduler</h2>
@@ -441,6 +441,6 @@ $(document).ready(function() {
     checkHeartbeat();
 });
 </script>
-
+<?php require "floatool.php"; ?>
 </body>
 </html>

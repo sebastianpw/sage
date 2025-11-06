@@ -35,9 +35,17 @@ try {
     $fileLogger->info(['Processing action' => ['action' => $action]]);
     
     switch ($action) {
+        case 'get_models':
+            $fileLogger->info(['Getting available models' => []]);
+            $result = [
+                'models' => AIProvider::getModelCatalog(),
+                'default_model' => AIProvider::getDefaultModel()
+            ];
+            break;
         case 'analyze_tasks':
-            $fileLogger->info(['Starting task analysis' => []]);
-            $result = $taskPrioritizer->analyzeTasks();
+            $model = $_POST['model'] ?? null;
+            $fileLogger->info(['Starting task analysis' => ['model' => $model]]);
+            $result = $taskPrioritizer->analyzeTasks($model);
             $fileLogger->info(['Task analysis completed' => ['result_keys' => array_keys($result)]]);
             break;
             

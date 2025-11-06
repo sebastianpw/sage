@@ -462,3 +462,40 @@
         .drag-handle:hover {
             color: #34495e;
         }
+
+        .model-select {
+            padding: 8px 12px;
+            font-size: 14px;
+            border: 2px solid #3498db;
+            border-radius: 6px;
+            background: white;
+            color: #2c3e50;
+            cursor: pointer;
+            max-width: 250px;
+            font-family: inherit;
+        }
+
+        .model-select:hover {
+            border-color: #2980b9;
+        }
+
+        .model-select:focus {
+            outline: none;
+            border-color: #2980b9;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+        }
+
+        .suggestion-checkbox {
+            margin-right: 8px;
+            cursor: pointer;
+        }
+
+        #checkAllSuggestions {
+            margin-right: 8px;
+            cursor: pointer;
+        }
+
+        .suggestion-item label {
+            cursor: pointer;
+            display: inline-block;
+        }

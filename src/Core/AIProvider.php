@@ -6,6 +6,8 @@ namespace App\Core;
  * AIProvider - Centralized AI Communication Module
  * 
  * Provides unified interface for communicating with various AI providers:
+ * - Cohere API
+ * - Mistral API
  * - Groq API
  * - Pollinations API
  * - Google Gemini (Generative Language API) — minimal integration
@@ -14,6 +16,9 @@ namespace App\Core;
  */
 class AIProvider
 {
+    // Add this after the other model constants
+    public const DEFAULT_MODEL = 'openai';
+
     // Known Groq model identifiers
     private const GROQ_MODELS = [
         'llama-3.3-70b-versatile',
@@ -30,7 +35,6 @@ class AIProvider
         'meta-llama/llama-4-maverick-17b-128e-instruct',
     ];
 
-
     private const QWEN_MODELS = [
         'qwen/qwen2-7b-instruct-awq',
         'qwen/Qwen2.5-7B-Instruct-AWQ',
@@ -41,19 +45,18 @@ class AIProvider
         'internlm/internlm2-chat-20b-4bits',
         'internlm/internlm2_5-20b-chat-4bit-awq',
     ];
+    
+    private const POLLINATIONS_FREE_MODELS = [
+        'openai',
+        'openai-fast',
+        'chickytutor',
+    ];
 
     private const POLLINATIONS_MODELS = [
         'mistral',
-        'openai',
-        'openai-fast',
         'openai-large',
         'openai-reasoning',
-        'qwen-coder',
         'roblox-rp',
-    ];
-
-    private const POLLINATIONS_COMMUNITY_MODELS = [
-        'chickytutor',
         'rtist',
     ];
 
@@ -66,33 +69,52 @@ class AIProvider
         'gemini-2.0-pro-exp',
     ];
 
-    
+    private const MISTRAL_MODELS = [
+        'codestral-2508',
+        'mistral-large-2411',
+        'mistral-medium-2508',
+        'mistral-small-2506',
+        'magistral-medium-2509',
+        'ministral-8b-2410',
+    ];
+
+    // New: Cohere model identifiers
+    private const COHERE_MODELS = [
+        'command-a-03-2025',
+        'command-r7b-12-2024',
+        'command-r-plus-08-2024',
+        'command-a-reasoning-08-2025',
+    ];
+
     private ?FileLogger $logger = null;
 
-
-
+    /**
+     * Get the default model for general use
+     */
+    public static function getDefaultModel(): string
+    {
+        return self::DEFAULT_MODEL;
+    }
 
     public static function getAllModels(): array
-        {
-            $allConstants = array_merge(
-                self::GROQ_MODELS,
-                self::GEMINI_MODELS,
-                self::POLLINATIONS_MODELS,
-                self::POLLINATIONS_COMMUNITY_MODELS,
-                self::QWEN_MODELS
-            );
+    {
+        $allConstants = array_merge(
+            self::POLLINATIONS_FREE_MODELS,
+            self::GEMINI_MODELS,
+            self::MISTRAL_MODELS,
+            self::GROQ_MODELS,
+            self::COHERE_MODELS,
+            self::POLLINATIONS_MODELS,
+            self::QWEN_MODELS
+        );
 
-            return $allConstants;
-        }
-
-
+        return $allConstants;
+    }
     
     public function __construct(?FileLogger $logger = null)
     {
         $this->logger = $logger;
     }
-
-
 
     /**
      * Return the canonical model catalog used by the UI and CLI.
@@ -120,95 +142,45 @@ class AIProvider
             $label = preg_replace('/\s+/', ' ', $label);
             return mb_convert_case($label, MB_CASE_TITLE);
         };
+        
+        $cohere = array_map(function ($m) use ($humanize) {
+            return ['id' => $m, 'name' => $humanize($m)];
+        }, self::COHERE_MODELS);
+        
+        $mistral = array_map(function ($m) use ($humanize) {
+            return ['id' => $m, 'name' => $humanize($m)];
+        }, self::MISTRAL_MODELS);
 
-        // Groq group: reuse existing GROQ_MODELS constant
         $groq = array_map(function ($m) use ($humanize) {
             return ['id' => $m, 'name' => $humanize($m)];
         }, self::GROQ_MODELS);
-
 
         $qwen_local = array_map(function ($m) use ($humanize) {
             return ['id' => $m, 'name' => $humanize($m)];
         }, self::QWEN_MODELS);
 
-
-        $pollinations_main = array_map(function ($m) use ($humanize) {
+        $pollinations_seed = array_map(function ($m) use ($humanize) {
             return ['id' => $m, 'name' => $humanize($m)];
         }, self::POLLINATIONS_MODELS);
 
-
-        $pollinations_community = array_map(function ($m) use ($humanize) {
+        $pollinations_free = array_map(function ($m) use ($humanize) {
             return ['id' => $m, 'name' => $humanize($m)];
-        }, self::POLLINATIONS_COMMUNITY_MODELS);
-
-
-        /*
-
-        // Pollinations groups: mirror the options previously in ChatUI
-        $pollinations_main = [
-            ['id'=>'mistral','name'=>'Mistral Small 3.1 24B'],
-            ['id'=>'openai','name'=>'OpenAI GPT-5 Mini'],
-            ['id'=>'openai-fast','name'=>'OpenAI GPT-5 Nano'],
-            ['id'=>'openai-large','name'=>'OpenAI GPT-5 Chat'],
-            ['id'=>'openai-reasoning','name'=>'OpenAI o4-mini (Reasoning)'],
-            ['id'=>'qwen-coder','name'=>'Qwen 2.5 Coder 32B'],
-            ['id'=>'roblox-rp','name'=>'Llama 3.1 8B Instruct'],
-        ];
-
-        $pollinations_community = [
-            ['id'=>'chickytutor','name'=>'ChickyTutor Language'],
-            ['id'=>'rtist','name'=>'Rtist'],
-        ];
-         */
-
-
-
-        /*
-        // Gemini groups: mirror the options previously in ChatUI
-        $gemini_text = [
-            ['id'=>'gemini-2.5-pro','name'=>'Gemini 2.5 Pro (Stable)'],
-            ['id'=>'gemini-2.5-flash','name'=>'Gemini 2.5 Flash (Stable)'],
-            ['id'=>'gemini-2.5-flash-lite','name'=>'Gemini 2.5 Flash-Lite (Stable)'],
-            ['id'=>'gemini-2.0-flash','name'=>'Gemini 2.0 Flash'],
-            ['id'=>'gemini-2.0-flash-lite','name'=>'Gemini 2.0 Flash-Lite'],
-            ['id'=>'gemini-2.0-pro-exp','name'=>'Gemini 2.0 Pro Experimental'],
-        ];
-         */
-
+        }, self::POLLINATIONS_FREE_MODELS);
 
         $gemini_text = array_map(function ($m) use ($humanize) {
             return ['id' => $m, 'name' => $humanize($m)];
         }, self::GEMINI_MODELS);
 
-
-
-
-
-/*
-        $qwen_local = [
-            ['id'=>'qwen/qwen2-7b-instruct-awq','name'=>'Qwen 2 7B Instruct (AWQ)'],
-            ['id'=>'qwen/Qwen2.5-7B-Instruct-AWQ','name'=>'Qwen 2.5 7B Instruct (AWQ)'],
-            ['id'=>'qwen/Qwen2.5-14B-Instruct-AWQ','name'=>'Qwen 2.5 14B Instruct (AWQ)'],
-            ['id'=>'qwen/Qwen2.5-32B-Instruct-AWQ','name'=>'Qwen 2.5 32B Instruct (AWQ)'],
-            ['id'=>'qwen/Qwen2.5-Coder-14B-Instruct-AWQ','name'=>'Qwen 2.5 Coder 14B Instruct (AWQ)'],
-            ['id'=>'internlm/internlm2-chat-7b-4bits','name'=>'InternLM2 Chat 7B 4-bit'],
-            ['id'=>'internlm/internlm2-chat-20b-4bits','name'=>'InternLM2 Chat 20B 4-bit'],
-            ['id'=>'internlm/internlm2_5-20b-chat-4bit-awq','name'=>'InternLM2.5 Chat 20B 4-bit AWQ'],
-        ];
- */
-
         return [
-            'Groq API' => $groq,
-            'Pollinations API - Main' => $pollinations_main,
-            'Pollinations API - Community' => $pollinations_community,
+            'Pollinations API - Free' => $pollinations_free,
             'Gemini Text / Coding Models' => $gemini_text,
-            'Qwen / InternLM (Local via zrok)' => $qwen_local,
+            'Mistral API' => $mistral,
+            'Groq API' => $groq,
+            'Cohere API' => $cohere,
+            'Pollinations API - Seed' => $pollinations_seed,
+            'Qwen / InternLM (Local via zrok)' => $qwen_local
         ];
-
-
     }
-
-
     
     /**
      * Main entry point: Send a message to an AI model and get a response
@@ -228,7 +200,11 @@ class AIProvider
         ]);
 
         // Route to appropriate provider based on model
-        if ($this->isGroqModel($model)) {
+        if ($this->isCohereModel($model)) {
+            return $this->sendToCohereApi($model, $messages, $options);
+        } elseif ($this->isMistralModel($model)) {
+            return $this->sendToMistralApi($model, $messages, $options);
+        } elseif ($this->isGroqModel($model)) {
             return $this->sendToGroqApi($model, $messages, $options);
         } elseif ($this->isGoogleModel($model)) {
             return $this->sendToGoogleApi($model, $messages, $options);
@@ -286,38 +262,28 @@ class AIProvider
         return false;
     }
 
-    /**
-     * Detect Google/Gemini model identifiers or shorthand.
-     */
     private function isGoogleModel(string $model): bool
     {
         $m = strtolower($model);
         if (strpos($m, 'gemini') !== false || strpos($m, 'google') !== false || strpos($m, 'generativelanguage') !== false) {
             return true;
         }
-        // accept shorthand 'google' or 'gemini' too
         if (in_array($m, ['google', 'gemini'], true)) {
             return true;
         }
         return false;
     }
 
-
-    /**
-     * Detect Qwen / InternLM local models.
-     */
     private function isQwenLocalModel(string $model): bool
     {
         $m = strtolower($model);
 
-        // Must be either a Qwen model with "awq" or any InternLM model
         if ((strpos($m, 'qwen') !== false && strpos($m, 'awq') !== false)
             || strpos($m, 'internlm') !== false
         ) {
             return true;
         }
 
-        // Optional: exact match check against a constant array
         foreach (self::QWEN_MODELS as $qm) {
             if (strcasecmp($qm, $model) === 0) {
                 return true;
@@ -327,7 +293,173 @@ class AIProvider
         return false;
     }
 
+    private function isMistralModel(string $model): bool
+    {
+        foreach (self::MISTRAL_MODELS as $m) {
+            if (strcasecmp($m, $model) === 0) {
+                return true;
+            }
+        }
+    
+        $lowerModel = strtolower($model);
+        if (strpos($lowerModel, 'mistral-') === 0 || strpos($lowerModel, 'codestral-') === 0) {
+            return true;
+        }
+    
+        return false;
+    }
 
+    /**
+     * New: Detect Cohere AI model identifiers.
+     */
+    private function isCohereModel(string $model): bool
+    {
+        // Check against the specific list of known models first
+        foreach (self::COHERE_MODELS as $m) {
+            if (strcasecmp($m, $model) === 0) {
+                return true;
+            }
+        }
+        
+        // Additionally, check for the common "command" prefix
+        if (stripos($model, 'command') !== false) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * Detect whether a Pollinations model is in the free/no-auth list.
+     */
+    private function isPollinationsFreeModel(string $model): bool
+    {
+        $m = strtolower($model);
+        $free = array_map('strtolower', self::POLLINATIONS_FREE_MODELS);
+        return in_array($m, $free, true);
+    }
+
+
+    // ============================================================================
+    // COHERE API PROVIDER
+    // ============================================================================
+    
+    private function sendToCohereApi(string $model, array $messages, array $options): string
+    {
+        $endpoint = getenv('COHERE_ENDPOINT') ?: 'https://api.cohere.ai/compatibility/v1/chat/completions';
+        $apiKey = $this->getCohereApiKey();
+
+        if (empty($apiKey)) {
+            throw new \RuntimeException('COHERE_API_KEY not found. Set COHERE_API_KEY or place token in ~/.cohere_api_key');
+        }
+
+        $payload = [
+            'model' => $model,
+            'messages' => $messages,
+        ];
+
+        // Add optional parameters
+        if (isset($options['temperature'])) {
+            $payload['temperature'] = $options['temperature'];
+        }
+        if (isset($options['max_tokens'])) {
+            $payload['max_tokens'] = $options['max_tokens'];
+        }
+
+        $payloadJson = json_encode($payload, JSON_UNESCAPED_UNICODE);
+
+        $headers = [
+            'Content-Type: application/json',
+            'Accept: application/json',
+            'User-Agent: spw-aiprovider/1.0',
+            'Authorization: Bearer ' . $apiKey,
+        ];
+
+        $response = $this->executeCurlRequest($endpoint, $payloadJson, $headers, 'Cohere');
+
+        $data = json_decode($response, true);
+        if (is_array($data) && isset($data['choices'][0]['message']['content'])) {
+            return $data['choices'][0]['message']['content'];
+        }
+
+        $jsonCandidate = $this->extractFirstJsonObject($response);
+        if ($jsonCandidate !== null) {
+            return $jsonCandidate;
+        }
+
+        throw new \RuntimeException('No usable reply from Cohere API. Raw response start: ' . mb_substr($response, 0, 2000));
+    }
+
+    private function getCohereApiKey(): ?string
+    {
+        $envKey = getenv('COHERE_API_KEY') ?: (isset($_SERVER['COHERE_API_KEY']) ? $_SERVER['COHERE_API_KEY'] : null);
+
+        if ($envKey) {
+            return $envKey;
+        }
+
+        return $this->readTokenFromHome(['.cohere_api_key', '.coheretoken']);
+    }
+
+    // ============================================================================
+    // MISTRAL API PROVIDER
+    // ============================================================================
+    
+    private function sendToMistralApi(string $model, array $messages, array $options): string
+    {
+        $endpoint = getenv('MISTRAL_ENDPOINT') ?: 'https://api.mistral.ai/v1/chat/completions';
+        $apiKey = $this->getMistralApiKey();
+
+        if (empty($apiKey)) {
+            throw new \RuntimeException('MISTRAL_API_KEY not found. Set MISTRAL_API_KEY or place token in ~/.mistral_api_key');
+        }
+
+        $payload = [
+            'model' => $model,
+            'messages' => $messages,
+        ];
+
+        if (isset($options['temperature'])) {
+            $payload['temperature'] = $options['temperature'];
+        }
+        if (isset($options['max_tokens'])) {
+            $payload['max_tokens'] = $options['max_tokens'];
+        }
+
+        $payloadJson = json_encode($payload, JSON_UNESCAPED_UNICODE);
+
+        $headers = [
+            'Content-Type: application/json',
+            'Accept: application/json',
+            'User-Agent: spw-aiprovider/1.0',
+            'Authorization: Bearer ' . $apiKey,
+        ];
+
+        $response = $this->executeCurlRequest($endpoint, $payloadJson, $headers, 'Mistral');
+
+        $data = json_decode($response, true);
+        if (is_array($data) && isset($data['choices'][0]['message']['content'])) {
+            return $data['choices'][0]['message']['content'];
+        }
+
+        $jsonCandidate = $this->extractFirstJsonObject($response);
+        if ($jsonCandidate !== null) {
+            return $jsonCandidate;
+        }
+
+        throw new \RuntimeException('No usable reply from Mistral API. Raw response start: ' . mb_substr($response, 0, 2000));
+    }
+
+    private function getMistralApiKey(): ?string
+    {
+        $envKey = getenv('MISTRAL_API_KEY') ?: (isset($_SERVER['MISTRAL_API_KEY']) ? $_SERVER['MISTRAL_API_KEY'] : null);
+
+        if ($envKey) {
+            return $envKey;
+        }
+
+        return $this->readTokenFromHome(['.mistral_api_key', '.mistraltoken']);
+    }
 
     
     // ============================================================================
@@ -348,7 +480,6 @@ class AIProvider
             'messages' => $messages,
         ];
         
-        // Add optional parameters
         if (isset($options['temperature'])) {
             $payload['temperature'] = $options['temperature'];
         }
@@ -399,8 +530,10 @@ class AIProvider
     {
         $endpoint = getenv('POLLINATIONS_ENDPOINT') ?: 'https://text.pollinations.ai/v1/chat/completions';
         $apiKey = $this->getPollinationsApiKey();
+
+        $isFreeModel = $this->isPollinationsFreeModel($model);
         
-        if (empty($apiKey)) {
+        if (empty($apiKey) && !$isFreeModel) {
             throw new \RuntimeException('No Pollinations API key found. Set POLLINATIONS_API_KEY or place token in ~/.pollinationsaitoken');
         }
         
@@ -409,7 +542,6 @@ class AIProvider
             'messages' => $messages,
         ];
         
-        // Add optional parameters
         if (isset($options['temperature'])) {
             $payload['temperature'] = $options['temperature'];
         }
@@ -423,8 +555,12 @@ class AIProvider
             'Content-Type: application/json',
             'Accept: application/json',
             'User-Agent: spw-aiprovider/1.0',
-            'Authorization: Bearer ' . $apiKey,
         ];
+
+        // Only include Authorization header if we have an API key.
+        if (!empty($apiKey)) {
+            $headers[] = 'Authorization: Bearer ' . $apiKey;
+        }
         
         $response = $this->executeCurlRequest($endpoint, $payloadJson, $headers, 'Pollinations');
         
@@ -460,7 +596,7 @@ class AIProvider
     private function getZrokTunnelUrl(): string
     {
         $scriptPath = \App\Core\SpwBase::getInstance()->getProjectPath() . '/bash/zrok_echo.sh';
-$output = trim(shell_exec('sh ' . escapeshellarg($scriptPath) . ' 2>&1'));
+        $output = trim(shell_exec('sh ' . escapeshellarg($scriptPath) . ' 2>&1'));
         return $output;
     }
 
@@ -478,7 +614,6 @@ $output = trim(shell_exec('sh ' . escapeshellarg($scriptPath) . ' 2>&1'));
             'messages' => $messages,
         ];
 
-        // Optional parameters
         if (isset($options['temperature'])) {
             $payload['temperature'] = $options['temperature'];
         }
@@ -526,12 +661,10 @@ $output = trim(shell_exec('sh ' . escapeshellarg($scriptPath) . ' 2>&1'));
 
     // ============================================================================
     // GOOGLE GEMINI (Generative Language) PROVIDER
-    // Minimal, dependency-free integration using api key header x-goog-api-key
     // ============================================================================
     
     private function sendToGoogleApi(string $model, array $messages, array $options): string
     {
-        // default model if shorthand used
         $lower = strtolower($model);
         if ($lower === 'google' || $lower === 'gemini') {
             $model = 'gemini-2.5-flash';
@@ -540,7 +673,6 @@ $output = trim(shell_exec('sh ' . escapeshellarg($scriptPath) . ' 2>&1'));
         $endpointBase = getenv('GEMINI_ENDPOINT') ?: 'https://generativelanguage.googleapis.com/v1beta/models';
         $endpoint = rtrim($endpointBase, '/') . '/' . $model . ':generateContent';
 
-        // API key: try env, $_SERVER, then token files
         $apiKey = getenv('GEMINI_API_KEY') ?: (isset($_SERVER['GEMINI_API_KEY']) ? $_SERVER['GEMINI_API_KEY'] : null);
         if (empty($apiKey)) {
             $apiKey = $this->readTokenFromHome(['.gemini_api_key', '.google_gemini_key', '.gcloud_api_key']);
@@ -549,12 +681,10 @@ $output = trim(shell_exec('sh ' . escapeshellarg($scriptPath) . ' 2>&1'));
             throw new \RuntimeException('GEMINI_API_KEY not found. Set GEMINI_API_KEY or place token in ~/.gemini_api_key');
         }
 
-        // Convert $messages to Google "contents" structure
         $contents = [];
         if (count($messages) === 1 && isset($messages[0]['content'])) {
             $contents[] = ['parts' => [['text' => $messages[0]['content']]]];
         } else {
-            // join messages into a single string with role markers to preserve context
             $joined = '';
             foreach ($messages as $m) {
                 $role = isset($m['role']) ? ucfirst($m['role']) : 'User';
@@ -566,12 +696,10 @@ $output = trim(shell_exec('sh ' . escapeshellarg($scriptPath) . ' 2>&1'));
 
         $payload = ['contents' => $contents];
 
-        // Map some options conservatively
         if (isset($options['temperature'])) {
             $payload['temperature'] = $options['temperature'];
         }
         if (isset($options['max_tokens'])) {
-            // Google naming differs; map conservatively to maxOutputTokens
             $payload['maxOutputTokens'] = (int)$options['max_tokens'];
         }
 
@@ -581,16 +709,13 @@ $output = trim(shell_exec('sh ' . escapeshellarg($scriptPath) . ' 2>&1'));
             'Content-Type: application/json',
             'Accept: application/json',
             'User-Agent: spw-aiprovider/1.0',
-            // Google simple API key auth header (matches your curl example)
             'x-goog-api-key: ' . $apiKey,
         ];
 
         $response = $this->executeCurlRequest($endpoint, $payloadJson, $headers, 'GoogleGemini');
 
-        // Defensive parsing
         $data = json_decode($response, true);
         if (is_array($data)) {
-            // Try candidates -> content -> parts -> text
             if (isset($data['candidates']) && is_array($data['candidates']) && count($data['candidates']) > 0) {
                 $cand = $data['candidates'][0];
                 if (isset($cand['content']['parts']) && is_array($cand['content']['parts'])) {
@@ -605,21 +730,18 @@ $output = trim(shell_exec('sh ' . escapeshellarg($scriptPath) . ' 2>&1'));
                         return implode("\n", $texts);
                     }
                 }
-                // fallback: recursive search in candidate
                 $found = $this->extractTextFromArray($cand);
                 if ($found !== null) {
                     return $found;
                 }
             }
 
-            // fallback: search whole decoded document
             $found = $this->extractTextFromArray($data);
             if ($found !== null) {
                 return $found;
             }
         }
 
-        // fallback: extract first JSON object string from raw response (existing helper)
         $jsonCandidate = $this->extractFirstJsonObject($response);
         if ($jsonCandidate !== null) {
             return $jsonCandidate;
@@ -628,9 +750,6 @@ $output = trim(shell_exec('sh ' . escapeshellarg($scriptPath) . ' 2>&1'));
         throw new \RuntimeException('No usable reply from Google Gemini. Raw response start: ' . mb_substr($response, 0, 2000));
     }
 
-    /**
-     * Recursively search nested arrays/objects for the first non-empty 'text' string and return it.
-     */
     private function extractTextFromArray($value): ?string
     {
         if (is_string($value)) {
@@ -642,11 +761,9 @@ $output = trim(shell_exec('sh ' . escapeshellarg($scriptPath) . ' 2>&1'));
         }
 
         if (is_array($value)) {
-            // If this array is associative and has a 'text' key, return it
             if (array_key_exists('text', $value) && is_string($value['text']) && $value['text'] !== '') {
                 return $value['text'];
             }
-            // Otherwise iterate recursively
             foreach ($value as $k => $v) {
                 if ($k === 'text' && is_string($v) && $v !== '') {
                     return $v;
@@ -677,8 +794,8 @@ $output = trim(shell_exec('sh ' . escapeshellarg($scriptPath) . ' 2>&1'));
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 300);
         curl_setopt($ch, CURLOPT_FAILONERROR, false);
         
         $response = curl_exec($ch);
@@ -706,7 +823,6 @@ $output = trim(shell_exec('sh ' . escapeshellarg($scriptPath) . ' 2>&1'));
     
     private function readTokenFromHome(array $candidateFilenames): ?string
     {
-	    //$home = getenv('HOME') ?: (isset($_SERVER['HOME']) ? $_SERVER['HOME'] : null);
 		$home = PROJECT_ROOT . '/token';
         if (!$home) {
             return null;
