@@ -290,7 +290,7 @@ while [ $attempt -le $MAX_RETRIES ]; do
     if [ -n "$IMAGE_URL" ]; then
       # Pollinations image-to-image (supports comma-separated URLs)
       curl -s -L -H "Authorization: Bearer $PAI_TOKEN" \
-        ""https://enter.pollinations.ai/api/generate/image/$url_prompt?model=kontext&image=$IMAGE_URL&width=1024&height=1024&nologo=true" \
+        ""https://enter.pollinations.ai/api/generate/image/$url_prompt?model=nanobanana&image=$IMAGE_URL&width=1024&height=1024&nologo=true" \
         -o "$outfile"
     else
       # Pollinations text-to-image
