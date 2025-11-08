@@ -73,20 +73,6 @@ class KaggleService
         $candidates = [];
         $candidates[] = $this->primaryConfigDir;
 
-        /*
-        $candidates[] = $this->projectRoot . '/.local/.config/kaggle';
-        if (!empty($this->kaggleBin)) {
-            $binDir = dirname($this->kaggleBin);
-            $localRoot = dirname($binDir);
-            $candidates[] = $localRoot . '/.config/kaggle';
-        }
-        $home = getenv('HOME') ?: null;
-        if ($home) {
-            $candidates[] = $home . '/.config/kaggle';
-            $candidates[] = $home . '/.kaggle';
-        }
-         */
-
         $unique = [];
         foreach ($candidates as $c) {
             if (empty($c)) continue;
@@ -278,47 +264,102 @@ class KaggleService
     // REMOTE KERNELS (migrated to use KaggleAPI)
     // =============================================================================
 
-
-    public function listRemoteKernels(string $username)
+    /**
+     * List remote kernels.
+     * If $username is empty or "me", we request mine=true (authenticated user).
+     * Otherwise we request user=<username> (public kernels only).
+     *
+     * Returns array of parsed kernel rows or debug keys when empty.
+     */
+    public function listRemoteKernels(?string $username = null)
     {
-        // request more than 1 result (null = no limit)
-        $res = $this->kaggleClient->listKernels(null, false, $username, null, null, null, 'hotness', null);
+        // prepare parameters
+        $page = 1;
+        $sort_by = 'hotness';
+        $page_size = 100;
 
+        $useMine = false;
+        if (empty($username) || strtolower($username) === 'me') {
+            $useMine = true;
+        }
+
+        
+        $res = $this->kaggleClient->listKernels(
+            search: null,
+            mine: $useMine,
+            user: $useMine ? null : $username,
+            dataset: null,
+            competition: null,
+            parent_kernel: null,
+            sort_by: $sort_by,
+            page: $page
+        );
+        
         if ($res === false) {
-            return ['__error' => $this->kaggleClient->getLastError(), 'cmd' => 'API: /kaggle/kernels/list', 'hint' => 'Check if PyAPI server is running at ' . $this->apiBaseUrl];
+            return ['__error' => $this->kaggleClient->getLastError(), 'cmd' => 'API: /kaggle/kernels/list', 'hint' => 'Check PyAPI server and token'];
         }
 
         if (!isset($res['status']) || $res['status'] !== 'success') {
             return ['__error' => 'Unexpected API status', 'raw' => $res, 'cmd' => 'API: /kaggle/kernels/list'];
         }
 
-        $csvData = $res['data'] ?? '';
-        if (trim($csvData) === '') {
-            // nothing returned
-            return [];
+        // Prefer parsed JSON if server provided it
+        if (isset($res['parsed']) && is_array($res['parsed']) && count($res['parsed']) > 0) {
+            return $res['parsed'];
         }
 
-        // Normalize line endings and split
+        // Get CSV text (cleaned by server)
+        $csvData = $res['data'] ?? ($res['stdout'] ?? '');
+        $cmd = $res['cmd'] ?? $res['command'] ?? 'API: /kaggle/kernels/list';
+        $raw = $res['raw_stdout'] ?? ($res['raw'] ?? null);
+
+        if (trim((string)$csvData) === '') {
+            // nothing returned: attempt fallback if we originally requested user=<name>
+            if (!$useMine && !empty($username)) {
+                // try again with mine=true (maybe kernel is private)
+                $fallback = $this->kaggleClient->listKernels($page, true, null, null, null, null, $sort_by, $page_size);
+                if ($fallback !== false && isset($fallback['status']) && $fallback['status'] === 'success') {
+                    // prefer parsed fallback
+                    if (isset($fallback['parsed']) && is_array($fallback['parsed']) && count($fallback['parsed']) > 0) {
+                        return $fallback['parsed'];
+                    }
+                    $csvData = $fallback['data'] ?? ($fallback['stdout'] ?? '');
+                    $cmd = $fallback['cmd'] ?? $fallback['command'] ?? $cmd;
+                    $raw = $fallback['raw_stdout'] ?? $raw;
+                }
+            }
+            // still empty -> return debug info
+            return ['__raw' => $csvData, '__raw_original' => $raw, '__cmd' => $cmd, 'hint' => 'No rows returned (private kernels require mine=true + correct token)'];
+        }
+
+        // Clean CSV: remove any leading lines that start with "Warning:" and find header
         $lines = preg_split("/\r\n|\n|\r/", $csvData);
-
-        // Clean: remove empty lines and separator lines like "------" or "======" possibly separated by commas
-        $cleanLines = [];
-        foreach ($lines as $line) {
-            $trim = trim($line, " \t\n\r\0\x0B\xEF\xBB\xBF"); // also trim BOM
-            if ($trim === '') continue;
-            // skip rows that are just dashes/equals or dashes separated by commas
-            if (preg_match('/^[-=]{2,}(?:\s*[,;]\s*[-=]{2,})*$/', $trim)) continue;
-            $cleanLines[] = $line;
+        $filtered = [];
+        foreach ($lines as $ln) {
+            if (trim($ln) === '') continue;
+            if (preg_match('/^\s*Warning:/i', $ln)) continue;
+            $filtered[] = $ln;
         }
 
-        if (count($cleanLines) <= 1) {
-            // only header (or nothing) after cleaning -> no kernels
-            return [];
+        // find header index (line that contains 'ref' and 'title' ideally)
+        $headerIndex = null;
+        foreach ($filtered as $i => $ln) {
+            if (stripos($ln, 'ref') !== false && stripos($ln, 'title') !== false) {
+                $headerIndex = $i;
+                break;
+            }
+        }
+        if ($headerIndex !== null) {
+            $filtered = array_slice($filtered, $headerIndex);
         }
 
-        // Feed cleaned content into fgetcsv
+        if (count($filtered) <= 1) {
+            return ['__raw_cleaned' => implode("\n", $filtered), '__cmd' => $cmd];
+        }
+
+        // parse CSV
         $stream = fopen('php://temp', 'r+');
-        fwrite($stream, implode("\n", $cleanLines));
+        fwrite($stream, implode("\n", $filtered));
         rewind($stream);
 
         $headers = null;
@@ -329,8 +370,6 @@ class KaggleService
                 continue;
             }
             if ($row === [null] || count($row) === 0) continue;
-
-            // skip rows where the first column is empty or contains only dashes (safety)
             $first = isset($row[0]) ? trim((string)$row[0]) : '';
             if ($first === '' || preg_match('/^[-\s]+$/', $first)) continue;
 
@@ -344,66 +383,13 @@ class KaggleService
         fclose($stream);
 
         if (empty($items)) {
-            // fallback: return raw cleaned csv so you can inspect it in the UI/logs
-            return ['__raw_cleaned' => implode("\n", $cleanLines), 'cmd' => 'API: /kaggle/kernels/list'];
+            return ['__raw_cleaned' => implode("\n", $filtered), '__cmd' => $cmd];
         }
 
         return $items;
     }
 
-/*
-    public function listRemoteKernels(string $username)
-    {
-        // Use the API client which mirrors the CLI parameters
-        $res = $this->kaggleClient->listKernels(null, false, $username, null, null, null, 'hotness', 1);
-
-        if ($res === false) {
-            return ['__error' => $this->kaggleClient->getLastError(), 'cmd' => 'API: /kaggle/kernels/list', 'hint' => 'Check if PyAPI server is running at ' . $this->apiBaseUrl];
-        }
-
-        if (isset($res['status']) && $res['status'] === 'success') {
-            $csvData = $res['data'] ?? '';
-            if (trim($csvData) === '') {
-                return ['__raw' => $csvData, 'cmd' => 'API: /kaggle/kernels/list', 'hint' => ''];
-            }
-
-            $items = [];
-            $stream = fopen('php://temp', 'r+');
-            fwrite($stream, $csvData);
-            rewind($stream);
-
-            $headers = null;
-            while (($row = fgetcsv($stream, 0, ",", '"', "\\")) !== false) {
-                if ($headers === null) {
-                    $headers = $row;
-                    continue;
-                }
-                if ($row === [null] || count($row) === 0) continue;
-                $item = [];
-                foreach ($row as $k => $v) {
-                    $key = $headers[$k] ?? $k;
-                    $item[$key] = $v;
-                }
-                $items[] = $item;
-            }
-            fclose($stream);
-
-            if (empty($items)) {
-                return ['__raw' => $csvData, 'cmd' => 'API: /kaggle/kernels/list', 'hint' => ''];
-            }
-
-            return $items;
-        }
-
-        return [
-            '__error' => 'Unexpected API response',
-            'cmd' => 'API: /kaggle/kernels/list',
-            'hint' => 'Check PyAPI server logs'
-        ];
-    }
- */
-
-
+    
     public function pushAndRunKernelFolder(string $folderPath): array
     {
         $folderPath = realpath($folderPath);
@@ -936,4 +922,181 @@ class KaggleService
             'message' => 'Created default metadata with GPU, internet, and Zrok dataset'
         ];
     }
+    
+    
+    
+    
+    
+   /**
+ * Slugify a string to a Kaggle-like kernel slug.
+ */
+private function slugify(string $s): string
+{
+    $s = mb_strtolower(trim($s));
+    // replace non-alphanumeric with hyphen
+    $s = preg_replace('/[^a-z0-9]+/', '-', $s);
+    // collapse hyphens
+    $s = preg_replace('/-+/', '-', $s);
+    $s = trim($s, '-');
+    if ($s === '') $s = 'notebook';
+    return $s;
+}
+
+/**
+ * Build canonical kernel id for a local notebook folder.
+ * - If kernel-metadata.json contains an 'id', return that.
+ * - Otherwise use username/slug (username from token if available).
+ * Returns null if folder not accessible.
+ */
+private function localKernelIdFromFolder(string $folderPath): ?string
+{
+    $folderPath = rtrim($folderPath, '/');
+    $metaPath = $folderPath . '/kernel-metadata.json';
+    if (file_exists($metaPath)) {
+        $json = @file_get_contents($metaPath);
+        if ($json !== false) {
+            $arr = json_decode($json, true);
+            if (is_array($arr) && !empty($arr['id']) && is_string($arr['id'])) {
+                return trim($arr['id']);
+            }
+        }
+    }
+
+    // fallback: use username/slug from folder name or first ipynb
+    $username = null;
+    $token = $this->getApiToken();
+    if ($token && isset($token['username'])) {
+        $username = $token['username'];
+    }
+
+    // try folder basename
+    $slugSource = basename($folderPath);
+    // if there's a single ipynb with a different name, prefer it as title
+    $ipynb = glob($folderPath . '/*.ipynb');
+    if (!empty($ipynb)) {
+        $base = basename($ipynb[0], '.ipynb');
+        // if base looks meaningful and differs, use it
+        if ($base !== '' && strlen($base) > 1) {
+            $slugSource = $base;
+        }
+    }
+
+    $slug = $this->slugify($slugSource);
+    if ($username) {
+        return $username . '/' . $slug;
+    }
+    return $slug; // best-effort without username
+}
+
+/**
+ * Merge local notebook entries with remote parsed kernel rows.
+ *
+ * $localList: array of local notebook entries (structure like listLocalNotebooks returns)
+ * $remoteParsed: array of parsed remote kernel rows (each row contains 'ref', 'title', etc.)
+ *
+ * Returns local list enriched with:
+ *   - 'kernel_id' (derived)
+ *   - 'is_remote' => bool
+ *   - 'remote_ref' => matched remote ref or null
+ *   - 'remote_row' => full remote row (if matched)
+ */
+public function mergeLocalWithRemote(array $localList, array $remoteParsed = []): array
+{
+    // build lookup maps for remote refs
+    $remoteByRef = [];
+    $remoteBySlug = []; // slug -> list of refs
+    foreach ($remoteParsed as $r) {
+        if (!is_array($r)) continue;
+        $ref = isset($r['ref']) ? trim($r['ref']) : null;
+        if (!$ref) continue;
+        $remoteByRef[strtolower($ref)] = $r;
+
+        // slug is the part after slash
+        $parts = explode('/', $ref, 2);
+        $slug = (count($parts) === 2) ? $parts[1] : $parts[0];
+        $slug = strtolower($slug);
+        if (!isset($remoteBySlug[$slug])) $remoteBySlug[$slug] = [];
+        $remoteBySlug[$slug][] = $r;
+    }
+
+    $out = [];
+    foreach ($localList as $item) {
+        // existing local fields remain
+        $entry = $item;
+        $folder = isset($item['folder']) ? $item['folder'] : null;
+
+        $kernelId = null;
+        if ($folder && is_dir($folder)) {
+            $kernelId = $this->localKernelIdFromFolder($folder);
+        } else {
+            // try to derive from local 'relative' or 'path' or 'name'
+            $maybe = $item['relative'] ?? $item['path'] ?? $item['name'] ?? '';
+            if ($maybe) {
+                $kernelId = $this->slugify(basename((string)$maybe));
+                $token = $this->getApiToken();
+                if ($token && isset($token['username'])) {
+                    $kernelId = $token['username'] . '/' . $kernelId;
+                }
+            }
+        }
+
+        $entry['kernel_id'] = $kernelId;
+        $entry['is_remote'] = false;
+        $entry['remote_ref'] = null;
+        $entry['remote_row'] = null;
+
+        if ($kernelId) {
+            $lk = strtolower($kernelId);
+            // direct exact match owner/slug -> remote
+            if (isset($remoteByRef[$lk])) {
+                $entry['is_remote'] = true;
+                $entry['remote_ref'] = $remoteByRef[$lk]['ref'];
+                $entry['remote_row'] = $remoteByRef[$lk];
+            } else {
+                // try slug-only match (basename)
+                $parts = explode('/', $lk, 2);
+                $slugOnly = (count($parts) === 2) ? $parts[1] : $parts[0];
+                if (isset($remoteBySlug[$slugOnly])) {
+                    // if multiple matches, pick the one with same author if available
+                    $pick = $remoteBySlug[$slugOnly][0];
+                    // try match by username if we have it
+                    $token = $this->getApiToken();
+                    if ($token && !empty($token['username'])) {
+                        $expectedRef = strtolower($token['username'] . '/' . $slugOnly);
+                        if (isset($remoteByRef[$expectedRef])) {
+                            $pick = $remoteByRef[$expectedRef];
+                        }
+                    }
+                    $entry['is_remote'] = true;
+                    $entry['remote_ref'] = $pick['ref'];
+                    $entry['remote_row'] = $pick;
+                } else {
+                    // no match found - maybe local metadata uses different slug; try last-resort fuzzy match on title
+                    $localName = strtolower($item['name'] ?? '');
+                    foreach ($remoteParsed as $r) {
+                        if (isset($r['title']) && strtolower($r['title']) === $localName) {
+                            $entry['is_remote'] = true;
+                            $entry['remote_ref'] = $r['ref'];
+                            $entry['remote_row'] = $r;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        $out[] = $entry;
+    }
+
+    return $out;
+}
+    
+    
+    
+    
+    
+    
+    
+    
+    
 }

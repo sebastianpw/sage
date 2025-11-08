@@ -187,6 +187,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+
+
 // Before the unified notebooks section, add this check
 $hasRequiredTokens = $kaggle->hasRequiredTokens();
 $token = $kaggle->getApiToken();
@@ -276,6 +278,12 @@ if ($hasRequiredTokens) {
 } else {
     $unifiedNotebooks = [];
 }
+
+
+
+
+
+
 
 ob_start();
 ?>

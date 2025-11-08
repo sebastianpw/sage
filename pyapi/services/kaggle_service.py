@@ -1,14 +1,17 @@
 """
 Kaggle Service - Complete Kaggle API wrapper for Termux/venv
-No Conda dependencies - uses direct Python Kaggle CLI via subprocess
+No Conda dependencies - uses direct Python Kaggle CLI via subprocess (argument-list style)
 """
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union, List
 import subprocess
 import logging
 from pathlib import Path
 import os
+import shlex
+import csv
+import io
 
 logger = logging.getLogger(__name__)
 
@@ -28,66 +31,149 @@ KAGGLE_CONFIG_DIR = Path(os.environ.get("KAGGLE_CONFIG_DIR", str(PROJECT_ROOT.pa
 for d in (DATASETS_DIR, KERNELS_DIR, MODELS_DIR, KAGGLE_CONFIG_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
+
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
 
-def run_kaggle_command(command: str, timeout: int = 300) -> Dict[str, Any]:
+def _format_cmd_for_log(args: List[str]) -> str:
+    """Return a safely-quoted string for logging / returned responses."""
+    return " ".join(shlex.quote(a) for a in args)
+
+
+def _clean_kaggle_stdout(stdout: str) -> str:
     """
-    Execute a Kaggle CLI command using the system-kaggle command inside venv.
-    Returns stdout/stderr/returncode/command.
+    Clean kaggle stdout by removing leading non-CSV lines (warnings) until a CSV header is found.
+    Looks for a header line containing 'ref' and 'title' (typical kernels CSV header),
+    otherwise falls back to removing pure 'Warning:' lines.
+    """
+    if not stdout:
+        return ""
+
+    lines = stdout.splitlines()
+    # quick removal of lines starting with 'Warning:' (case-insensitive)
+    stripped = [ln for ln in lines if not ln.strip().lower().startswith("warning:")]
+
+    # If we removed something and the remaining begins with a header-like line, return that.
+    if len(stripped) < len(lines):
+        # find header index in stripped
+        for i, ln in enumerate(stripped):
+            if 'ref' in ln.lower() and 'title' in ln.lower():
+                return "\n".join(stripped[i:]).strip()
+        # otherwise return joined stripped as best-effort
+        return "\n".join(stripped).strip()
+
+    # If no 'Warning:' lines, try to find header in original
+    for i, ln in enumerate(lines):
+        if 'ref' in ln.lower() and 'title' in ln.lower():
+            return "\n".join(lines[i:]).strip()
+
+    # fallback: return original stdout (no header found)
+    return stdout.strip()
+
+
+def _parse_csv_to_list(csv_text: str) -> List[Dict[str, str]]:
+    """Parse CSV text (first line header) into list of dicts. If parse fails return empty list."""
+    if not csv_text:
+        return []
+    f = io.StringIO(csv_text)
+    reader = csv.reader(f)
+    try:
+        headers = next(reader)
+    except StopIteration:
+        return []
+    items = []
+    for row in reader:
+        if row == [None] or len(row) == 0:
+            continue
+        # skip empty first column rows
+        if len(row) == 0 or (len(row) > 0 and (row[0] is None or str(row[0]).strip() == "")):
+            continue
+        # normalize shorter rows
+        row += [''] * (len(headers) - len(row))
+        item = {headers[i]: row[i] for i in range(len(headers))}
+        items.append(item)
+    return items
+
+
+def run_kaggle_command(command: Union[str, List[str]], timeout: int = 300) -> Dict[str, Any]:
+    """
+    Execute a Kaggle CLI command using subprocess with an argv list (safe).
+    Accepts either a string (will be split) or a list of args. Ensures KAGGLE_CONFIG_DIR
+    is present in env. Returns stdout/stderr/returncode/command (display string) and
+    also raw_stdout/raw_stderr for debugging. stdout is cleaned of leading warnings.
     """
     try:
-        full_command = f"kaggle {command}"
-        logger.info("Executing: %s", full_command)
+        # normalize to list of args
+        if isinstance(command, str):
+            args = shlex.split(command)
+        else:
+            args = list(command)
 
-        # Use a copy of current env to ensure KAGGLE_CONFIG_DIR is passed
+        # ensure the tool name is the first token
+        if not args or args[0] != "kaggle":
+            args = ["kaggle"] + args
+
+        display_cmd = _format_cmd_for_log(args)
+        logger.info("Executing: %s", display_cmd)
+
         env = os.environ.copy()
+        # ensure KAGGLE_CONFIG_DIR is always present in the environment the subprocess sees
+        env["KAGGLE_CONFIG_DIR"] = str(KAGGLE_CONFIG_DIR)
 
-        # Run the command
         result = subprocess.run(
-            full_command,
-            shell=True,
+            args,
             capture_output=True,
             text=True,
             timeout=timeout,
-            env=env
+            env=env,
+            check=False
         )
 
-        # Log outputs for debugging
-        stdout = (result.stdout or "").strip()
-        stderr = (result.stderr or "").strip()
-        if stdout:
-            logger.debug("kaggle stdout: %s", stdout)
-        if stderr:
-            logger.info("kaggle stderr: %s", stderr)
+        raw_stdout = (result.stdout or "").rstrip("\n")
+        raw_stderr = (result.stderr or "").rstrip("\n")
+
+        # Clean Kaggle stdout: remove permission-warning lines and any other leading non-CSV scaffolding
+        stdout = _clean_kaggle_stdout(raw_stdout)
+
+        if raw_stdout:
+            logger.debug("kaggle raw_stdout: %s", raw_stdout)
+        if raw_stderr:
+            logger.info("kaggle raw_stderr: %s", raw_stderr)
 
         return {
             "stdout": stdout,
-            "stderr": stderr,
+            "raw_stdout": raw_stdout,
+            "stderr": raw_stderr,
+            "raw_stderr": raw_stderr,
             "returncode": result.returncode,
-            "command": full_command
+            "command": display_cmd
         }
 
     except subprocess.TimeoutExpired:
-        logger.error("Command timed out after %s seconds: %s", timeout, command)
+        logger.exception("Command timed out after %s seconds: %s", timeout, command)
         return {
             "stdout": "",
+            "raw_stdout": "",
             "stderr": f"Command timed out after {timeout} seconds",
+            "raw_stderr": "",
             "returncode": -1,
-            "command": command
+            "command": _format_cmd_for_log(["kaggle"] + (shlex.split(command) if isinstance(command, str) else list(command)))
         }
     except Exception as e:
         logger.exception("Error executing kaggle command: %s", e)
         return {
             "stdout": "",
+            "raw_stdout": "",
             "stderr": str(e),
+            "raw_stderr": "",
             "returncode": -1,
-            "command": command
+            "command": _format_cmd_for_log(["kaggle"] + (shlex.split(command) if isinstance(command, str) else list(command)))
         }
 
+
 # =============================================================================
-# Pydantic request models
+# Pydantic request models (unchanged except optional page_size)
 # =============================================================================
 class CompetitionListRequest(BaseModel):
     search: Optional[str] = None
@@ -95,11 +181,13 @@ class CompetitionListRequest(BaseModel):
     category: Optional[str] = None
     page: int = Field(1, ge=1)
 
+
 class CompetitionDownloadRequest(BaseModel):
     competition: str
     file_name: Optional[str] = None
     force: bool = False
     quiet: bool = False
+
 
 class DatasetListRequest(BaseModel):
     search: Optional[str] = None
@@ -113,12 +201,14 @@ class DatasetListRequest(BaseModel):
     page: int = Field(1, ge=1)
     max_size: int = Field(20, ge=1, le=100)
 
+
 class DatasetDownloadRequest(BaseModel):
     dataset: str
     file_name: Optional[str] = None
     unzip: bool = True
     force: bool = False
     output_dir: Optional[str] = None
+
 
 class KernelListRequest(BaseModel):
     search: Optional[str] = None
@@ -129,14 +219,19 @@ class KernelListRequest(BaseModel):
     parent_kernel: Optional[str] = None
     sort_by: str = "hotness"
     page: int = Field(1, ge=1)
+    page_size: Optional[int] = None  # maps to --page-size
+    format: Optional[str] = "csv"     # 'csv' (default) or 'json' (parsed)
+
 
 class KernelPushRequest(BaseModel):
     path: str
+
 
 class KernelPullRequest(BaseModel):
     kernel: str
     path: Optional[str] = None
     metadata: bool = False
+
 
 class KernelOutputRequest(BaseModel):
     kernel: str
@@ -144,29 +239,31 @@ class KernelOutputRequest(BaseModel):
     force: bool = False
     quiet: bool = False
 
+
 class KernelStatusRequest(BaseModel):
     kernel: str
 
+
 # =============================================================================
-# Endpoints (unchanged behaviour, with debug-friendly returns)
+# Endpoints (use args lists, treat rc==0 as success even if stdout empty)
 # =============================================================================
 
 @router.post("/competitions/list")
 def list_competitions(req: CompetitionListRequest):
     try:
-        cmd = f"competitions list --page {req.page}"
+        args = ["competitions", "list", "--page", str(req.page), "--sort-by", req.sort_by]
         if req.search:
-            cmd += f" --search '{req.search}'"
+            args += ["--search", req.search]
         if req.category:
-            cmd += f" --category {req.category}"
-        cmd += f" --sort-by {req.sort_by}"
+            args += ["--category", req.category]
 
-        result = run_kaggle_command(cmd)
-        if result["returncode"] == 0:
-            return {"status": "success", "data": result["stdout"], "page": req.page}
-        raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"]})
+        result = run_kaggle_command(args)
+        if result["returncode"] != 0:
+            raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")})
+        return {"status": "success", "data": result["stdout"], "page": req.page, "cmd": result["command"], "raw_stdout": result.get("raw_stdout")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/competitions/download")
 def download_competition(req: CompetitionDownloadRequest):
@@ -174,73 +271,79 @@ def download_competition(req: CompetitionDownloadRequest):
         output_path = DATASETS_DIR / f"competitions/{req.competition}"
         output_path.mkdir(parents=True, exist_ok=True)
 
-        cmd = f"competitions download -c {req.competition} -p {output_path}"
+        args = ["competitions", "download", "-c", req.competition, "-p", str(output_path)]
         if req.file_name:
-            cmd += f" -f {req.file_name}"
+            args += ["-f", req.file_name]
         if req.force:
-            cmd += " --force"
+            args.append("--force")
         if req.quiet:
-            cmd += " --quiet"
+            args.append("--quiet")
 
-        result = run_kaggle_command(cmd)
-        if result["returncode"] == 0:
-            return {
-                "status": "success",
-                "competition": req.competition,
-                "output_path": str(output_path),
-                "stdout": result["stdout"]
-            }
-        raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"]})
+        result = run_kaggle_command(args)
+        if result["returncode"] != 0:
+            raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")})
+        return {
+            "status": "success",
+            "competition": req.competition,
+            "output_path": str(output_path),
+            "stdout": result["stdout"],
+            "cmd": result["command"],
+            "raw_stdout": result.get("raw_stdout")
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/competitions/submit")
 def submit_to_competition(req: dict):
     try:
-        cmd = f"competitions submit -c {req['competition']} -f {req['file_path']} -m '{req['message']}'"
-        result = run_kaggle_command(cmd)
-        if result["returncode"] == 0:
-            return {"status": "success", "competition": req['competition'], "message": "Submission successful", "stdout": result["stdout"]}
-        raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"]})
+        args = ["competitions", "submit", "-c", req["competition"], "-f", req["file_path"], "-m", req["message"]]
+        result = run_kaggle_command(args)
+        if result["returncode"] != 0:
+            raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")})
+        return {"status": "success", "competition": req['competition'], "message": "Submission successful", "stdout": result["stdout"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/datasets/list")
 def list_datasets(req: DatasetListRequest):
     try:
-        cmd = f"datasets list --sort-by {req.sort_by} --page {req.page} --max-size {req.max_size}"
+        args = ["datasets", "list", "--sort-by", req.sort_by, "--page", str(req.page), "--max-size", str(req.max_size)]
         if req.search:
-            cmd += f" --search '{req.search}'"
+            args += ["--search", req.search]
         if req.size:
-            cmd += f" --size {req.size}"
+            args += ["--size", req.size]
         if req.file_type:
-            cmd += f" --file-type {req.file_type}"
+            args += ["--file-type", req.file_type]
         if req.license:
-            cmd += f" --license '{req.license}'"
+            args += ["--license", req.license]
         if req.tags:
-            cmd += f" --tags '{req.tags}'"
+            args += ["--tags", req.tags]
         if req.user:
-            cmd += f" --user {req.user}"
+            args += ["--user", req.user]
         if req.mine:
-            cmd += " --mine"
+            args.append("--mine")
 
-        result = run_kaggle_command(cmd)
-        if result["returncode"] == 0:
-            return {"status": "success", "data": result["stdout"], "page": req.page}
-        raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"]})
+        result = run_kaggle_command(args)
+        if result["returncode"] != 0:
+            raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")})
+        return {"status": "success", "data": result["stdout"], "page": req.page, "cmd": result["command"], "raw_stdout": result.get("raw_stdout")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/datasets/files")
 def list_dataset_files(req: dict):
     try:
-        cmd = f"datasets files {req['dataset']}"
-        result = run_kaggle_command(cmd)
-        if result["returncode"] == 0:
-            return {"status": "success", "dataset": req['dataset'], "files": result["stdout"]}
-        raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"]})
+        args = ["datasets", "files", req["dataset"]]
+        result = run_kaggle_command(args)
+        if result["returncode"] != 0:
+            raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")})
+        return {"status": "success", "dataset": req['dataset'], "files": result["stdout"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/datasets/download")
 def download_dataset(req: DatasetDownloadRequest):
@@ -248,75 +351,106 @@ def download_dataset(req: DatasetDownloadRequest):
         output_path = DATASETS_DIR / (req.output_dir or req.dataset.replace('/', '_'))
         output_path.mkdir(parents=True, exist_ok=True)
 
-        cmd = f"datasets download {req.dataset} -p {output_path}"
+        args = ["datasets", "download", req.dataset, "-p", str(output_path)]
         if req.file_name:
-            cmd += f" -f {req.file_name}"
+            args += ["-f", req.file_name]
         if req.unzip:
-            cmd += " --unzip"
+            args.append("--unzip")
         if req.force:
-            cmd += " --force"
+            args.append("--force")
 
-        result = run_kaggle_command(cmd)
-        if result["returncode"] == 0:
-            return {"status": "success", "dataset": req.dataset, "output_path": str(output_path), "stdout": result["stdout"]}
-        raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"]})
+        result = run_kaggle_command(args)
+        if result["returncode"] != 0:
+            raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")})
+        return {"status": "success", "dataset": req.dataset, "output_path": str(output_path), "stdout": result["stdout"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/datasets/create")
 def create_dataset(req: dict):
     try:
-        cmd = f"datasets create -p {req['path']} --dir-mode {req.get('dir_mode', 'skip')}"
+        args = ["datasets", "create", "-p", req['path'], "--dir-mode", req.get('dir_mode', 'skip')]
         if req.get('public', False):
-            cmd += " --public"
+            args.append("--public")
         if req.get('quiet', False):
-            cmd += " --quiet"
+            args.append("--quiet")
 
-        result = run_kaggle_command(cmd)
-        if result["returncode"] == 0:
-            return {"status": "success", "message": "Dataset created", "stdout": result["stdout"]}
-        raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"]})
+        result = run_kaggle_command(args)
+        if result["returncode"] != 0:
+            raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")})
+        return {"status": "success", "message": "Dataset created", "stdout": result["stdout"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/kernels/list")
 def list_kernels(req: KernelListRequest):
-    """List Kaggle kernels (return CSV so PHP can parse reliably)"""
+    """List Kaggle kernels (return CSV so PHP can parse reliably).
+    Returns:
+      - data: cleaned CSV string (backwards compatible)
+      - parsed: optional list of dicts (if parsing succeeds)
+      - raw_stdout, raw_stderr, cmd for debugging
+    """
     try:
-        # Always request CSV output so clients expecting CSV (old PHP parser) work unchanged
-        cmd = f"kernels list --sort-by {req.sort_by} --page {req.page} --csv"
-
+        args = ["kernels", "list", "--sort-by", req.sort_by, "--page", str(req.page), "--csv"]
         if req.search:
-            cmd += f" --search '{req.search}'"
+            args += ["--search", req.search]
         if req.mine:
-            cmd += " --mine"
+            args.append("--mine")
         if req.user:
-            cmd += f" --user {req.user}"
+            args += ["--user", req.user]
         if req.dataset:
-            cmd += f" --dataset {req.dataset}"
+            args += ["--dataset", req.dataset]
         if req.competition:
-            cmd += f" --competition {req.competition}"
+            args += ["--competition", req.competition]
         if req.parent_kernel:
-            cmd += f" --parent-kernel {req.parent_kernel}"
+            # CLI expects --parent <owner/slug>
+            args += ["--parent", req.parent_kernel]
+        if req.page_size:
+            args += ["--page-size", str(req.page_size)]
 
-        result = run_kaggle_command(cmd)
+        result = run_kaggle_command(args)
+        if result["returncode"] != 0:
+            raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")})
 
-        if result["returncode"] == 0:
-            return {"status": "success", "data": result["stdout"], "page": req.page}
-        raise HTTPException(status_code=500, detail={"error": result["stderr"]})
+        csv_text = result.get("stdout", "")  # cleaned CSV
+        parsed = None
+        try:
+            parsed = _parse_csv_to_list(csv_text)
+        except Exception:
+            parsed = None
+
+        # Keep backward-compatible `data` (CSV) and add parsed JSON if we could parse it.
+        resp = {
+            "status": "success",
+            "data": csv_text,
+            "page": req.page,
+            "cmd": result["command"],
+            "raw_stdout": result.get("raw_stdout"),
+            "raw_stderr": result.get("raw_stderr")
+        }
+        if parsed is not None and len(parsed) > 0:
+            resp["parsed"] = parsed
+        else:
+            resp["parsed"] = []
+
+        return resp
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/kernels/push")
 def push_kernel(req: KernelPushRequest):
     try:
-        cmd = f"kernels push -p {req.path}"
-        result = run_kaggle_command(cmd)
-        if result["returncode"] == 0:
-            return {"status": "success", "message": "Kernel pushed successfully", "stdout": result["stdout"]}
-        raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"]})
+        args = ["kernels", "push", "-p", req.path]
+        result = run_kaggle_command(args)
+        if result["returncode"] != 0:
+            raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")})
+        return {"status": "success", "message": "Kernel pushed successfully", "stdout": result["stdout"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/kernels/pull")
 def pull_kernel(req: KernelPullRequest):
@@ -324,16 +458,17 @@ def pull_kernel(req: KernelPullRequest):
         path = req.path or str(KERNELS_DIR / req.kernel.replace('/', '_'))
         Path(path).mkdir(parents=True, exist_ok=True)
 
-        cmd = f"kernels pull {req.kernel} -p {path}"
+        args = ["kernels", "pull", req.kernel, "-p", path]
         if req.metadata:
-            cmd += " --metadata"
+            args.append("--metadata")
 
-        result = run_kaggle_command(cmd)
-        if result["returncode"] == 0:
-            return {"status": "success", "kernel": req.kernel, "path": path, "stdout": result["stdout"]}
-        raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"]})
+        result = run_kaggle_command(args)
+        if result["returncode"] != 0:
+            raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")})
+        return {"status": "success", "kernel": req.kernel, "path": path, "stdout": result["stdout"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/kernels/output")
 def download_kernel_output(req: KernelOutputRequest):
@@ -341,61 +476,65 @@ def download_kernel_output(req: KernelOutputRequest):
         path = req.path or str(KERNELS_DIR / f"{req.kernel.replace('/', '_')}_output")
         Path(path).mkdir(parents=True, exist_ok=True)
 
-        cmd = f"kernels output {req.kernel} -p {path}"
+        args = ["kernels", "output", req.kernel, "-p", path]
         if req.force:
-            cmd += " --force"
+            args.append("--force")
         if req.quiet:
-            cmd += " --quiet"
+            args.append("--quiet")
 
-        result = run_kaggle_command(cmd)
-        if result["returncode"] == 0:
-            return {"status": "success", "kernel": req.kernel, "output_path": path, "stdout": result["stdout"]}
-        raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"]})
+        result = run_kaggle_command(args)
+        if result["returncode"] != 0:
+            raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")})
+        return {"status": "success", "kernel": req.kernel, "output_path": path, "stdout": result["stdout"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/kernels/status")
 def get_kernel_status(req: KernelStatusRequest):
     try:
-        cmd = f"kernels status {req.kernel}"
-        result = run_kaggle_command(cmd)
-        if result["returncode"] == 0:
-            return {"status": "success", "kernel": req.kernel, "info": result["stdout"]}
-        raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"]})
+        args = ["kernels", "status", req.kernel]
+        result = run_kaggle_command(args)
+        if result["returncode"] != 0:
+            raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")})
+        return {"status": "success", "kernel": req.kernel, "info": result["stdout"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/config/view")
 def view_config():
     try:
-        cmd = "config view"
-        result = run_kaggle_command(cmd)
-        if result["returncode"] == 0:
-            return {"status": "success", "config": result["stdout"]}
-        raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"]})
+        args = ["config", "view"]
+        result = run_kaggle_command(args)
+        if result["returncode"] != 0:
+            raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")})
+        return {"status": "success", "config": result["stdout"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/config/set")
 def set_config(req: dict):
     try:
-        cmd = f"config set -n {req['key']} -v {req['value']}"
-        result = run_kaggle_command(cmd)
-        if result["returncode"] == 0:
-            return {"status": "success", "message": f"Set {req['key']}={req['value']}", "stdout": result["stdout"]}
-        raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"]})
+        args = ["config", "set", "-n", req['key'], "-v", req['value']]
+        result = run_kaggle_command(args)
+        if result["returncode"] != 0:
+            raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")})
+        return {"status": "success", "message": f"Set {req['key']}={req['value']}", "stdout": result["stdout"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/status")
 def kaggle_status():
     try:
-        result = run_kaggle_command("--version")
+        result = run_kaggle_command(["--version"])
         if result["returncode"] == 0:
             return {
                 "status": "operational",
                 "message": "Kaggle API is configured and accessible",
-                "version": result["stdout"].strip(),
+                "version": result["raw_stdout"].strip() if result.get("raw_stdout") else result.get("stdout", "").strip(),
                 "environment": "venv (Termux)",
                 "kaggle_config_dir": str(KAGGLE_CONFIG_DIR),
                 "endpoints": {
@@ -403,9 +542,10 @@ def kaggle_status():
                     "datasets": ["list", "files", "download", "create"],
                     "kernels": ["list", "push", "pull", "output", "status"],
                     "config": ["view", "set"]
-                }
+                },
+                "last_cmd": result["command"]
             }
         else:
-            return {"status": "error", "message": "Kaggle CLI not accessible", "error": result["stderr"]}
+            return {"status": "error", "message": "Kaggle CLI not accessible", "error": result["stderr"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")}
     except Exception as e:
         return {"status": "error", "message": str(e)}

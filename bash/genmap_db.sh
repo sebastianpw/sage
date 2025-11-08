@@ -32,7 +32,8 @@ FRAMES_DIR_REL="${FRAMES_ROOT#$PROJECT_ROOT/public/}"
 # -----------------------------
 # Config
 # -----------------------------
-CLOUDFLARED_URL="https://c7sr49n1ktm9.share.zrok.io"
+ZROK_URL=$("$SCRIPT_DIR/zrok_echo.sh")
+#ZROK_URL="https://qbqtyxpox7an.share.zrok.io"
 DB_USER="root"
 DB_NAME=$("$SCRIPT_DIR/db_name.sh")
 MAX_RETRIES=1
@@ -92,7 +93,7 @@ SELECT CONCAT('frame', LPAD(LAST_INSERT_ID(), 7, '0'));
 
   attempt=1
   while [ $attempt -le $MAX_RETRIES ]; do
-    curl -s -X POST "$CLOUDFLARED_URL/map/$MAP_TYPE" \
+    curl -s -X POST "$ZROK_URL/map/$MAP_TYPE" \
       -F "file=@$IMG2IMG_FILENAME" \
       --output "$outfile"
 
