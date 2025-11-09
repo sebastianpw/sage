@@ -76,29 +76,37 @@ if check_wake_lock; then
     echo "Wake lock acquired!"
 else
 
-    KAGGLE_DIR="$SCRIPT_DIR/../token/.kaggle"
-    KAGGLE_FILE="$KAGGLE_DIR/kaggle.json"
 
-    # 1. Read existing JSON into memory
-    if [ -f "$KAGGLE_FILE" ]; then
-        KAGGLE_JSON=$(cat "$KAGGLE_FILE")
-    else
-        echo "No existing kaggle.json found, skipping backup."
-        KAGGLE_JSON=""
-    fi
 
-    # 2. Remove old folder and file
-    rm -rf "$KAGGLE_DIR"
+KAGGLE_DIR="$SCRIPT_DIR/../token/.kaggle"
+KAGGLE_FILE="$KAGGLE_DIR/kaggle.json"
 
-    # 3. Recreate folder
-    mkdir -p "$KAGGLE_DIR"
-    chmod 777 "$KAGGLE_DIR"
+# Ensure folder exists and is writable
+mkdir -p "$KAGGLE_DIR"
+chmod 777 "$KAGGLE_DIR"
 
-    # 4. Restore JSON from memory if it exists
-    if [ -n "$KAGGLE_JSON" ]; then
-        echo "$KAGGLE_JSON" > "$KAGGLE_FILE"
-        chmod 777 "$KAGGLE_FILE"
-    fi
+# Use PHP CLI to read/write the JSON directly
+php <<PHP_CODE
+<?php
+\$kaggleFile = '$KAGGLE_FILE';
+
+if (file_exists(\$kaggleFile)) {
+    \$json = file_get_contents(\$kaggleFile);
+    if (json_decode(\$json) === null) {
+        \$json = '{}';
+    }
+} else {
+    \$json = '{}';
+}
+
+// Rewrite file with full permissions
+file_put_contents(\$kaggleFile, \$json);
+chmod(\$kaggleFile, 0777);
+echo "Kaggle JSON restored at \$kaggleFile\n";
+?>
+PHP_CODE
+
+
 
     "$SCRIPT_DIR/cloudflared_tunnel.sh"
 fi
