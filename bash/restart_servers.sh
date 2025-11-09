@@ -78,6 +78,8 @@ else
 
 
 
+sleep 10
+
 KAGGLE_DIR="$SCRIPT_DIR/../token/.kaggle"
 KAGGLE_FILE="$KAGGLE_DIR/kaggle.json"
 
