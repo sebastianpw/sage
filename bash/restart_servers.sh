@@ -75,6 +75,31 @@ if check_wake_lock; then
     termux-wake-lock
     echo "Wake lock acquired!"
 else
+
+    KAGGLE_DIR="$SCRIPT_DIR/../token/.kaggle"
+    KAGGLE_FILE="$KAGGLE_DIR/kaggle.json"
+
+    # 1. Read existing JSON into memory
+    if [ -f "$KAGGLE_FILE" ]; then
+        KAGGLE_JSON=$(cat "$KAGGLE_FILE")
+    else
+        echo "No existing kaggle.json found, skipping backup."
+        KAGGLE_JSON=""
+    fi
+
+    # 2. Remove old folder and file
+    rm -rf "$KAGGLE_DIR"
+
+    # 3. Recreate folder
+    mkdir -p "$KAGGLE_DIR"
+    chmod 777 "$KAGGLE_DIR"
+
+    # 4. Restore JSON from memory if it exists
+    if [ -n "$KAGGLE_JSON" ]; then
+        echo "$KAGGLE_JSON" > "$KAGGLE_FILE"
+        chmod 777 "$KAGGLE_FILE"
+    fi
+
     "$SCRIPT_DIR/cloudflared_tunnel.sh"
 fi
 
