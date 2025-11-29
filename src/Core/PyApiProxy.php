@@ -25,6 +25,7 @@ abstract class PyApiProxy
  */
 protected function debugApiRequest(string $endpoint, array $postData): void
 {
+    /*
     $debugInfo = [
         'endpoint' => $endpoint,
         'post_data' => $postData,
@@ -34,6 +35,7 @@ protected function debugApiRequest(string $endpoint, array $postData): void
     // Log to file
     $logFile = $this->spw->getProjectPath() . '/public/temp_image_tests/api_debug.log';
     file_put_contents($logFile, json_encode($debugInfo, JSON_PRETTY_PRINT) . "\n\n", FILE_APPEND);
+     */
 
     // Also log curl command for testing
     $curlCmd = "curl -X POST ";
@@ -45,7 +47,9 @@ protected function debugApiRequest(string $endpoint, array $postData): void
         }
     }
     $curlCmd .= $endpoint;
-    file_put_contents($logFile, "CURL: " . $curlCmd . "\n\n", FILE_APPEND);
+    /*
+        file_put_contents($logFile, "CURL: " . $curlCmd . "\n\n", FILE_APPEND);
+     */
 }
 
 
@@ -183,10 +187,12 @@ private function executeCurlRequest(string $endpoint, array $postData): ?string
     $error = curl_error($ch);
     curl_close($ch);
 
+    /*
     // Log response
     $logFile = $this->spw->getProjectPath() . '/public/temp_image_tests/api_debug.log';
     file_put_contents($logFile, "Response HTTP: {$httpCode}\n", FILE_APPEND);
     file_put_contents($logFile, "Response Body: {$responseBody}\n\n", FILE_APPEND);
+     */
 
     if ($error) {
         throw new Exception("cURL Error calling Python API: {$error}");

@@ -252,7 +252,11 @@ $sessionUser = SetupManager::getSessionUser($pdo);
 
       <hr style="margin-top:16px;">
       <p class="text-muted" style="font-size:0.95rem;">
-        Notes: Inserts admin directly. In production set <code>DEV_MODE=false</code> or remove <code>setup.php</code> after use.
+        Notes: Inserts admin directly. In production 
+<?php if ($devMode): ?>
+set <code>DEV_MODE=false</code> or 
+<?php endif; ?>
+remove <code>setup.php</code> after use.
       </p>
     </div>
   </div>
