@@ -212,10 +212,17 @@ CREATE TABLE `character_poses` (
   `state_id_active` int(11) DEFAULT NULL,
   `img2img` tinyint(1) NOT NULL DEFAULT 0,
   `img2img_frame_id` int(11) DEFAULT NULL,
+  `img2img_frame_filename` varchar(100) DEFAULT NULL,
   `img2img_prompt` text DEFAULT NULL,
+  `cnmap` tinyint(1) NOT NULL DEFAULT 0,
+  `cnmap_frame_id` int(11) DEFAULT NULL,
+  `cnmap_frame_filename` varchar(100) DEFAULT NULL,
+  `cnmap_prompt` text DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
 
 -- --------------------------------------------------------
 
