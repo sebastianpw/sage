@@ -292,7 +292,7 @@ $entityDisplayName = $entityTypes[$entityType] ?? ucfirst(rtrim($entityType, 's'
         } catch (e) {}
       })();
     </script>
-    
+    <?php echo \App\Core\SpwBase::getInstance()->getJquery(); ?> 
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/photoswipe@5.3.7/dist/photoswipe.css">
     
