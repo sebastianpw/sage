@@ -37,6 +37,7 @@ ob_start();
     <link rel="stylesheet" href="/vendor/font-awesome/css/all.min.css" />
 <?php endif; ?>
 
+<link rel="stylesheet" href="/css/base.css">
 <link rel="stylesheet" href="/css/toast.css">
 <script src="/js/toast.js"></script>
 
@@ -109,8 +110,8 @@ button:disabled, .disabled {
 </style>
 
 <div class="view-container">
-<a style="font-size: 1.5em; float:left;" href="dashboard.php" class="back-link" title="Dashboard">🔮</a>
-  <h2 style="float: left; margin: 0 0 20px 10px;">📽️  Slideshow</h2>
+<a style="font-size: 1.5em; float:left; display:none;" href="dashboard.php" class="back-link" title="Dashboard">🔮</a>
+  <h2 style="float: left; margin: 0 0 20px 45px;">📽️  Slideshow</h2>
   <div style="clear: left;"> </div>
   
   
@@ -134,20 +135,20 @@ button:disabled, .disabled {
 
   <div class="controls">
     <div class="control-left">
-      <button id="play-pause" class="play-btn" title="Pause/Play">⏸</button>
+      <button id="play-pause" class="play-btn btn btn-sm" title="Pause/Play">⏸</button>
 
       <label>
         Autoplay (ms):
-        <input id="autoplay-input" type="number" value="500" style="width:100px"/>
+        <input class="form-control" id="autoplay-input" type="number" value="500" style="width:100px"/>
       </label>
 
-      <button style="display: none;" id="refresh-index">Refresh Index</button>
+      <button style="display: none;" id="refresh-index" class="btn btn-sm">Refresh Index</button>
 
       <label>
         Jump:
-        <input id="jump-to" class="jump-input" type="number" min="1" value="<?= (int)$startFrame ?>" />
+        <input id="jump-to" class="form-control jump-input" type="number" min="1" value="<?= (int)$startFrame ?>" />
       </label>
-      <button id="jump-btn" style="margin-top: 20px;">Jump</button>
+      <button id="jump-btn" class="btn btn-sm" style="margin-top: 20px;">Jump</button>
     </div>
   </div>
 
@@ -161,10 +162,12 @@ button:disabled, .disabled {
 <div>
    <!-- Import Buttons -->
     <div id="import-buttons" style="margin-top: 10px;">
-        <button id="import-generative" class="import-btn">Import Generative</button>
-        <button id="import-controlnet" class="import-btn">Import ControlNet Map</button>
-        <button id="use-prompt-matrix" class="import-btn">Use Prompt Matrix</button>
-        <button id="delete-frame" class="import-btn">Delete Frame</button>
+        <button id="view-frame" class="import-btn btn btn-sm">View Frame</button>
+        <button id="edit-entity" class="import-btn btn btn-sm">Edit Entity</button>
+        <button id="import-generative" class="import-btn btn btn-sm">Import Generative</button>
+        <button id="import-controlnet" class="import-btn btn btn-sm">Import ControlNet Map</button>
+        <button id="use-prompt-matrix" class="import-btn btn btn-sm">Use Prompt Matrix</button>
+        <button id="delete-frame" class="import-btn btn btn-sm">Delete Frame</button>
     </div>
 </div>
 
@@ -275,13 +278,30 @@ button:disabled, .disabled {
                 'delete-frame': 'deleteFrame'
             };
 
-            const functionName = functionMap[buttonId];
-            
             // Set the onclick event handler
             button.onclick = function() {
                 const entity = this.getAttribute('data-entity-type');
                 const entityId = this.getAttribute('data-entity-id');
                 const frameId = this.getAttribute('data-frame-id');
+
+                // Special handling for the view-frame button
+                if (buttonId === 'view-frame') {
+                    if (entity && entityId && frameId) {
+                        showFrameDetailsModal(frameId, 0.7);
+                    }
+                    return; // Stop further execution for this button
+                }
+                
+                // Special handling for the edit-entity button
+                if (buttonId === 'edit-entity') {
+                    if (entity && entityId) {
+                        // This function is defined in modal_frame_details.php
+                        window.showEntityFormInModal(entity, entityId);
+                    }
+                    return; // Stop further execution for this button
+                }
+                
+                const functionName = functionMap[buttonId];
                 if (functionName && window[functionName]) {
                     window[functionName](entity, entityId, frameId);
                 }
@@ -295,12 +315,16 @@ button:disabled, .disabled {
     // Show/hide and enable/disable buttons based on metadata availability
     if (metadata.entity_id && metadata.frame_id) {
         // Update all buttons to be enabled with metadata and active
+        updateButtonState('view-frame', metadata, true);
+        updateButtonState('edit-entity', metadata, true);
         updateButtonState('import-generative', metadata, true);
         updateButtonState('import-controlnet', metadata, true);
         updateButtonState('use-prompt-matrix', metadata, true);
         updateButtonState('delete-frame', metadata, true);
     } else {
         // Update all buttons to be disabled (greyed out) when no metadata is available
+        updateButtonState('view-frame', null, false);
+        updateButtonState('edit-entity', null, false);
         updateButtonState('import-generative', null, false);
         updateButtonState('import-controlnet', null, false);
         updateButtonState('use-prompt-matrix', null, false);
@@ -529,6 +553,7 @@ button:disabled, .disabled {
 </script>
 
 <?php
+require 'modal_frame_details.php';
 require "floatool.php";
 $content = ob_get_clean();
 $content .= $eruda;

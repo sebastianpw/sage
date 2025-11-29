@@ -1,83 +1,222 @@
+/* public/css/form.css
+ *
+ * Updated to use base.css variables (colors, elevation, etc.)
+ * Assumes /css/base.css is loaded before this file so variables are available.
+ *
+ * Keeps original structure but replaces hard-coded colors with theme variables
+ * and uses base utility classes where appropriate (.form-container, .form-control, .btn, .btn-primary).
+ */
+
+/* Page */
 body {
-    font-family: Arial, sans-serif;
-    background-color: #f4f4f9;
+    /* let base.css control font-family / font-size; provide sensible fallbacks */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg);
+    color: var(--text);
     margin: 0;
     padding: 20px;
-    color: #333;
 }
 
+/* Form wrapper (replaces direct `form` styling from old file) */
+.form-container,
 form {
     max-width: 600px;
     margin: 40px auto;
-    background: #fff;
-    padding: 25px;
-    border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    background: var(--card);
+    padding: 24px;
+    border-radius: 8px;
+    box-shadow: var(--card-elevation);
+    border: 1px solid rgba(var(--muted-border-rgb), 0.06);
+    box-sizing: border-box;
 }
 
+/* Headings / labels */
 label {
     display: block;
     margin-bottom: 6px;
     font-weight: 600;
+    color: var(--text);
+    font-size: 0.95rem;
 }
 
+/* Form controls - use same styling as base's .form-control but keep improvements for older markup */
 input[type="text"],
 input[type="number"],
-select {
+input[type="email"],
+input[type="password"],
+select,
+textarea,
+.form-control {
+    display: block;
     width: 100%;
     padding: 10px 12px;
     margin-bottom: 18px;
-    border: 1px solid #ccc;
-    border-radius: 8px;
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--text);
+    background-color: var(--bg);
+    border: 1px solid rgba(var(--muted-border-rgb), 1);
+    border-radius: 6px;
     box-sizing: border-box;
+    transition: border-color .15s ease-in-out, box-shadow .15s ease-in-out;
 }
 
-button {
-    background-color: #1a7f37;
-    color: #fff;
-    padding: 10px 18px;
-    border: none;
+/* Focus state uses accent */
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+select:focus,
+textarea:focus,
+.form-control:focus {
+    outline: 0;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+}
+
+/* Textarea sizing */
+textarea { min-height: 120px; font-family: inherit; }
+textarea.small { min-height: 80px; }
+
+/* Buttons: prefer base .btn and .btn-primary; provide fallback rules for legacy markup */
+button,
+.btn {
+    padding: 10px 16px;
     border-radius: 8px;
-    cursor: pointer;
     font-weight: 600;
+    cursor: pointer;
+    border: 1px solid rgba(var(--muted-border-rgb), 0.9);
+    background: transparent;
+    color: var(--text);
+    transition: all 0.12s ease;
 }
 
-button:hover {
-    background-color: #155a27;
+/* Primary action */
+button[type="submit"],
+.btn-primary,
+button.btn-primary {
+    color: #fff;
+    background-color: var(--green);
+    border-color: rgba(240, 246, 252, 0.06);
+}
+button[type="submit"]:hover,
+.btn-primary:hover,
+button.btn-primary:hover {
+    filter: brightness(0.95);
 }
 
-.result {
+/* Secondary / disabled look */
+button[disabled],
+.btn:disabled { cursor: not-allowed; opacity: 0.6; }
+
+/* Result / notification blocks - match base notification styles */
+.result,
+.notification {
     margin-top: 20px;
     padding: 12px;
     border-radius: 8px;
+    border: 1px solid rgba(var(--muted-border-rgb), 0.06);
+    background-color: var(--card);
+    color: var(--text);
 }
 
-.result.success {
-    background-color: #e6f5ea;
-    color: #1a7f37;
+/* Success */
+.result.success,
+.notification.notification-success {
+    background-color: rgba(35, 134, 54, 0.08);
+    color: var(--green);
+    border-color: rgba(35, 134, 54, 0.12);
     font-weight: 600;
 }
 
-.result.error {
-    background-color: #fdecea;
-    color: #b42318;
+/* Error */
+.result.error,
+.notification.notification-error {
+    background-color: rgba(218, 54, 51, 0.06);
+    color: var(--red);
+    border-color: rgba(218, 54, 51, 0.1);
     font-weight: 600;
 }
 
+/* Utilities for showing file path / truncated strings (uses theme colors) */
 .table-path {
-  max-width: 200px;       /* adjust as needed */
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: inline-block;
-  vertical-align: middle;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    vertical-align: middle;
+    color: var(--text);
 }
 .table-path-full {
-  display: block;
-  font-size: 0.8em;
-  color: #666;
-  word-break: break-all;
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    word-break: break-all;
 }
 
+/* Import disabled / warning (maps to notification-warning) */
+.import-disabled {
+    padding: 12px;
+    border-radius: 6px;
+    background-color: rgba(245, 159, 11, 0.08);
+    color: var(--orange);
+    border: 1px solid rgba(245, 159, 11, 0.12);
+    margin: 20px 0;
+}
 
+/* Simple list of files - neutral look that respects theme */
+.file-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 12px 0;
+}
+.file-list li {
+    margin-bottom: 6px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: rgba(var(--muted-border-rgb), 0.02);
+    color: var(--text);
+    border: 1px solid rgba(var(--muted-border-rgb), 0.04);
+}
 
+/* Spawn-type tabs converted to use variables */
+.spawn-type-tabs {
+    margin: 20px 0;
+    border-bottom: 2px solid rgba(var(--muted-border-rgb), 0.06);
+}
+.spawn-tab {
+    display: inline-block;
+    padding: 8px 14px;
+    margin-right: 8px;
+    text-decoration: none;
+    border: 1px solid rgba(var(--muted-border-rgb), 0.06);
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    background: rgba(var(--muted-border-rgb), 0.02);
+    color: var(--text);
+    font-weight: 600;
+}
+.spawn-tab.active {
+    background: var(--accent);
+    color: var(--text);
+    border-bottom: 2px solid var(--accent);
+}
+
+/* small responsive tweaks - preserve original layout behaviour */
+@media (max-width: 720px) {
+    .form-container, form { margin: 20px; padding: 18px; }
+}
+
+/* Keep legacy classes usable */
+button.primary,
+button.btn-primary { /* legacy selectors fallback */
+    color: #fff;
+    background-color: var(--green);
+}
+
+/* Accessibility: focus ring on actionable items */
+a:focus, button:focus, input:focus, select:focus, textarea:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+}

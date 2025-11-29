@@ -256,12 +256,12 @@ protected function renderItem(array $row): string {
         ?>
         <div class="album-container <?= $this->gridOn ? 'grid-view' : '' ?>">
             <div style="display: flex; align-items: center; margin-bottom: 20px; gap: 10px;">
-                <a href="dashboard.php" title="Show Gallery" style="text-decoration: none; font-size: 24px; display: inline-block;">
+                <a href="dashboard.php" title="Show Gallery" style="text-decoration: none; font-size: 24px; display: none;">
                     🌅
 		</a>  
 		<?php 
 	            $entity = $this->getGalleryEntity();
-	            echo '<h2><a href="sql_crud_' . $entity . '.php">' . $entityIcons[$entity] . '</a></h2>';
+	            echo '<h2 style="padding-top:10px;padding-left:35px;"><a href="sql_crud_' . $entity . '.php">' . $entityIcons[$entity] . '</a></h2>';
                 ?>
 		<h2 style="margin: 0;"><?= $this->getGalleryTitle() ?></h2>
 
@@ -357,7 +357,7 @@ protected function renderItem(array $row): string {
 
 
 
-        <!-- Image Edit Modal (Cropper) -->
+        <!-- Image Edit Modal (Cropper) 
         <div id="imageEditModal" class="modal" style="display:none;">
           <div class="modal-content" style="max-width:90%; width:1000px; padding:10px;">
             <button class="close" id="imageEditClose" style="position:absolute; right:10px; top:10px; font-size:18px;">&times;</button>
@@ -373,11 +373,28 @@ protected function renderItem(array $row): string {
                 <div style="width:360px;">
                     <div style="margin-bottom:8px;">
                         <label for="imageEditMode"><strong>Mode</strong></label>
+
+
+<select id="imageEditMode" style="width:100%; margin-top:6px; padding: 6px; background-color: #333; color: white; border: 1px solid #555;">
+    <option value="mask">Mask (Green Overlay)</option>
+    <option value="crop">Crop (Reduce Image)</option>
+    <!- The "placement" option can be implemented later using the same pattern --
+    <option value="placement" disabled>Placement (Future)</option>
+</select>
+
+
+
+
+<!-
                         <select id="imageEditMode" style="width:100%; margin-top:6px;">
                             <option value="crop">Crop</option>
                             <option value="greenscreen">Green area (greenscreen)</option>
                             <option value="placement">Placement</option>
                         </select>
+--
+
+
+
                     </div>
 
                     <div style="margin-bottom:8px;">
@@ -407,6 +424,7 @@ protected function renderItem(array $row): string {
             </div>
           </div>
         </div>
+-->
 
 <script>
 /*
@@ -567,7 +585,7 @@ window.selectStoryboard = async function(frameId, $trigger) {
     // Add separator and manage link
     $menu.append('<div class="sb-menu-sep"></div>');
     $menu.append(`
-        <div class="sb-menu-item" onclick="window.open('/view_storyboards_v2.php','_blank')">
+        <div class="sb-menu-item" onclick="window.open('/view_storyboards.php','_self')">
             📋 Manage Storyboards
         </div>
     `);
@@ -1290,6 +1308,14 @@ $('#toggleView').off('click.gridToggle').on('click.gridToggle', function(e){
         $('#imageEditModal').fadeOut(120);
     }
 
+
+
+
+
+
+
+
+
     window.openImageEditor = function(opts) {
         current.entity = opts.entity;
         current.entityId = opts.entityId;
@@ -1300,7 +1326,7 @@ $('#toggleView').off('click.gridToggle').on('click.gridToggle', function(e){
         $('#imageEditPreviewImg').attr('src', opts.src);
         $('#imageEditNote').val('');
         $('#imageEditApplyNow').prop('checked', false);
-        $('#imageEditMode').val('crop');
+        $('#imageEditMode').val('mask');
 
         $('#imageEditImg').off('load').on('load', function(){
             try { $('#imageEditImg').cropper('destroy'); } catch(e){}
@@ -1364,7 +1390,7 @@ $('#toggleView').off('click.gridToggle').on('click.gridToggle', function(e){
             frame_id: current.frameId,
             entity_id: current.entityId,
             coords: cropData,
-            mode: $('#imageEditMode').val() || 'crop',
+            mode: $('#imageEditMode').val() || 'mask',
             tool: 'jquery-cropper',
             note: $('#imageEditNote').val() || '',
             apply_immediately: doApply ? 1 : 0

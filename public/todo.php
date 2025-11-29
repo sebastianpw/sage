@@ -185,6 +185,25 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Task Dashboard with CRUD</title>
 
+
+
+<script>
+  (function() {
+    try {
+      var theme = localStorage.getItem('spw_theme');
+      if (theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else if (theme === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+      // If no theme is set, we do nothing and let the CSS media query handle it.
+    } catch (e) {
+      // Fails gracefully
+    }
+  })();
+</script>
+
+
 <?php echo \App\Core\SpwBase::getInstance()->getJquery(); ?>
 
 <?php if (\App\Core\SpwBase::CDN_USAGE): ?>
@@ -193,6 +212,7 @@ try {
     <script src="/vendor/sortable/Sortable.min.js"></script>
 <?php endif; ?>
 
+    <link rel="stylesheet" href="/css/base.css">
     <link rel="stylesheet" href="/css/todo.css">
     
     <style>
@@ -231,26 +251,34 @@ try {
     </style>
 </head>
 <body>
-<?php require "floatool.php"; echo $eruda; ?>
+<?php 
+//require "floatool.php"; 
+echo $eruda; 
+?>
 
     <div class="dashboard">
-        
-        <div class="header">
-            <a href="dashboard.php" class="back-link" title="Dashboard">🔮</a>
-            <h2 style="padding-bottom: 5px;">🎫 SAGE TODOs</h2>
-            <select id="modelSelect" class="model-select">
-                <option value="">Loading models...</option>
-            </select>
-            <button class="btn" id="analyzeBtn" onclick="analyzeTasks()">
-                <span class="btn-text">🧠 Analyze</span>
+
+
+
+<div class="header" style="margin-bottom: 0;">
+    <h2 style="padding-bottom: 5px;">🎫 SAGE TODOs</h2>
+    
+    <!-- ADD THIS THEME TOGGLE BUTTON -->
+    <button id="themeToggle" class="btn" title="Toggle Theme" style="margin-left: auto;">🌙</button>
+
+    <select id="modelSelect" class="form-control">
+        <option value="">Loading models...</option>
+    </select>
+    <button class="btn btn-sm" id="analyzeBtn" onclick="analyzeTasks()">
+        <span class="btn-text">🧠 AI</span>
+    </button>
+            <button class="btn btn-sm" onclick="openCreateModal()">
+                <span class="btn-text">➕ New</span>
             </button>
-            <button class="btn success" onclick="openCreateModal()">
-                <span class="btn-text">➕ Add New</span>
-            </button>
-            <button class="btn success" onclick="toggleSortMode()">
+            <button class="btn btn-sm" onclick="toggleSortMode()">
                 <span class="btn-text" id="sortModeText">🔄 +Drag</span>
             </button>
-            <button class="btn secondary" onclick="saveSortOrder()">
+            <button class="btn btn-sm" onclick="saveSortOrder()">
                 <span class="btn-text">💾 Save</span>
             </button>
         </div>
@@ -268,7 +296,7 @@ try {
         </div>
 
         <div class="filters" style="font-size: 0.5em;">
-            <input type="text" class="search-box" id="searchBox" placeholder="🔍 Search TODOs...">
+            <input style="margin-bottom: 10px;" type="text" class="form-control" id="searchBox" placeholder="🔍 Search TODOs...">
             
             <div class="filter-group">
                 <label>Priority:</label>
@@ -279,7 +307,7 @@ try {
                 <button class="filter-btn" data-filter="priority" data-value="low">Low</button>
             </div>
             
-            <div class="filter-group">
+            <div class="filter-group" style="display:none;">
                 <label>Area:</label>
                 <button class="filter-btn active" data-filter="area" data-value="all">All Areas</button>
                 <button class="filter-btn" data-filter="area" data-value="UI">UI</button>
@@ -372,22 +400,22 @@ try {
                 
                 <div class="form-group">
                     <label for="taskName">Task Name *</label>
-                    <input type="text" id="taskName" name="name" required>
+                    <input type="text" id="taskName" name="name" class="form-control" required>
                 </div>
                 
                 <div class="form-group">
                     <label for="taskDescription">Description</label>
-                    <textarea id="taskDescription" name="description"></textarea>
+                    <textarea id="taskDescription" name="description"class="form-control"></textarea>
                 </div>
                 
                 <div class="form-group">
                     <label for="taskOrder">Priority Order</label>
-                    <input type="number" id="taskOrder" name="order" value="100" min="1">
+                    <input type="number" id="taskOrder" name="order" value="100" min="1"class="form-control">
                 </div>
                 
                 <div class="form-group">
                     <label for="taskStatus">Status</label>
-                    <select id="taskStatus" name="status">
+                    <select id="taskStatus" name="status"class="form-control">
                         <option value="pending">Pending</option>
                         <option value="in_progress">In Progress</option>
                         <option value="completed">Completed</option>
@@ -851,7 +879,7 @@ function showLoading(buttonId) {
     const btn = document.getElementById(buttonId);
     const textSpan = btn.querySelector('.btn-text');
     const originalText = textSpan.textContent;
-    textSpan.innerHTML = '<span class="loading">⟳</span> Processing...';
+    textSpan.innerHTML = '<span class="loading">⟳</span> ...';
     btn.disabled = true;
     return originalText;
 }
@@ -1068,6 +1096,10 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 
+
+<script src="/js/theme-manager.js"></script>
+
+<script src="/js/sage-home-button.js" data-home="/dashboard.php"></script>
 
 </body>
 </html>

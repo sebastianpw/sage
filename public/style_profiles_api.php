@@ -1,6 +1,6 @@
 <?php
 // public/style_profiles_api.php
-// Consolidated API for style profiles: actions: list, load, save_json, save_db, delete, download
+// Consolidated API for style profiles: actions: list, load, save_json, save_db, delete, download, get_config, save_config, save_convert_result
 require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
 
@@ -29,7 +29,7 @@ if ($action === 'download') {
         exit;
     }
     try {
-        $stmt = $pdo->prepare("SELECT filename, json_payload, profile_name FROM style_profiles WHERE id = :id LIMIT 1");
+        $stmt = $pdo->prepare("SELECT filename, json_payload, name FROM style_profiles WHERE id = :id LIMIT 1");
         $stmt->execute([':id' => $id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$row) {
@@ -40,7 +40,7 @@ if ($action === 'download') {
 
         $filename = $row['filename'];
         $filepath = $saveDir . '/' . $filename;
-        $downloadName = ($row['profile_name'] ? preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $row['profile_name']) : 'style_profile') . '_' . $id . '.json';
+        $downloadName = ($row['name'] ? preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $row['name']) : 'style_profile') . '_' . $id . '.json';
 
         if ($filename && is_file($filepath) && is_readable($filepath)) {
             header('Content-Type: application/json; charset=utf-8');
@@ -68,8 +68,8 @@ if ($action === 'download') {
     }
 }
 
-// for JSON-based actions (list, load, save_json, save_db, delete)
-if (!in_array($action, ['list','load','save_json','save_db','delete'])) {
+// for JSON-based actions
+if (!in_array($action, ['list','load','save_json','save_db','delete','convert_proxy','get_config','save_config','get_generator_configs', 'save_convert_result'])) {
     jsonResp(['status'=>'error','message'=>'Unknown action']);
 }
 
@@ -78,13 +78,144 @@ $rawBody = file_get_contents('php://input');
 $body = null;
 if ($rawBody) {
     $body = json_decode($rawBody, true);
-    // if JSON parse failed, body stays null (we'll handle it per-action)
+}
+
+// action: get_config - retrieve generator config IDs
+if ($action === 'get_config') {
+    try {
+
+        
+        
+        
+        $stmt = $pdo->query("SELECT config_key, config_value FROM style_profile_config WHERE config_key IN ('axes_generator_config_id', 'polish_generator_config_id')");
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        
+        
+        
+        $config = [];
+        foreach ($rows as $r) {
+            $config[$r['config_key']] = $r['config_value'];
+        }
+        jsonResp(['status'=>'ok','config'=>$config]);
+        
+        
+
+    } catch (Exception $e) {
+        jsonResp(['status'=>'error','message'=>$e->getMessage()]);
+    }
+}
+
+// action: save_config - update generator config IDs
+if ($action === 'save_config') {
+    if (!$body) jsonResp(['status'=>'error','message'=>'Empty request or invalid JSON']);
+    try {
+        $pdo->beginTransaction();
+        
+        if (isset($body['axes_generator_config_id'])) {
+            $stmt = $pdo->prepare("INSERT INTO style_profile_config (config_key, config_value) VALUES ('axes_generator_config_id', :val) ON DUPLICATE KEY UPDATE config_value = :val");
+            $stmt->execute([':val' => $body['axes_generator_config_id']]);
+        }
+        
+        if (isset($body['polish_generator_config_id'])) {
+            $stmt = $pdo->prepare("INSERT INTO style_profile_config (config_key, config_value) VALUES ('polish_generator_config_id', :val) ON DUPLICATE KEY UPDATE config_value = :val");
+            $stmt->execute([':val' => $body['polish_generator_config_id']]);
+        }
+        
+        $pdo->commit();
+        jsonResp(['status'=>'ok']);
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        jsonResp(['status'=>'error','message'=>$e->getMessage()]);
+    }
+}
+
+// action: get_generator_configs - list all available generator configs for dropdown
+if ($action === 'get_generator_configs') {
+    try {
+        
+        
+        /*
+        $stmt = $pdo->query("SELECT config_id, title FROM generator_config WHERE active = 1 ORDER BY title ASC");
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        */
+        
+        
+        
+        
+        
+              
+
+// Assume $pdo is your configured PDO connection object
+
+// The area keys you want to find configs for
+$areaKeys = [
+    'style-profiles-axes-translation',
+    'style-profiles-prompt-polish'
+];
+
+// 1. Create the correct number of '?' placeholders for the SQL IN clause
+// This will result in a string like "?,?"
+$placeholders = implode(',', array_fill(0, count($areaKeys), '?'));
+
+// 2. Construct the final SQL query using the correct table and column names
+$sql = "
+    SELECT DISTINCT
+        g.config_id,
+        g.title
+    FROM
+        generator_config g
+    JOIN
+        generator_config_to_display_area gctda ON g.id = gctda.generator_config_id
+    JOIN
+        generator_config_display_area gcda ON gctda.display_area_id = gcda.id
+    WHERE
+        g.active = 1
+        AND gcda.area_key IN ($placeholders)
+    ORDER BY
+        g.title ASC
+";
+
+// 3. Prepare the SQL statement to prevent SQL injection
+$stmt = $pdo->prepare($sql);
+
+// 4. Execute the statement, passing the array of area keys.
+// PDO will safely bind each value in the array to a placeholder.
+$stmt->execute($areaKeys);
+
+// 5. Fetch all the matching rows
+$rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// The $rows variable now holds the desired list of generators
+// e.g., print_r($rows);
+
+
+    
+        
+        
+        
+        
+        
+        
+        
+        jsonResp(['status'=>'ok','configs'=>$rows]);
+    } catch (Exception $e) {
+        jsonResp(['status'=>'error','message'=>$e->getMessage()]);
+    }
 }
 
 // action: list
 if ($action === 'list') {
     try {
-        $stmt = $pdo->query("SELECT id, profile_name, filename, created_at FROM style_profiles ORDER BY created_at DESC LIMIT 500");
+        $axisGroup = isset($_GET['axis_group']) ? trim($_GET['axis_group']) : null;
+        
+        if ($axisGroup) {
+            $stmt = $pdo->prepare("SELECT id, name, description, axis_group, filename, created_at FROM style_profiles WHERE axis_group = :group ORDER BY created_at DESC LIMIT 500");
+            $stmt->execute([':group' => $axisGroup]);
+        } else {
+            $stmt = $pdo->query("SELECT id, name, description, axis_group, filename, created_at FROM style_profiles ORDER BY created_at DESC LIMIT 500");
+        }
+        
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         jsonResp(['status'=>'ok','profiles'=>$rows]);
     } catch (Exception $e) {
@@ -97,8 +228,9 @@ if ($action === 'load') {
     $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
     if ($id <= 0) jsonResp(['status'=>'error','message'=>'Missing id']);
     try {
+        // Updated query to fetch convert_result
         $stmt = $pdo->prepare("
-            SELECT sp.id AS profile_id, sp.profile_name, sp.created_at,
+            SELECT sp.id AS profile_id, sp.name, sp.description, sp.axis_group, sp.created_at, sp.convert_result,
                    da.id AS axis_id, da.axis_name, da.pole_left, da.pole_right,
                    spa.value
             FROM style_profiles sp
@@ -111,10 +243,14 @@ if ($action === 'load') {
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         if (!$rows) jsonResp(['status'=>'error','message'=>'Profile not found or no axes saved']);
 
+        // Updated profile structure to include convert_result
         $profile = [
             'id' => (int)$rows[0]['profile_id'],
-            'profile_name' => $rows[0]['profile_name'],
+            'name' => $rows[0]['name'],
+            'description' => $rows[0]['description'],
+            'axis_group' => $rows[0]['axis_group'] ?? 'default',
             'created_at' => $rows[0]['created_at'],
+            'convert_result' => $rows[0]['convert_result'],
             'axes' => []
         ];
         foreach ($rows as $r) {
@@ -132,60 +268,19 @@ if ($action === 'load') {
     }
 }
 
-// action: save_json  (client wants to save a JSON file, optionally insert DB row if insert_db flag)
-if ($action === 'save_json') {
-    if (!$body) jsonResp(['status'=>'error','message'=>'Empty request or invalid JSON']);
-    $profileName = isset($body['profile_name']) ? trim($body['profile_name']) : null;
-    $axes = isset($body['axes']) && is_array($body['axes']) ? $body['axes'] : [];
-    $insertDb = isset($body['insert_db']) ? (bool)$body['insert_db'] : false;
-
-    $payload = [
-        'profile_name' => $profileName,
-        'created_at' => $body['created_at'] ?? date(DATE_ATOM),
-        'axes' => $axes
-    ];
-
-    $filenameSafe = $profileName ? preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $profileName) : 'style_profile';
-    $filename = $filenameSafe . '_' . date('Y-m-d_H-i-s') . '.json';
-    $filepath = $saveDir . '/' . $filename;
-
-    $written = @file_put_contents($filepath, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-    if ($written === false) {
-        jsonResp(['status'=>'error','message'=>'Could not write file', 'payload'=>$payload]);
-    }
-
-    if ($insertDb) {
-        try {
-            $stmt = $pdo->prepare("INSERT INTO style_profiles (profile_name, filename, json_payload, created_at) VALUES (:profile_name, :filename, :json_payload, :created_at)");
-            $stmt->execute([
-                ':profile_name' => $profileName,
-                ':filename' => $filename,
-                ':json_payload' => json_encode($payload, JSON_UNESCAPED_UNICODE),
-                ':created_at' => $payload['created_at']
-            ]);
-            $profileId = (int)$pdo->lastInsertId();
-            jsonResp(['status'=>'ok','filename'=>$filename,'filepath'=>$filepath,'payload'=>$payload,'profile_id'=>$profileId]);
-        } catch (Exception $e) {
-            if (isset($fileLogger) && is_callable([$fileLogger,'error'])) $fileLogger->error("style_profiles_api save_json DB insert failed: ".$e->getMessage());
-            // still return success for file
-            jsonResp(['status'=>'ok','filename'=>$filename,'filepath'=>$filepath,'payload'=>$payload]);
-        }
-    } else {
-        jsonResp(['status'=>'ok','filename'=>$filename,'filepath'=>$filepath,'payload'=>$payload]);
-    }
-}
-
-// action: save_db (insert or update). Expects JSON body with payload.axes and optional id.
+// action: save_db
 if ($action === 'save_db') {
     if (!$body) jsonResp(['status'=>'error','message'=>'Empty request or invalid JSON']);
     $profileId = isset($body['id']) ? (int)$body['id'] : 0;
-    $profileName = isset($body['profile_name']) && strlen(trim($body['profile_name'])) ? trim($body['profile_name']) : null;
+    $name = isset($body['name']) && strlen(trim($body['name'])) ? trim($body['name']) : null;
+    $description = isset($body['description']) ? trim($body['description']) : null;
+    $axis_group = isset($body['axis_group']) && !empty(trim($body['axis_group'])) ? trim($body['axis_group']) : 'default';
     $axes = isset($body['axes']) && is_array($body['axes']) ? $body['axes'] : [];
 
     if (count($axes) === 0) jsonResp(['status'=>'error','message'=>'No axes provided']);
 
     try {
-        // Validate axis ids present in DB
+        // Validate axis ids
         $axisIds = array_map(function($a){ return (int)$a['id']; }, $axes);
         $axisIds = array_values(array_unique($axisIds));
         if (count($axisIds) === 0) throw new Exception('No axis IDs');
@@ -201,13 +296,15 @@ if ($action === 'save_db') {
 
         $payload = [
             'id' => $profileId > 0 ? $profileId : null,
-            'profile_name' => $profileName,
+            'name' => $name,
+            'description' => $description,
+            'axis_group' => $axis_group,
             'created_at' => $body['created_at'] ?? (new DateTime('now', new DateTimeZone('UTC')))->format(DATE_ATOM),
             'axes' => $axes
         ];
 
         // save file copy
-        $filenameSafe = $profileName ? preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $profileName) : 'style_profile';
+        $filenameSafe = $name ? preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $name) : 'style_profile';
         $filename = $filenameSafe . '_' . date('Y-m-d_H-i-s') . '.json';
         $filepath = $saveDir . '/' . $filename;
         @file_put_contents($filepath, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
@@ -216,18 +313,22 @@ if ($action === 'save_db') {
 
         if ($profileId > 0) {
             // update
-            $update = $pdo->prepare("UPDATE style_profiles SET profile_name = :profile_name, filename = :filename, json_payload = :json_payload WHERE id = :id");
+            $update = $pdo->prepare("UPDATE style_profiles SET name = :name, description = :description, axis_group = :axis_group, filename = :filename, json_payload = :json_payload WHERE id = :id");
             $update->execute([
-                ':profile_name' => $profileName,
+                ':name' => $name,
+                ':description' => $description,
+                ':axis_group' => $axis_group,
                 ':filename' => $filename,
                 ':json_payload' => json_encode($payload, JSON_UNESCAPED_UNICODE),
                 ':id' => $profileId
             ]);
         } else {
             // insert
-            $ins = $pdo->prepare("INSERT INTO style_profiles (profile_name, filename, json_payload, created_at, created_by) VALUES (:profile_name, :filename, :json_payload, :created_at, :created_by)");
+            $ins = $pdo->prepare("INSERT INTO style_profiles (name, description, axis_group, filename, json_payload, created_at, created_by) VALUES (:name, :description, :axis_group, :filename, :json_payload, :created_at, :created_by)");
             $ins->execute([
-                ':profile_name' => $profileName,
+                ':name' => $name,
+                ':description' => $description,
+                ':axis_group' => $axis_group,
                 ':filename' => $filename,
                 ':json_payload' => json_encode($payload, JSON_UNESCAPED_UNICODE),
                 ':created_at' => date('Y-m-d H:i:s'),
@@ -257,6 +358,99 @@ if ($action === 'save_db') {
         if (isset($fileLogger) && is_callable([$fileLogger,'error'])) $fileLogger->error('style_profiles_api save_db error: '.$e->getMessage());
         jsonResp(['status'=>'error','message'=>$e->getMessage()]);
     }
+}
+
+// New action: save_convert_result
+if ($action === 'save_convert_result') {
+    if (!$body || !isset($body['id']) || !isset($body['result'])) {
+        jsonResp(['status'=>'error','message'=>'Missing id or result']);
+    }
+    $id = (int)$body['id'];
+    $result = is_string($body['result']) ? trim($body['result']) : '';
+    if ($id <= 0) {
+        jsonResp(['status'=>'error','message'=>'Invalid id']);
+    }
+
+    try {
+        $stmt = $pdo->prepare("UPDATE style_profiles SET convert_result = :result WHERE id = :id");
+        $stmt->execute([':result' => $result, ':id' => $id]);
+        jsonResp(['status'=>'ok', 'message'=>'Result saved.']);
+    } catch (Exception $e) {
+        if (isset($fileLogger) && is_callable([$fileLogger,'error'])) {
+            $fileLogger->error('style_profiles_api save_convert_result error: '.$e->getMessage());
+        }
+        jsonResp(['status'=>'error','message'=>$e->getMessage()]);
+    }
+}
+
+
+if ($action === 'convert_proxy') {
+    $raw = file_get_contents('php://input');
+    header('Content-Type: application/json');
+
+    $forwardPayload = $raw ?: '{}';
+
+    $decoded = json_decode($raw, true);
+    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+        if (array_key_exists('profile', $decoded) && !array_key_exists('profiles', $decoded)) {
+            $decoded['profiles'] = [ $decoded['profile'] ];
+            unset($decoded['profile']);
+        }
+
+        if (array_key_exists('profiles', $decoded)) {
+            $p = $decoded['profiles'];
+            if (!is_array($p) || array_keys($p) !== range(0, count($p) - 1)) {
+                $decoded['profiles'] = [ $p ];
+            }
+        } else {
+            if (isset($decoded['axes']) || isset($decoded['name']) || isset($decoded['id'])) {
+                $decoded = ['profiles' => [ $decoded ]];
+            }
+        }
+        
+        // Load generator config IDs from database
+        try {
+            $configStmt = $pdo->query("SELECT config_key, config_value FROM style_profile_config WHERE config_key IN ('axes_generator_config_id', 'polish_generator_config_id')");
+            $configRows = $configStmt->fetchAll(PDO::FETCH_KEY_PAIR);
+            
+            if (isset($configRows['axes_generator_config_id'])) {
+                $decoded['generator_config_id'] = $configRows['axes_generator_config_id'];
+            }
+            if (isset($configRows['polish_generator_config_id'])) {
+                $decoded['polish_generator_config_id'] = $configRows['polish_generator_config_id'];
+            }
+        } catch (Exception $e) {
+            // fallback to defaults if config fetch fails
+            $decoded['generator_config_id'] = '777af2baa9d8360fb01e6337368880c9';
+            $decoded['polish_generator_config_id'] = '623ce189ac2ede98c2d60c24c0d814e2';
+        }
+
+        $forwardPayload = json_encode($decoded);
+    }
+
+    $target = 'http://127.0.0.1:8009/style/convert';
+    $ch = curl_init($target);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $forwardPayload);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 300);
+
+    $resp = curl_exec($ch);
+    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+
+    if ($resp === false) {
+        http_response_code(502);
+        echo json_encode(['error' => 'proxy_curl_failed', 'message' => $curlErr]);
+        exit;
+    }
+
+    http_response_code($httpcode ?: 200);
+    echo $resp;
+    exit;
 }
 
 // action: delete

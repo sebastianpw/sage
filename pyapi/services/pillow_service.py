@@ -9,7 +9,7 @@ from PIL import Image, ImageFilter, ImageEnhance, ImageDraw, ImageFont, ImageOps
 import json
 import imghdr
 
-router = APIRouter(prefix="/image", tags=["image"])
+router = APIRouter(tags=["image"])
 
 # Optional persistent directories (safe defaults)
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -120,14 +120,28 @@ async def flip_image(file: UploadFile = File(...), direction: str = Form(...)):
 
 # --- Filters & Presets ------------------------------------------------------
 PRESET_FILTERS = {
-    "vintage": {"color": 0.75, "contrast": 1.1, "blur": 1.0, "sepia": True},
-    "bright": {"brightness": 1.25, "contrast": 1.1},
-    "cool": {"color_mul": (0.9, 1.0, 1.05)},
-    "warm": {"color_mul": (1.05, 1.0, 0.95)},
+    # Original Presets
+    "vintage": {"color": 0.75, "contrast": 1.1, "blur": 0.5, "sepia": True},
     "noir": {"grayscale": True, "contrast": 1.4},
-    "soft": {"blur": 1.0, "contrast": 0.95},
-    "sharpen": {"sharpen": True}
+    "sharpen": {"sharpen": True},
+
+    # New Instagram-Style Presets
+    "sepia": {"sepia": True, "contrast": 1.1},
+    "clarendon": {"contrast": 1.2, "color": 1.35}, # Boosts light and dark, adds vibrance
+    "gingham": {"brightness": 1.05, "contrast": 0.9}, # A gentle, hazy, washed-out look
+    "moon": {"grayscale": True, "contrast": 1.1, "brightness": 1.1}, # A softer, brighter B&W
+    "lark": {"brightness": 1.1, "color_mul": (1.0, 1.0, 1.05)}, # Slightly brighter and cooler
+    "reyes": {
+        "brightness": 1.1,
+        "contrast": 0.85,
+        "color": 1.1,
+        "color_mul": (1.15, 1.05, 0.95)  # Boost reds slightly, mild green, reduce blue
+    },
+    "juno": {"contrast": 1.15, "color": 1.1, "color_mul": (1.0, 1.05, 1.0)}, # Punches contrast, boosts greens
+    "slumber": {"brightness": 0.95, "color": 0.8}, # Desaturated and dreamy
 }
+
+
 
 def apply_preset(img: Image.Image, name: str) -> Image.Image:
     cfg = PRESET_FILTERS.get(name)
@@ -180,14 +194,18 @@ async def filter_preset(file: UploadFile = File(...), name: str = Form(...)):
     return image_to_stream_response(out, fmt=img.format or "PNG", filename=f"{name}.{(img.format or 'png').lower()}")
 
 @router.post("/filter/custom")
-async def filter_custom(file: UploadFile = File(...), blur_radius: Optional[float] = Form(None), sharpen: Optional[bool] = Form(False)):
+async def filter_custom(file: UploadFile = File(...), 
+                        blur_radius: Optional[float] = Form(None), 
+                        sharpen_amount: Optional[float] = Form(None)):
     img = open_image_from_upload(file)
     out = img
-    if blur_radius:
+    if blur_radius is not None and blur_radius > 0:
         out = out.filter(ImageFilter.GaussianBlur(float(blur_radius)))
-    if sharpen:
-        out = out.filter(ImageFilter.UnsharpMask(radius=1, percent=150, threshold=3))
+    if sharpen_amount is not None and sharpen_amount > 0:
+        # The 'percent' parameter in UnsharpMask is a good target for a slider
+        out = out.filter(ImageFilter.UnsharpMask(radius=1, percent=int(sharpen_amount), threshold=3))
     return image_to_stream_response(out, fmt=img.format or "PNG", filename=f"filtered.{(img.format or 'png').lower()}")
+
 
 # --- Enhancement -------------------------------------------------------------
 @router.post("/enhance")

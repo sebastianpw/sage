@@ -10,6 +10,7 @@ DEFAULT="pollinations"  # Default option if no argument is given
 # Define available variants
 declare -A OPTIONS=(
     ["pollinations"]="genframe_db.sh.pollinations.ai"
+    ["pollinana"]="genframe_db.sh.pollinana"
     ["jupyter"]="genframe_db.sh.JUPYTER"
     ["jupyter_lcm"]="genframe_db.sh.JUPYTER_LCM"
     ["freepik"]="genframe_db.sh.freepik"

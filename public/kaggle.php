@@ -36,59 +36,90 @@ if (!empty($_GET['ajax'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
+    // Corrected, flexible handler for saving tokens independently.
     if ($action === 'save_token') {
         $username = trim($_POST['kaggle_username'] ?? '');
         $key = trim($_POST['kaggle_key'] ?? '');
-        $zrokToken = trim($_POST['zrok_token'] ?? '');
+        $zrokTokenPosted = trim($_POST['zrok_token'] ?? '');
 
-        // Validate fields
-        if ($username === '' || $key === '' || $zrokToken === '') {
-            $messages[] = ['type' => 'error', 'text' => 'Kaggle username, API key, and Zrok token are all required'];
-        } else {
-            // Save Kaggle token
-            $res = $kaggle->setApiToken($username, $key);
-            $written = $res['written'] ?? [];
-            $failed = $res['failed'] ?? [];
+        // track results
+        $kaggleSaved = false;
+        $zrokSaved = false;
+        $parts = [];
 
-            // Save Zrok token
-            $zrokRes = $kaggle->setZrokToken($zrokToken);
-
-            if (!empty($zrokRes['success'])) {
-                // Sync Zrok token to Kaggle dataset
-                $syncRes = $kaggle->syncZrokTokenDataset();
-
-                if (!empty($syncRes['success'])) {
-                    $txt = "✓ All credentials saved successfully!\n\n";
-                    $txt .= "Kaggle token saved to:\n" . implode("\n", $written) . "\n\n";
-                    $txt .= "Zrok token saved to:\n" . ($zrokRes['path'] ?? 'token/.zrok_api_key') . "\n\n";
-                    $txt .= "✓ Zrok token dataset synced: " . ($syncRes['dataset_ref'] ?? 'sage-zrok-token');
-
-                    if (!empty($failed)) {
-                        $txt .= "\n\n⚠ Warning - Failed to write Kaggle token to:\n" . implode("\n", $failed);
-                    }
-
-                    $messages[] = ['type' => empty($failed) ? 'success' : 'warning', 'text' => $txt];
-                } else {
-                    $txt = "✓ Tokens saved locally\n\n";
-                    $txt .= "⚠ Warning: Failed to sync Zrok dataset to Kaggle:\n" . ($syncRes['message'] ?? 'Unknown error');
-                    $messages[] = ['type' => 'warning', 'text' => $txt];
-                }
+        // --- Kaggle handling (only if any kaggle field was provided) ---
+        if ($username !== '' || $key !== '') {
+            if ($username === '' || $key === '') {
+                // partial input
+                $parts[] = ['type' => 'error', 'text' => 'Kaggle: please provide both username and API key, or leave both empty.'];
             } else {
-                $txt = "✓ Kaggle token saved\n\n";
-                $txt .= "✗ Failed to save Zrok token: " . ($zrokRes['message'] ?? 'Unknown error');
-                $messages[] = ['type' => 'warning', 'text' => $txt];
+                $res = $kaggle->setApiToken($username, $key);
+                $written = $res['written'] ?? [];
+                $failed  = $res['failed'] ?? [];
+                $okFlag  = !empty($written) || !empty($res['success']);
+
+                if ($okFlag && empty($failed)) {
+                    $kaggleSaved = true;
+                    $parts[] = ['type' => 'success', 'text' => 'Kaggle token saved.' . (!empty($written) ? ' Saved to: ' . implode(', ', $written) : '')];
+                } elseif ($okFlag && !empty($failed)) {
+                    $kaggleSaved = true;
+                    $parts[] = ['type' => 'warning', 'text' => 'Kaggle saved with warnings. Failed to write: ' . implode(', ', $failed)];
+                } else {
+                    $parts[] = ['type' => 'error', 'text' => 'Kaggle: failed to save (' . ($res['message'] ?? 'unknown') . ')'];
+                }
             }
         }
+
+        // --- Zrok handling (independent) ---
+        if ($zrokTokenPosted !== '') {
+            $zrokRes = $kaggle->setZrokToken($zrokTokenPosted);
+            if (!empty($zrokRes['success'])) {
+                $zrokSaved = true;
+                $parts[] = ['type' => 'success', 'text' => 'Zrok token saved to: ' . ($zrokRes['path'] ?? 'token/.zrok_api_key')];
+            } else {
+                $parts[] = ['type' => 'error', 'text' => 'Zrok: failed to save (' . ($zrokRes['message'] ?? 'unknown') . ')'];
+            }
+        }
+
+        // --- If nothing was provided, inform the user ---
+        if (empty($parts)) {
+            $messages[] = ['type' => 'error', 'text' => 'No credentials provided to save.'];
+        } else {
+            // push per-field parts into messages for display
+            foreach ($parts as $p) $messages[] = $p;
+        }
+
+        // --- Auto-run sync_zrok_dataset ONLY if both Kaggle and Zrok were provided and saved successfully this time ---
+        if ($kaggleSaved && $zrokSaved) {
+            // perform sync and report
+            $syncRes = $kaggle->syncZrokTokenDataset();
+            if (!empty($syncRes['success'])) {
+                // Use the clean message directly from the service
+                $messages[] = ['type' => 'success', 'text' => $syncRes['message']];
+            } else {
+                $messages[] = ['type' => 'warning', 'text' => "Saved credentials but failed to sync Zrok dataset: " . ($syncRes['message'] ?? 'Unknown error')];
+            }
+        }
+
+        
+        
+        
+        
+        
+        
+        
     }
 
     if ($action === 'sync_zrok_dataset') {
         $syncRes = $kaggle->syncZrokTokenDataset();
         if (!empty($syncRes['success'])) {
-            $messages[] = ['type' => 'success', 'text' => "✓ Zrok token dataset synced successfully!\n\n" . ($syncRes['output'] ?? '')];
+            // Use the clean message directly from the service
+            $messages[] = ['type' => 'success', 'text' => $syncRes['message']];
         } else {
-            $messages[] = ['type' => 'error', 'text' => "✗ Failed to sync Zrok dataset:\n" . ($syncRes['message'] ?? 'Unknown error')];
+            $messages[] = ['type' => 'error', 'text' => $syncRes['message'] ?? '✘ Failed to sync Zrok dataset: Unknown error'];
         }
     }
+
 
     if ($action === 'sync_and_run') {
         $kernelRef = trim($_POST['kernel_ref'] ?? '');
@@ -279,101 +310,80 @@ if ($hasRequiredTokens) {
     $unifiedNotebooks = [];
 }
 
-
-
-
-
-
-
 ob_start();
 ?>
+
+<link rel="stylesheet" href="/css/base.css" />
+
 <style>
+/* Theme-aware Kaggle module styles using base.css variables (no layout changes) */
+
+/* small fallbacks in case base.css isn't loaded */
 :root {
-    --primary: #2563eb;
-    --primary-dark: #1e40af;
-    --success: #10b981;
-    --warning: #f59e0b;
-    --error: #ef4444;
-    --bg-light: #f8fafc;
-    --bg-card: #ffffff;
-    --border: #e2e8f0;
-    --text: #1e293b;
-    --text-light: #64748b;
-    --shadow: 0 1px 3px rgba(0,0,0,0.1);
-    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1);
+    --kg-accent: var(--accent, #2563eb);
+    --kg-accent-dark: color-mix(in srgb, var(--kg-accent) 70%, black 30%); /* graceful on modern browsers */
+    --kg-success: var(--green, #10b981);
+    --kg-warning: var(--orange, #f59e0b);
+    --kg-error: var(--red, #ef4444);
+    --kg-card-bg: var(--card, #ffffff);
+    --kg-border: rgba(var(--muted-border-rgb, 48,54,61), 0.12);
+    --kg-text: var(--text, #111);
+    --kg-text-muted: var(--text-muted, #64748b);
+    --kg-shadow: var(--card-elevation, 0 6px 18px rgba(0,0,0,0.06));
 }
 
-* { box-sizing: border-box; }
-
+/* module container - keep background transparent so app background shows through */
 .kaggle-module {
     max-width: 1400px;
     margin: 0 auto;
     padding: 20px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    color: var(--text);
-    background: var(--bg-light);
+    color: var(--kg-text);
     min-height: 100vh;
+    background: transparent;
 }
 
+/* header uses the accent color from base.css */
 .header {
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-    color: white;
+    background: linear-gradient(135deg, var(--kg-accent) 0%, var(--kg-accent-dark, var(--kg-accent)) 100%);
+    color: var(--card) == '#ffffff' ? #fff : #fff; /* fallback */
     padding: 24px;
     border-radius: 12px;
     margin-bottom: 24px;
-    box-shadow: var(--shadow-lg);
+    box-shadow: var(--kg-shadow);
 }
+.header h1 { margin: 0 0 8px 0; font-size: 28px; font-weight: 700; }
+.header p  { margin: 0; opacity: 0.95; font-size: 14px; color: #efefef; }
 
-.header h1 {
-    margin: 0 0 8px 0;
-    font-size: 28px;
-    font-weight: 700;
-}
-
-.header p {
-    margin: 0;
-    opacity: 0.9;
-    font-size: 14px;
-}
-
+/* messages */
 .message {
     padding: 12px 16px;
     margin: 12px 0;
     border-radius: 8px;
-    border-left: 4px solid;
-    background: white;
-    box-shadow: var(--shadow);
+    border-left: 4px solid transparent;
+    background: var(--kg-card-bg);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     white-space: pre-wrap;
     font-size: 14px;
+    color: var(--kg-text);
 }
 
-.message.success {
-    border-color: var(--success);
-    background: #f0fdf4;
-    color: #166534;
-}
+/* specific message variants */
+.message.success { border-color: var(--kg-success); background: rgba(var(--muted-border-rgb), 0.015); }
+.message.error   { border-color: var(--kg-error);   background: rgba(var(--muted-border-rgb), 0.02); }
+.message.warning { border-color: var(--kg-warning); background: rgba(var(--muted-border-rgb), 0.02); }
 
-.message.error {
-    border-color: var(--error);
-    background: #fef2f2;
-    color: #991b1b;
-}
-
-.message.warning {
-    border-color: var(--warning);
-    background: #fffbeb;
-    color: #92400e;
-}
-
+/* card */
 .card {
-    background: var(--bg-card);
+    background: var(--kg-card-bg);
     border-radius: 12px;
     padding: 20px;
     margin-bottom: 20px;
-    box-shadow: var(--shadow);
-    border: 1px solid var(--border);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    border: 1px solid var(--kg-border);
 }
 
+/* card header */
 .card-header {
     display: flex;
     justify-content: space-between;
@@ -382,305 +392,115 @@ ob_start();
     cursor: pointer;
     user-select: none;
 }
+.card-header h2 { margin: 0; font-size: 18px; font-weight: 600; color: var(--kg-text); display:flex; align-items:center; gap:8px; }
 
-.card-header h2 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
+/* badge */
 .badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 600;
-    background: var(--primary);
-    color: white;
-}
-
-.toggle-icon {
-    transition: transform 0.2s ease;
-    font-size: 20px;
-    color: var(--text-light);
-}
-
-.toggle-icon.collapsed {
-    transform: rotate(-90deg);
-}
-
-.card-content {
-    overflow: visible;
-    transition: opacity 0.3s ease;
-    opacity: 1;
-    display: block;
-}
-
-.card-content.collapsed {
-    display: none;
-    opacity: 0;
-}
-
-.form-group {
-    margin-bottom: 16px;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 6px;
-    font-weight: 500;
-    font-size: 14px;
-    color: var(--text);
-}
-
-.form-input {
-    width: 100%;
-    padding: 10px 12px;
-    border: 2px solid var(--border);
-    border-radius: 8px;
-    font-size: 14px;
-    transition: border-color 0.2s ease;
-}
-
-.form-input:focus {
-    outline: none;
-    border-color: var(--primary);
-}
-
-.btn {
-    padding: 10px 20px;
-    border-radius: 8px;
-    border: none;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.btn-primary {
-    background: var(--primary);
-    color: white;
-}
-
-.btn-primary:hover {
-    background: var(--primary-dark);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow);
-}
-
-.btn-success {
-    background: var(--success);
-    color: white;
-}
-
-.btn-success:hover {
-    background: #059669;
-    transform: translateY(-1px);
-}
-
-.btn-secondary {
-    background: var(--bg-light);
-    color: var(--text);
-    border: 2px solid var(--border);
-}
-
-.btn-secondary:hover {
-    background: white;
-    border-color: var(--primary);
-}
-
-.btn-sm {
-    padding: 6px 12px;
-    font-size: 13px;
-}
-
-.table-container {
-    overflow-x: auto;
-    margin-top: 16px;
-}
-
-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 14px;
-}
-
-thead {
-    background: var(--bg-light);
-}
-
-th {
-    padding: 12px;
-    text-align: left;
-    font-weight: 600;
-    color: var(--text);
-    border-bottom: 2px solid var(--border);
-}
-
-td {
-    padding: 12px;
-    border-bottom: 1px solid var(--border);
-    vertical-align: middle;
-}
-
-tr:hover {
-    background: var(--bg-light);
-}
-
-.notebook-name {
-    font-weight: 600;
-    color: var(--text);
-    margin-bottom: 2px;
-}
-
-.notebook-ref {
-    color: var(--text-light);
-    font-size: 12px;
-}
-
-.sync-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 8px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 600;
-}
-
-.sync-badge.synced {
-    background: #d1fae5;
-    color: #065f46;
-}
-
-.sync-badge.not-synced {
-    background: #fef3c7;
-    color: #92400e;
-}
-
-.sync-badge.local-only {
-    background: #e0e7ff;
-    color: #3730a3;
-}
-
-.sync-time {
-    font-size: 11px;
-    color: var(--text-light);
-    margin-top: 2px;
-}
-
-.status-indicator {
     display: inline-block;
     padding: 4px 10px;
     border-radius: 12px;
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 700;
+    background: linear-gradient(90deg, rgba(255,255,255,0.06), rgba(0,0,0,0.06)), var(--kg-accent);
+    color: #fff;
 }
 
-.status-running {
-    background: #dbeafe;
-    color: #1e40af;
+/* toggle icon */
+.toggle-icon {
+    transition: transform 0.2s ease;
+    font-size: 18px;
+    color: var(--kg-text-muted);
 }
+.toggle-icon.collapsed { transform: rotate(-90deg); }
 
-.status-complete {
-    background: #d1fae5;
-    color: #065f46;
+/* content visibility */
+.card-content { overflow: visible; transition: opacity 0.3s ease; opacity: 1; display: block; }
+.card-content.collapsed { display: none; opacity: 0; }
+
+/* forms */
+.form-group { margin-bottom: 16px; }
+.form-group label { display:block; margin-bottom:6px; font-weight:500; font-size:14px; color: var(--kg-text); }
+.form-input {
+    width:100%;
+    padding:10px 12px;
+    border-radius:8px;
+    border:1px solid var(--kg-border);
+    background: color-mix(in srgb, var(--kg-card-bg) 92%, transparent 8%);
+    font-size:14px;
+    color: var(--kg-text);
+    transition: border-color 0.12s ease;
 }
+.form-input:focus { outline: none; border-color: var(--kg-accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.08); }
 
-.empty-state {
-    text-align: center;
-    padding: 40px 20px;
-    color: var(--text-light);
+/* buttons - use base .btn where possible, add small overrides for size */
+.btn { padding: 10px 18px; border-radius: 8px; font-size:14px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:8px; border: none; }
+.btn-primary { background: var(--kg-accent); color: #fff; }
+.btn-primary:hover { filter: brightness(0.95); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,0.06); }
+.btn-success { background: var(--kg-success); color: #fff; }
+.btn-success:hover { filter: brightness(0.95); transform: translateY(-1px); }
+.btn-secondary { background: transparent; color: var(--kg-text); border: 1px solid var(--kg-border); }
+.btn-secondary:hover { border-color: var(--kg-accent); background: color-mix(in srgb, var(--kg-card-bg) 92%, var(--kg-accent) 8%); }
+
+.btn-sm { padding: 6px 12px; font-size:13px; border-radius: 8px; }
+
+/* table layout */
+.table-container { overflow-x:auto; margin-top:16px; }
+table { width:100%; border-collapse: collapse; font-size:14px; }
+thead { background: transparent; }
+th { padding:12px; text-align:left; font-weight:600; color: var(--kg-text); border-bottom: 2px solid var(--kg-border); }
+td { padding:12px; border-bottom: 1px solid var(--kg-border); vertical-align: middle; }
+tr:hover { background: rgba(var(--muted-border-rgb), 0.02); }
+
+/* notebook metadata */
+.notebook-name { font-weight:600; color: var(--kg-text); margin-bottom:2px; }
+.notebook-ref { color: var(--kg-text-muted); font-size:12px; }
+
+/* sync badges using base notification colors via variables */
+.sync-badge {
+    display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:12px; font-size:11px; font-weight:700;
 }
+.sync-badge.synced { background: rgba(var(--muted-border-rgb), 0.02); color: var(--kg-success); border: 1px solid rgba(var(--muted-border-rgb), 0.04); }
+.sync-badge.not-synced { background: rgba(245,159,11,0.06); color: var(--kg-warning); border: 1px solid rgba(var(--muted-border-rgb), 0.04); }
+.sync-badge.local-only { background: rgba(56, 139, 253, 0.06); color: var(--accent); border: 1px solid rgba(var(--muted-border-rgb), 0.04); }
 
-.info-box {
-    background: var(--bg-light);
-    padding: 12px;
-    border-radius: 8px;
-    font-size: 13px;
-    color: var(--text-light);
-    margin-bottom: 16px;
-}
+.sync-time { font-size:11px; color: var(--kg-text-muted); margin-top:2px; }
 
-.warning-box {
-    background: #fffbeb;
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-size: 12px;
-    color: #92400e;
-    margin-top: 6px;
-    border-left: 3px solid var(--warning);
-}
+/* status indicators */
+.status-indicator { display:inline-block; padding:6px 12px; border-radius:12px; font-size:12px; font-weight:700; }
+.status-running { background: rgba(59,130,246,0.06); color: var(--accent); border: 1px solid rgba(var(--muted-border-rgb), 0.04); }
+.status-complete { background: rgba(35,134,54,0.06); color: var(--green); border: 1px solid rgba(var(--muted-border-rgb), 0.04); }
 
-.code {
-    background: var(--bg-light);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-family: monospace;
-    font-size: 12px;
-}
+/* empty state / info box / warning box / code */
+.empty-state { text-align:center; padding:40px 20px; color: var(--kg-text-muted); }
+.info-box { background: color-mix(in srgb, var(--kg-card-bg) 96%, transparent 4%); padding:12px; border-radius:8px; font-size:13px; color: var(--kg-text-muted); margin-bottom:16px; border: 1px solid var(--kg-border); }
+.warning-box { background: rgba(245,159,11,0.06); padding:8px 12px; border-radius:6px; font-size:12px; color: var(--kg-warning); margin-top:6px; border-left:3px solid var(--kg-warning); }
+.code { background: color-mix(in srgb, var(--kg-card-bg) 94%, transparent 6%); padding:2px 6px; border-radius:4px; font-family:monospace; font-size:12px; }
 
-.action-buttons {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-}
+/* action buttons container */
+.action-buttons { display:flex; gap:8px; flex-wrap:wrap; }
 
+/* responsive tweaks */
 @media (max-width: 768px) {
-    .kaggle-module {
-        padding: 12px;
-    }
-    
-    .header {
-        padding: 16px;
-    }
-    
-    .header h1 {
-        font-size: 22px;
-    }
-    
-    .card {
-        padding: 16px;
-    }
-    
-    table {
-        font-size: 13px;
-    }
-    
-    th, td {
-        padding: 8px 6px;
-    }
-    
-    .btn {
-        width: 100%;
-        justify-content: center;
-    }
-    
-    .action-buttons {
-        flex-direction: column;
-    }
+    .kaggle-module { padding:12px; }
+    .header { padding:16px; }
+    .header h1 { font-size:22px; }
+    .card { padding:16px; }
+    table { font-size:13px; }
+    th, td { padding:8px 6px; }
+    .btn { width:100%; justify-content:center; }
+    .action-buttons { flex-direction:column; }
 }
 
+/* spinner uses accent color on top for visibility */
 .spinner {
-    display: inline-block;
-    width: 14px;
-    height: 14px;
-    border: 2px solid rgba(255,255,255,0.3);
-    border-radius: 50%;
-    border-top-color: white;
+    display:inline-block;
+    width:14px; height:14px;
+    border:2px solid rgba(var(--muted-border-rgb), 0.18);
+    border-radius:50%;
+    border-top-color: var(--accent);
     animation: spin 0.6s linear infinite;
 }
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
 
 <div class="kaggle-module">
@@ -719,28 +539,28 @@ tr:hover {
                     <label>Kaggle Username</label>
                     <input type="text" name="kaggle_username" class="form-input"
                         value="<?= htmlspecialchars($token['username'] ?? '', ENT_QUOTES) ?>"
-                        placeholder="yourusername" required />
+                        placeholder="yourusername" />
                 </div>
 
                 <div class="form-group">
                     <label>Kaggle API Key</label>
                     <input type="password" name="kaggle_key" class="form-input"
                         value="<?= htmlspecialchars($token['key'] ?? '', ENT_QUOTES) ?>"
-                        placeholder="Your Kaggle API key" required />
+                        placeholder="Your Kaggle API key" />
                 </div>
 
                 <div class="form-group">
                     <label>Zrok API Token</label>
                     <input type="password" name="zrok_token" class="form-input"
                         value="<?= htmlspecialchars($zrokToken ?? '', ENT_QUOTES) ?>"
-                        placeholder="Your Zrok API token" required />
+                        placeholder="Your Zrok API token" />
                     <div class="info-box" style="margin-top: 6px; font-size: 12px;">
                         💡 Zrok token will be stored in <span class="code">token/.zrok_api_key</span> and synced to a private Kaggle dataset
                     </div>
                 </div>
 
                 <div style="display: flex; gap: 10px; align-items: center;">
-                    <button type="submit" class="btn btn-primary">💾 Save All Credentials</button>
+                    <button type="submit" class="btn btn-primary">💾 Save Credentials</button>
 
                     <?php if ($hasRequiredTokens): ?>
                         <!-- sync_zrok_dataset must not be nested inside the save_token form, so we render a separate form next to it -->
@@ -748,13 +568,7 @@ tr:hover {
                     <?php endif; ?>
                 </div>
             </form>
-
-            <?php if ($hasRequiredTokens): ?>
-                <form method="post" style="display:inline; margin-top:10px;">
-                    <input type="hidden" name="action" value="sync_zrok_dataset">
-                    <button type="submit" class="btn btn-secondary">🔄 Sync Zrok Dataset</button>
-                </form>
-            <?php endif; ?>
+            
         </div>
     </div>
 
@@ -769,8 +583,8 @@ tr:hover {
             </div>
             <div class="card-content">
                 <div class="empty-state">
-                    <p style="color: var(--text-light); font-size: 16px;">🔒 Notebook operations are disabled</p>
-                    <p style="color: var(--text-light); font-size: 14px; margin-top: 8px;">
+                    <p style="color: var(--kg-text-muted); font-size: 16px;">🔒 Notebook operations are disabled</p>
+                    <p style="color: var(--kg-text-muted); font-size: 14px; margin-top: 8px;">
                         Please configure both Kaggle and Zrok API tokens above to enable notebook management.
                     </p>
                 </div>
@@ -780,7 +594,7 @@ tr:hover {
         <div class="card">
             <div class="card-header" onclick="toggleSection('notebooks')">
                 <h2>
-                    <span>📚</span> Notebooks
+                    <span>💻</span> Notebooks
                     <?php if (!empty($unifiedNotebooks)): ?>
                         <span class="badge"><?= count($unifiedNotebooks) ?></span>
                     <?php endif; ?>
@@ -879,7 +693,7 @@ tr:hover {
                                                     <input type="hidden" name="notebook_folder" value="<?= htmlspecialchars($nb['local_folder'], ENT_QUOTES) ?>">
                                                     <button type="submit" class="btn btn-primary btn-sm"
                                                             onclick="return confirm('<?= !empty($nb['needs_metadata']) ? 'Create metadata and push to Kaggle?' : 'Push this notebook to your Kaggle account?' ?>')">
-                                                        ▶️ Push to Kaggle
+                                                        ▶️ Push
                                                     </button>
                                                 </form>
                                             <?php endif; ?>
@@ -911,18 +725,18 @@ tr:hover {
             </div>
         
             <div class="card-content" id="content-zrok">
-                <div style="background: #ccc; padding: 30px; height: 400px; width: 300px; overflow: auto; position: relative;">
+                <div style="background: color-mix(in srgb, var(--kg-card-bg, #fff) 88%, transparent 12%); padding: 30px; height: 400px; width: 300px; overflow: auto; position: relative;">
         
                     <!-- 🔄 Reload button -->
                     <button
                         onclick="reloadIframeZrok()"
                         style="position: absolute; top: 10px; left: 40px; z-index: 10;
-                            background: #333; color: #fff; border: none; padding: 5px 10px;
-                            cursor: pointer; font-size: 12px; border-radius: 3px;">
+                            background: var(--kg-accent, #333); color: #fff; border: none; padding: 5px 10px;
+                            cursor: pointer; font-size: 12px; border-radius: 6px;">
                         🔄 Reload
                     </button>
         
-                    <div style="background: #fff; transform: scale(0.5); transform-origin: 0 0; width: 800px; height: 800px;">
+                    <div style="background: var(--kg-card-bg); transform: scale(0.5); transform-origin: 0 0; width: 800px; height: 800px;">
                         <iframe id="zrokIframe" style="height: 800px; width: 800px;" src="https://api.zrok.io/"></iframe>
                     </div>
         
@@ -1013,3 +827,4 @@ function escapeHtml(text) {
 <?php
 $content = ob_get_clean();
 $spw->renderLayout($content, $pageTitle);
+

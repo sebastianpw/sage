@@ -1,5 +1,5 @@
 <?php
-// view_storyboards_v2.php - Overview of all storyboards (CRUD interface)
+// view_storyboards.php - Overview of all storyboards (CRUD interface)
 require "error_reporting.php";
 require "eruda_var.php";
 require __DIR__ . '/../vendor/autoload.php';
@@ -7,7 +7,7 @@ require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
 
 $spw = \App\Core\SpwBase::getInstance();
-$pageTitle = "Storyboards Overview";
+$pageTitle = "Storyboards";
 ob_start();
 ?>
 
@@ -25,48 +25,62 @@ ob_start();
   <link rel="stylesheet" href="/vendor/font-awesome/css/all.min.css" />
 <?php endif; ?>
 
+
+
+
+<link rel="stylesheet" href="/css/base.css" />
+
+
+
 <style>
 .storyboards-wrap { padding: 12px; }
 .storyboards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-top: 16px; }
+
+/* card */
 .storyboard-card { 
-    background: #fff; 
-    border-radius: 8px; 
-    box-shadow: 0 2px 6px rgba(0,0,0,0.1); 
+    background: var(--card, #ffffff); 
+    border-radius: var(--radius, 8px); 
+    box-shadow: var(--shadow-sm, 0 2px 6px rgba(0,0,0,0.1)); 
     overflow: hidden;
     transition: transform 0.2s, box-shadow 0.2s;
     cursor: pointer;
 }
 .storyboard-card:hover { 
     transform: translateY(-2px); 
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+    box-shadow: var(--shadow-md, 0 4px 12px rgba(0,0,0,0.15)); 
 }
+
+/* thumbnail */
 .storyboard-thumb { 
     width: 100%; 
     height: 150px; 
     object-fit: cover; 
-    background: #f5f5f5;
+    background: var(--card-weak);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #999;
+    color: var(--muted);
 }
 .storyboard-thumb img { 
     width: 100%; 
     height: 100%; 
     object-fit: cover; 
 }
+
+/* info */
 .storyboard-info { padding: 12px; }
 .storyboard-title { 
     font-weight: 600; 
     font-size: 14px; 
     margin-bottom: 4px;
+    color: var(--accent);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 .storyboard-meta { 
     font-size: 12px; 
-    color: #666; 
+    color: var(--muted); 
     margin-bottom: 8px;
 }
 .storyboard-actions { 
@@ -74,20 +88,8 @@ ob_start();
     gap: 6px; 
     justify-content: space-between;
 }
-.btn { 
-    font-size: 12px; 
-    padding: 6px 10px; 
-    border-radius: 6px; 
-    border: none; 
-    background: #f3f3f3; 
-    cursor: pointer;
-    transition: background 0.2s;
-}
-.btn:hover { background: #e5e5e5; }
-.btn-primary { background: #4CAF50; color: white; }
-.btn-primary:hover { background: #45a049; }
-.btn-danger { background: #f44336; color: white; }
-.btn-danger:hover { background: #da190b; }
+
+/* toolbar */
 .toolbar { 
     display: flex; 
     gap: 10px; 
@@ -95,6 +97,8 @@ ob_start();
     margin-bottom: 16px; 
     flex-wrap: wrap;
 }
+
+/* modal / overlay */
 .modal { 
     display: none; 
     position: fixed; 
@@ -103,52 +107,64 @@ ob_start();
     top: 0; 
     width: 100%; 
     height: 100%; 
-    background: rgba(0,0,0,0.5);
+    background: var(--overlay);
     align-items: center;
     justify-content: center;
 }
 .modal.active { display: flex; }
 .modal-content { 
-    background: white; 
+    background: var(--card); 
     padding: 24px; 
-    border-radius: 12px; 
+    border-radius: var(--radius, 12px); 
     max-width: 500px; 
     width: 90%;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    box-shadow: var(--shadow-lg, 0 4px 20px rgba(0,0,0,0.3));
+    color: var(--accent, #111);
 }
 .modal-header { 
     font-size: 18px; 
     font-weight: 600; 
     margin-bottom: 16px;
 }
+
+/* forms */
 .form-group { margin-bottom: 14px; }
 .form-group label { 
     display: block; 
     font-size: 13px; 
     margin-bottom: 6px; 
     font-weight: 500;
+    color: var(--text);
 }
 .form-group input, .form-group textarea { 
     width: 100%; 
     padding: 8px; 
-    border: 1px solid #ddd; 
-    border-radius: 6px; 
+    border: 1px solid var(--border, #ddd); 
+    border-radius: var(--radius, 6px); 
     font-size: 14px;
     box-sizing: border-box;
+    background: var(--input-bg, transparent);
+    color: var(--accent, #111);
 }
 .form-group textarea { resize: vertical; min-height: 80px; }
+
+/* modal actions */
 .modal-actions { 
     display: flex; 
     gap: 8px; 
     justify-content: flex-end; 
     margin-top: 20px;
 }
+
+/* empty state */
 .empty-state {
     text-align: center;
     padding: 60px 20px;
-    color: #999;
+    color: var(--muted, #999);
 }
 .empty-state i { font-size: 48px; margin-bottom: 16px; }
+
+/* responsive tweak */
 @media(min-width: 600px) {
     .storyboards-grid { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
 }
@@ -157,10 +173,10 @@ ob_start();
 <div class="view-container storyboards-wrap">
 
 
-<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"> 
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;margin-left:45px;"> 
     <h2><?php echo htmlspecialchars($pageTitle); ?></h2>
 
-<a href="dashboard.php" class="btn">
+<a style="display:none;" href="dashboard.php" class="btn">
 <i class="fa fa-arrow-left"></i>
 Dashboard
 </a>
@@ -169,7 +185,7 @@ Dashboard
 
     
     <div class="toolbar">
-        <button id="btn-create" class="btn btn-primary">
+        <button id="btn-create" class="btn btn-outline-primary">
             <i class="fa fa-plus"></i> Create New Storyboard
         </button>
         <div style="flex: 1;"></div>
@@ -188,17 +204,17 @@ Dashboard
 
 <!-- Create/Edit Modal -->
 <div id="modal-edit" class="modal">
-    <div class="modal-content">
+    <div class="modal-content card">
         <div class="modal-header" id="modal-title">Create Storyboard</div>
         <form id="form-storyboard">
             <input type="hidden" id="edit-id" value="">
             <div class="form-group">
                 <label>Name *</label>
-                <input type="text" id="edit-name" required>
+                <input class="form-control" type="text" id="edit-name" required>
             </div>
             <div class="form-group">
                 <label>Description</label>
-                <textarea id="edit-description"></textarea>
+                <textarea class="form-control" id="edit-description"></textarea>
             </div>
             <div class="modal-actions">
                 <button type="button" class="btn" id="btn-cancel">Cancel</button>
@@ -207,12 +223,6 @@ Dashboard
         </form>
     </div>
 </div>
-
-<?php
-$content = ob_get_clean();
-$content .= $eruda ?? '';
-$spw->renderLayout($content, $pageTitle);
-?>
 
 <?= $spw->getJquery() ?>
 
@@ -449,3 +459,9 @@ $(function() {
     loadStoryboards();
 });
 </script>
+
+<?php
+$content = ob_get_clean();
+$content .= $eruda ?? '';
+$spw->renderLayout($content, $pageTitle);
+?>

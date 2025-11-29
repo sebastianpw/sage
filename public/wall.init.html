@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Wall — 9 Images</title>
+
+  <!-- Font Awesome (spinner icon) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="" crossorigin="anonymous">
+
+  <style>
+    /* Minimal reset */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html,body { height: 100%; width: 100%; }
+    body {
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background: #0b0b0c; /* dark background while loading */
+      color: #e9eef4;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overflow: hidden;
+    }
+
+    /* Fullscreen grid container */
+    .wall {
+      height: 100vh;
+      width: 100vw;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 0; /* absolutely no gaps */
+    }
+
+    .cell {
+      position: relative;
+      overflow: hidden;
+      background: #111; /* fallback background while image loads */
+    }
+
+    .cell img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover; /* covers cell, crops if needed so edges are seamless */
+      transform-origin: center center;
+      transition: transform .75s cubic-bezier(.2,.9,.25,1);
+      will-change: transform;
+    }
+
+    /* subtle hover zoom (optional, unobtrusive) */
+    .cell:hover img { transform: scale(1.03); }
+
+    /* Loading overlay */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, rgba(11,11,12,0.90), rgba(11,11,12,0.80));
+      z-index: 9999;
+      transition: opacity .6s ease, visibility .6s;
+    }
+    .overlay.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .loader {
+      text-align: center;
+      color: #d7e6f3;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+    }
+
+    .loader .spinner {
+      font-size: 40px;
+      display: block;
+      margin-bottom: 12px;
+      opacity: 0.95;
+    }
+
+    .loader .msg {
+      font-size: 14px;
+      opacity: 0.9;
+      margin-bottom: 6px;
+    }
+
+    .progress {
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: 0.06em;
+      margin-top: 6px;
+      color: #bcd0e8;
+    }
+
+    /* tiny credit, top-right */
+    .credit {
+      position: fixed;
+      top: 10px;
+      right: 14px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.7);
+      z-index: 6000;
+      background: rgba(0,0,0,0.25);
+      padding: 6px 10px;
+      border-radius: 999px;
+      backdrop-filter: blur(2px);
+    }
+
+    /* keyboard hint at bottom-left */
+    .hint {
+      position: fixed;
+      left: 12px;
+      bottom: 12px;
+      z-index: 6000;
+      font-size: 12px;
+      color: rgba(255,255,255,0.65);
+      background: rgba(0,0,0,0.22);
+      padding: 6px 10px;
+      border-radius: 999px;
+    }
+
+    /* Responsive: on very narrow screens force 3 columns to remain but allow scroll if needed */
+    @media (max-aspect-ratio: 3/4) {
+      /* If viewport is very tall/narrow, preserve visual by allowing vertical overflow */
+      body { overflow: auto; }
+      .wall { height: auto; min-height: 100vh; grid-auto-rows: minmax(120px, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Credit + hint -->
+  <div class="credit">Minimal Wall • no margins</div>
+  <div class="hint">Esc = exit (if fullscreen) • Hover to zoom</div>
+
+  <!-- Loading overlay -->
+  <div id="overlay" class="overlay" aria-hidden="false">
+    <div class="loader" role="status" aria-live="polite">
+      <i class="fa-solid fa-spinner fa-spin spinner" aria-hidden="true"></i>
+      <div class="msg">One moment — building the wall. Be patient.</div>
+      <div class="progress" id="progress">0 / 9 (0%)</div>
+    </div>
+  </div>
+
+  <!-- The seamless grid -->
+  <main class="wall" id="wall" aria-hidden="true">
+    <!-- populated by JS -->
+  </main>
+
+  <script>
+    (function(){
+      // Image filenames — 01.jpg .. 09.jpg
+      const images = [
+        'wall/01.jpg','wall/02.jpg','wall/03.jpg',
+        'wall/04.jpg','wall/05.jpg','wall/06.jpg',
+        'wall/07.jpg','wall/08.jpg','wall/09.jpg'
+      ];
+
+      const wall = document.getElementById('wall');
+      const overlay = document.getElementById('overlay');
+      const progressEl = document.getElementById('progress');
+
+      // create cells in DOM first for layout stability
+      images.forEach((src, i) => {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.src = src;
+        cell.setAttribute('role','img');
+        cell.setAttribute('aria-label', `Wall tile ${i+1}`);
+        wall.appendChild(cell);
+      });
+
+      // preload with progress tracking
+      let loaded = 0, errored = 0;
+      function updateProgress() {
+        const total = images.length;
+        const pct = Math.round((loaded + errored) / total * 100);
+        progressEl.textContent = `${loaded + errored} / ${total} (${pct}%)`;
+      }
+
+      // Start preloading all images
+      const cellNodes = Array.from(document.querySelectorAll('.cell'));
+      const loadPromises = images.map((src, idx) => new Promise((resolve) => {
+        const img = new Image();
+        img.src = src;
+        img.decoding = 'async';
+        img.onload = () => {
+          loaded++;
+          updateProgress();
+
+          // append the fully loaded <img> into its cell
+          const cell = cellNodes[idx];
+          img.alt = `Wall image ${idx+1}`;
+          img.loading = 'eager';
+          cell.appendChild(img);
+
+          resolve({status:'ok', src});
+        };
+        img.onerror = () => {
+          errored++;
+          updateProgress();
+
+          // show placeholder for failed image
+          const cell = cellNodes[idx];
+          cell.style.background = '#222';
+          cell.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="72" height="72" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"><path d="M12 2v20M2 12h20"/></svg>';
+          resolve({status:'err', src});
+        };
+      }));
+
+      // When all done, fade overlay
+      Promise.all(loadPromises).then(() => {
+        // Slight delay so user sees 100%
+        setTimeout(() => {
+          overlay.classList.add('hidden');
+          overlay.setAttribute('aria-hidden','true');
+          wall.setAttribute('aria-hidden','false');
+          // switch to light-ish background after load to nicely frame the images
+          document.body.style.background = '#030303';
+        }, 280);
+      });
+
+      // Optional: click on overlay to force-hide (if you trust the network)
+      overlay.addEventListener('click', () => {
+        overlay.classList.add('hidden');
+        overlay.setAttribute('aria-hidden','true');
+        wall.setAttribute('aria-hidden','false');
+      });
+
+      // Keyboard: Esc to exit fullscreen if any
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+        }
+      });
+
+      // Double-click to toggle fullscreen (handy for a wall)
+      wall.addEventListener('dblclick', async () => {
+        try {
+          if (!document.fullscreenElement) {
+            await document.documentElement.requestFullscreen();
+          } else {
+            await document.exitFullscreen();
+          }
+        } catch (err) {
+          // ignore
+        }
+      });
+
+      // Accessibility: allow tab focus on cells
+      cellNodes.forEach(c => c.tabIndex = 0);
+
+      // Initial progress
+      updateProgress();
+    })();
+  </script>
+</body>
+</html>

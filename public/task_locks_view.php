@@ -42,14 +42,16 @@ if (isset($_POST['action'])) {
     if ($action === 'release_lock') {
         $lockId = (int)($_POST['lock_id'] ?? 0);
         if ($lockId > 0) {
-            $success = $lockManager->releaseLock($lockId);
+            // Tell the manager to FORCE the release, bypassing owner_token checks.
+            $success = $lockManager->releaseLock($lockId, true); // <-- FIXED LINE
             echo json_encode(['success' => $success]);
         } else {
             echo json_encode(['success' => false, 'error' => 'Invalid lock ID']);
         }
         exit;
     }
-    
+
+
     if ($action === 'force_release_task') {
         $taskId = (int)($_POST['task_id'] ?? 0);
         if ($taskId > 0) {
@@ -77,6 +79,34 @@ if (isset($_POST['action'])) {
 <title>Task Locks</title>
 <?php echo \App\Core\SpwBase::getInstance()->getJquery(); ?>
 <link rel="stylesheet" href="/css/toast.css">
+
+<script>
+  (function() {
+    try {
+      var theme = localStorage.getItem('spw_theme');
+      if (theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else if (theme === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+      // If no theme is set, we do nothing and let the CSS media query handle it.
+    } catch (e) {
+      // Fails gracefully
+    }
+  })();
+</script>
+
+<?php if (\App\Core\SpwBase::CDN_USAGE): ?>
+    <!-- Font Awesome CSS via CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<?php else: ?>
+    <!-- Font Awesome CSS via local copy -->
+    <link rel="stylesheet" href="/vendor/font-awesome/css/all.min.css">
+<?php endif; ?>
+
+<!-- Link to the consolidated base CSS -->
+<link rel="stylesheet" href="/css/base.css">
+
 <style>
 body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
 .container { max-width: 1400px; margin: 0 auto; }
@@ -121,7 +151,7 @@ button { padding: 8px 16px; cursor: pointer; border: none; border-radius: 4px; f
 
     <div class="card">
         <h3>Active Locks</h3>
-        <div id="locksContainer">
+        <div id="locksContainer" style="overflow:auto;">
             <div class="empty-state">Loading...</div>
         </div>
     </div>

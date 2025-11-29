@@ -54,7 +54,7 @@ class SpawnUpload
         <div class="spawns-upload-container">
             {$galleryHtml}
 
-            <div style="margin: 10px;">
+            <div class="card" style="margin: 10px;">
                 <hr>
                 <h2>Upload {$spawnTypeLabel}</h2>
                 <form id="uploader" method="post" enctype="multipart/form-data">
@@ -74,6 +74,180 @@ class SpawnUpload
                 <div class="message">{$message}</div>
             </div>
         </div>
+        
+           
+<link rel="stylesheet" href="/css/base.css">
+
+ 
+
+    <style>
+    
+    
+    /* Theme-aware form elements */
+.gallery-header select,
+.gallery-header button {
+    background-color: var(--card);
+    color: var(--float-text);
+    border: 1px solid var(--float-border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+.gallery-header button:hover {
+    background-color: var(--float-hover);
+}
+.gallery-header select {
+    -webkit-appearance: none; /* For better styling consistency */
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.5rem center;
+    background-repeat: no-repeat;
+    background-size: 1.5em 1.5em;
+    padding-right: 2.5rem;
+}
+html[data-theme="dark"] .gallery-header select {
+     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+}
+    
+    
+        /*
+         * Gallery-specific Floatool Override
+         * Increases floatool size to compensate for the pages initial-scale=0.6
+         */
+        #floatool {
+            /* Original size was 180%, we increase it to ~300% to counteract the 0.6 scale */
+            font-size: 300%;
+        }
+
+        /* Also override the responsive size */
+        @media (max-width: 768px) {
+            #floatool, #floatool {
+                /* Original responsive size was 150%, we increase it to ~250% */
+                font-size: 240%;
+            }
+
+
+            .floatool-buttons button {
+                min-width: 50px;
+                min-height: 65px;
+                margin: 0 !important;
+                padding: 0 7px;
+
+            }
+
+            .floatool-handle { 
+                font-size: 30px;
+            }
+
+            #floatool {
+            min-width: 70px;
+            min-height: 70px;
+            }
+
+
+        }
+    </style>
+
+        <style>
+        
+        
+        .card {
+            background: var(--card);
+        }
+        
+.spawn-type-tabs {
+    border: none !important;
+    margin-bottom: 0 !important;
+}
+        
+/* Spawn upload form — theme-aware, uses base CSS variables */
+.spawns-upload-container { display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; color:var(--text); }
+
+/* card wrapper for the form area (keeps existing markup) */
+.spawns-upload-container > div {
+  background: var(--card);
+  border: 1px solid rgba(var(--muted-border-rgb), 0.06);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: var(--card-elevation);
+  color: var(--text);
+  width: 100%;
+  max-width: 780px;
+}
+
+/* headings and hr */
+.spawns-upload-container h2 { margin: 0 0 12px 0; font-size:1.15rem; font-weight:600; color:var(--text); }
+.spawns-upload-container hr { border: none; border-top: 1px solid rgba(var(--muted-border-rgb),0.06); margin:10px 0 16px 0; }
+
+/* labels and helper text */
+.spawns-upload-container label { display:block; font-weight:600; margin-bottom:6px; color:var(--text); }
+.spawns-upload-container .small-muted, .spawns-upload-container .message { color: var(--text-muted); font-size:0.92rem; }
+
+/* form controls */
+.spawns-upload-container input[type="text"],
+.spawns-upload-container textarea,
+.spawns-upload-container select,
+.spawns-upload-container input[type="file"] {
+  display:block;
+  width:100%;
+  padding:8px 12px;
+  border-radius:6px;
+  border:1px solid rgba(var(--muted-border-rgb),0.12);
+  background: var(--bg);
+  color: var(--text);
+  font-size:14px;
+  box-sizing:border-box;
+  transition: box-shadow .12s ease, border-color .12s ease;
+}
+
+/* textarea tweaks */
+.spawns-upload-container textarea { min-height:100px; resize:vertical; font-family:inherit; }
+
+/* focus state */
+.spawns-upload-container input:focus,
+.spawns-upload-container textarea:focus,
+.spawns-upload-container select:focus {
+  outline: 0;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* submit button - matches base button styling but scoped */
+.spawns-upload-container button[type="submit"] {
+  display:inline-block;
+  padding:8px 14px;
+  font-size:14px;
+  font-weight:600;
+  border-radius:6px;
+  cursor:pointer;
+  border:1px solid rgba(var(--muted-border-rgb),0.06);
+  background-color: var(--green);
+  color:#fff;
+  transition: filter .12s ease;
+}
+
+/* hover/active */
+.spawns-upload-container button[type="submit"]:hover:not(:disabled) { filter:brightness(0.95); }
+.spawns-upload-container button[type="submit"]:disabled { opacity:0.6; cursor:not-allowed; }
+
+/* image/gallery area (if present) */
+.spawns-upload-container img { max-width:100%; height:auto; border-radius:6px; display:block; }
+
+/* compact spacing for inline breaks that previously used <br> */
+.spawns-upload-container form > * + * { margin-top:10px; }
+
+/* message area */
+.spawns-upload-container .message { margin-top:10px; }
+
+/* responsive */
+@media (max-width:720px) {
+  .spawns-upload-container { gap:12px; }
+  .spawns-upload-container > div { padding:12px; border-radius:8px; }
+  .spawns-upload-container .grid-two { display:block; }
+}
+</style>
 HTML;
         return $content;
     }
@@ -126,7 +300,7 @@ HTML;
      */
     private function renderGallery(): string
     {
-        $defaultClassName = 'SpawnsGalleryDefault';
+        $defaultClassName = 'SpawnsGallery';
 
         // If spawn type is specified, try custom class name
         $requestedClass = $defaultClassName;

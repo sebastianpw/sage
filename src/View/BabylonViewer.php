@@ -25,11 +25,11 @@ class BabylonViewer
         <html lang="en">
         <head>
             <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width,initial-scale=1">
+            <meta name="viewport" content="width=device-width,initial-scale=0.6">
             <title>3D Viewer — Babylon.js</title>
             <style>
                 html,body { height:100%; margin:0; }
-                #viewerContainer { width:100%; height:80vh; background:#111; }
+                #viewerContainer { width:100%; height:80vh; background:#fff; }
                 #viewerToolbar { padding:30px;margin-bottom:50px;  background:#fafafa; display:flex; gap:10px; align-items:center; }
                 #modelSelect { min-width:200px; }
 		.btn { padding:6px 10px; border-radius:4px; border:1px solid #ccc; background:#fff; cursor:pointer; }
@@ -39,14 +39,52 @@ class BabylonViewer
     max-width: 1000px;     /* optional limit */
     margin: 0 auto;
     aspect-ratio: 1 / 1;   /* forces square */
-    background: #111;
+    background: #fff;
     position: relative;
     height: 350px;
     width: 350px;
 }
 #renderCanvas { width:350px; height:350px; display:block; }
+
+
+html, body { background: #fff; }
+
+/* Apply inversion only when the theme is dark 
+html[data-theme="dark"],
+:root[data-theme="dark"],
+body[data-theme="dark"] {
+  filter: invert(1) hue-rotate(180deg) contrast(1) saturate(1);
+  transition: filter 240ms ease;
+}
+
+html[data-theme="dark"] #viewerContainer, .noinvert {
+  filter: invert(1) hue-rotate(180deg) contrast(1) saturate(1);
+}
+*/
+
+
+/*
+body {
+  filter: invert(1) hue-rotate(180deg) contrast(1) saturate(1);
+  
+  transition: filter 240ms ease;
+}
+
+#viewerContainer, .noinvert {
+     
+    filter: invert(1) hue-rotate(180deg) contrast(1) saturate(1);
+
+    }
+*/
+
 	    </style>
 
+        
+        
+       
+        
+
+        
         </head>
         <body>
         <div id="viewerToolbar">
@@ -406,7 +444,7 @@ function setMobileView() {
 
 
 
-        <div id="viewerContainer">
+        <div id="viewerContainer" class="noinvert">
             <canvas id="renderCanvas" touch-action="none" style="width:100%; height:100%;"></canvas>
         </div>
 

@@ -91,6 +91,9 @@ case "$1" in
     get_dbname_from_url "DATABASE_URL" || echo ""
     get_dbname_from_url "DATABASE_SYS_URL" || echo ""
     ;;
+  root)
+    get_dbname_from_url "DATABASE_ROOT_URL" || exit 1
+    ;;
   conn)
     get_mysql_args_from_url "DATABASE_URL" || exit 1
     ;;
@@ -99,6 +102,9 @@ case "$1" in
     ;;
   sys-conn)
     get_mysql_args_from_url "DATABASE_SYS_URL" || exit 1
+    ;;
+  root-conn)
+    get_mysql_args_from_url "DATABASE_ROOT_URL" || exit 1
     ;;
   "")
     get_dbname_from_url "DATABASE_URL" || exit 1

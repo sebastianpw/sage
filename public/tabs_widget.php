@@ -33,6 +33,12 @@ require __DIR__ . '/env_locals.php'; // provides $pdo, $mysqli, etc.
     }
     li { margin: 3px 0; }
 
+
+    [data-theme="dark"] #tree > li {
+      background: #161b22;
+    }
+
+
     /* Toggle - fixed top-left, single .arrow element (no ::before) */
     .toggle {
       position: absolute;
@@ -51,8 +57,8 @@ require __DIR__ . '/env_locals.php'; // provides $pdo, $mysqli, etc.
     }
     .toggle .arrow {
       transition: transform .15s ease;
-      font-size: 1.3em;
-      color: #0056b3;
+      font-size: 0.8em;
+      color: #333;
       pointer-events: none;
     }
     .open > .toggle .arrow { transform: rotate(90deg); }
@@ -62,10 +68,15 @@ require __DIR__ . '/env_locals.php'; // provides $pdo, $mysqli, etc.
       display: inline-block;
       margin-left: 10px; /* ensures text starts to the right of the toggle */
       font-weight: 700;
-      color: #0056b3;
+      color: #333;
       user-select: none;
       padding-right: 10px;
     }
+
+[data-theme="dark"] .category, .toggle .arrow {
+    color: #c9d1d9;
+}
+
 
     /* Editing state */
     .category.editing {

@@ -1,0 +1,185 @@
+/*
+ * Base CSS for the NuGallery component
+ * Extracted from AbstractNuGallery.php
+ */
+
+/* --- Theme Variable Definitions --- */
+:root {
+    /* Light theme (default) */
+    --float-bg: #ffffff;
+    --float-border: #d1d5db;
+    --float-text: #111827;
+    --float-muted: #6b7280;
+    --float-hover: #f3f4f6;
+    --float-btn-bg: #f8f9fa;
+    --float-overlay-bg: rgba(20, 20, 20, 0.7);
+}
+
+html[data-theme="dark"] {
+    /* Dark theme overrides */
+    --float-bg: #0f1724;
+    --float-border: #1f2937;
+    --float-text: #cbd5e1;
+    --float-muted: #94a3b8;
+    --float-hover: #111827;
+    --float-btn-bg: #0b1220;
+    --float-overlay-bg: rgba(0, 0, 0, 0.8);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+        /* System preference dark mode */
+        --float-bg: #0f1724;
+        --float-border: #1f2937;
+        --float-text: #cbd5e1;
+        --float-muted: #94a3b8;
+        --float-hover: #111827;
+        --float-btn-bg: #0b1220;
+        --float-overlay-bg: rgba(0, 0, 0, 0.8);
+    }
+}
+/* --- End of Theme Variables --- */
+
+
+/* --- NEW: Styles moved from inline attributes --- */
+.gallery-main-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+    gap: 10px;
+}
+.gallery-dashboard-link {
+    text-decoration: none;
+    font-size: 24px;
+    display: inline-block;
+}
+.gallery-title {
+    margin: 0;
+}
+.gallery-refresh-link-wrapper {
+    font-size: 2.6em;
+    height: 50px;
+    position: relative;
+    top: -10px;
+    margin: 0 !important;
+    vertical-align: top;
+}
+#galleryFilterForm {
+    position: relative;
+    height: 40px;
+}
+.swiper {
+    margin-top: 15px;
+}
+/* --- End of new styles --- */
+
+
+/* Apply theme variables to the page */
+body {
+    background-color: var(--float-bg);
+    color: var(--float-text);
+    /* Resetting some browser defaults for consistency */
+    margin: 0 auto;
+    padding: 20px;
+}
+h2, h2 a {
+    color: var(--float-text);
+    border-color: transparent !important; /* Override potential global link styles */
+}
+/* This targets the '↻' icon */
+h2 a[href*="gallery_"] {
+    color: var(--float-muted) !important;
+    text-decoration: none;
+    border: 0 !important;
+    border-image-width: 0;
+}
+h2 a[href*="gallery_"]:hover {
+    color: var(--float-text) !important;
+}
+
+/* Theme-aware form elements */
+.gallery-header select,
+.gallery-header button {
+    background-color: var(--float-btn-bg);
+    color: var(--float-text);
+    border: 1px solid var(--float-border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+.gallery-header button:hover {
+    background-color: var(--float-hover);
+}
+.gallery-header select {
+    -webkit-appearance: none; /* For better styling consistency */
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.5rem center;
+    background-repeat: no-repeat;
+    background-size: 1.5em 1.5em;
+    padding-right: 2.5rem;
+}
+html[data-theme="dark"] .gallery-header select {
+     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+}
+
+
+/* Default album layout (list/stacked) */
+.album { display: flex; flex-direction: column; gap: 20px; }
+body { width: 600px; max-width: 600px; }
+.album-container { max-width: 100%; }
+
+/* Grid view */
+.album-container.grid-view .album {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 15px;
+}
+.album-container.grid-view .album .img-wrapper img { width: 100%; display:block; }
+.album.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; margin-bottom: 200px; }
+.album.grid .img-wrapper img { width: 100%; }
+
+/* Caption and loading text */
+.caption {
+    color: var(--float-text);
+    overflow: hidden;
+}
+.page-loading {
+    color: var(--float-muted);
+    text-align: center;
+    padding: 40px;
+}
+
+/* Modal styles */
+#fullTextModal {
+    display: none; position: fixed; z-index: 9999; left: 0; top: 0; width:100%; height:100%; overflow:auto;
+    background-color: var(--float-overlay-bg); /* Use variable */
+}
+.modal-content {
+    position: relative;
+    background-color: var(--float-bg); /* Use variable */
+    color: var(--float-text); /* Use variable */
+    border: 1px solid var(--float-border); /* Use variable */
+    margin: 20% auto; padding:30px; border-radius:6px; max-width:80%; max-height:70%; overflow-y:auto; box-shadow:0 4px 20px rgba(0,0,0,0.3);
+}
+.modal-content .close {
+    position:absolute; top:10px; right:10px; font-size:20px; font-weight:bold;
+    color: var(--float-muted); /* Use variable */
+    background:none; border:none; cursor:pointer; z-index:1000;
+}
+.modal-content .close:hover {
+    color: var(--float-text); /* Use variable */
+}
+
+.img-wrapper { position: relative; }
+.img-wrapper img { display:block; max-width:100%; }
+
+/* Swiper navigation buttons (These styles are theme-agnostic and look good on both) */
+.swiper-button-prev { background-image: url(/img/arrow-circle-left.svg) !important; background-repeat: no-repeat; background-size: 100% auto; background-position: center; }
+.swiper-button-next { background-image: url(/img/arrow-circle-right.svg) !important; background-repeat: no-repeat; background-size: 100% auto; background-position: center; }
+.swiper-button-next::after, .swiper-button-prev::after { display: none; }
+.swiper-button-prev, .swiper-button-next { filter: opacity(0.9); width: 40px; height: 40px; border-radius: 50%; background-color: rgba(0, 0, 0, 0.2); border: 2px solid rgba(0, 255, 255, 0.4); box-shadow: 0 0 8px rgba(0, 255, 255, 0.3), 0 0 16px rgba(0, 255, 255, 0.2), 0 0 24px rgba(0, 255, 255, 0.1); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.swiper-button-prev:hover, .swiper-button-next:hover { transform: scale(1.1); box-shadow: 0 0 12px rgba(0, 255, 255, 0.4), 0 0 24px rgba(0, 255, 255, 0.3), 0 0 36px rgba(0, 255, 255, 0.2); }
+

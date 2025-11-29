@@ -151,70 +151,109 @@ if (isset($_POST['action'])) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?php echo $entity; ?></title>
+
+    
+<script>
+  (function() {
+    try {
+      var theme = localStorage.getItem('spw_theme');
+      if (theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else if (theme === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+      // If no theme is set, we do nothing and let the CSS media query handle it.
+    } catch (e) {
+      // Fails gracefully
+    }
+  })();
+</script>
+
+<script src="/js/theme-manager.js"></script>
+
 <?php echo \App\Core\SpwBase::getInstance()->getJquery(); ?>
+<link rel="stylesheet" href="/css/base.css">
 <link rel="stylesheet" href="/css/toast.css">
 <style>
+/* same layout as you provided — only colours replaced with base CSS variables */
+
 body { font-family: Arial, sans-serif; margin: 20px; }
 table { border-collapse: collapse; width: 100%; margin-top: 15px; }
-th, td { border: 1px solid #ccc; padding: 8px; text-align: left; font-size: 14px; }
-th { background: #f0f0f0; cursor: pointer; }
-td[contenteditable="true"] { background: #f9f9f9; }
-button { padding: 4px 8px; margin: 2px; }
+th, td { border: 1px solid rgba(var(--muted-border-rgb), 0.12); padding: 8px; text-align: left; font-size: 14px; }
+th { background: color-mix(in srgb, var(--card) 88%, var(--bg) 12%); cursor: pointer; }
+td[contenteditable="true"] { background: color-mix(in srgb, var(--card) 85%, var(--bg) 15%); }
+
+button { padding: 4px 8px; margin: 2px; background: var(--btn); color: var(--text); }
+
 .pagination { margin-top: 15px; }
 .pagination button { margin-right: 5px; padding: 5px 10px; cursor: pointer; }
 .pagination .active { font-weight: bold; }
+
 @media (max-width:600px) {
     table, thead, tbody, th, td, tr { display:block; }
-    tr { margin-bottom: 15px; border:1px solid #ddd; padding:10px; background:#fff; }
+    tr { margin-bottom: 15px; border:1px solid rgba(var(--muted-border-rgb), 0.08); padding:10px; background: var(--card); }
     td { border:none; padding:5px 0; }
     th { display:none; }
 }
-.dragHandle { font-size: 18px; color: #888; user-select: none; }
-.dragHandle:hover { color: #333; }
+
+/* drag handle */
+.dragHandle { font-size: 18px; color: var(--text); user-select: none; }
+.dragHandle:hover { color: var(--text); }
 .dragHandle span { width: 30px; height: 30px; line-height: 30px; font-size: 16px; }
-.lock-badge { 
-    display: inline-block; 
-    background: #ffc107; 
-    color: #000; 
-    padding: 2px 6px; 
-    border-radius: 3px; 
-    font-size: 11px; 
+
+/* lock badges */
+.lock-badge {
+    display: inline-block;
+    background: var(--orange);
+    color: var(--text);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
     font-weight: bold;
     margin-left: 5px;
 }
-.lock-badge.active { background: #dc3545; color: #fff; }
-.lock-badge.none { background: #28a745; color: #fff; }
+.lock-badge.active { background: var(--red); color: #fff; }
+.lock-badge.none { background: var(--green); color: #fff; }
+
+/* args special field — keep the red nuance but using CSS variables */
 td[contenteditable="true"][data-field="args"] {
-  background-color: rgba(255, 0, 0, 0.05);  /* very light red nuance */
-  border: 1px solid rgba(200, 0, 0, 0.3);   /* soft, darker red border */
-  border-radius: 3px;                       /* optional: smooth corners */
+  background-color: color-mix(in srgb, var(--red) 6%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--red) 22%, rgba(0,0,0,0));
+  border-radius: 3px;
 }
 td[contenteditable="true"][data-field="args"]:focus {
   outline: none;
-  background-color: rgba(255, 0, 0, 0.08);
-  border-color: rgba(200, 0, 0, 0.6);
+  background-color: color-mix(in srgb, var(--red) 8%, var(--card));
+  border-color: color-mix(in srgb, var(--red) 48%, rgba(0,0,0,0));
 }
+
+
+#searchInput {
+    background: var(--bg);
+}
+
+
 </style>
 <?php echo $eruda; ?>
 </head>
 <body>
 <?php //require "floatool.php"; ?>
 <div style="display: flex; align-items: center; margin-bottom: 15px; gap: 10px;">
-    <a href="dashboard.php" title="Dashboard" style="text-decoration: none; font-size: 24px;">🔮</a>
-    <h2 style="margin: 0;">Scheduler</h2>
-    <button id="addBtn">Add New</button>
-    <button id="logBtn">View Logs</button>
-    <button id="locksBtn">🔒 Locks</button>
+    <a href="dashboard.php" title="Dashboard" style="text-decoration: none; font-size: 24px; display:none;">🔮</a>
+    <h2 style="margin: 0;margin-left:35px;">Scheduler</h2>
+    <button class="btn btn-sm" id="addBtn">New</button>
+    <button class="btn btn-sm" id="logBtn">Logs</button>
+    <button class="btn btn-sm" id="locksBtn">🔒 Locks</button>
     <div id="heartbeatLed" style="
         width:15px; height:15px; border-radius:50%; 
         background:red; display:inline-block; margin-left:10px;"></div>
 </div>
 
 <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
-    <input type="text" id="searchInput" placeholder="Search by id or name..."
+    <input type="text" class="form-control" id="searchInput" placeholder="Search by id or name..."
            value="<?php echo htmlspecialchars($initialSearch, ENT_QUOTES); ?>" style="padding:5px; width:250px;">
-    <button id="searchBtn">Search</button>
-    <button id="toggleSortBtn">Enable Drag</button>
+    <button class="btn btn-sm" id="searchBtn">Search</button>
+    <button class="btn btn-sm" id="toggleSortBtn">+ Drag</button>
 </div>
 
 <table id="<?php echo $entity; ?>Table">
@@ -236,7 +275,7 @@ td[contenteditable="true"][data-field="args"]:focus {
 <!-- Log Overlay -->
 <div id="logOverlay" style="display:none;">
     <div id="logOverlayContent">
-        <button id="closeLogOverlay">✕ Close</button>
+        <button class="btn btn-sm" id="closeLogOverlay">✕ Close</button>
         <iframe id="logFrame" src="" frameborder="0"></iframe>
     </div>
 </div>
@@ -259,6 +298,20 @@ td[contenteditable="true"][data-field="args"]:focus {
 }
 </style>
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <div id="toast-container"></div>
 <script src="/js/toast.js"></script>
 
@@ -272,17 +325,19 @@ function loadTable(sort='id', order='DESC', search='', page=1) {
         data = JSON.parse(data);
         let rows = '';
         data.rows.forEach(row => {
-            const lockBadge = row.active_locks > 0 
+            const lockBadge = row.active_locks > 0
                 ? `<span class="lock-badge active">🔒 ${row.active_locks}</span>`
                 : (row.require_lock ? `<span class="lock-badge none">✓</span>` : '');
-            
-            const lockInfo = row.require_lock 
+
+            const lockInfo = row.require_lock
                 ? ` | Scope: ${row.lock_scope} | Max: ${row.max_concurrent_runs}`
                 : '';
-            
+
             rows += `<tr data-id="${row.id}">`;
             rows += '<td><span class="dragHandle">☰</span></td>';
-            rows += `<td><button style="width: 50px; height: 50px; font-size: 180%;" class="runBtn">▶</button><button class="copyBtn">Copy</button><button class="deleteBtn">Delete</button></td>`;
+            // --- THIS IS THE CORRECTED LINE ---
+            rows += `<td><button class="btn btn-sm runBtn" style="width: 50px; height: 50px; font-size: 180%;">▶</button><button class="btn btn-sm copyBtn">Copy</button><button class="btn btn-sm deleteBtn">Delete</button></td>`;
+            // ------------------------------------
             rows += `<td contenteditable="true" data-field="name">${row.name ?? ''}${lockBadge}</td>`;
             rows += `<td contenteditable="true" data-field="args">${row.args ?? ''}</td>`;
             rows += `<td contenteditable="true" data-field="script_path">${row.script_path ?? ''}</td>`;
@@ -293,7 +348,7 @@ function loadTable(sort='id', order='DESC', search='', page=1) {
 
         let paginationHtml = '';
         for(let i=1; i<=data.totalPages; i++){
-            paginationHtml += `<button class="pageBtn ${i==data.currentPage?'active':''}" data-page="${i}">${i}</button>`;
+            paginationHtml += `<button class="btn btn-sm pageBtn ${i==data.currentPage?'active':''}" data-page="${i}">${i}</button>`;
         }
         $('#pagination').html(paginationHtml);
         currentPage = data.currentPage;
@@ -380,10 +435,10 @@ $(document).ready(function() {
     $('#toggleSortBtn').click(function() {
         if(sortableEnabled) {
             disableSortable();
-            $(this).text('Enable Drag');
+            $(this).text('+ Drag');
         } else {
             enableSortable();
-            $(this).text('Disable Drag');
+            $(this).text('- Drag');
         }
     });
 
@@ -441,6 +496,10 @@ $(document).ready(function() {
     checkHeartbeat();
 });
 </script>
+
 <?php require "floatool.php"; ?>
+
+<script src="/js/sage-home-button.js" data-home="/dashboard.php"></script>
+
 </body>
 </html>

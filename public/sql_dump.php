@@ -123,30 +123,58 @@ if (isset($_POST['dump_db'])) {
     exit;
 }
 ?>
-
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Full Database Dump</title>
-<style>
-body { font-family: Arial, sans-serif; margin: 30px; }
-button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
-</style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Full Database Dump</title>
+    <script>
+    (function() {
+        try {
+        var theme = localStorage.getItem('spw_theme');
+        if (theme === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        } else if (theme === 'light') {
+            document.documentElement.setAttribute('data-theme', 'light');
+        }
+        // If no theme is set, we do nothing and let the CSS media query handle it.
+        } catch (e) {
+        // Fails gracefully
+        }
+    })();
+    </script>
+    <link rel="stylesheet" href="/css/base.css">
 </head>
 <body>
+    <div class="container">
+        <div style="margin-bottom: 1.5rem;">
+            <a href="dashboard.php" class="btn btn-secondary btn-sm">&larr; Back to Dashboard</a>
+        </div>
 
-<div style="display: flex; align-items: center; margin-bottom: 20px; gap: 10px;">
-    <a href="dashboard.php" title="Dashboard" style="text-decoration: none; font-size: 24px; display: inline-block;">
-        &#x1F5C3;
-    </a>
-    <h2 style="margin: 0;">Download Full Database Dump</h2>
-</div>
+        <div class="header">
+            <h1>Full Database Dump</h1>
+        </div>
 
-<form method="post">
-    <button type="submit" name="dump_db">Go & Download SQL Dump</button>
-</form>
+        <div class="section">
+            <div class="card">
+                <div class="card-body">
+                    <p style="margin-top: 0; max-width: 65ch;">
+                        This tool generates a complete backup of the database. The resulting <code>.sql</code> file contains all table structures, data, views, and triggers.
+                    </p>
+                    <p style="max-width: 65ch;">
+                        It's a useful way to create a snapshot for migration, backup, or offline analysis.
+                    </p>
+                </div>
+                <div class="card-footer">
+                    <form method="post" style="margin: 0;">
+                        <button type="submit" name="dump_db" class="btn btn-primary">Generate and Download SQL Dump</button>
+                    </form>
+                </div>
+            </div>
+        </div>
 
+    </div>
 </body>
 </html>
+

@@ -23,3 +23,9 @@ protobuf
 six
 pillow
 python-multipart
+httpx
+pymysql
+gunicorn
+bloom-filter2
+mysql-connector-python
+python-dotenv

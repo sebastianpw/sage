@@ -441,26 +441,8 @@ try {
 
 // render HTML using your pattern
 ob_start();
-?><style>
-:root{
-  --primary: #0d6efd;
-  --primary-rgb: 13,110,253;
-  --muted: #6c757d;
-  --bg: #fbfdff;
-  --card-bg: #ffffff;
-  --glass: rgba(255,255,255,0.6);
-  --shadow: 0 6px 18px rgba(20,24,28,0.06);
-  --radius: 10px;
-}
-
-/* Page / container */
-body {
-  background: linear-gradient(180deg, #f7f9fc 0%, var(--bg) 100%);
-  font-family: Inter, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  color: #222;
-  -webkit-font-smoothing:antialiased;
-  -moz-osx-font-smoothing:grayscale;
-}
+?><link rel="stylesheet" href="/css/base.css">
+<style>
 
 .container { 
   max-width: 1100px;
@@ -478,9 +460,13 @@ body {
   overflow: hidden;
 }
 
+.card-body {
+  padding: 1rem;
+}
+
 .card-header {
   background: transparent;
-  border-bottom: 1px solid #eef3f7;
+  border-bottom: 1px solid var(--border-weak);
   font-weight: 600;
   font-size: 0.98rem;
   padding: 0.65rem 1rem;
@@ -488,23 +474,23 @@ body {
 
 /* Forms & inputs */
 .form-label { 
-
-
   display: inline-block;
   width: 150px !important;
-
   flex: 0 0 150px; /* don’t let it shrink */
- font-weight:600;
-  color: #333;
-   font-size: .88rem; }
+  font-weight:600;
+  color: var(--text);
+  font-size: .88rem;
+}
 .form-control {
-  border-radius: 5px;
-  border: 1px solid #e6ebf0;
-  padding: 5px;
-  height: 10px;
-  margin-bottom: 5px;
+  border-radius: 6px;
+  border: 1px solid var(--border-weak);
+  padding: 8px 10px;
+  min-height: 36px;
+  margin-bottom: 6px;
   box-shadow: none;
   transition: box-shadow .12s ease, border-color .12s ease, transform .06s ease;
+  background: transparent;
+  font-size: 0.95rem;
 }
 .form-control:focus {
   outline: 0;
@@ -515,20 +501,27 @@ body {
 .form-check {
     margin-bottom: 5px;
 }
+.form-check-input {
+    width: 1.05em;
+    height: 1.05em;
+}
+
 /* Buttons */
 .btn {
   border-radius: 9px;
   padding: .45rem .8rem;
   font-weight: 600;
   letter-spacing: .2px;
+  border: 0;
+  cursor: pointer;
 }
 .btn-primary {
   background: linear-gradient(180deg, var(--primary), #0b5ed7);
-  border: 0;
+  color: #fff;
   box-shadow: 0 6px 18px rgba(var(--primary-rgb), 0.12);
 }
 .btn-secondary {
-  background: linear-gradient(180deg, #f6f7f9, #eef1f6);
+  background: linear-gradient(180deg, var(--surface), #eef1f6);
   border: 1px solid #e3e7eb;
   color: #333;
 }
@@ -540,47 +533,42 @@ body {
   box-shadow: none;
   padding: .6rem .9rem;
 }
-.alert-success { border-left: 4px solid #198754; }
-.alert-danger  { border-left: 4px solid #dc3545; }
+.alert-success { border-left: 4px solid var(--success); }
+.alert-danger  { border-left: 4px solid var(--danger); }
 .alert-info    { border-left: 4px solid var(--primary); }
 
-/* Tables */
+/* Tables - compact styling for dry-run */
 .table {
   margin-bottom: 0;
   border-spacing: 0;
-    align-self: flex-start;
-    border-collapse: collapse !important; /* collapse spacing */
-
+  border-collapse: collapse !important;
+  width: 100%;
 }
 .table thead th {
-  border-bottom: 1px solid #eef3f7;
+  border-bottom: 1px solid var(--border-weak);
   font-weight: 700;
-  font-size: .65rem;
+  font-size: .75rem;
   color: #444;
+  text-align:left;
+  padding: .4rem .5rem;
 }
 .table tbody tr:hover {
-  background: linear-gradient(90deg, rgba(13,110,253,0.02), rgba(13,110,253,0.01));
+  background: linear-gradient(90deg, rgba(var(--primary-rgb),0.02), rgba(var(--primary-rgb),0.01));
   transform: translateZ(0);
 }
-.table {
-  border-collapse: collapse !important; /* collapse spacing */
-}
 
+/* keep rows compact but reasonable */
 .table tr {
-  height: 10px !important;
-  max-height: 10px !important;
+  height: auto;
 }
-
 .table td, .table th {
-  font-size: .65rem;       /* shrink font */
-  line-height: 10px !important;    /* match row height */
-  height: 10px !important;
-  max-height: 10px !important;
-  padding: 5px 0 !important;
-  margin: 0 !important;
-  overflow: hidden !important;
-  vertical-align: top !important;  /* top align avoids extra centering space */
-  white-space: nowrap !important;
+  font-size: .78rem;
+  line-height: 1.1;
+  padding: .35rem .5rem;
+  vertical-align: top;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Truncate long descriptions in table cells */
@@ -594,8 +582,8 @@ body {
 }
 
 /* Tiny utilities */
-.small-muted { color: var(--muted); font-size: .82rem; }
-.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace; font-size: .86rem; }
+.small-muted { color: var(--muted); font-size: .86rem; }
+.mono { font-family: var(--mono); font-size: .86rem; }
 .count-bubble {
   display: inline-block;
   background: rgba(var(--primary-rgb), 0.12);
@@ -608,9 +596,15 @@ body {
 }
 
 /* Pagination tweaks */
+.pagination { display:flex; gap:.25rem; padding:0; list-style:none; }
 .pagination .page-item .page-link {
   border-radius: 7px;
   padding: .35rem .6rem;
+  display:inline-block;
+  text-decoration:none;
+  color:inherit;
+  background:transparent;
+  border:1px solid transparent;
 }
 .pagination .page-item.active .page-link {
   background: var(--primary);
@@ -619,13 +613,15 @@ body {
 }
 
 /* Dry-run tables slightly smaller and denser */
-.dryrun-table .table td, .dryrun-table .table th { padding: .35rem .5rem; font-size: .82rem; }
+.dryrun-table .table td, .dryrun-table .table th { padding: .25rem .4rem; font-size: .78rem; }
 
 /* Responsive niceties */
 @media (max-width: 768px) {
   .truncate { max-width: 12rem; }
   .container { padding-left: .5rem; padding-right: .5rem; }
   .card-header { font-size: .95rem; }
+  .form-label { width: 100% !important; flex: 0 0 auto; margin-bottom: .4rem; }
+  .row.gx-3 { gap: .5rem; }
 }
 
 /* Accessibility: keep a visible focus ring for keyboard users */
@@ -633,7 +629,9 @@ body {
   outline: 3px solid rgba(var(--primary-rgb), 0.12);
   outline-offset: 2px;
 }
-</style><div class="container my-4">
+</style>
+
+<div class="container my-4">
     <h1 class="mb-3"><?= htmlspecialchars($pageTitle) ?></h1><!-- messages -->
 <?php foreach ($messages['errors'] as $err): ?>
     <div class="alert alert-danger" role="alert"><?= htmlspecialchars($err) ?></div>
@@ -699,7 +697,7 @@ body {
             <div class="mt-3 d-flex align-items-center">
                 <button type="submit" class="btn btn-primary me-2">Run Import</button>
                 <button type="button" id="resetFormBtn" class="btn btn-secondary">Reset</button>
-                <small class="text-muted ms-3">
+                <small class="text-muted ms-3"></small>
             </div>
         </form>
     </div>
@@ -722,7 +720,7 @@ body {
         <div class="card-body">
             <h5>Rows that would be <strong>inserted</strong> (page <?= $page_insert ?>)</h5>
             <?php if (!empty($dryRunInsertRows)): ?>
-                <div class="table-responsive mb-3">
+                <div class="table-responsive mb-3 dryrun-table">
                     <table class="table table-sm">
                         <thead>
                             <tr>
@@ -790,7 +788,7 @@ body {
 
             <h5>Rows that would be <strong>updated</strong> (page <?= $page_update ?>)</h5>
             <?php if (!empty($dryRunUpdateRows)): ?>
-                <div class="table-responsive mb-3">
+                <div class="table-responsive mb-3 dryrun-table">
                     <table class="table table-sm">
                         <thead>
                             <tr>

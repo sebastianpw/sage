@@ -371,8 +371,14 @@ const scripts = [
     </script>
 
 <?php else: ?>
+
+
+    <a style="float:right;" class="badge" href="view_mass_upload_generic.php">Import</a>
+
     <!-- Conversation List -->
     <h2 class="mb-4 text-center fw-bold"><a href="dashboard.php">💬</a> GPT Conversations</h2>
+
+
     <form class="search-bar" onsubmit="return false;">
         <input type="text" id="searchInput" placeholder="Search conversations..." value="<?= htmlspecialchars($search, ENT_QUOTES) ?>">
         <button type="button" id="searchBtn">Search</button>

@@ -3,6 +3,8 @@
 
 namespace App\Entity;
 
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity]
@@ -42,6 +44,9 @@ class GeneratorConfig
     #[ORM\Column(name: 'examples', type: 'json', nullable: true)]
     private ?array $examples = null;
 
+    #[ORM\Column(name: 'oracle_config', type: 'json', nullable: true)]
+    private ?array $oracleConfig = null;
+
     #[ORM\Column(name: 'created_at', type: 'datetime')]
     private \DateTimeInterface $createdAt;
 
@@ -51,11 +56,30 @@ class GeneratorConfig
     #[ORM\Column(name: 'active', type: 'boolean')]
     private bool $active = true;
 
+    #[ORM\Column(name: 'is_public', type: 'boolean', options: ['default' => false])]
+    private bool $isPublic = false;
+
+    #[ORM\Column(name: 'list_order', type: 'integer', options: ['default' => 0])]
+    private int $listOrder = 0;
+
+    /**
+     * @var Collection<int, GeneratorConfigDisplayArea>
+     */
+    #[ORM\ManyToMany(targetEntity: GeneratorConfigDisplayArea::class, cascade: ['persist'])]
+    #[ORM\JoinTable(
+        name: 'generator_config_to_display_area',
+        joinColumns: [new ORM\JoinColumn(name: 'generator_config_id', referencedColumnName: 'id')],
+        inverseJoinColumns: [new ORM\JoinColumn(name: 'display_area_id', referencedColumnName: 'id')]
+    )]
+    private Collection $displayAreas;
+
+
     public function __construct()
     {
         $this->createdAt = new \DateTimeImmutable();
         $this->updatedAt = new \DateTimeImmutable();
         $this->configId = bin2hex(random_bytes(16));
+        $this->displayAreas = new ArrayCollection();
     }
 
     // --- Getters / Setters ---
@@ -79,6 +103,8 @@ class GeneratorConfig
     public function getInstructions(): array { return $this->instructions; }
     public function setInstructions(array $instructions): self { $this->instructions = $instructions; return $this; }
 
+
+
     public function getParameters(): array { return $this->parameters; }
     public function setParameters(array $parameters): self { $this->parameters = $parameters; return $this; }
 
@@ -88,6 +114,9 @@ class GeneratorConfig
     public function getExamples(): ?array { return $this->examples; }
     public function setExamples(?array $examples): self { $this->examples = $examples; return $this; }
 
+    public function getOracleConfig(): ?array { return $this->oracleConfig; }
+    public function setOracleConfig(?array $oracleConfig): self { $this->oracleConfig = $oracleConfig; return $this; }
+
     public function getCreatedAt(): \DateTimeInterface { return $this->createdAt; }
     public function getUpdatedAt(): \DateTimeInterface { return $this->updatedAt; }
     public function setUpdatedAt(\DateTimeInterface $updatedAt): self { $this->updatedAt = $updatedAt; return $this; }
@@ -95,14 +124,59 @@ class GeneratorConfig
     public function isActive(): bool { return $this->active; }
     public function setActive(bool $active): self { $this->active = $active; return $this; }
 
-    // --- Utility ---
+    public function isPublic(): bool { return $this->isPublic; }
+    public function setIsPublic(bool $isPublic): self { $this->isPublic = $isPublic; return $this; }
+
+    public function getListOrder(): int { return $this->listOrder; }
+    public function setListOrder(int $listOrder): self { $this->listOrder = $listOrder; return $this; }
+
+    /**
+     * @return Collection<int, GeneratorConfigDisplayArea>
+     */
+    public function getDisplayAreas(): Collection
+    {
+        return $this->displayAreas;
+    }
+
+    public function addDisplayArea(GeneratorConfigDisplayArea $displayArea): self
+    {
+        if (!$this->displayAreas->contains($displayArea)) {
+            $this->displayAreas->add($displayArea);
+        }
+        return $this;
+    }
+
+    public function removeDisplayArea(GeneratorConfigDisplayArea $displayArea): self
+    {
+        $this->displayAreas->removeElement($displayArea);
+        return $this;
+    }
+
+    public function duplicate(int $newUserId): self
+    {
+        $copy = new self();
+        $copy->setUserId($newUserId);
+        $copy->setTitle('[Copy of] ' . $this->getTitle());
+        $copy->setModel($this->getModel());
+        $copy->setSystemRole($this->getSystemRole());
+        $copy->setInstructions($this->getInstructions());
+        $copy->setParameters($this->getParameters());
+        $copy->setOutputSchema($this->getOutputSchema());
+        $copy->setExamples($this->getExamples());
+        $copy->setOracleConfig($this->getOracleConfig());
+        $copy->setListOrder(0);
+        foreach ($this->getDisplayAreas() as $area) {
+            $copy->addDisplayArea($area);
+        }
+        $copy->setActive(true);
+        $copy->setIsPublic(false);
+        return $copy;
+    }
+
     public function toConfigArray(): array
     {
         return [
-            'system' => [
-                'role' => $this->systemRole,
-                'instructions' => $this->instructions,
-            ],
+            'system' => [ 'role' => $this->systemRole, 'instructions' => $this->instructions ],
             'parameters' => $this->parameters,
             'output' => $this->outputSchema,
             'examples' => $this->examples ?? [],
@@ -112,10 +186,7 @@ class GeneratorConfig
     public static function fromJson(string $json, int $userId): self
     {
         $data = json_decode($json, true);
-        if (!$data) {
-            throw new \InvalidArgumentException('Invalid JSON');
-        }
-
+        if (!$data) { throw new \InvalidArgumentException('Invalid JSON'); }
         $config = new self();
         $config->setUserId($userId);
         $config->setSystemRole($data['system']['role'] ?? '');
@@ -123,11 +194,10 @@ class GeneratorConfig
         $config->setParameters($data['parameters'] ?? []);
         $config->setOutputSchema($data['output'] ?? []);
         $config->setExamples($data['examples'] ?? null);
-
+        $config->setListOrder(0);
         return $config;
     }
 
-    // --- Lifecycle callbacks ---
     #[ORM\PreUpdate]
     public function preUpdateTimestamp(): void
     {

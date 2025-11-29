@@ -8,6 +8,7 @@ use App\Core\AIProvider;
 use App\Core\FileLogger;
 use App\Service\Schema\SchemaValidator;
 use App\Service\Schema\ResponseNormalizer;
+use App\Oracle\Bloom;
 
 class GeneratorService
 {
@@ -43,8 +44,33 @@ class GeneratorService
     ): GeneratorResult {
         $startTime = microtime(true);
 
+        // ===== START: BLOOM ORACLE INTEGRATION =====
+        $oracleHint = null;
+        $oracleConfig = $config->getOracleConfig();
+
+        if ($oracleConfig && !empty($oracleConfig['dictionary_ids'])) {
+            try {
+                $bloomOracle = new Bloom(); // Assumes default pyapi URL is fine
+                
+                // Use a random seed from the request if provided, for dynamism
+                $seed = $params['random_oracle_seed'] ?? $oracleConfig['seed'] ?? null;
+                
+                $oracleHint = $bloomOracle->generateHint(
+                    $oracleConfig['dictionary_ids'],
+                    $oracleConfig['num_words'] ?? 200,
+                    $oracleConfig['error_rate'] ?? 0.01,
+                    $seed ? (int)$seed : null
+                );
+            } catch (\Exception $e) {
+                // Log the error but don't fail the entire generation
+                $this->log('error', 'Bloom Oracle failed', ['error' => $e->getMessage()]);
+            }
+        }
+        // ===== END: BLOOM ORACLE INTEGRATION =====
+
+
         // Build system message
-        $systemContent = $this->buildSystemMessage($config);
+        $systemContent = $this->buildSystemMessage($config, $oracleHint);
 
         // Build user input from params + defaults
         $userInput = $this->buildUserInput($config, $params);
@@ -103,7 +129,7 @@ class GeneratorService
     /**
      * Build system message from config
      */
-    private function buildSystemMessage(GeneratorConfig $config): string
+    private function buildSystemMessage(GeneratorConfig $config, ?array $oracleHint = null): string
     {
         $parts = [];
         
@@ -114,6 +140,14 @@ class GeneratorService
         if ($instructions = $config->getInstructions()) {
             $parts[] = implode("\n", $instructions);
         }
+        
+        // ===== START: HINT INJECTION =====
+        if ($oracleHint && isset($oracleHint['meta']['sampled_lemmas'])) {
+            $wordList = implode(', ', $oracleHint['meta']['sampled_lemmas']);
+            // You can choose your injection strategy. This is a direct and effective one.
+            $parts[] = "INSPIRATIONAL HINT: To enhance creativity and reduce repetition, draw inspiration from the following set of words. You do not have to use them directly, but let them influence the tone, theme, or subject matter of your response. But after all: Come on we made the effort to provide all these words for a good reason. We do not always want the same! USE the words!!.\nInspirational Words: [{$wordList}]";
+        }
+        // ===== END: HINT INJECTION =====
 
         return implode("\n\n", $parts);
     }
@@ -198,7 +232,7 @@ class GeneratorResult
     public function getData(): ?array { return $this->data; }
     public function getRawResponse(): string { return $this->rawResponse; }
     public function getDecoded(): ?array { return $this->decoded; }
-    public function getValidation(): ValidationResult { return $this->validation; }
+    public function getValidation(): \App\Service\Schema\ValidationResult { return $this->validation; }
     public function getWarnings(): array { return $this->warnings; }
     public function getElapsedMs(): int { return $this->elapsedMs; }
     public function getModel(): string { return $this->model; }

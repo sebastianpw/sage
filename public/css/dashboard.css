@@ -1,0 +1,358 @@
+/* Dashboard theme glue — relies on variables defined in base.css
+   Load this AFTER base.css so it overrides older rules.
+*/
+
+/* Base page */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-stack, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Header / hero */
+.header { position: relative; text-align: center; color: var(--text); }
+.header img { width: 100%; max-height: 400px; object-fit: cover; }
+.header h1 {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  background-color: rgba(0,0,0,0.35);
+  padding: 10px 20px; border-radius: 8px;
+  display: none; color: var(--text);
+}
+
+/* ---- Script list container (same structure as your source page) ---- */
+.script-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  max-width: 900px;
+  margin: auto;
+  margin-bottom: 70px;
+}
+
+/* Generic card-like list items (keeps the full-width single-link look) */
+.script-list > a {
+  display: block;
+  padding: 11px 25px;
+  background: var(--card);
+  border: 1px solid rgba(var(--muted-border-rgb), 0.12);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text);
+  font-weight: 700;
+  transition: all 0.16s ease;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 5px;
+}
+.script-list > a:last-child { margin-bottom: 0; }
+.script-list > a:hover {
+  filter: brightness(1.03);
+  transform: translateY(-1px);
+}
+
+/* Disabled list link */
+.script-list a.btn-disabled {
+  opacity: 0.35;
+  filter: grayscale(30%);
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Horizontal rule (uses theme border) */
+.horizontal-line {
+  display: block;
+  width: 90%;
+  border-bottom: 1px solid rgba(var(--muted-border-rgb), 0.12) !important;
+  margin: 10px auto;
+  height: 0;
+}
+
+/* Collapsible groups */
+.collapsible-group { width: 100%; margin-bottom: 8px; }
+.script-list .group-header {
+  cursor: pointer;
+  padding: 11px 15px;
+  font-weight: 700;
+  font-size: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--card);
+  border-radius: 8px;
+  color: var(--text);
+  border: 1px solid rgba(var(--muted-border-rgb), 0.06);
+  transition: transform 0.12s ease, filter 0.12s ease, box-shadow 0.12s ease;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.01) inset;
+}
+.script-list .group-header::after {
+  content: "▼";
+  display: inline-block;
+  transition: transform 0.18s ease;
+  transform: rotate(-90deg);
+  color: var(--text-muted);
+  opacity: 0.9;
+}
+.script-list .group-header.active {
+  transform: translateY(-1px);
+  border-color: rgba(var(--muted-border-rgb), 0.12);
+  box-shadow: 0 6px 18px rgba(2,6,23,0.08);
+}
+.script-list .group-header.active::after { transform: rotate(0deg); }
+.script-list .group-header:hover { filter: brightness(1.03); }
+.script-list .group-header:focus, .script-list .group-header:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(59,130,246,0.08);
+}
+
+/* collapsed content */
+.group-content { display: none; padding-top: 8px; }
+
+/* ---- Split / joined button group (exactly like your original) ----
+   Important: override .script-list > a width:100% rule for group children
+   by using a more specific selector and ensuring this CSS is loaded last.
+*/
+.button-group {
+  display: flex;
+  width: 100%;
+  margin-bottom: 5px;
+  border-radius: 8px;
+  overflow: hidden;           /* keeps the pieces joined */
+  border: 1px solid rgba(var(--muted-border-rgb), 0.12);
+  background: transparent;
+}
+
+/* Specific override for button-group children — prevents the generic
+   .script-list > a rule from forcing them into stacked full-width items. */
+.button-group > a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 11px 20px;
+  text-decoration: none;
+  color: var(--text);
+  font-weight: 700;
+  background: var(--card);
+  transition: all 0.12s ease;
+  text-align: center;
+  border: none;               /* we control separators */
+  margin: 0;
+  flex: 1 1 auto;             /* equal sizing by default */
+  min-width: 0;               /* avoid overflow in flex children */
+  gap: 8px;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  cursor: pointer;
+  border-right: 1px solid rgba(var(--muted-border-rgb), 0.08); /* separator */
+}
+/* remove separator on last */
+.button-group > a:last-child { border-right: none; }
+
+/* fixed small segments (CRUD / scheduler) */
+.button-group > a.crud { flex: 0 0 80px; font-weight: 600; }
+.button-group > a.scheduler { flex: 0 0 48px; font-weight: 600; }
+
+/* visual separator for first child if desired (keeps identical to your old CSS) */
+.button-group > a:first-child { border-right: 1px solid rgba(var(--muted-border-rgb), 0.08); }
+
+/* hover / focus */
+.button-group > a:hover { filter: brightness(1.03); transform: translateY(-1px); }
+.button-group > a:focus, .button-group > a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(59,130,246,0.08);
+  z-index: 2;
+}
+
+/* active/selected style (optional class) */
+.button-group > a.active {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));
+  box-shadow: inset 0 -2px 6px rgba(0,0,0,0.06);
+}
+
+/* fallback for very narrow screens: stack segments neatly */
+@media (max-width: 520px) {
+  .button-group { flex-wrap: wrap; gap: 8px; }
+  .button-group > a { flex: 1 1 100%; border-right: none; border-radius: 8px; }
+}
+
+/* ---- Overlays (log / styles) ---- */
+#dashboardLogOverlay, #stylesOverlay {
+  position: fixed; top:0; left:0; width:100%; height:100%;
+  background: var(--overlay-bg, rgba(0,0,0,0.85)); z-index: 9999;
+  display: flex; justify-content: center; align-items: center;
+}
+#dashboardLogOverlayContent, #stylesOverlayContent {
+  width: 80%; height: 80%; background: var(--card); padding: 20px;
+  position: relative; display: flex; flex-direction: column; color: var(--text);
+}
+#dashboardLogFrame, #stylesFrame { flex: 1; width: 100%; background: var(--bg); border: 1px solid rgba(var(--muted-border-rgb),0.08); }
+#closeDashboardLogOverlay, #closeStylesOverlay {
+  position: absolute; top: 10px; right: 10px;
+  background: var(--red); color: #fff; border: none; padding: 5px 10px;
+  cursor: pointer; border-radius: 6px;
+}
+
+/* ---- Footer ---- */
+.footer {
+  position: fixed; bottom: 0; left: 0; width: 100%;
+  background-color: var(--footer-bg, var(--bg)); padding: 10px 0;
+  box-shadow: 0 -2px 5px rgba(0,0,0,0.06); z-index: 1000;
+  display: flex; justify-content: center; align-items: center;
+}
+.footer a {
+  display: block;
+  padding: 12px 20px;
+  background: var(--card);
+  border: 1px solid rgba(var(--muted-border-rgb), 0.12);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text);
+  width: 90%;
+  max-width: 900px;
+  box-sizing: border-box;
+  margin: 0 auto;
+}
+.footer a:hover { filter: brightness(1.02); }
+
+/* ---- Token messages & forms (theme-aware) ---- */
+.token-message {
+  padding: 12px 16px; margin: 12px 0; border-radius: 8px;
+  border-left: 4px solid var(--accent);
+  background: var(--card); color: var(--text); font-size: 14px; white-space: pre-wrap;
+}
+.token-message.success { border-color: var(--green); background: rgba(35,134,54,0.06); color: var(--green); }
+.token-message.error   { border-color: var(--red);   background: rgba(218,54,51,0.06); color: var(--red); }
+.token-message.warning { border-color: var(--orange); background: rgba(245,159,11,0.06); color: var(--orange); }
+
+.token-form-group { margin-bottom: 16px; }
+.token-form-group label { display:block; margin-bottom:6px; font-weight:600; font-size:14px; color:var(--text); }
+.token-form-input {
+  width:100%; padding:10px 12px; border:2px solid rgba(var(--muted-border-rgb), 0.12);
+  border-radius:8px; font-size:14px; box-sizing:border-box;
+  background: var(--card); color: var(--text);
+}
+.token-form-input:focus { outline:none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.08); }
+
+.token-info-box {
+  background: rgba(var(--muted-border-rgb), 0.03); padding:12px; border-radius:8px;
+  font-size:13px; color: var(--text-muted); margin-bottom:16px;
+  width:327px; max-width:100%; overflow:auto;
+}
+.token-code { background: rgba(var(--muted-border-rgb),0.04); padding:2px 6px; border-radius:4px; font-family:monospace; font-size:12px; color:var(--text); }
+
+/* Accessibility: focus rings for interactive elements */
+button:focus, a:focus, .group-header:focus { outline: 3px solid rgba(37,99,235,0.14); outline-offset: 2px; }
+
+/* small polish */
+html, body { font-weight: 400; letter-spacing: 0.01em; }
+
+
+/* ==== Make direct child links inside group-content look like buttons/cards ==== */
+/* Add AFTER other rules in dashboard.css so it wins over generic link styles */
+
+.group-content > a {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 18px;
+  margin: 6px 0;
+  background: var(--card);
+  border: 1px solid rgba(var(--muted-border-rgb), 0.12);
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 700;
+  transition: transform 0.12s ease, filter 0.12s ease, box-shadow 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Keep the same hover / pressed look as other buttons */
+.group-content > a:hover {
+  filter: brightness(1.03);
+  transform: translateY(-1px);
+}
+
+/* Disabled variant keeps its look */
+.group-content > a.btn-disabled {
+  opacity: 0.35;
+  filter: grayscale(30%);
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* If inner markup uses icons + text, make them align nicely */
+.group-content > a > .icon,
+.group-content > a > i,
+.group-content > a > svg {
+  margin-right: 10px;
+  vertical-align: middle;
+  display: inline-block;
+}
+
+/* Make sure we do NOT override split button segments (they live inside .button-group) */
+.button-group > a { /* re-assert to be safe — this should already exist in dashboard.css */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 11px 20px;
+  border-right: 1px solid rgba(var(--muted-border-rgb), 0.08);
+  background: var(--card);
+}
+
+/* Slight responsive spacing tweak for dense groups */
+@media (max-width: 520px) {
+  .group-content > a { padding: 10px 14px; margin: 6px 0; }
+}
+
+
+
+
+/* Main card links */
+.script-list > a,
+.footer a,
+.group-content > a,
+.button-group > a,
+.button-group > a.crud,
+.button-group > a.scheduler,
+.button-group {
+  border: 1px solid rgba(var(--muted-border-rgb), 0.12);
+  box-sizing: border-box;
+}
+
+/* Slightly stronger border on hover/focus for clarity */
+.script-list > a:hover,
+.group-content > a:hover,
+.button-group > a:hover,
+.footer a:hover,
+.button-group > a:focus,
+.button-group > a:focus-visible {
+  border-color: rgba(var(--muted-border-rgb), 0.18);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.01) inset;
+}
+
+/* Ensure split-button separators still look correct (no double borders) */
+.button-group {
+  border-right: 1px solid rgba(var(--muted-border-rgb), 0.12);
+}
+.button-group > a { border-right: 1px solid rgba(var(--muted-border-rgb), 0.08); }
+.button-group > a:last-child { border-right: none; }
+
+
+/* === Force borders if other rules / inline styles block them === */
+.script-list > a,
+.group-content > a,
+.button-group > a,
+.footer a,
+.button-group {
+  border: 1px solid rgba(var(--muted-border-rgb), 0.12) !important;
+}
+
+/* Keep separators */
+.button-group > a { border-right: 1px solid rgba(var(--muted-border-rgb), 0.08) !important; }
+.button-group > a:last-child { border-right: none !important; }
+
+
+

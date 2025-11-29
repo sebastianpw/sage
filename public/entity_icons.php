@@ -1,6 +1,8 @@
 <?php
 
 $entityIcons = [
+
+    // entities with frames, galleries etc:
     'characters'      => '🦸',
     'character_poses' => '🤸',
     'animas'          => '🐾',
@@ -15,9 +17,12 @@ $entityIcons = [
     'sketches'        => '🪄',
     'prompt_matrix_blueprints' => '🌌',
     'composites'      => '🧩',
+
+    // sys entities without frames, galleries etc.:
     'pastebin'        => '📋',
     'sage_todos'      => '🎫',
     'meta_entities'   => '📦'
+
 ];
 
 

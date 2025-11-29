@@ -1,911 +1,766 @@
 <?php
-// entity_form.php - Universal Entity CRUD with AI Generator
+// public/entity_form.php
 require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
 
-use App\Entity\GeneratorConfig;
+use App\Core\SpwBase;
+use App\UI\Modules\ModuleRegistry;
 
-define('ID_NAME_GEN', '9bf6de291765e2ced28589de857a9f0b');
-define('ID_DESC_GEN', 'e76db8f464c7e35851685a0dbc8f3da8');
+$spw = SpwBase::getInstance();
+$mysqli = $spw->getMysqli();
 
-$em = $spw->getEntityManager();
-// assume bootstrap.php already started session; if not, uncomment next line
-// session_start();
-$userId = $_SESSION['user_id'] ?? null;
+// Get parameters
+$entityType = $_GET['entity_type'] ?? '';
+$entityId = isset($_GET['entity_id']) ? (int)$_GET['entity_id'] : 0;
+$redirectUrl = $_GET['redirect_url'] ?? "gallery_{$entityType}_nu.php";
 
-if (!$userId) {
-    die('Not authenticated');
+// Validate entity type (security: only allow alphanumeric and underscores)
+if (!preg_match('/^[a-z_]+$/', $entityType)) {
+    die('Invalid entity type.');
 }
 
-// --- IMPORTANT: detect edit mode only from GET (URL) as requested
-$entityType = $_GET['entity_type'] ?? $_POST['entity_type'] ?? null;
-$entityId = isset($_GET['entity_id']) ? (int)$_GET['entity_id'] : null;
-$isEdit = ($entityId > 0);
-
-if (!$entityType) {
-    die('Missing entity_type parameter');
+// Check if table exists
+$tableCheck = $mysqli->query("SHOW TABLES LIKE '{$entityType}'");
+if ($tableCheck->num_rows === 0) {
+    die("Entity table '{$entityType}' does not exist.");
 }
 
-$allowedTables = ['characters', 'animas', 'locations', 'artifacts', 'vehicles', 'backgrounds',
-                  'sketches', 'generatives', 'blueprints', 'composites'];
-if (!in_array($entityType, $allowedTables)) {
-    die('Invalid entity type');
+// Initialize notification
+$notification = '';
+$notificationType = 'success';
+
+// Get column metadata for proper type handling
+$columnInfo = [];
+$result = $mysqli->query("SHOW FULL COLUMNS FROM `{$entityType}`");
+while ($col = $result->fetch_assoc()) {
+    $columnInfo[$col['Field']] = $col;
 }
 
-$errors = [];
-$success = null;
-$entity = null;
-$previewImage = null;
-$sketchTemplates = [];
-
-// Load sketch templates if entity type is sketches
-if ($entityType === 'sketches') {
-    $conn = $em->getConnection();
-    $templatesStmt = $conn->prepare("SELECT * FROM sketch_templates WHERE entity_type = 'sketches' AND active = 1 ORDER BY name");
-    $templatesResult = $templatesStmt->executeQuery();
-    $sketchTemplates = $templatesResult->fetchAllAssociative();
-}
-
-// Load entity if editing (based only on GET param)
-if ($isEdit) {
-    $conn = $em->getConnection();
-    $stmt = $conn->prepare("SELECT * FROM {$entityType} WHERE id = ?");
-    $stmt->bindValue(1, $entityId);
-    $result = $stmt->executeQuery();
-    $entity = $result->fetchAssociative();
-
-    if (!$entity) {
-        die('Entity not found');
-    }
-
-    if (!empty($entity['img2img_frame_id'])) {
-        $frameStmt = $conn->prepare("SELECT filename FROM frames WHERE id = ?");
-        $frameStmt->bindValue(1, $entity['img2img_frame_id']);
-        $frameResult = $frameStmt->executeQuery();
-        $frame = $frameResult->fetchAssociative();
-        if ($frame) {
-            $previewImage = '/frames/' . $frame['filename'];
+// Handle form submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    if ($_POST['action'] === 'update' && $entityId > 0) {
+        // Build UPDATE query dynamically
+        $updates = [];
+        $types = '';
+        $values = [];
+        
+        foreach ($_POST as $key => $value) {
+            if ($key === 'action' || $key === 'id') continue;
+            
+            // Skip if column doesn't exist (security)
+            if (!isset($columnInfo[$key])) continue;
+            
+            $colInfo = $columnInfo[$key];
+            $colType = strtolower($colInfo['Type']);
+            $isNullable = ($colInfo['Null'] === 'YES');
+            
+            $updates[] = "`{$key}` = ?";
+            
+            // Handle empty values for nullable fields
+            if ($value === '' && $isNullable) {
+                $values[] = null;
+                $types .= 's'; // NULL can use string type
+                continue;
+            }
+            
+            // Integer fields
+            if (preg_match('/^(tiny|small|medium|big)?int/', $colType)) {
+                if ($value === '') { $value = 0; }
+                $types .= 'i';
+                $values[] = (int)$value;
+            }
+            // Float/Decimal fields
+            elseif (preg_match('/^(float|double|decimal)/', $colType)) {
+                if ($value === '') { $value = $isNullable ? null : 0.0; }
+                $types .= 'd';
+                $values[] = $value === null ? null : (float)$value;
+            }
+            // All other fields (text, varchar, etc.)
+            else {
+                $types .= 's';
+                $values[] = $value;
+            }
         }
-    }
-}
-
-// Helper: check whether request is JSON/AJAX
-function is_json_request(): bool {
-    $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
-    $accept = $_SERVER['HTTP_ACCEPT'] ?? '';
-    $xhr = $_SERVER['HTTP_X_REQUESTED_WITH'] ?? '';
-    return (stripos($contentType, 'application/json') !== false)
-        || (stripos($accept, 'application/json') !== false)
-        || (strtolower($xhr) === 'xmlhttprequest');
-}
-
-// Handle form submission (supports both regular POST form and JSON AJAX)
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // If JSON, decode payload into $payload, else use $_POST
-    $payload = null;
-    if (is_json_request()) {
-        $raw = file_get_contents('php://input');
-        $payload = json_decode($raw, true) ?: [];
-    } else {
-        $payload = $_POST;
-    }
-
-    $action = $payload['action'] ?? null;
-
-    if ($action === 'save') {
-        // Determine if this POST intends an update: prefer posted entity_id param (from form or AJAX) for update
-        $postEntityId = isset($payload['entity_id']) && (int)$payload['entity_id'] > 0 ? (int)$payload['entity_id'] : null;
-        $isPostEdit = ($postEntityId !== null);
-
-        $name = trim($payload['name'] ?? '');
-        $description = trim($payload['description'] ?? '');
-        $order = (int)($payload['order'] ?? 0);
-        $regenerateImages = isset($payload['regenerate_images']) && ($payload['regenerate_images'] == 1 || $payload['regenerate_images'] === true) ? 1 : 0;
-        // For JSON requests the checkboxes might come as booleans; accept both forms
-        $img2img = isset($payload['img2img']) && ($payload['img2img'] == 1 || $payload['img2img'] === true) ? 1 : 0;
-        $cnmap = isset($payload['cnmap']) && ($payload['cnmap'] == 1 || $payload['cnmap'] === true) ? 1 : 0;
-
-        if (empty($name)) {
-            $errors[] = 'Name is required';
-        }
-
-        if (empty($errors)) {
-            $conn = $em->getConnection();
-
-            if ($isPostEdit) {
-                // UPDATE existing row
-                $sql = "UPDATE {$entityType} SET 
-                        name = ?, 
-                        description = ?, 
-                        `order` = ?, 
-                        regenerate_images = ?,
-                        img2img = ?,
-                        cnmap = ?,
-                        updated_at = NOW()
-                        WHERE id = ?";
-                $stmt = $conn->prepare($sql);
-                $stmt->bindValue(1, $name);
-                $stmt->bindValue(2, $description);
-                $stmt->bindValue(3, $order);
-                $stmt->bindValue(4, $regenerateImages);
-                $stmt->bindValue(5, $img2img);
-                $stmt->bindValue(6, $cnmap);
-                $stmt->bindValue(7, $postEntityId);
-                $stmt->executeStatement();
-
-                // If JSON/AJAX request, respond with JSON and stop rendering page
-                if (is_json_request()) {
-                    header('Content-Type: application/json');
-                    echo json_encode([
-                        'ok' => true,
-                        'created' => false,
-                        'id' => $postEntityId,
-                        'message' => 'Entity updated successfully'
-                    ]);
-                    exit;
+        
+        if (!empty($updates)) {
+            $sql = "UPDATE `{$entityType}` SET " . implode(', ', $updates) . " WHERE id = ?";
+            $types .= 'i';
+            $values[] = $entityId;
+            
+            $stmt = $mysqli->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param($types, ...$values);
+                if ($stmt->execute()) {
+                    $notification = "Entity updated successfully!";
+                    $notificationType = 'success';
                 } else {
-                    // Non-AJAX fallback: reload entity in page so form shows updated data
-                    $success = 'Entity updated successfully';
-                    $stmt = $conn->prepare("SELECT * FROM {$entityType} WHERE id = ?");
-                    $stmt->bindValue(1, $postEntityId);
-                    $result = $stmt->executeQuery();
-                    $entity = $result->fetchAssociative();
+                    $notification = "Error updating entity: " . $stmt->error;
+                    $notificationType = 'error';
                 }
+                $stmt->close();
             } else {
-                // INSERT new row
-                $sql = "INSERT INTO {$entityType} 
-                        (name, description, `order`, regenerate_images, img2img, cnmap, created_at, updated_at) 
-                        VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())";
-                $stmt = $conn->prepare($sql);
-                $stmt->bindValue(1, $name);
-                $stmt->bindValue(2, $description);
-                $stmt->bindValue(3, $order);
-                $stmt->bindValue(4, $regenerateImages);
-                $stmt->bindValue(5, $img2img);
-                $stmt->bindValue(6, $cnmap);
-                $stmt->executeStatement();
-
-                $newId = (int)$conn->lastInsertId();
-
-                if (is_json_request()) {
-                    header('Content-Type: application/json');
-                    echo json_encode([
-                        'ok' => true,
-                        'created' => true,
-                        'id' => $newId,
-                        'message' => 'Entity created successfully'
-                    ]);
-                    exit;
-                } else {
-                    // Non-AJAX fallback: keep behaviour similar to before (load created entity into edit view)
-                    $entityId = $newId;
-                    $isEdit = true;
-                    $success = 'Entity created successfully';
-                    $stmt = $conn->prepare("SELECT * FROM {$entityType} WHERE id = ?");
-                    $stmt->bindValue(1, $entityId);
-                    $result = $stmt->executeQuery();
-                    $entity = $result->fetchAssociative();
-                }
+                $notification = "Error preparing statement: " . $mysqli->error;
+                $notificationType = 'error';
             }
-        } else {
-            // Validation errors
-            if (is_json_request()) {
-                header('Content-Type: application/json', true, 400);
-                echo json_encode([
-                    'ok' => false,
-                    'errors' => $errors
-                ]);
-                exit;
-            }
-            // else: continue to page rendering where $errors will be shown
         }
     }
 }
 
-// Generator configs
-$repo = $em->getRepository(GeneratorConfig::class);
-$generators = $repo->findBy(['userId' => $userId, 'active' => true], ['title' => 'ASC']);
-$entityDisplayName = ucfirst(rtrim($entityType, 's'));
+// Fetch entity data
+$entity = null;
+if ($entityId > 0) {
+    $stmt = $mysqli->prepare("SELECT * FROM `{$entityType}` WHERE id = ?");
+    $stmt->bind_param('i', $entityId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $entity = $result->fetch_assoc();
+    $stmt->close();
+    
+    if (!$entity) {
+        die("Entity #{$entityId} not found in {$entityType} table.");
+    }
+} else {
+    die("No entity ID provided.");
+}
+
+// Fetch associated frames
+$frames = [];
+$frameStmt = $mysqli->prepare("SELECT id, name, filename FROM frames WHERE entity_type = ? AND entity_id = ? ORDER BY id DESC");
+if ($frameStmt) {
+    $frameStmt->bind_param('si', $entityType, $entityId);
+    $frameStmt->execute();
+    $frameResult = $frameStmt->get_result();
+    while ($row = $frameResult->fetch_assoc()) {
+        $frames[] = $row;
+    }
+    $frameStmt->close();
+}
+
+// --- fetch img2img / cnmap frames (if referenced on the entity)
+$specialFrames = []; // keys: 'img2img', 'cnmap'
+if (!empty($entity['img2img_frame_id'])) {
+    $fid = (int)$entity['img2img_frame_id'];
+    $stmt = $mysqli->prepare("SELECT id, name, filename FROM frames WHERE id = ?");
+    if ($stmt) {
+        $stmt->bind_param('i', $fid);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($row = $res->fetch_assoc()) {
+            $specialFrames['img2img'] = $row;
+        }
+        $stmt->close();
+    }
+}
+if (!empty($entity['cnmap_frame_id'])) {
+    $fid = (int)$entity['cnmap_frame_id'];
+    $stmt = $mysqli->prepare("SELECT id, name, filename FROM frames WHERE id = ?");
+    if ($stmt) {
+        $stmt->bind_param('i', $fid);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($row = $res->fetch_assoc()) {
+            $specialFrames['cnmap'] = $row;
+        }
+        $stmt->close();
+    }
+}
+
+// --- fetch composite frames when editing a composite entity
+$compositeFrames = [];
+if ($entityType === 'composites') {
+    $stmt = $mysqli->prepare("
+        SELECT f.id, f.name, f.filename
+        FROM composite_frames cf
+        JOIN frames f ON f.id = cf.frame_id
+        WHERE cf.composite_id = ?
+        ORDER BY cf.created_at DESC, f.id DESC
+    ");
+    if ($stmt) {
+        $stmt->bind_param('i', $entityId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        while ($row = $res->fetch_assoc()) {
+            $compositeFrames[] = $row;
+        }
+        $stmt->close();
+    }
+}
+
+
+// Get column metadata from database
+$columns = [];
+$result = $mysqli->query("SHOW FULL COLUMNS FROM `{$entityType}`");
+while ($col = $result->fetch_assoc()) {
+    $columns[] = $col;
+}
+
+// Determine form field types and properties
+function getFieldConfig($column) {
+    $config = [
+        'name' => $column['Field'],
+        'type' => 'text',
+        'required' => $column['Null'] === 'NO' && $column['Default'] === null && $column['Extra'] !== 'auto_increment',
+        'readonly' => false,
+        'hidden' => false,
+        'label' => ucwords(str_replace('_', ' ', $column['Field'])),
+        'help' => $column['Comment'] ?: '',
+        'rows' => 3,
+        'nullable' => $column['Null'] === 'YES',
+        'placeholder' => '',
+    ];
+    
+    if ($column['Extra'] === 'auto_increment' || $column['Key'] === 'PRI') {
+        $config['readonly'] = true;
+        $config['type'] = 'number';
+    }
+    if (in_array($column['Field'], ['created_at', 'updated_at'])) {
+        $config['readonly'] = true;
+        $config['type'] = 'datetime-local';
+    }
+    if (stripos($column['Type'], 'tinyint(1)') !== false) {
+        $config['type'] = 'checkbox';
+    }
+    if (preg_match('/^int\(/', $column['Type'])) {
+        $config['type'] = 'number';
+        if ($config['nullable']) { $config['placeholder'] = 'Leave empty for NULL'; }
+    }
+    if (stripos($column['Type'], 'text') !== false || stripos($column['Type'], 'longtext') !== false) {
+        $config['type'] = 'textarea';
+        $config['rows'] = 5;
+    }
+    if (preg_match('/varchar\((\d+)\)/', $column['Type'], $matches)) {
+        if ((int)$matches[1] > 200) {
+            $config['type'] = 'textarea';
+            $config['rows'] = 3;
+        }
+    }
+    if (stripos($column['Type'], 'date') !== false) {
+        $config['type'] = 'datetime-local';
+    }
+    
+    return $config;
+}
+
+// Build field configs
+$fields = array_map('getFieldConfig', $columns);
+
+// Organize fields into sections for better UX
+$alwaysVisibleFields = [];
+$collapsibleFields = [];
+$systemFields = [];
+$alwaysVisibleNames = ['name', 'description', 'regenerate_images'];
+
+foreach ($fields as $field) {
+    if (in_array($field['name'], ['id', 'created_at', 'updated_at'])) {
+        $systemFields[] = $field; // System fields will go into the collapsible part
+    } elseif (in_array($field['name'], $alwaysVisibleNames) && isset($entity[$field['name']])) {
+        $alwaysVisibleFields[] = $field;
+    } else {
+        $collapsibleFields[] = $field; // Everything else is collapsible
+    }
+}
+
+// Configure modules for the frame grid
+$registry = ModuleRegistry::getInstance();
+
+$gearMenu = $registry->create('gear_menu', ['position' => 'top-right', 'icon' => '&#9881;', 'icon_size' => '1.5em', 'show_for_entities' => [$entityType]]);
+$gearMenu->addAction($entityType, ['label' => 'View Frame Details', 'icon' => '👁️', 'callback' => 'window.location.href = "view_frame.php?frame_id=" + frameId;']);
+$gearMenu->addAction($entityType, ['label' => 'Edit Image', 'icon' => '🖌️', 'callback' => 'const $w = $(wrapper); if (typeof ImageEditorModal !== "undefined") { ImageEditorModal.open({ entity: entity, entityId: entityId, frameId: frameId, src: $w.find("img").attr("src") }); }']);
+$gearMenu->addAction($entityType, [
+    'label' => 'View Frame Chain',
+    'icon' => '🔗', // A chain link icon
+    'callback' => 'window.showFrameChainInModal(frameId);'
+]);
+
+
+$gearMenu->addAction($entityType, ['label' => 'Import to Generative', 'icon' => '⚡', 'callback' => 'window.importGenerative(entity, entityId, frameId);']);
+
+$gearMenu->addAction($entityType, ['label' => 'Add to Storyboard', 'icon' => '🎬', 'callback' => 'window.selectStoryboard(frameId, $(wrapper));']);
+$gearMenu->addAction($entityType, ['label' => 'Assign to Composite', 'icon' => '🧩', 'callback' => 'window.assignToComposite(entity, entityId, frameId);']);
+$gearMenu->addAction($entityType, ['label' => 'Import to ControlNet Map', 'icon' => '🎛️', 'callback' => 'window.importControlNetMap(entity, entityId, frameId);']);
+$gearMenu->addAction($entityType, ['label' => 'Use Prompt Matrix', 'icon' => '🌐', 'callback' => 'window.usePromptMatrix(entity, entityId, frameId);']);
+$gearMenu->addAction($entityType, ['label' => 'Delete Frame', 'icon' => '🗑️', 'callback' => 'if (confirm("Delete this frame?")) { window.deleteFrame(entity, entityId, frameId, wrapper); }']);
+
+
+// Configure image editor module
+$imageEditor = $registry->create('image_editor', [
+    'modes' => ['mask', 'crop'],
+    'show_transform_tab' => true,
+    'show_filters_tab' => true, // This is a legacy setting now, but we leave it for consistency
+    'enable_rotate' => true,
+    'enable_resize' => true,
+    'preset_filters' => [
+        'grayscale', 'vintage', 'sepia', 'clarendon',
+        'gingham', 'moon', 'lark', 'reyes', 'juno', 'slumber'
+    ], // 'sharpen' has been removed
+]);
+
+
+$pageTitle = "Edit " . ucfirst($entityType) . ": " . ($entity['name'] ?? "ID {$entityId}");
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $isEdit ? 'Edit' : 'Create' ?> <?= htmlspecialchars($entityDisplayName) ?></title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/photoswipe@5.3.7/dist/photoswipe.css">
+    <meta name="viewport" content="width=device-width, initial-scale=0.7">
+    <title><?= htmlspecialchars($pageTitle) ?></title>
+    <script>
+    (function() {
+        try {
+            var theme = localStorage.getItem('spw_theme');
+            if (theme === 'dark' || theme === 'light') { document.documentElement.setAttribute('data-theme', theme); }
+        } catch (e) {}
+    })();
+    </script>
+    <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/toast.css">
+    <?php if (SpwBase::CDN_USAGE): ?>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/photoswipe.css" />
+    <?php else: ?>
+    <link rel="stylesheet" href="/vendor/photoswipe/photoswipe.css" />
+    <?php endif; ?>
+    
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="/js/toast.js"></script>
+    <script src="/js/gear_menu_globals.js"></script>
+    
+    <?php if (SpwBase::CDN_USAGE): ?>
+    <script src="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/photoswipe.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/photoswipe-lightbox.umd.js"></script>
+    <?php else: ?>
+    <script src="/vendor/photoswipe/photoswipe.umd.js"></script>
+    <script src="/vendor/photoswipe/photoswipe-lightbox.umd.js"></script>
+    <?php endif; ?>
+    
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        .card {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
-            padding: 24px;
-            margin-bottom: 20px;
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
-            flex-wrap: wrap;
-            gap: 12px;
-        }
-        h1 {
-            font-size: 24px;
-            color: #1f2937;
-        }
-        .entity-badge {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: 600;
-        }
-        .notice {
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 16px;
-            font-size: 14px;
-        }
-        .notice.success {
-            background: #d1fae5;
-            color: #065f46;
-            border: 1px solid #a7f3d0;
-        }
-        .notice.error {
-            background: #fee2e2;
-            color: #991b1b;
-            border: 1px solid #fecaca;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        label {
-            display: block;
-            font-weight: 600;
-            color: #374151;
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-        input[type="text"],
-        input[type="number"],
-        textarea,
-        select {
+        .field-section { margin-bottom: 10px; }
+        .field-section-header { font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid rgba(var(--muted-border-rgb), 0.2); color: var(--text); }
+        .form-group { margin-bottom: 10px !important; }
+        .form-group-inline { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media (max-width: 640px) { .form-group-inline { grid-template-columns: 1fr; } }
+        .readonly-field { background-color: rgba(0, 0, 0, 0.05); cursor: not-allowed; }
+        .form-help { font-size: 12px; color: var(--text-muted); margin-top: 4px; font-style: italic; display:none; }
+label[for="field_regenerate_images"] {
+}
+        
+        /* Styles for Frame Grid */
+        .frames-grid { display: grid; grid-template-columns: repeat(3, 1fr) !important; gap: 16px; }
+        .frame-item { position: relative; z-index: 1; aspect-ratio: 1 / 1; overflow: hidden; border-radius: 8px; background-color: var(--card); box-shadow: var(--card-elevation); border: 1px solid rgba(var(--muted-border-rgb), 0.1); }
+        .frame-item:hover { z-index: 10; overflow: visible; }
+        .frame-item img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s ease; display: block; }
+        .frame-item:hover img { transform: scale(1.05); }
+        .frame-overlay { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); padding: 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; pointer-events: none; }
+        .frame-name { color: #fff; font-size: 14px; font-weight: 500; text-shadow: 1px 1px 2px rgba(0,0,0,0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .frame-item .gear-icon-wrapper { pointer-events: auto; }
+        
+        
+       /* allow popup menus to overflow the grid and not be clipped */
+.field-section,
+.frames-grid,
+.special-grid,
+#pswp-composite-gallery {
+  overflow: visible !important;
+}
+
+/* allow the menu to escape the frame item */
+.frame-item {
+  overflow: visible !important;
+}
+
+/* ensure the image visually stays clipped (rounded corners) */
+.frame-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 8px; /* keep same radius as .frame-item */
+}
+
+/* make sure gear menu has very high stacking order */
+.gear-menu, .gear-popup, .gear-menu-popup {
+  position: absolute;
+  z-index: 99999 !important;
+}
+
+        /* NEW: Styles for Collapsible Section */
+        .collapsible-toggle {
+            background-color: var(--card);
+            color: var(--text);
+            border: 1px solid rgba(var(--muted-border-rgb), 0.2);
+            padding: 10px 16px;
             width: 100%;
-            padding: 12px;
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            font-size: 15px;
-            transition: border-color 0.2s;
-            font-family: inherit;
-        }
-        input:focus, textarea:focus, select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        textarea {
-            min-height: 150px;
-            resize: vertical;
-            font-family: ui-monospace, monospace;
-            font-size: 14px;
-        }
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 12px;
-        }
-        .checkbox-group input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            cursor: pointer;
-        }
-        .checkbox-group label {
-            margin: 0;
-            cursor: pointer;
-            font-weight: 500;
-        }
-        .btn {
-            padding: 12px 24px;
-            border-radius: 8px;
-            border: none;
-            font-weight: 600;
-            font-size: 15px;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: inline-block;
-            text-decoration: none;
-        }
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-        .btn-primary[disabled] {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-        .btn-secondary {
-            background: #f3f4f6;
-            color: #374151;
-        }
-        .btn-secondary:hover {
-            background: #e5e7eb;
-        }
-        .btn-generator {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            color: white;
-            width: 100%;
-            margin-bottom: 12px;
-        }
-        .btn-generator:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-        }
-        .actions {
-            display: flex;
-            gap: 12px;
-            margin-top: 24px;
-            flex-wrap: wrap;
-        }
-        .preview-image {
-            margin-top: 12px;
-            cursor: pointer;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            display: inline-block;
-        }
-        .preview-image img {
-            display: block;
-            width: 200px;
-            height: 200px;
-            object-fit: cover;
-        }
-        .generator-panel {
-            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-            border: 2px solid #86efac;
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 12px;
-        }
-        .generator-panel h3 {
-            font-size: 16px;
-            color: #065f46;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .generator-select {
-            width: 100%;
-            padding: 10px;
-            border: 2px solid #86efac;
-            border-radius: 8px;
-            font-size: 14px;
-            margin-bottom: 12px;
-            background: white;
-        }
-        .template-preview {
-            background: white;
-            padding: 10px;
+            text-align: left;
             border-radius: 6px;
-            margin-top: 10px;
-            font-size: 13px;
-            color: #6b7280;
-            border-left: 3px solid #86efac;
-        }
-
-        /* simple toast */
-        .toast-container {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 99999;
-        }
-        .toast {
-            background: rgba(0,0,0,0.85);
-            color: white;
-            padding: 10px 14px;
-            margin-bottom: 8px;
-            border-radius: 8px;
-            min-width: 180px;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
             font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            font-size: 15px;
+            transition: background-color 0.2s;
         }
-        .toast.success {
-            background: linear-gradient(135deg,#10b981,#059669);
+        .collapsible-toggle:hover {
+            background-color: rgba(var(--muted-border-rgb), 0.1);
         }
-        .toast.error {
-            background: linear-gradient(135deg,#ef4444,#b91c1c);
+        .collapsible-toggle .toggle-indicator {
+            display: inline-block;
+            width: 20px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 1.2em;
+            transition: transform 0.2s ease-in-out;
         }
-
-        @media (max-width: 768px) {
-            body {
-                padding: 12px;
-            }
-            .card {
-                padding: 16px;
-                border-radius: 12px;
-            }
-            h1 {
-                font-size: 20px;
-            }
-            .actions {
-                flex-direction: column;
-            }
-            .btn {
-                width: 100%;
-            }
+        .collapsible-toggle[aria-expanded="true"] .toggle-indicator {
+            transform: rotate(45deg);
         }
+        .collapsible-content {
+            padding-top: 24px;
+            margin-top: -1px; /* Overlap border */
+            border-top: 1px solid rgba(var(--muted-border-rgb), 0.2);
+        }
+        
+        
+        /* Special source images grid (forced 3 columns to match frames-grid) */
+.special-grid { display: grid; grid-template-columns: repeat(3, 1fr) !important; gap: 16px; margin-top: 8px; }
+.special-grid .frame-item { aspect-ratio: 1 / 1; border-radius: 8px; overflow: hidden; background-color: var(--card); border: 1px solid rgba(var(--muted-border-rgb), 0.1); box-shadow: var(--card-elevation); }
+.special-grid .frame-item img { width:100%; height:100%; object-fit:cover; display:block; transition: transform 0.25s; }
+.special-grid .frame-item:hover img { transform: scale(1.03); }
+.special-grid .frame-item.empty { visibility: hidden; pointer-events: none; }
+        
     </style>
 </head>
 <body>
+    <?php
+    echo $gearMenu->render();
+    echo $imageEditor->render();
+    ?>
     <div class="container">
-        <div class="card">
-            <div class="header">
-                <h1><?= $isEdit ? 'Edit' : 'Create' ?> <?= htmlspecialchars($entityDisplayName) ?></h1>
-                <span class="entity-badge"><?= htmlspecialchars($entityType) ?></span>
+        <div class="header" style="display:none;">
+        </div>
+
+        <?php if ($notification): ?>
+            <div class="notification notification-<?= $notificationType ?>"><?= htmlspecialchars($notification) ?></div>
+        <?php endif; ?>
+
+        <div class="form-container">
+            <div style="position: absolute; right: 50px;" class="badge badge-blue">
+                <?php echo $entityType; ?>
             </div>
+            <form style="margin-top: 10px;"  action="entity_form.php?entity_type=<?= urlencode($entityType) ?>&entity_id=<?= $entityId ?>&redirect_url=<?= urlencode($redirectUrl) ?>" method="post">
+                <input type="hidden" name="action" value="update">
+                <input type="hidden" name="id" value="<?= $entityId ?>">
 
-            <?php if ($success): ?>
-                <div class="notice success"><?= htmlspecialchars($success) ?></div>
-            <?php endif; ?>
-            
-            <?php foreach ($errors as $error): ?>
-                <div class="notice error"><?= htmlspecialchars($error) ?></div>
-            <?php endforeach; ?>
-
-            <form method="POST" id="entityForm" novalidate>
-                <input type="hidden" name="action" value="save">
-                <input type="hidden" name="entity_type" value="<?= htmlspecialchars($entityType) ?>">
-                <?php if ($isEdit): ?>
-                    <input type="hidden" name="entity_id" id="entity_id" value="<?= htmlspecialchars($entityId) ?>">
-                <?php endif; ?>
-
-                <div class="form-group">
-                    <label for="name">Name *</label>
-                    
-                    <?php if (!empty($generators)): ?>
-                    <div class="generator-panel">
-                        <h3>⚗️ Generate Name</h3>
-                        <select class="generator-select" id="nameGeneratorSelect">
-                            <option value="">-- Select Name Generator --</option>
-
-<?php foreach ($generators as $gen): ?>
-    <option 
-        value="<?= htmlspecialchars($gen->getConfigId()) ?>"
-        data-title="<?= htmlspecialchars($gen->getTitle()) ?>"
-        <?= ($gen->getConfigId() === ID_NAME_GEN ? ' selected' : '') ?>
-    >
-        <?= htmlspecialchars($gen->getTitle()) ?>
-    </option>
-<?php endforeach; ?>
-
-                        </select>
-                        <button type="button" class="btn btn-generator" onclick="generateField('name')">
-                            ⚗️ Generate Name
-                        </button>
+                <?php if (!empty($alwaysVisibleFields)): ?>
+                <div class="field-section">
+                    <div class="field-section-header" style="display:none;">
+                        <a href="<?= htmlspecialchars($redirectUrl) ?>" class="btn btn-secondary">&larr; Back</a>
                     </div>
-                    <?php endif; ?>
-                    
-                    <input type="text" 
-                           id="name" 
-                           name="name" 
-                           value="<?= htmlspecialchars($entity['name'] ?? '') ?>" 
-                           required>
-                </div>
-
-                <div class="form-group">
-                    <label for="order">Display Order</label>
-                    <input type="number" 
-                           id="order" 
-                           name="order" 
-                           value="<?= htmlspecialchars($entity['order'] ?? 0) ?>">
-                </div>
-
-                <div class="form-group">
-                    <label for="description">Description / Prompt</label>
-                    
-                    
-                    
-                    <?php if ($entityType === 'sketches' && !empty($sketchTemplates)): ?>
-                    <div class="generator-panel">
-                        <h3>🎬 Sketch Template Context</h3>
-                        <select class="generator-select" id="sketchTemplateSelect" onchange="previewTemplate()">
-                            <option value="">-- Select Template (Optional) --</option>
-                            <?php foreach ($sketchTemplates as $tpl): ?>
-                                <option value="<?= htmlspecialchars($tpl['id']) ?>"
-                                        data-prompt="<?= htmlspecialchars($tpl['example_prompt']) ?>"
-                                        data-idea="<?= htmlspecialchars($tpl['core_idea']) ?>">
-                                    <?= htmlspecialchars($tpl['name']) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <div id="templatePreview" class="template-preview" style="display:none;"></div>
-                        <p style="font-size:13px;color:#6b7280;margin-top:8px;">
-                            💡 Selected template will be included as context when generating description below
-                        </p>
-                    </div>
-                    <?php endif; ?>
-                    
-                    
-                    <?php /*
-                    
-                    <?php if ($entityType === 'sketches' && !empty($sketchTemplates)): ?>
-                    <div class="generator-panel">
-                        <h3>🎬 Sketch Template</h3>
-                        <select class="generator-select" id="sketchTemplateSelect" onchange="previewTemplate()">
-                            <option value="">-- Select Sketch Template --</option>
-                            <?php foreach ($sketchTemplates as $tpl): ?>
-                                <option value="<?= htmlspecialchars($tpl['id']) ?>"
-                                        data-prompt="<?= htmlspecialchars($tpl['example_prompt']) ?>"
-                                        data-idea="<?= htmlspecialchars($tpl['core_idea']) ?>">
-                                    <?= htmlspecialchars($tpl['name']) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <div id="templatePreview" class="template-preview" style="display:none;"></div>
-                        <button type="button" class="btn btn-generator" onclick="applyTemplate()">
-                            🎬 Apply Template
-                        </button>
-                    </div>
-                    <?php endif; ?>
-                    
-                    */ ?>
-                    
-                    
-                    
-                    <?php if (!empty($generators)): ?>
-                    <div class="generator-panel">
-                        <h3>⚗️ AI Generator</h3>
-                        <select class="generator-select" id="descGeneratorSelect">
-                            <option value="">-- Select Generator --</option>
-
-<?php foreach ($generators as $gen): ?>
-    <option 
-        value="<?= htmlspecialchars($gen->getConfigId()) ?>"
-        data-title="<?= htmlspecialchars($gen->getTitle()) ?>"
-        <?= ($gen->getConfigId() === ID_DESC_GEN ? ' selected' : '') ?>
-    >
-        <?= htmlspecialchars($gen->getTitle()) ?>
-    </option>
-<?php endforeach; ?>
-
-                        </select>
-                        <button type="button" class="btn btn-generator" onclick="generateField('description')">
-                            ⚗️ Generate Description
-                        </button>
-                    </div>
-                    <?php endif; ?>
-                    
-                    <textarea id="description" 
-                              name="description" 
-                              placeholder="Enter description or use generator above..."><?= htmlspecialchars($entity['description'] ?? '') ?></textarea>
-                </div>
-
-                <?php if ($previewImage): ?>
-                <div class="form-group">
-                    <label>Current Image Preview</label>
-                    <a href="<?= htmlspecialchars($previewImage) ?>" 
-                       class="preview-image"
-                       data-pswp-width="1024" 
-                       data-pswp-height="1024">
-                        <img src="<?= htmlspecialchars($previewImage) ?>" 
-                             alt="Preview">
-                    </a>
+                    <?php foreach ($alwaysVisibleFields as $field): 
+                        $value = $entity[$field['name']] ?? '';
+                        $fieldId = 'field_' . $field['name'];
+                    ?>
+                        <div class="form-group">
+                            <label for="<?= $fieldId ?>" class="form-label">
+                                <?= htmlspecialchars($field['label']) ?>
+                                <?php if ($field['required']): ?><span style="color: var(--red);">*</span><?php endif; ?>
+                            </label>
+                            
+                            <?php if ($field['type'] === 'textarea'): ?>
+                                <textarea id="<?= $fieldId ?>" name="<?= htmlspecialchars($field['name']) ?>" class="form-control <?= $field['readonly'] ? 'readonly-field' : '' ?>" rows="<?= $field['rows'] ?>" <?= $field['required'] ? 'required' : '' ?> <?= $field['readonly'] ? 'readonly' : '' ?>><?= htmlspecialchars($value) ?></textarea>
+                            <?php elseif ($field['type'] === 'checkbox'): ?>
+                                <div class="form-check">
+                                    <input type="checkbox" id="<?= $fieldId ?>" name="<?= htmlspecialchars($field['name']) ?>" class="form-check-input" value="1" <?= $value ? 'checked' : '' ?> <?= $field['readonly'] ? 'disabled' : '' ?>>
+                                </div>
+                            <?php else: ?>
+                                <input type="<?= htmlspecialchars($field['type']) ?>" id="<?= $fieldId ?>" name="<?= htmlspecialchars($field['name']) ?>" class="form-control <?= $field['readonly'] ? 'readonly-field' : '' ?>" value="<?= htmlspecialchars($value) ?>" <?= $field['placeholder'] ? 'placeholder="' . htmlspecialchars($field['placeholder']) . '"' : '' ?> <?= $field['required'] ? 'required' : '' ?> <?= $field['readonly'] ? 'readonly' : '' ?>>
+                            <?php endif; ?>
+                            
+                            <?php if ($field['help']): ?><div class="form-help"><?= htmlspecialchars($field['help']) ?></div><?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
                 </div>
                 <?php endif; ?>
 
-                <div class="form-group">
-                    <div class="checkbox-group">
-                        <input type="checkbox" 
-                               id="regenerate_images" 
-                               name="regenerate_images" 
-                               value="1"
-                               <?= !empty($entity['regenerate_images']) ? 'checked' : '' ?>>
-                        <label for="regenerate_images">Regenerate Images</label>
-                    </div>
-
-                    <div class="checkbox-group">
-                        <input type="checkbox" 
-                               id="img2img" 
-                               name="img2img" 
-                               value="1"
-                               <?= !empty($entity['img2img']) ? 'checked' : '' ?>>
-                        <label for="img2img">Enable img2img</label>
-                    </div>
-
-                    <div class="checkbox-group">
-                        <input type="checkbox" 
-                               id="cnmap" 
-                               name="cnmap" 
-                               value="1"
-                               <?= !empty($entity['cnmap']) ? 'checked' : '' ?>>
-                        <label for="cnmap">Enable ControlNet Map</label>
-                    </div>
-                </div>
-
-                <div class="actions">
-                    <button type="submit" id="submitBtn" class="btn btn-primary">
-                        💾 <?= $isEdit ? 'Update' : 'Create' ?> <?= htmlspecialchars($entityDisplayName) ?>
+                <?php if (!empty($collapsibleFields) || !empty($systemFields)): ?>
+                <div class="field-section">
+                     <button type="button" class="collapsible-toggle" id="details-toggle" aria-expanded="false" aria-controls="details-content">
+                        <span class="toggle-indicator">+</span>
+                        <span class="toggle-text">Show Advanced &amp; System Details</span>
                     </button>
-                    <a href="javascript:history.back()" class="btn btn-secondary">Cancel</a>
+                    <div class="collapsible-content" id="details-content" style="display: none;">
+                        <?php if (!empty($collapsibleFields)): ?>
+                            <div class="field-section-header">Advanced Settings</div>
+                            <?php foreach ($collapsibleFields as $field): 
+                                $value = $entity[$field['name']] ?? ''; $fieldId = 'field_' . $field['name']; ?>
+                                <div class="form-group">
+                                    <label for="<?= $fieldId ?>" class="form-label"><?= htmlspecialchars($field['label']) ?><?php if ($field['required']): ?><span style="color: var(--red);">*</span><?php endif; ?></label>
+                                    <?php if ($field['type'] === 'textarea'): ?>
+                                        <textarea id="<?= $fieldId ?>" name="<?= htmlspecialchars($field['name']) ?>" class="form-control <?= $field['readonly'] ? 'readonly-field' : '' ?>" rows="<?= $field['rows'] ?>" <?= $field['required'] ? 'required' : '' ?> <?= $field['readonly'] ? 'readonly' : '' ?>><?= htmlspecialchars($value) ?></textarea>
+                                    <?php elseif ($field['type'] === 'checkbox'): ?>
+                                        <div class="form-check">
+                                            <input type="checkbox" id="<?= $fieldId ?>" name="<?= htmlspecialchars($field['name']) ?>" class="form-check-input" value="1" <?= $value ? 'checked' : '' ?> <?= $field['readonly'] ? 'disabled' : '' ?>>
+                                            <label for="<?= $fieldId ?>"><?= htmlspecialchars($field['help']) ?></label>
+                                        </div>
+                                    <?php else: ?>
+                                        <input type="<?= htmlspecialchars($field['type']) ?>" id="<?= $fieldId ?>" name="<?= htmlspecialchars($field['name']) ?>" class="form-control <?= $field['readonly'] ? 'readonly-field' : '' ?>" value="<?= htmlspecialchars($value) ?>" <?= $field['placeholder'] ? 'placeholder="' . htmlspecialchars($field['placeholder']) . '"' : '' ?> <?= $field['required'] ? 'required' : '' ?> <?= $field['readonly'] ? 'readonly' : '' ?>>
+                                    <?php endif; ?>
+                                    <?php if ($field['help']): ?><div class="form-help"><?= htmlspecialchars($field['help']) ?></div><?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+
+                        <?php if (!empty($systemFields)): ?>
+                            <div class="field-section-header" style="margin-top: 32px;">System Information (Read-Only)</div>
+                            <div class="form-group-inline">
+                                <?php foreach ($systemFields as $field): 
+                                    $value = $entity[$field['name']] ?? ''; $fieldId = 'field_' . $field['name'];
+                                    if (in_array($field['name'], ['created_at', 'updated_at']) && $value) { $value = date('Y-m-d H:i:s', strtotime($value)); }
+                                ?>
+                                    <div class="form-group"><label for="<?= $fieldId ?>" class="form-label"><?= htmlspecialchars($field['label']) ?></label><input type="text" id="<?= $fieldId ?>" class="form-control readonly-field" value="<?= htmlspecialchars($value) ?>" readonly></div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <div class="form-actions" style="margin-top: 10px;">
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <a href="<?= htmlspecialchars($redirectUrl) ?>" class="btn btn-secondary">Back</a>
                 </div>
             </form>
         </div>
+        
+        
+        
+        
+        
+<?php if (!empty($specialFrames)): ?>
+    <div class="field-section">
+        <div class="field-section-header">Source Images (img2img / CN Map)</div>
+        <div class="special-grid pswp-gallery" id="pswp-special-gallery">
+            <?php foreach (['img2img', 'cnmap'] as $k):
+                if (!isset($specialFrames[$k])) continue;
+                $f = $specialFrames[$k];
+                $frameId = (int)$f['id'];
+                $frameName = htmlspecialchars($f['name'] ?: ucfirst($k));
+                $frameFile = '/' . ltrim($f['filename'] ?? '', '/');
+                $badge = $k === 'img2img' ? 'IMG2IMG' : 'CNMAP';
+            ?>
+            <div class="frame-item img-wrapper" data-frame-id="<?= $frameId ?>" data-entity="<?= htmlspecialchars($entityType) ?>" data-entity-id="<?= $entityId ?>" data-type="<?= $k ?>">
+                <a href="<?= htmlspecialchars($frameFile) ?>" class="pswp-gallery-item" data-pswp-src="<?= htmlspecialchars($frameFile) ?>" data-pswp-width="1024" data-pswp-height="1024" title="<?= $frameName ?>">
+                    <img src="<?= htmlspecialchars($frameFile) ?>" alt="<?= $frameName ?>" loading="lazy">
+                </a>
+                <div class="frame-overlay">
+                    <div class="frame-name"><?= $frameName ?> <small style="opacity:.85">— <?= $badge ?></small></div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+
+            <?php
+            // keep 3 columns visually consistent by adding invisible placeholders
+            $count = count($specialFrames);
+            for ($i = 0; $i < max(0, 3 - $count); $i++): ?>
+                <div class="frame-item empty" aria-hidden="true"></div>
+            <?php endfor; ?>
+        </div>
     </div>
+<?php endif; ?>
+        
+        
+<?php if (!empty($compositeFrames)): ?>
+    <div class="field-section">
+        <div class="field-section-header">Composite Frames (<?= count($compositeFrames) ?>)</div>
+        <div class="frames-grid pswp-gallery" id="pswp-composite-gallery">
+            <?php foreach ($compositeFrames as $f):
+                $frameId = (int)$f['id'];
+                $frameName = htmlspecialchars($f['name'] ?: 'Frame ' . $frameId);
+                $frameFile = '/' . ltrim($f['filename'] ?? '', '/');
+            ?>
+            <div class="frame-item img-wrapper" data-frame-id="<?= $frameId ?>" data-entity="<?= htmlspecialchars($entityType) ?>" data-entity-id="<?= $entityId ?>" data-type="composite">
+                <a href="<?= htmlspecialchars($frameFile) ?>" class="pswp-gallery-item" data-pswp-src="<?= htmlspecialchars($frameFile) ?>" data-pswp-width="1024" data-pswp-height="1024" title="<?= $frameName ?>">
+                    <img src="<?= htmlspecialchars($frameFile) ?>" alt="<?= $frameName ?>" loading="lazy">
+                </a>
+                <div class="frame-overlay">
+                    <div class="frame-name"><?= $frameName ?> <small style="opacity:.85">— composite</small></div>
+                </div>
+            </div>
+            <?php endforeach; ?>
 
-    <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+            <?php
+            // keep layout consistent with 3 columns by adding invisible placeholders
+            $count = count($compositeFrames);
+            for ($i = 0; $i < max(0, 3 - $count); $i++): ?>
+                <div class="frame-item empty" aria-hidden="true"></div>
+            <?php endfor; ?>
+        </div>
+    </div>
+<?php endif; ?>
 
-    <script src="https://cdn.jsdelivr.net/npm/photoswipe@5.3.7/dist/umd/photoswipe.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/photoswipe@5.3.7/dist/umd/photoswipe-lightbox.umd.min.js"></script>
-    
+
+
+        
+
+        <?php if (!empty($frames)): ?>
+        <div class="field-section">
+            <div class="field-section-header">Frames (<?= count($frames) ?>)</div>
+            <div class="frames-grid pswp-gallery" id="pswp-gallery">
+                <?php foreach ($frames as $frame):
+                    $frameId = (int)$frame['id']; $frameName = htmlspecialchars($frame['name'] ?? 'Frame ' . $frameId); $frameFile = '/' . ltrim($frame['filename'] ?? '', '/');
+                ?>
+                <div class="frame-item img-wrapper" data-frame-id="<?= $frameId ?>" data-entity="<?= htmlspecialchars($entityType) ?>" data-entity-id="<?= $entityId ?>">
+                    <a href="<?= htmlspecialchars($frameFile) ?>" class="pswp-gallery-item" data-pswp-src="<?= htmlspecialchars($frameFile) ?>" data-pswp-width="1024" data-pswp-height="1024" title="<?= $frameName ?>">
+                        <img src="<?= htmlspecialchars($frameFile) ?>" alt="<?= $frameName ?>" loading="lazy">
+                    </a>
+                    <div class="frame-overlay"><div class="frame-name"><?= $frameName ?></div></div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
+    </div>
     <script>
-        // Page flags from PHP
-        const PAGE_IS_EDIT = <?= $isEdit ? 'true' : 'false' ?>;
-        const PAGE_ENTITY_ID = <?= json_encode($entityId) ?>;
-        const PAGE_ENTITY_TYPE = <?= json_encode($entityType) ?>;
+    $(document).ready(function() {
+        // --- NEW: Collapsible Section Logic ---
+        const $toggleBtn = $('#details-toggle');
+        const $content = $('#details-content');
+        const storageKey = `spw_entity_form_collapse_state:<?= $entityType ?>:<?= $entityId ?>`;
 
-        if (document.querySelector('.preview-image')) {
-            const lightbox = new PhotoSwipeLightbox({
-                gallery: 'body',
-                children: '.preview-image',
-                pswpModule: PhotoSwipe
-            });
-            lightbox.init();
+        // Function to update the button's appearance
+        function updateToggleState(isExpanded) {
+            $toggleBtn.attr('aria-expanded', isExpanded);
+            $toggleBtn.find('.toggle-indicator').text(isExpanded ? '−' : '+');
+            $toggleBtn.find('.toggle-text').text(isExpanded ? 'Hide Advanced & System Details' : 'Show Advanced & System Details');
+            if(isExpanded) {
+                $toggleBtn.find('.toggle-indicator').css('transform', 'rotate(0deg)');
+            }
         }
 
-        function previewTemplate() {
-            const select = document.getElementById('sketchTemplateSelect');
-            const option = select.options[select.selectedIndex];
-            const preview = document.getElementById('templatePreview');
-            
-            if (option && option.value) {
-                const idea = option.getAttribute('data-idea');
-                const prompt = option.getAttribute('data-prompt');
-                preview.innerHTML = `<strong>Concept:</strong> ${idea}<br><strong>Prompt:</strong> ${prompt}`;
-                preview.style.display = 'block';
+        // Set initial state from localStorage
+        try {
+            const savedState = localStorage.getItem(storageKey);
+            if (savedState === 'expanded') {
+                $content.show();
+                updateToggleState(true);
             } else {
-                preview.style.display = 'none';
+                updateToggleState(false);
             }
-        }
-
-        function applyTemplate() {
-            const select = document.getElementById('sketchTemplateSelect');
-            const option = select.options[select.selectedIndex];
+        } catch (e) { /* ignore */ }
+        
+        // Handle click event
+        $toggleBtn.on('click', function() {
+            const isExpanded = $(this).attr('aria-expanded') === 'true';
+            const newState = !isExpanded;
             
-            if (!option || !option.value) {
-                alert('Please select a template first');
-                return;
-            }
-
-            const prompt = option.getAttribute('data-prompt');
-            const descField = document.getElementById('description');
-            descField.value = prompt;
-            descField.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-
-        async function generateField(fieldName) {
-            const selectId = fieldName === 'name' ? 'nameGeneratorSelect' : 'descGeneratorSelect';
-            const select = document.getElementById(selectId);
-            const configId = select.value;
+            $content.slideToggle(250);
+            updateToggleState(newState);
             
-            if (!configId) {
-                alert('Please select a generator first');
-                return;
-            }
-
-            const targetField = document.getElementById(fieldName);
-            const btn = event.target;
-            
-            btn.disabled = true;
-            btn.textContent = '⚗️ Generating...';
-
             try {
-                const infoResponse = await fetch(`/api/generate.php?config_id=${encodeURIComponent(configId)}&_info=1`);
-                const infoData = await infoResponse.json();
-                
-                if (!infoData.ok) {
-                    throw new Error('Failed to load generator info');
-                }
+                localStorage.setItem(storageKey, newState ? 'expanded' : 'collapsed');
+            } catch (e) { /* ignore */ }
+        });
 
-                
-                
-                
-                
-                
-                // Start with the base name from the input field
-                let finalEntityName = '';
+        
+        
+        
+        
+        /*
+        // Initialize Gear Menu
+        if (window.GearMenu && typeof window.GearMenu.attach === 'function') {
+            const grid = document.querySelector('.frames-grid');
+            if (grid) { window.GearMenu.attach(grid); }
+        }
+        */
+        
+        
+        
 
-                if (fieldName === 'name') {
-                    // we do not want to add existing nane for new name request actually but how bout desc?
-                    finalEntityName = document.getElementById('description').value || '';
-                } else {
-                    finalEntityName = document.getElementById('name').value || '';
-                }
-                
-                // Find the template select element
-                const sketchTemplateSelect = document.getElementById('sketchTemplateSelect');
-                
-                // Check if the dropdown exists and a valid template is selected
-                if (sketchTemplateSelect && sketchTemplateSelect.value) {
-                    // Get the currently selected <option> ELEMENT
-                    const selectedOption = sketchTemplateSelect.options[sketchTemplateSelect.selectedIndex];
-                    
-                    // Get the 'data-prompt' attribute from that element
-                    const templatePrompt = selectedOption.getAttribute('data-prompt');
-                    
-                    // If the prompt exists, append it. The trim() is good practice.
-                    if (templatePrompt) {
-                        finalEntityName += ` (${templatePrompt.trim()})`;
+        // Initialize PhotoSwipe
+        try {
+            const lightbox = new PhotoSwipeLightbox({ gallery: '#pswp-gallery', children: '.pswp-gallery-item', pswpModule: PhotoSwipe });
+            lightbox.init();
+        } catch(e) { console.warn('PhotoSwipe could not be initialized.', e); }
+
+        // Enhance deleteFrame for instant UI feedback
+        if (typeof window.deleteFrame === 'function') {
+            const originalDeleteFrame = window.deleteFrame;
+            window.deleteFrame = function(entity, entityId, frameId, wrapper) {
+                originalDeleteFrame(entity, entityId, frameId);
+                $(document).one('toast-show', function(e, message, type) {
+                    if (type === 'success' && wrapper) {
+                        $(wrapper).fadeOut(400, function() { $(this).remove(); });
                     }
-                }
-
-                
-                
-                
-                const params = {
-                    config_id: configId,
-                    entity_type: PAGE_ENTITY_TYPE,
-                    //entity_name: document.getElementById('name').value || 'unnamed',
-                    entity_name: finalEntityName,
-                    random_seed: Math.floor(Math.random() * 1000000)
-                };
-
-                if (infoData.config.parameters) {
-                    for (const [key, def] of Object.entries(infoData.config.parameters)) {
-                        if (!params[key] && def.default !== undefined) {
-                            params[key] = def.default;
-                        }
-                    }
-                }
-
-                const response = await fetch('/api/generate.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(params)
                 });
-
-                const result = await response.json();
-
-                if (result.ok && result.data) {
-                    let generatedText = '';
-                    
-                    if (typeof result.data === 'string') {
-                        generatedText = result.data;
-                    } else if (result.data.description) {
-                        generatedText = result.data.description;
-                    } else if (result.data.name) {
-                        generatedText = result.data.name;
-                    } else if (result.data.prompt) {
-                        generatedText = result.data.prompt;
-                    } else if (result.data.text) {
-                        generatedText = result.data.text;
-                    } else {
-                        const firstValue = Object.values(result.data)[0];
-                        generatedText = typeof firstValue === 'string' ? firstValue : JSON.stringify(result.data, null, 2);
-                    }
-
-                    targetField.value = generatedText;
-                    targetField.dispatchEvent(new Event('input', { bubbles: true }));
-                } else {
-                    alert('Generation failed: ' + (result.error || 'Unknown error'));
-                }
-            } catch (err) {
-                alert('Request failed: ' + err.message);
-            } finally {
-                btn.disabled = false;
-                btn.textContent = fieldName === 'name' ? '⚗️ Generate Name' : '⚗️ Generate Description';
-            }
+            };
         }
+        
+        
+        // initialize gearmenu on special grid if present
+        /*
+const specialGrid = document.querySelector('.special-grid');
+if (specialGrid && window.GearMenu && typeof window.GearMenu.attach === 'function') {
+    window.GearMenu.attach(specialGrid);
+}
+*/
 
-        // --- Toast helpers
-        function showToast(message, type = 'success', timeout = 3000) {
-            const container = document.getElementById('toastContainer');
-            const t = document.createElement('div');
-            t.className = 'toast ' + (type === 'error' ? 'error' : 'success');
-            t.textContent = message;
-            container.appendChild(t);
-            setTimeout(() => {
-                t.style.transition = 'opacity 300ms';
-                t.style.opacity = '0';
-                setTimeout(() => t.remove(), 350);
-            }, timeout);
-        }
 
-        // --- AJAX submit handling for rapid-create
-        (function() {
-            const form = document.getElementById('entityForm');
-            const submitBtn = document.getElementById('submitBtn');
+// PhotoSwipe for the special gallery (separate instance)
+try {
+    const specialLightbox = new PhotoSwipeLightbox({ gallery: '#pswp-special-gallery', children: '.pswp-gallery-item', pswpModule: PhotoSwipe });
+    specialLightbox.init();
+} catch(e) { console.warn('PhotoSwipe (special gallery) init failed', e); }
+        
+        
+        
+        
+        
+        
+       // composite grid: GearMenu attach + PhotoSwipe lightbox
+const compositeGrid = document.querySelector('#pswp-composite-gallery');
+if (compositeGrid) {
+    /*
+    if (window.GearMenu && typeof window.GearMenu.attach === 'function') {
+        window.GearMenu.attach(compositeGrid);
+    }
+    */
+    try {
+        const compositeLightbox = new PhotoSwipeLightbox({ gallery: '#pswp-composite-gallery', children: '.pswp-gallery-item', pswpModule: PhotoSwipe });
+        compositeLightbox.init();
+    } catch (e) { console.warn('PhotoSwipe (composite gallery) init failed', e); }
+}
 
-            form.addEventListener('submit', async function(ev) {
-                ev.preventDefault();
 
-                // Build payload object - include checkboxes as 1/0
-                const formData = new FormData(form);
-                const payload = {};
-                for (const [k,v] of formData.entries()) {
-                    payload[k] = v;
-                }
+        
+        
+        
+        
+       // Initialize Gear Menu on all relevant grids
+if (window.GearMenu && typeof window.GearMenu.attach === 'function') {
+    // Attach to every frames-grid (covers composite + frames)
+    document.querySelectorAll('.frames-grid').forEach(function(grid) {
+        try { window.GearMenu.attach(grid); } catch (e) { console.warn('GearMenu.attach failed for frames-grid', e); }
+    });
 
-                // checkboxes: if not present will be undefined -> set to 0
-                payload.regenerate_images = document.getElementById('regenerate_images')?.checked ? 1 : 0;
-                payload.img2img = document.getElementById('img2img')?.checked ? 1 : 0;
-                payload.cnmap = document.getElementById('cnmap')?.checked ? 1 : 0;
+    // Attach to special grid (if present)
+    document.querySelectorAll('.special-grid').forEach(function(sg) {
+        try { window.GearMenu.attach(sg); } catch (e) { console.warn('GearMenu.attach failed for special-grid', e); }
+    });
 
-                // If page is in edit mode (URL had entity_id), include entity_id to perform update
-                if (PAGE_IS_EDIT && PAGE_ENTITY_ID) {
-                    payload.entity_id = PAGE_ENTITY_ID;
-                }
-
-                // Action already in hidden input, but ensure present
-                payload.action = 'save';
-
-                // Disable submit while request in flight
-                submitBtn.disabled = true;
-                const originalText = submitBtn.textContent;
-                submitBtn.textContent = PAGE_IS_EDIT ? 'Saving...' : 'Creating...';
-
-                try {
-                    const res = await fetch(window.location.pathname + window.location.search.split('&').filter(Boolean).join('&'), {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                        body: JSON.stringify(payload)
-                    });
-
-                    const isJson = res.headers.get('content-type') && res.headers.get('content-type').includes('application/json');
-                    if (!isJson) throw new Error('Server did not return JSON');
-
-                    const data = await res.json();
-
-                    if (res.ok && data.ok) {
-                        if (data.created) {
-                            // Created new entity -> clear form for rapid next creation
-                            form.reset();
-                            // remove any hidden entity_id if present (we are in create flow so shouldn't be)
-                            const hid = document.getElementById('entity_id');
-                            if (hid) hid.remove();
-                            showToast('Created — ID ' + data.id, 'success', 2000);
-                            // focus name field for quick entry
-                            document.getElementById('name').focus();
-                        } else {
-                            // Updated existing entity (edit mode). Keep form as-is and show success toast.
-                            showToast('Updated — ID ' + data.id, 'success', 1500);
-                            // Optional: update PAGE_ENTITY_ID if returned different (normally not)
-                        }
-                    } else {
-                        // error response
-                        const errText = (data && (data.error || (data.errors && data.errors.join ? data.errors.join(', ') : JSON.stringify(data.errors)))) || 'Unknown error';
-                        showToast('Error: ' + errText, 'error', 4000);
-                    }
-                } catch (err) {
-                    showToast('Request failed: ' + err.message, 'error', 5000);
-                } finally {
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = originalText;
-                }
-            });
-        })();
+    // If you still want to explicitly attach composite/gallery by id, it's harmless but optional
+    const compositeGallery = document.querySelector('#pswp-composite-gallery');
+    if (compositeGallery) {
+        try { window.GearMenu.attach(compositeGallery); } catch (e) { /* already attached or failed */ }
+    }
+}
+        
+        
+        
+        
+        
+    });
     </script>
-<?php
-require "floatool.php";
-echo $eruda;
-?>
+
+<?php echo $eruda; ?>
 </body>
 </html>

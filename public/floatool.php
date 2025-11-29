@@ -7,9 +7,35 @@ $dbname = $spw->getDbName();
 // Fetch active generators for the user
 use App\Entity\GeneratorConfig;
 $em = $spw->getEntityManager();
-$repo = $em->getRepository(GeneratorConfig::class);
 $userId = $_SESSION['user_id'] ?? null;
-$generators = $userId ? $repo->findBy(['userId' => $userId, 'active' => true], ['title' => 'ASC']) : [];
+
+$repo = $em->getRepository(App\Entity\GeneratorConfig::class);
+$generators = [];
+
+if ($userId) {
+    // 1. Start building the query
+    $qb = $repo->createQueryBuilder('g'); // 'g' is an alias for GeneratorConfig
+
+    // 2. Join the displayAreas relationship and give it an alias 'da'
+    $qb->join('g.displayAreas', 'da')
+
+       // 3. Add WHERE clauses for the conditions
+       ->where('g.userId = :userId')
+       ->andWhere('g.active = :isActive')
+       ->andWhere('da.areaKey = :areaKey') // Filter on the JOINED table's column
+
+       // 4. Set the parameters to prevent SQL injection
+       ->setParameter('userId', $userId)
+       ->setParameter('isActive', true)
+       ->setParameter('areaKey', 'floatool') // The area you're looking for
+
+       // 5. Set the ordering
+       ->orderBy('g.title', 'ASC');
+
+    // 6. Execute the query and get the results
+    $generators = $qb->getQuery()->getResult();
+}
+
 
 // --- DYNAMIC LAB MENU ---
 
@@ -23,7 +49,7 @@ $entityIcons = [
     'artifacts'       => '🏺',
     'vehicles'        => '🛸',
 //    'scene_parts'     => '🎬',
-//    'controlnet_maps' => '☠️', 
+//    'controlnet_maps' => '☠️',
 //    'spawns'          => '🌱',
     'generatives'     => '⚡',
     'sketches'        => '🪄',
@@ -48,10 +74,10 @@ foreach ($entityIcons as $type => $icon) {
 ?>
 
 <!-- Floating Toolbar -->
-<div id="floatool" class="floatool collapsed">
+<div id="floatool" class="floatool collapsed" aria-hidden="false">
     <div class="floatool-handle">☰</div>
     <div class="floatool-buttons">
-        <button data-action="open-dashboard">🔮</button>
+        <button data-action="open-dashboard">🧭</button>
         <button data-action="open-database">🛢️</button>
         <button data-action="open-styles">🎨</button>
         <button data-action="open-regen">♻️</button>
@@ -65,7 +91,7 @@ foreach ($entityIcons as $type => $icon) {
 
 <!-- Gear flyout menu -->
 <div id="floatoolGearMenu" class="floatool-gear-menu" style="display:none;">
-    <a style="border-bottom: 1px solid #ddd;" class="floatoolgearmenulink" href="scheduler_view.php">🌀 Scheduler</a>
+    <a class="floatool-menu-header" href="scheduler_view.php">🌀 Scheduler</a>
     <a href="#" class="scheduler" data-id="10" onclick="runScheduler(this)">🌀 run ⚡ now</a>
     <a href="#" class="scheduler" data-id="15" onclick="runScheduler(this)">🌀 run 🪄 now</a>
     <a href="#" class="scheduler" data-id="23" onclick="runScheduler(this)">🌀 run 🌌 now</a>
@@ -83,30 +109,30 @@ foreach ($entityIcons as $type => $icon) {
 
 <!-- Generator flyout menu -->
 <div id="floatoolGeneratorMenu" class="floatool-gear-menu" style="display:none;">
-    <a style="border-bottom: 1px solid #ddd;font-weight:bold;pointer-events:none;background:#f8f9fa" href="#">⚗️ Quick Generators</a>
+    <a class="floatool-menu-header" href="#">⚗️ Quick Generators</a>
     <?php if (empty($generators)): ?>
-        <a style="color:#999;font-style:italic;pointer-events:none" href="#">No active generators</a>
-        <a href="generator_admin_v2.php">+ Create Generator</a>
+        <a class="floatool-menu-item-disabled" href="#">No active generators</a>
+        <a href="generator_admin.php">+ Create Generator</a>
     <?php else: ?>
         <?php foreach ($generators as $gen): ?>
-            <a href="#" 
-               class="generator-quick-run" 
+            <a href="#"
+               class="generator-quick-run"
                data-config-id="<?=htmlspecialchars($gen->getConfigId())?>"
                data-title="<?=htmlspecialchars($gen->getTitle())?>"
                onclick="openGeneratorDialog(this); return false;">
                 <?=htmlspecialchars($gen->getTitle())?>
             </a>
         <?php endforeach; ?>
-        <a style="border-top:1px solid #ddd;margin-top:4px" href="generator_admin_v2.php">🤖 Generator Admin</a>
+        <a class="floatool-menu-separator-top" href="generator_admin.php">🤖 Generator Admin</a>
     <?php endif; ?>
 </div>
 
 <!-- Lab flyout menu -->
 <div id="floatoolLabMenu" class="floatool-gear-menu" style="display:none;">
-    <a style="border-bottom: 1px solid #ddd;font-weight:bold;pointer-events:none;background:#f8f9fa" href="#">💫 Quick Forms</a>
+    <a class="floatool-menu-header" href="#">💫 Rapid Create</a>
     <?php foreach ($labEntities as $entity): ?>
-        <a href="#" 
-           class="lab-entity-link" 
+        <a href="#"
+           class="lab-entity-link"
            data-entity-type="<?= htmlspecialchars($entity['type']) ?>"
            onclick="openEntityForm(this); return false;">
             <?= htmlspecialchars($entity['icon']) ?> <?= htmlspecialchars($entity['name']) ?>
@@ -122,7 +148,7 @@ foreach ($entityIcons as $type => $icon) {
             <button class="generator-dialog-close" onclick="closeGeneratorDialog()">✖</button>
         </div>
         <div class="generator-dialog-body">
-            <div id="generatorDialogParams"></div>
+            <div id="generatorDialogParams" class="generator-form-params"></div>
             <div class="generator-dialog-actions">
                 <button class="btn-secondary" onclick="closeGeneratorDialog()">Cancel</button>
                 <button class="btn-primary" onclick="runGenerator()">⚗️ Generate</button>
@@ -145,365 +171,305 @@ foreach ($entityIcons as $type => $icon) {
     </div>
 </div>
 
+
 <style>
+    /*
+      Theme-aware floatool styles (Final Version)
+      This CSS now "follows" the data-theme set by the main application.
+    */
+
+    :root {
+        /* Define shared font stacks */
+        --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        --emoji-fonts: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+
+        /*
+           RULE 1: Light theme is the default fallback.
+           These variables are used if no other rule matches.
+        */
+        --float-bg: #ffffff;
+        --float-border: #d1d5db;
+        --float-text: #111827;
+        --float-muted: #6b7280;
+        --float-hover: #f3f4f6;
+        --float-shadow: 0 2px 8px rgba(0,0,0,0.12);
+        --float-btn-bg: #f8f9fa;
+        --accent: #2563eb;
+        --float-overlay-bg: rgba(20, 20, 20, 0.7);
+    }
+
+    /*
+       RULE 2: Explicit Dark Mode.
+       This is the most important rule. If the <html> tag has data-theme="dark"
+       (set by your dashboard's head script), these variables will be used.
+       This has higher specificity than :root, so it wins.
+    */
+    html[data-theme="dark"] {
+        --float-bg: #0f1724;
+        --float-border: #1f2937;
+        --float-text: #cbd5e1;
+        --float-muted: #94a3b8;
+        --float-hover: #111827;
+        --float-shadow: 0 6px 18px rgba(0,0,0,0.6);
+        --float-btn-bg: #0b1220;
+        --accent: #3b82f6;
+        --float-overlay-bg: rgba(0, 0, 0, 0.8);
+    }
+
+    /*
+       RULE 3: System Preference Dark Mode.
+       This rule applies ONLY if the user's OS is dark AND no explicit
+       data-theme has been set. This covers the initial visit before
+       a user has toggled the theme.
+    */
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme]) {
+        --float-bg: #0f1724;
+        --float-border: #1f2937;
+        --float-text: #cbd5e1;
+        --float-muted: #94a3b8;
+        --float-hover: #111827;
+        --float-shadow: 0 6px 18px rgba(0,0,0,0.6);
+        --float-btn-bg: #0b1220;
+        --accent: #3b82f6;
+        --float-overlay-bg: rgba(0, 0, 0, 0.8);
+      }
+    }
+
     #floatool {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: white;
-        border: 1px solid #ccc;
-        border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        z-index: 9999;
-        cursor: grab;
-        transition: width 0.2s ease, height 0.2s ease;
-        overflow: hidden;
-        font-size: 180%;
+        opacity: 0.8;
+        position: fixed; bottom: 20px; right: 20px; background: var(--float-bg); border: 1px solid var(--float-border); border-radius: 12px; box-shadow: var(--float-shadow); z-index: 9999; cursor: grab; transition: width 0.18s ease, height 0.18s ease, background .12s ease, border-color .12s ease; overflow: hidden; font-size: 180%; color: var(--float-text); font-family: var(--emoji-fonts), var(--font-stack); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
     }
-    .floatool.collapsed {
-        width: 40px;
-        height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+    .floatool.collapsed { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
+    .floatool.expanded { width: auto; height: auto; padding: 6px; display: flex; align-items: center; gap: 6px; }
+    .floatool-handle { cursor: pointer; user-select: none; transition: transform 0.18s ease; font-size: 18px; line-height: 1; }
+    .floatool.collapsed .floatool-handle { cursor: pointer; }
+    .floatool.expanded .floatool-handle { transform: rotate(90deg); cursor: pointer; }
+    .floatool.collapsed .floatool-buttons { display: none; }
+    .floatool.expanded .floatool-buttons { display: flex; flex-wrap: wrap; }
+    .floatool button { font-size: 0.9em; border: none; background: var(--float-btn-bg); padding: 4px; border-radius: 4px; cursor: pointer; transition: background 0.12s, color 0.12s, transform 0.12s; margin: 0; color: var(--float-text); font-family: var(--emoji-fonts), var(--font-stack); display: inline-flex; align-items: center; justify-content: center; line-height: 1; min-width: 36px; min-height: 36px; }
+    .floatool button:hover { background: var(--float-hover); transform: translateY(-1px); }
+    .floatool-gear-menu { position: fixed; display: flex; flex-direction: column; gap: 6px; z-index: 10000; padding: 6px 0; background: var(--float-bg); border: 1px solid var(--float-border); border-radius: 10px; box-shadow: var(--float-shadow); max-height: 70vh; overflow-y: auto; }
+    .floatool-gear-menu a { padding: 10px 14px; text-decoration: none; color: var(--float-text); font-weight: 700; white-space: nowrap; transition: background 0.12s; font-size: 14px; font-family: var(--font-stack); }
+    .floatool-gear-menu a:hover { background: var(--float-hover); }
+    .floatool-menu-header { border-bottom: 1px solid var(--float-border); font-weight: bold; pointer-events: none; }
+    .floatool-menu-item-disabled { color: var(--float-muted) !important; font-style: italic; pointer-events: none; }
+    .floatool-menu-separator-top { border-top: 1px solid var(--float-border); margin-top: 4px; }
+    
+    /* Generator Dialog Modal - Improved Styling */
+    .generator-dialog-overlay { 
+        position: fixed; 
+        inset: 0; 
+        background: var(--float-overlay-bg); 
+        z-index: 10001; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        padding: 12px; 
     }
-    .floatool.expanded {
-        width: auto;
-        height: auto;
-        padding: 6px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
+    
+    .generator-dialog { 
+        background: var(--float-bg); 
+        border-radius: 10px; 
+        max-width: 600px; 
+        width: 100%; 
+        max-height: 90vh; 
+        overflow-y: auto; 
+        box-shadow: 0 8px 30px rgba(2,6,23,0.35); 
+        color: var(--float-text); 
+        font-family: var(--font-stack); 
+        border: 1px solid rgba(var(--muted-border-rgb), 0.06);
     }
-    .floatool-handle {
-        cursor: pointer;
-        user-select: none;
-        transition: transform 0.2s ease;
+    
+    .generator-dialog-header { 
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center; 
+        padding: 16px 20px; 
+        border-bottom: 1px solid var(--float-border); 
+        position: sticky; 
+        top: 0; 
+        background: var(--float-bg); 
+        z-index: 1; 
     }
-    .floatool.collapsed .floatool-handle {
-        cursor: pointer;
-    }
-    .floatool.expanded .floatool-handle {
-        transform: rotate(90deg);
-        cursor: pointer;
-    }
-    .floatool.collapsed .floatool-buttons {
-        display: none;
-    }
-    .floatool.expanded .floatool-buttons {
-        display: flex;
-        flex-wrap: wrap;
-    }
-    .floatool button {
-        font-size: 0.7em;
-        border: none;
-        background: #f8f9fa;
-        padding: 7px;
-        border-radius: 8px;
-        cursor: pointer;
-        transition: background 0.2s;
-        margin: 0;
-    }
-    .floatool button:hover {
-        background: #e9ecef;
-    }
-    .floatool-gear-menu {
-        position: fixed;
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        z-index: 10000;
-        padding: 4px 0;
-        background: #fff;
-        border: 1px solid #ccc;
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        max-height: 70vh;
-        overflow-y: auto;
-    }
-    .floatool-gear-menu a {
-        padding: 8px 14px;
-        text-decoration: none;
-        color: #333;
-        font-weight: bold;
-        white-space: nowrap;
-        transition: background 0.2s;
-        font-size: 15px;
-    }
-    .floatool-gear-menu a:hover {
-        background: #e9ecef;
-    }
-    .generator-dialog-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.7);
-        z-index: 10001;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 12px;
-    }
-    .generator-dialog {
-        background: white;
-        border-radius: 12px;
-        max-width: 600px;
-        width: 100%;
-        max-height: 90vh;
-        overflow-y: auto;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-    }
-    .generator-dialog-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 16px 20px;
-        border-bottom: 1px solid #e5e7eb;
-        position: sticky;
-        top: 0;
-        background: white;
-        z-index: 1;
-    }
-    .generator-dialog-header h3 {
-        margin: 0;
-        font-size: 18px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        flex: 1;
-        padding-right: 10px;
-    }
-    .generator-dialog-close {
-        background: none;
-        border: none;
-        font-size: 24px;
-        cursor: pointer;
-        color: #999;
-        padding: 0 8px;
-        flex-shrink: 0;
-    }
-    .generator-dialog-close:hover {
-        color: #333;
-    }
-    .generator-dialog-body {
-        padding: 20px;
-    }
-    .generator-dialog-params label {
-        display: block;
-        margin-bottom: 6px;
+    
+    .generator-dialog-header h3 { 
+        margin: 0; 
+        font-size: 1.1rem; 
         font-weight: 600;
-        font-size: 14px;
-        color: #374151;
+        overflow: hidden; 
+        text-overflow: ellipsis; 
+        white-space: nowrap; 
+        flex: 1; 
+        padding-right: 10px; 
+        font-family: var(--font-stack); 
     }
-    .generator-dialog-params input,
-    .generator-dialog-params select,
-    .generator-dialog-params textarea {
-        width: 100%;
-        padding: 12px;
-        border: 1px solid #d1d5db;
-        border-radius: 6px;
-        margin-bottom: 16px;
-        font-size: 16px;
-        font-family: inherit;
+    
+    .generator-dialog-close { 
+        background: none; 
+        border: none; 
+        font-size: 22px; 
+        cursor: pointer; 
+        color: var(--float-muted); 
+        padding: 0 8px; 
+        flex-shrink: 0; 
+        transition: color 0.15s;
     }
-    .generator-dialog-params textarea {
-        min-height: 100px;
-        resize: vertical;
-        font-family: ui-monospace, monospace;
-        font-size: 14px;
+    .generator-dialog-close:hover { color: var(--float-text); }
+    
+    .generator-dialog-body { padding: 20px; }
+    
+    /* Improved form styling matching generator admin */
+    .generator-form-params { display: grid; gap: 16px; margin-bottom: 20px; }
+    
+    .form-group { margin-bottom: 0; }
+    
+    .generator-form-params label { 
+        display: block; 
+        margin-bottom: 6px; 
+        font-weight: 600; 
+        font-size: 0.85rem; 
+        color: var(--float-muted); 
     }
-    .generator-dialog-actions {
-        display: flex;
-        gap: 10px;
-        justify-content: flex-end;
-        margin-top: 20px;
-        flex-wrap: wrap;
+    
+    .generator-form-params input, 
+    .generator-form-params select, 
+    .generator-form-params textarea { 
+        width: 100%; 
+        padding: 10px 12px; 
+        border: 1px solid rgba(var(--muted-border-rgb), 0.12); 
+        border-radius: 6px; 
+        font-size: 0.9rem; 
+        font-family: var(--font-stack); 
+        background: var(--float-btn-bg); 
+        color: var(--float-text); 
+        transition: border-color 0.15s ease;
     }
-    .btn-primary, .btn-secondary, .btn-copy, .btn-fill {
-        padding: 12px 18px;
-        border-radius: 8px;
-        border: none;
-        cursor: pointer;
-        font-weight: 600;
-        font-size: 15px;
-        touch-action: manipulation;
+    
+    .generator-form-params input:focus,
+    .generator-form-params select:focus,
+    .generator-form-params textarea:focus {
+        outline: none;
+        border-color: var(--accent);
     }
-    .btn-primary {
-        background: #2563eb;
-        color: white;
-        flex: 1;
-        min-width: 120px;
+    
+    .generator-form-params textarea { 
+        min-height: 100px; 
+        resize: vertical; 
+        font-family: ui-monospace, monospace; 
+        font-size: 0.85rem; 
     }
-    .btn-primary:hover {
-        background: #1d4ed8;
+    
+    .generator-dialog-actions { 
+        display: flex; 
+        gap: 10px; 
+        justify-content: flex-end; 
+        flex-wrap: wrap; 
     }
-    .btn-secondary {
-        background: #f3f4f6;
-        color: #374151;
-        flex: 1;
-        min-width: 100px;
+    
+    .btn-primary, .btn-secondary, .btn-copy, .btn-fill { 
+        padding: 10px 16px; 
+        border-radius: 6px; 
+        border: none; 
+        cursor: pointer; 
+        font-weight: 600; 
+        font-size: 0.9rem; 
+        touch-action: manipulation; 
+        font-family: var(--font-stack); 
+        transition: all 0.15s ease;
     }
-    .btn-secondary:hover {
-        background: #e5e7eb;
+    
+    .btn-primary { 
+        background: var(--accent); 
+        color: white; 
+        flex: 1; 
+        min-width: 120px; 
     }
-    .btn-copy, .btn-fill {
-        background: #10b981;
-        color: white;
-        padding: 8px 12px;
-        font-size: 14px;
+    .btn-primary:hover { filter: brightness(1.1); }
+    
+    .btn-secondary { 
+        background: var(--float-btn-bg); 
+        color: var(--float-text); 
+        flex: 1; 
+        min-width: 100px; 
+        border: 1px solid rgba(var(--muted-border-rgb), 0.12);
     }
-    .btn-copy:hover, .btn-fill:hover {
-        background: #059669;
+    .btn-secondary:hover { filter: brightness(0.98); }
+    
+    .btn-copy, .btn-fill { 
+        background: #10b981; 
+        color: white; 
+        padding: 8px 12px; 
+        font-size: 0.85rem; 
     }
-    .btn-fill {
-        background: #f59e0b;
+    .btn-copy:hover, .btn-fill:hover { background: #059669; }
+    .btn-fill { background: #f59e0b; }
+    .btn-fill:hover { background: #d97706; }
+    
+    .generator-dialog-result { 
+        padding: 20px; 
+        border-top: 1px solid var(--float-border); 
+        background: var(--float-bg); 
     }
-    .btn-fill:hover {
-        background: #d97706;
+    
+    .result-header { 
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center; 
+        margin-bottom: 12px; 
+        gap: 10px; 
+        flex-wrap: wrap; 
     }
-    .generator-dialog-result {
-        padding: 20px;
-        border-top: 1px solid #e5e7eb;
-        background: #f9fafb;
+    
+    .result-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    
+    .generator-dialog-result pre { 
+        background: var(--float-btn-bg); 
+        padding: 12px; 
+        border-radius: 6px; 
+        border: 1px solid rgba(var(--muted-border-rgb), 0.12); 
+        max-height: 300px; 
+        overflow: auto; 
+        font-size: 0.8rem; 
+        margin: 0; 
+        word-break: break-word; 
+        white-space: pre-wrap; 
+        color: var(--float-text); 
+        font-family: ui-monospace, monospace; 
     }
-    .result-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 10px;
-        gap: 10px;
-        flex-wrap: wrap;
+    
+    .generator-loading { padding: 40px; text-align: center; color: var(--float-muted); }
+    .spinner { 
+        width: 40px; 
+        height: 40px; 
+        margin: 0 auto 16px; 
+        border: 4px solid rgba(var(--muted-border-rgb), 0.2); 
+        border-top-color: var(--accent); 
+        border-radius: 50%; 
+        animation: spin 0.8s linear infinite; 
     }
-    .result-actions {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    @media (max-width: 768px) { 
+        #floatool { bottom: 15px; right: 15px; font-size: 150%; } 
+        .floatool.expanded { flex-wrap: wrap; max-width: calc(100vw - 30px); } 
+        .floatool-gear-menu { left: 50% !important; transform: translateX(-50%); max-width: 90vw; bottom: 70px; top: auto !important; } 
+        .generator-dialog { max-height: 95vh; margin: 0; border-radius: 10px 10px 0 0; } 
+        .generator-dialog-header h3 { font-size: 1rem; } 
+        .generator-dialog-body { padding: 16px; } 
+        .generator-dialog-actions { flex-direction: column-reverse; } 
+        .btn-primary, .btn-secondary { width: 100%; min-width: 0; } 
     }
-    .generator-dialog-result pre {
-        background: white;
-        padding: 12px;
-        border-radius: 6px;
-        border: 1px solid #e5e7eb;
-        max-height: 300px;
-        overflow: auto;
-        font-size: 13px;
-        margin: 0;
-        word-break: break-all;
-        white-space: pre-wrap;
-    }
-    .generator-loading {
-        padding: 40px;
-        text-align: center;
-        color: #6b7280;
-    }
-    .spinner {
-        width: 40px;
-        height: 40px;
-        margin: 0 auto 16px;
-        border: 4px solid #f3f4f6;
-        border-top-color: #2563eb;
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin {
-        to { transform: rotate(360deg); }
-    }
-    .mobile-generator-button {
-        position: fixed;
-        bottom: 80px;
-        right: 20px;
-        z-index: 9998;
-        animation: slideInUp 0.3s ease-out;
-    }
-    .mobile-generator-button button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        padding: 14px 24px;
-        border-radius: 24px;
-        font-size: 16px;
-        font-weight: 600;
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        cursor: pointer;
-        touch-action: manipulation;
-    }
-    .mobile-generator-button button:active {
-        transform: scale(0.95);
-    }
-    @keyframes slideInUp {
-        from {
-            transform: translateY(20px);
-            opacity: 0;
-        }
-        to {
-            transform: translateY(0);
-            opacity: 1;
-        }
-    }
-    @media (max-width: 768px) {
-        #floatool {
-            bottom: 15px;
-            right: 15px;
-            font-size: 150%;
-        }
-        .floatool.expanded {
-            flex-wrap: wrap;
-            max-width: calc(100vw - 30px);
-        }
-        .floatool-gear-menu {
-            left: 50% !important;
-            transform: translateX(-50%);
-            max-width: 90vw;
-            bottom: 70px;
-            top: auto !important;
-        }
-        .generator-dialog {
-            max-height: 95vh;
-            margin: 0;
-        }
-        .generator-dialog-header h3 {
-            font-size: 16px;
-        }
-        .generator-dialog-body {
-            padding: 16px;
-        }
-        .generator-dialog-actions {
-            flex-direction: column-reverse;
-        }
-        .btn-primary, .btn-secondary {
-            width: 100%;
-            min-width: 0;
-        }
-        .mobile-generator-button {
-            bottom: 70px;
-        }
-        .result-header {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-        .result-actions {
-            width: 100%;
-        }
-        .result-actions button {
-            flex: 1;
-        }
-    }
-    @media (max-width: 480px) {
-        .generator-dialog-overlay {
-            padding: 0;
-        }
-        .generator-dialog {
-            border-radius: 12px 12px 0 0;
-            max-height: 100vh;
-        }
-        .floatool-gear-menu a {
-            padding: 12px 16px;
-            font-size: 16px;
-        }
+    
+    @media (max-width: 480px) { 
+        .generator-dialog-overlay { padding: 0; } 
+        .generator-dialog { border-radius: 10px 10px 0 0; max-height: 100vh; } 
+        .floatool-gear-menu a { padding: 12px 16px; font-size: 16px; } 
     }
 </style>
+
+
+<!-- The rest of your scripts remain unchanged -->
 
 <script>
 (function() {
@@ -611,15 +577,16 @@ foreach ($entityIcons as $type => $icon) {
     floatool.querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const action = btn.getAttribute('data-action');
-            if(action==='open-dashboard') 
+            if(action==='open-dashboard')
                 window.location.href='dashboard.php';
             else if(action==='open-database')
-                window.location.href="/admin/"
+                window.location.href="/dbtool.php"
             else if(action==='open-regen')
-                window.location.href="regenerate_frames_set.php"
+                /*window.location.href="regenerate_frames_set.php"*/
+                window.showRegenerateFramesModal();
             else if(action==='open-styles') window.toggleStylesModal?.();
             else if(action==='open-logs') window.toggleLogsModal?.();
-            else if(action==='open-chat') 
+            else if(action==='open-chat')
                 window.location.href='chat.php';
             else if(action==='open-generators') {
                 e.stopPropagation();
@@ -703,7 +670,7 @@ foreach ($entityIcons as $type => $icon) {
             generatorMenu.style.transform = 'none';
         }
     }
-    
+
     function updateLabMenuPosition(){
         const rect = floatool.getBoundingClientRect();
         if (window.innerWidth <= 768) {
@@ -724,7 +691,7 @@ foreach ($entityIcons as $type => $icon) {
             console.error('No data-entity-type attribute found on the element.');
             return;
         }
-        const url = `/entity_form.php?entity_type=${encodeURIComponent(entityType)}`;
+        const url = `/entity_gen.php?entity_type=${encodeURIComponent(entityType)}`;
         labMenu.style.display = 'none';
         window.location.href = url;
     };
@@ -735,7 +702,7 @@ foreach ($entityIcons as $type => $icon) {
             currentTargetField = target;
             clearTimeout(focusTimeout);
             focusTimeout = setTimeout(() => {
-                mobileGenButton.style.display = 'block';
+                if (mobileGenButton) mobileGenButton.style.display = 'block';
             }, 300);
         }
     });
@@ -744,7 +711,7 @@ foreach ($entityIcons as $type => $icon) {
         clearTimeout(focusTimeout);
         focusTimeout = setTimeout(() => {
             if (document.activeElement !== currentTargetField) {
-                mobileGenButton.style.display = 'none';
+                if (mobileGenButton) mobileGenButton.style.display = 'none';
             }
         }, 200);
     });
@@ -765,7 +732,8 @@ foreach ($entityIcons as $type => $icon) {
         document.getElementById('generatorDialogOverlay').style.display = 'none';
         document.getElementById('generatorDialogResult').style.display = 'none';
         document.getElementById('generatorDialogLoading').style.display = 'none';
-        document.querySelector('.btn-fill').style.display = 'none';
+        const fillBtn = document.querySelector('.btn-fill');
+        if (fillBtn) fillBtn.style.display = 'none';
     };
 
     window.currentGeneratorConfig = null;
@@ -774,10 +742,10 @@ foreach ($entityIcons as $type => $icon) {
         const overlay = document.getElementById('generatorDialogOverlay');
         const titleEl = document.getElementById('generatorDialogTitle');
         const paramsEl = document.getElementById('generatorDialogParams');
-        
+
         titleEl.textContent = title;
-        paramsEl.innerHTML = '<p style="color:#999">Loading parameters...</p>';
-        
+        paramsEl.innerHTML = '<p style="color: var(--float-muted); text-align: center; padding: 20px;">Loading parameters...</p>';
+
         overlay.style.display = 'flex';
 
         if (!targetField && currentTargetField) {
@@ -790,28 +758,33 @@ foreach ($entityIcons as $type => $icon) {
                 if (data.config && data.config.parameters) {
                     window.currentGeneratorConfig = { configId, targetField };
                     renderParameters(data.config.parameters);
-                    
-                    if (targetField) {
-                        document.querySelector('.btn-fill').style.display = 'inline-block';
+
+                    const fillBtn = document.querySelector('.btn-fill');
+                    if (targetField && fillBtn) {
+                        fillBtn.style.display = 'inline-block';
                     }
                 } else {
-                    paramsEl.innerHTML = '<p style="color:#999">No parameters defined</p>';
+                    paramsEl.innerHTML = '<p style="color:var(--float-muted); text-align: center; padding: 20px;">No parameters defined</p>';
                     window.currentGeneratorConfig = { configId, targetField };
                 }
             })
             .catch(err => {
-                paramsEl.innerHTML = '<p style="color:red">Error loading parameters</p>';
+                paramsEl.innerHTML = '<p style="color:red; text-align: center; padding: 20px;">Error loading parameters</p>';
             });
     }
 
     function renderParameters(params) {
         const paramsEl = document.getElementById('generatorDialogParams');
         paramsEl.innerHTML = '';
-        
+
         for (const [key, def] of Object.entries(params)) {
+            const formGroup = document.createElement('div');
+            formGroup.className = 'form-group';
+
             const label = document.createElement('label');
             label.textContent = def.label || key;
-            
+            formGroup.appendChild(label);
+
             let input;
             if (def.type === 'string' && def.enum) {
                 input = document.createElement('select');
@@ -838,27 +811,27 @@ foreach ($entityIcons as $type => $icon) {
                 input.name = key;
                 input.value = def.default || '';
             }
-            
-            paramsEl.appendChild(label);
-            paramsEl.appendChild(input);
+
+            formGroup.appendChild(input);
+            paramsEl.appendChild(formGroup);
         }
     }
 
     window.runGenerator = function() {
         if (!window.currentGeneratorConfig) return;
-        
+
         const { configId } = window.currentGeneratorConfig;
         const paramsEl = document.getElementById('generatorDialogParams');
         const inputs = paramsEl.querySelectorAll('input, select, textarea');
-        
+
         const params = { config_id: configId };
         inputs.forEach(input => {
             params[input.name] = input.value;
         });
-        
+
         document.getElementById('generatorDialogResult').style.display = 'none';
         document.getElementById('generatorDialogLoading').style.display = 'block';
-        
+
         fetch('/api/generate.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -868,7 +841,7 @@ foreach ($entityIcons as $type => $icon) {
         .then(result => {
             document.getElementById('generatorDialogLoading').style.display = 'none';
             document.getElementById('generatorDialogResult').style.display = 'block';
-            
+
             const resultContent = document.getElementById('generatorResultContent');
             if (result.ok && result.data) {
                 resultContent.textContent = JSON.stringify(result.data, null, 2);
@@ -889,10 +862,10 @@ foreach ($entityIcons as $type => $icon) {
             alert('No target field or result available');
             return;
         }
-        
+
         const field = window.currentGeneratorConfig.targetField;
         const firstValue = Object.values(window.currentGeneratorResult)[0];
-        
+
         if (typeof firstValue === 'string') {
             field.value = firstValue;
             field.dispatchEvent(new Event('input', { bubbles: true }));
@@ -905,7 +878,7 @@ foreach ($entityIcons as $type => $icon) {
 
     window.copyGeneratorResult = function() {
         const content = document.getElementById('generatorResultContent').textContent;
-        
+
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(content).then(() => {
                 alert('Copied to clipboard!');
@@ -986,3 +959,7 @@ $(document).ready(function() {
     };
 });
 </script>
+
+<?php
+require __DIR__ . '/modal_frame_details.php';
+?>

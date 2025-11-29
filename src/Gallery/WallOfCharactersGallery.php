@@ -5,7 +5,7 @@ require_once "AbstractGallery.php";
 class WallOfCharactersGallery extends WallOfImagesGallery {
     
 
-    protected function getGalleryUrl() {
+    protected function getGalleryUrl(): string {
         return 'wall_of_characters.php';
     }
 

@@ -1,7 +1,10 @@
 <?php
-// view_storyboard_v2.php - Individual storyboard view with frames
+// view_storyboard.php - Individual storyboard view with frames
 require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
+
+// Use statements for the UI modules
+use App\UI\Modules\ModuleRegistry;
 
 $spw = \App\Core\SpwBase::getInstance();
 $pdo = $spw->getPDO();
@@ -59,8 +62,136 @@ foreach ($framesToCopy as $frame) {
     }
 }
 
+// --- MODULE CONFIGURATION ---
+
+$registry = ModuleRegistry::getInstance();
+
+// Configure gear menu module
+$gearMenu = $registry->create('gear_menu', [
+    'position' => 'top-right',
+    'show_for_entities' => null, // Allow for any entity type
+]);
+
+// --- UPDATED: Define a comprehensive set of actions for all entities ---
+$universalActions = [
+    // --- View/Edit Group ---
+    [
+        'label' => 'View Frame',
+        'icon' => '👁️',
+        'callback' => 'window.showFrameDetailsModal(frameId);',
+        'condition' => 'frameId > 0'
+    ],
+    [
+        'label' => 'Import to Generative',
+        'icon' => '⚡',
+        'callback' => 'window.importGenerative(entity, entityId, frameId);',
+        'condition' => 'frameId > 0'
+    ],
+    [
+        'label' => 'Edit Entity',
+        'icon' => '✏️',
+        'callback' => 'window.showEntityFormInModal(entity, entityId);',
+        'condition' => 'entityId > 0'
+    ],
+    [
+        'label' => 'Edit Image',
+        'icon' => '🖌️',
+        'callback' => 'const $w = $(wrapper); ImageEditorModal.open({ entity: entity, entityId: entityId, frameId: frameId, src: $w.find(\'img\').attr(\'src\') });'
+    ],
+    [
+            'label' => 'View Frame Chain',
+            'icon' => '🔗',
+            'callback' => 'window.showFrameChainInModal(frameId);'
+        ],
+    
+    [
+        'label' => 'Add to another Storyboard',
+        'icon' => '🎬',
+        'callback' => 'window.selectStoryboard(frameId, $(wrapper));',
+        'condition' => 'frameId > 0'
+    ],
+    // --- Import/Create Group ---
+    
+    [
+    'label' => 'Assign to Composite',
+        'icon' => '🧩',
+        'callback' => 'window.showImportEntityModal({ source: entity, target: "composites", source_entity_id: entityId, frame_id: frameId, limit: 1, copy_name_desc: 0, composite: 1 });'
+    ],
+    
+    
+    [
+        'label' => 'Import to ControlNet Map',
+        'icon' => '☠️',
+        'callback' => 'window.importControlNetMap(entity, entityId, frameId);',
+        'condition' => 'frameId > 0'
+    ],
+    
+    [
+        'label' => 'Use Prompt Matrix',
+        'icon' => '🌌',
+        'callback' => 'window.usePromptMatrix(entity, entityId, frameId);',
+        'condition' => 'frameId > 0'
+    ],
+    
+
+    // --- Organization/Destructive Group ---
+
+    [
+        'label' => 'Delete Original Frame',
+        'icon' => '🗑️',
+        'callback' => 'window.deleteFrame(entity, entityId, frameId);',
+        'condition' => 'frameId > 0'
+    ]
+];
+
+
+
+/*
+[
+        'label' => 'Assign to Composite',
+        'icon' => '🧩',
+        'callback' => 'window.assignToComposite(entity, entityId, frameId);',
+        'condition' => 'frameId > 0'
+    ],
+*/
+
+
+
+// --- UPDATED: Apply these actions to ALL specified entity types ---
+$allEntityTypes = [
+    'characters', 'character_poses', 'animas', 'locations', 'backgrounds',
+    'artifacts', 'vehicles', 'scene_parts', 'controlnet_maps', 'spawns',
+    'generatives', 'sketches', 'prompt_matrix_blueprints', 'composites'
+];
+
+foreach ($allEntityTypes as $entityType) {
+    foreach($universalActions as $action) {
+        $gearMenu->addAction($entityType, $action);
+    }
+}
+
+// Configure image editor module
+$imageEditor = $registry->create('image_editor', [
+    'modes' => ['mask', 'crop'],
+    'show_transform_tab' => true,
+    'show_filters_tab' => true,
+    'enable_rotate' => true,
+    'enable_resize' => true,
+    'preset_filters' => ['grayscale', 'vintage', 'sepia', 'blur', 'sharpen'],
+]);
+
+
 $pageTitle = "Storyboard: " . htmlspecialchars($storyboard['name']);
 ob_start();
+
+// --- RENDER MODULES ---
+echo '<link rel="stylesheet" href="/css/toast.css">';
+echo '<script src="/js/toast.js"></script>';
+echo '<script src="/js/gear_menu_globals.js"></script>';
+echo $gearMenu->render();
+echo $imageEditor->render();
+require __DIR__ . '/modal_frame_details.php';
+// --- END: RENDER MODULES ---
 ?>
 
 <!-- PhotoSwipe CSS -->
@@ -77,21 +208,68 @@ ob_start();
   <link rel="stylesheet" href="/vendor/font-awesome/css/all.min.css" />
 <?php endif; ?>
 
+
+<link rel="stylesheet" href="/css/base.css" />
+
 <style>
 .storyboard-wrap { padding: 12px; }
-.storyboard-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(110px,1fr)); gap:8px; align-items:start; }
-.frame-card { background:#fff; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,0.08); padding:6px; display:flex; flex-direction:column; gap:6px; user-select:none; touch-action:manipulation; }
-.frame-thumb { width:100%; height:90px; object-fit:cover; border-radius:6px; cursor:pointer; }
-.frame-meta { display:flex; justify-content:space-between; align-items:center; gap:6px; font-size:13px; }
-.handle { cursor:grab; padding:6px; border-radius:6px; background: rgba(0,0,0,0.03); }
-.btn { font-size:12px; padding:6px 8px; border-radius:6px; border:none; background:#f3f3f3; cursor:pointer; }
-.btn:hover { background:#e5e5e5; }
-.btn-primary { background:#4CAF50; color:white; }
-.btn-primary:hover { background:#45a049; }
-.toolbar { display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
-.save-status { font-size:13px; color:#666; }
-@media(min-width:800px) { .storyboard-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); } .frame-thumb { height:120px; } }
-</style>
+.storyboard-grid { 
+  display: grid; 
+  grid-template-columns: repeat(auto-fill, minmax(110px,1fr)); 
+  gap: var(--gap, 8px); 
+  align-items: start; 
+}
+
+/* card */
+.frame-card { 
+  background: var(--card, #fff); 
+  border-radius: var(--radius, 8px); 
+  box-shadow: var(--shadow-sm, 0 1px 4px rgba(0,0,0,0.08)); 
+  padding: var(--spacing-xs, 6px); 
+  display: flex; 
+  flex-direction: column; 
+  gap: var(--gap-xs, 6px); 
+  user-select: none; 
+  touch-action: manipulation; 
+  position: relative; /* Important for gear menu positioning */
+}
+
+/* thumbnail */
+.frame-thumb { 
+  width: 100%; 
+  height: 90px; 
+  object-fit: cover; 
+  border-radius: var(--radius-sm, 6px); 
+  cursor: pointer; 
+}
+
+/* meta */
+.frame-meta { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  gap: var(--gap-xs, 6px); 
+  font-size: 13px; 
+  color: var(--muted, #666); 
+}
+
+/* handle */
+.handle { 
+  cursor: grab; 
+  padding: 6px; 
+  border-radius: var(--radius-sm, 6px); 
+  background: var(--muted-weak, rgba(0,0,0,0.03)); 
+}
+
+/* toolbar / status */
+.toolbar { display: flex; gap: var(--gap, 8px); align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+.save-status { font-size: 13px; color: var(--muted, #666); }
+
+/* responsive */
+@media(min-width:800px) { 
+  .storyboard-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); } 
+  .frame-thumb { height: 120px; } 
+}</style>
 
 <div class="view-container storyboard-wrap">
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -102,15 +280,15 @@ ob_start();
   </div>
 
   <?php if ($storyboard['description']): ?>
-  <div style="margin-bottom:12px; font-size:13px; color:#666; padding:8px; background:#f9f9f9; border-radius:6px;">
+  <div style="margin-bottom:12px; padding:5px;" class="">
     <?php echo nl2br(htmlspecialchars($storyboard['description'])); ?>
   </div>
   <?php endif; ?>
 
   <div class="toolbar">
-    <button id="btn-save" class="btn btn-primary">Save Order</button>
-    <button id="btn-auto-prefix" class="btn" title="Rename files with numeric prefixes">Auto-prefix filenames</button>
-    <button id="btn-export" class="btn" title="Export as ZIP">
+    <button id="btn-save" class="btn btn-sm btn-primary">Save Order</button>
+    <button id="btn-auto-prefix" class="btn btn-sm" title="Rename files with numeric prefixes">Auto-prefix filenames</button>
+    <button id="btn-export" class="btn btn-sm" title="Export as ZIP">
       <i class="fa fa-download"></i> Export ZIP
     </button>
     <div class="save-status" id="save-status">Ready</div>
@@ -174,7 +352,12 @@ $(function(){
       const safeFilename = escapeHtml(frame.filename);
       
       const $card = $(`
-        <div class="frame-card" data-id="${frame.id}">
+        <div class="frame-card" 
+             data-id="${frame.id}"
+             data-entity="${frame.entity_type || ''}"
+             data-entity-id="${frame.entity_id || 0}"
+             data-frame-id="${frame.frame_id || 0}"
+             >
           <a href="${frame.filename}" 
              data-pswp-width="768" 
              data-pswp-height="768"
@@ -183,10 +366,10 @@ $(function(){
             <img src="${frame.filename}" alt="${safeName}" class="frame-thumb" loading="lazy" />
           </a>
           <div class="frame-meta">
-            <div style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${safeName}</div>
+            <div style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${safeName}">${safeName}</div>
             <div style="display:flex; gap:6px; align-items:center;">
               <div class="handle" title="drag to reorder">☰</div>
-              <button class="btn btn-delete" data-id="${frame.id}">🗑</button>
+              <button class="btn btn-sm btn-delete btn-danger delete-single-btn" data-id="${frame.id}" title="Delete from storyboard">✕</button>
             </div>
           </div>
         </div>
@@ -196,6 +379,11 @@ $(function(){
     });
 
     initPhotoSwipe();
+
+    // Initialize the Gear Menu on the new content
+    if (window.GearMenu && typeof window.GearMenu.attach === 'function') {
+        window.GearMenu.attach($grid[0]);
+    }
   }
 
   function initPhotoSwipe() {
@@ -219,6 +407,7 @@ $(function(){
   }
 
   function escapeHtml(text) {
+    if (!text) return '';
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
@@ -242,7 +431,7 @@ $(function(){
     const frameId = $card.data('id');
     const frame = frames.find(f => f.id == frameId);
     
-    if (!frame || !confirm('Delete "' + frame.name + '"?')) return;
+    if (!frame || !confirm('Delete "' + frame.name + '" from this storyboard?')) return;
     
     $.post('storyboards_v2_api.php', { 
       action: 'delete_frame', 

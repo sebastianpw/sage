@@ -1,12 +1,14 @@
 #!/bin/bash
-# import_gpt_conversations_final.sh
+# import_gpt_conversations.sh
 # Stream ChatGPT export and insert conversations + messages into DB
-# Usage: ./import_gpt_conversations_final.sh [conversations.json] [BATCH_CONV_COUNT]
+# Usage: ./import_gpt_conversations.sh [conversations.json] [BATCH_CONV_COUNT]
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CONV_FILE="${1:-$SCRIPT_DIR/conversations.json}"
+
+# UPDATED: Use the generic import directory
+CONV_FILE="${1:-$SCRIPT_DIR/../public/import/generic/conversations.json}"
 MAX_CONVS="${2:-0}"   # 0 = all
 DB_ARGS="$($SCRIPT_DIR/db_name.sh sys-conn || true)"
 
@@ -69,9 +71,6 @@ to_sql_datetime() {
     echo "'$dt'"
   fi
 }
-
-
-
 
 # extract conversations into NDJSON
 if [ "$MAX_CONVS" -gt 0 ]; then
@@ -224,3 +223,10 @@ SQL
 done < "$TMP_DIR/_conversations.ndjson"
 
 echo "Import complete. Conversations processed: $conv_count, imported: $imported_convs, messages total: $imported_msgs"
+
+# UPDATED: Delete the conversations.json file after successful import
+if [ "$imported_convs" -gt 0 ]; then
+  echo "Deleting successfully imported conversations.json file..."
+  rm -f "$CONV_FILE"
+  echo "File deleted: $CONV_FILE"
+fi

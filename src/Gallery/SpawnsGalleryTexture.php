@@ -103,4 +103,17 @@ class SpawnsGalleryTexture extends AbstractGallery
         
         return $html;
     }
+    
+    
+    
+   
+    /**
+     * Override the AJAX endpoint to use the dedicated spawns handler.
+     */
+    protected function getAjaxEndpoint(): string
+    {
+        return '/ajax_spawns_gallery.php';
+    }
+    
+    
 }

@@ -52,7 +52,7 @@ fi
 
 export $(grep -v '^#' "$ENV_FILE" | xargs)
 
-# Parse DATABASE_URL and DATABASE_SYS_URL
+# Parse DATABASE_URL, DATABASE_SYS_URL and DATABASE_WORDNET_URL
 parse_url() {
     local url="$1"
     # remove protocol
@@ -77,6 +77,7 @@ parse_url() {
 
 read MAIN_USER MAIN_PASS MAIN_HOST MAIN_PORT MAIN_DB <<< $(parse_url "$DATABASE_URL")
 read SYS_USER SYS_PASS SYS_HOST SYS_PORT SYS_DB <<< $(parse_url "$DATABASE_SYS_URL")
+read WN_USER WN_PASS WN_HOST WN_PORT WN_DB <<< $(parse_url "$DATABASE_WORDNET_URL")
 
 # Function to create database if it doesn't exist
 create_db_if_not_exists() {
@@ -211,6 +212,8 @@ echo "phpMyAdmin installation complete."
 # Create main and system databases if needed
 create_db_if_not_exists "$MAIN_USER" "$MAIN_PASS" "$MAIN_HOST" "$MAIN_PORT" "$MAIN_DB"
 create_db_if_not_exists "$SYS_USER" "$SYS_PASS" "$SYS_HOST" "$SYS_PORT" "$SYS_DB"
+create_db_if_not_exists "$WN_USER" "$WN_PASS" "$WN_HOST" "$WN_PORT" "$WN_DB"
+
 
 # Import main database
 echo "Importing main database $MAIN_DB..."
@@ -219,6 +222,15 @@ mysql -h "$MAIN_HOST" -P "${MAIN_PORT:-3306}" -u "$MAIN_USER" -p"$MAIN_PASS" "$M
 # Import system database
 echo "Importing system database $SYS_DB..."
 mysql -h "$SYS_HOST" -P "${SYS_PORT:-3306}" -u "$SYS_USER" -p"$SYS_PASS" "$SYS_DB" < "$SCRIPT_DIR/init_sys.sql"
+
+# Import WordNet database
+echo "Importing WordNet database $WN_DB..."
+
+mysql -h "$WN_HOST" -P "${WN_PORT:-3306}" -u "$WN_USER" -p"$WN_PASS" "$WN_DB" < "$SCRIPT_DIR/init_wordnet_structure.sql"
+mysql -h "$WN_HOST" -P "${WN_PORT:-3306}" -u "$WN_USER" -p"$WN_PASS" "$WN_DB" < "$SCRIPT_DIR/init_wordnet_data.sql"
+
+echo "Wordnet import finished."
+
 
 
 cat << "EOF"

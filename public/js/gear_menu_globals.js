@@ -23,6 +23,29 @@ window.importGenerative = window.importGenerative || (async function(entity, ent
     }
 });
 
+window.editEntity = window.editEntity || (function(entity, entityId, frameId) {
+    if (!entity || !entityId) {
+        Toast.show('Missing entity or entityId. Cannot edit.', 'error');
+        return;
+    }
+    
+    // Build redirect URL based on current page
+    let redirectUrl = window.location.pathname;
+    
+    // If we're on a frame detail page, preserve the frame_id
+    if (frameId && window.location.pathname.includes('view_frame')) {
+        redirectUrl = `view_frame.php?frame_id=${frameId}`;
+    } 
+    // If we're on a gallery page, go back to the gallery
+    else if (window.location.pathname.includes('gallery_')) {
+        redirectUrl = `gallery_${entity}_nu.php`;
+    }
+    
+    // Navigate to entity form
+    const editUrl = `/entity_form.php?entity_type=${encodeURIComponent(entity)}&entity_id=${encodeURIComponent(entityId)}&redirect_url=${encodeURIComponent(redirectUrl)}`;
+    window.location.href = editUrl;
+});
+
 window._storyboardsCache = null;
 
 window.loadStoryboards = async function() {
@@ -102,7 +125,7 @@ window.selectStoryboard = async function(frameId, $trigger) {
 
     $menu.append('<div class="sb-menu-sep"></div>');
     $menu.append(`
-        <div class="sb-menu-item" onclick="window.open('/view_storyboards_v2.php','_blank')">
+        <div class="sb-menu-item" onclick="window.open('/view_storyboards.php','_self')">
             📋 Manage Storyboards
         </div>
     `);
@@ -198,4 +221,26 @@ window.deleteFrame = window.deleteFrame || (async function(entity, entityId, fra
         alert("Delete failed: " + (err.message || err));
         console.error(err);
     }
+});
+
+window.assignControlNetMap = window.assignControlNetMap || (async function(entity, entityId, frameId, targetEntity){
+    // Only allow controlnet_maps
+    if (entity !== 'controlnet_maps') {
+        Toast.show('Only controlnet_maps can be assigned.', 'error');
+        return;
+    }
+
+    if (!entityId || !frameId) {
+        Toast.show('Missing entityId or frameId.', 'error');
+        return;
+    }
+
+    if (!targetEntity || !['characters','generatives','sketches'].includes(targetEntity)) {
+        Toast.show('Invalid target entity.', 'error');
+        return;
+    }
+
+    // Redirect to your import form with prefilled parameters
+    const hrefUrl = `/import_entity_from_entity.php?source=${encodeURIComponent(entity)}&source_entity_id=${encodeURIComponent(entityId)}&frame_id=${encodeURIComponent(frameId)}&target=${encodeURIComponent(targetEntity)}&copy_name_desc=0&controlnet=1`;
+    window.location.href = hrefUrl;
 });

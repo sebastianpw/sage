@@ -616,10 +616,16 @@ class KaggleService
         $token = @file_get_contents($zrokPath);
         return $token !== false ? trim($token) : null;
     }
-
-    /**
-     * Check if both Kaggle and Zrok tokens are configured
-     */
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     public function hasRequiredTokens(): bool
     {
         $kaggleToken = $this->getApiToken();
@@ -627,9 +633,17 @@ class KaggleService
 
         return !empty($kaggleToken) && !empty($zrokToken);
     }
-
+    
+    
+    
+    
+    
+    
     /**
-     * Create or update the private Zrok token dataset on Kaggle
+     * Syncs the Zrok token dataset to Kaggle using a robust "update, then create" strategy.
+     * It first attempts to update (version) the dataset. If that fails for any reason
+     * (e.g., it doesn't exist), it falls back to creating it fresh.
+     * This is handled entirely in PHP and provides a clean, definitive success message.
      */
     public function syncZrokTokenDataset(): array
     {
@@ -637,72 +651,62 @@ class KaggleService
         if (!$token) {
             return ['success' => false, 'message' => 'No Kaggle API token configured'];
         }
-
+    
         $zrokToken = $this->getZrokToken();
         if (!$zrokToken) {
             return ['success' => false, 'message' => 'No Zrok token configured'];
         }
-
+    
         $username = $token['username'];
         $datasetSlug = 'sage-zrok-token';
         $datasetRef = $username . '/' . $datasetSlug;
-
-        // Create temporary directory for dataset
-        $tmpDir = sys_get_temp_dir() . '/kaggle_zrok_' . time();
+    
+        // Create temporary directory and prepare dataset files
+        $tmpDir = sys_get_temp_dir() . '/kaggle_zrok_' . time() . '_' . bin2hex(random_bytes(4));
         @mkdir($tmpDir, 0777, true);
-
+    
         try {
-            // Write .zrok_api_key file
-            $zrokFile = $tmpDir . '/.zrok_api_key';
-            file_put_contents($zrokFile, $zrokToken);
-
-            // Create dataset-metadata.json
+            file_put_contents($tmpDir . '/.zrok_api_key', $zrokToken);
             $metadata = [
                 'title' => 'sage-zrok-token',
                 'id' => $datasetRef,
                 'licenses' => [['name' => 'CC0-1.0']],
                 'isPrivate' => true
             ];
+            file_put_contents($tmpDir . '/dataset-metadata.json', json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
-            $metadataFile = $tmpDir . '/dataset-metadata.json';
-            file_put_contents($metadataFile, json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            // --- STEP 1: Attempt to UPDATE (version) the dataset first. ---
+            $message = 'Automated zrok token sync at ' . date('Y-m-d H:i:s');
+            $versionResult = $this->kaggleClient->versionDataset($tmpDir, $message);
 
-            // Check if dataset exists using API
-            $checkResult = $this->kaggleClient->listDatasets(null, 'hottest', null, null, null, null, $username, true);
-
-            $datasetExists = false;
-            if ($checkResult !== false && isset($checkResult['status']) && $checkResult['status'] === 'success') {
-                $datasetExists = stripos($checkResult['data'], $datasetSlug) !== false;
-            }
-
-            // Create or update dataset using API
-            if ($datasetExists) {
-                // Update dataset (call createDataset for simplicity, server may interpret as new version)
-                $result = $this->kaggleClient->createDataset($tmpDir, false, false);
-            } else {
-                // Create new dataset
-                $result = $this->kaggleClient->createDataset($tmpDir, false, false);
-            }
-
-            // Clean up temp directory
-            @unlink($zrokFile);
-            @unlink($metadataFile);
-            @rmdir($tmpDir);
-
-            if ($result !== false && isset($result['status']) && $result['status'] === 'success') {
+            // --- STEP 2: If the update was successful, we are done. ---
+            if ($versionResult !== false && isset($versionResult['status']) && $versionResult['status'] === 'success') {
+                $this->recursiveRemoveDirectory($tmpDir);
                 return [
                     'success' => true,
-                    'message' => $datasetExists ? 'Zrok token dataset updated' : 'Zrok token dataset created',
-                    'dataset_ref' => $datasetRef,
-                    'output' => $result['stdout'] ?? $result['message'] ?? ''
-                ];
-            } else {
-                return [
-                    'success' => false,
-                    'message' => 'Failed to sync Zrok dataset',
-                    'output' => $this->kaggleClient->getLastError() ?: json_encode($result)
+                    'message' => '✔ Zrok token dataset was UPDATED successfully on Kaggle.',
                 ];
             }
+
+            // --- STEP 3: If update failed, FALLBACK to CREATING the dataset. ---
+            $createResult = $this->kaggleClient->createDataset($tmpDir);
+
+            // --- STEP 4: If the creation was successful, we are done. ---
+            if ($createResult !== false && isset($createResult['status']) && $createResult['status'] === 'success') {
+                $this->recursiveRemoveDirectory($tmpDir);
+                return [
+                    'success' => true,
+                    'message' => '✔ Zrok token dataset was CREATED successfully on Kaggle.',
+                ];
+            }
+
+            // --- STEP 5: If BOTH attempts failed, report a final error. ---
+            $this->recursiveRemoveDirectory($tmpDir);
+            return [
+                'success' => false,
+                'message' => '✘ Failed to sync Zrok dataset. Both update and create attempts failed.',
+                'output' => $this->kaggleClient->getLastError() ?: json_encode($createResult), // Show error from the last attempt
+            ];
 
         } catch (\Exception $e) {
             if (is_dir($tmpDir)) {
@@ -710,10 +714,25 @@ class KaggleService
             }
             return [
                 'success' => false,
-                'message' => 'Exception: ' . $e->getMessage()
+                'message' => 'Exception during dataset sync: ' . $e->getMessage()
             ];
         }
     }
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
     /**
      * Fix kernel metadata: ensure GPU, internet, and Zrok dataset are configured

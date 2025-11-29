@@ -198,7 +198,7 @@ a:hover {
     <input id="asc-duration-num" type="number" min="10" max="1200" step="1" value="120"> <span style="margin-left:6px;">s</span>
   </div>
   <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;">
-    <label style="display:flex;gap:6px;align-items:center;"><input id="asc-autoplay" type="checkbox"> Autoplay</label>
+    <label style="display:none;gap:6px;align-items:center;"><input style="display: none;" id="asc-autoplay" type="checkbox"> Autoplay</label>
     <button id="asc-hide" title="Hide controls">✕</button>
   </div>
   <small>Space = pause/resume • S = start • R = restart • Manual scroll or blur = paused</small>

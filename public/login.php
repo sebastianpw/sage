@@ -7,6 +7,7 @@ $alreadyAdmin = \App\Core\SetupManager::adminExists($pdo);
 
 if (!$alreadyAdmin) {
     header("Location: setup.php");
+    exit;
 }
 
 $message = '';
@@ -71,46 +72,95 @@ $googleLoginUrl = '';
 if ($googleLoginEnabled) {
     $googleClient = new Google_Client();
     $googleClient->setAuthConfig($googleJsonPath);
+    // keep existing redirect; you may want to make this dynamic
     $googleClient->setRedirectUri('http://localhost:8080/google_callback.php');
     $googleClient->addScope('email');
     $googleClient->addScope('profile');
     $googleLoginUrl = $googleClient->createAuthUrl();
 }
 
-// Render UI — Google link uses AccessManager::urlWithRedirect so redirect is preserved across OAuth
+// Render UI
 require "eruda_var.php";
 ob_start();
 ?>
-<div style="max-width:400px; margin:50px auto; font-family:sans-serif; border:1px solid #ddd; padding:25px; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.1);">
+<link rel="stylesheet" href="/css/base.css">
 
-    <img src="SAGE_nuicon.jpg" style="width: 55%; display:block;  margin: 0 auto;" />
-    <h2 style="text-align:center;">Login</h2>
+<style>
+.sage-logo-icon {
+    width: 55%;
+    aspect-ratio: 1 / 1;
+    clip-path: inset(5% 5% 5% 5% round 18%);
+    object-fit: cover;
+    border-radius: 18%;
+    display: block;
+    margin: 0 auto 20px;
+}
+</style>
+
+<script>
+  (function() {
+    try {
+      var theme = localStorage.getItem('spw_theme');
+      if (theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else if (theme === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    } catch (e) {
+      // ignore
+    }
+  })();
+</script>
+
+<div class="container" style="max-width:420px; margin:60px auto; padding:0 12px;">
+  <div style="padding:20px;" class="card" role="main" aria-label="Login box">
+    <div style="text-align:center; margin-bottom:12px;">
+      <img class="sage-logo-icon" src="SAGE_nuicon.jpg" alt="SAGE" style="width:55%; max-width:180px; display:inline-block;">
+    </div>
+
+    <h2 style="text-align:center; margin:6px 0 18px 0;">Login</h2>
 
     <form method="post" action="">
-        <?= AccessManager::renderHiddenRedirectInput($defaultRedirect) ?>
-        <label>Username: <input type="text" name="username" required style="width:100%; padding:8px; margin-top:5px;"></label><br><br>
-        <label>Password: <input type="password" name="password" required style="width:100%; padding:8px; margin-top:5px;"></label><br><br>
-        <button type="submit" style="width:100%; padding:10px; background:#4CAF50; color:white; border:none; border-radius:5px;">Login</button>
+      <?= AccessManager::renderHiddenRedirectInput($defaultRedirect) ?>
+
+      <div class="form-group">
+        <label class="form-label" for="username">Username</label>
+        <input id="username" name="username" type="text" required class="form-control" />
+      </div>
+
+      <div class="form-group" style="margin-bottom:8px;">
+        <label class="form-label" for="password">Password</label>
+        <input id="password" name="password" type="password" required class="form-control" />
+      </div>
+
+      <div style="margin-top:12px;">
+        <button type="submit" class="btn btn-primary" style="width:100%;">Login</button>
+      </div>
     </form>
 
-    <p style="text-align:center; margin:15px 0; color:#888;">or</p>
+    <div style="text-align:center; margin:14px 0; color:var(--muted);">or</div>
 
-    <!-- Google login button: enabled only if JSON exists -->
     <?php if ($googleLoginEnabled): ?>
-        <a href="<?= htmlspecialchars(AccessManager::urlWithRedirect('/google_login.php', $defaultRedirect), ENT_QUOTES, 'UTF-8') ?>"
-           style="display:flex; align-items:center; justify-content:center; text-decoration:none; border:1px solid #ddd; padding:10px; border-radius:5px; color:#444; font-weight:bold; background:#fff;">
-            <i class="fab fa-google" style="margin-right:10px; font-size:18px;"></i> Sign in with Google
-        </a>
+      <a href="<?= htmlspecialchars(\AccessManager::urlWithRedirect('/google_login.php', $defaultRedirect), ENT_QUOTES, 'UTF-8') ?>"
+         class="btn secondary" style="display:flex; align-items:center; justify-content:center; gap:10px; width:100%; box-sizing:border-box;">
+        <i class="fab fa-google" style="margin-right:0px; font-size:18px;"></i>Sign in with Google
+      </a>
     <?php else: ?>
-        <button disabled style="display:flex; align-items:center; justify-content:center; text-decoration:none; border:1px solid #ddd; padding:10px; border-radius:5px; color:#aaa; font-weight:bold; background:#f9f9f9; cursor:not-allowed;">
-            <i class="fab fa-google" style="margin-right:10px; font-size:18px;"></i> Google login unavailable
-        </button>
+      <button disabled class="btn secondary" title="Google login not available" style="display:flex; align-items:center; justify-content:center; gap:10px; width:100%; box-sizing:border-box; cursor:not-allowed;">
+        <i class="fab fa-google" style="margin-right:0px; font-size:18px;"></i>Google login unavailable
+      </button>
     <?php endif; ?>
 
     <?php if (!empty($message)): ?>
-        <p style="color:red; margin-top:15px;"><?= htmlspecialchars($message) ?></p>
+      <div style="margin-top:14px;">
+        <div class="notification notification-danger">
+          <?= htmlspecialchars($message) ?>
+        </div>
+      </div>
     <?php endif; ?>
+  </div>
 </div>
+
 <?php
 $content = ob_get_clean();
 $content .= $eruda;

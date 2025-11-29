@@ -91,6 +91,24 @@ except Exception as e:
     logger.exception("Failed to register kaggle router: %s", e)
 
 
+# --- Bloom router (NEW) ---
+try:
+    from services.bloom_service import router as bloom_router
+    app.include_router(bloom_router, prefix="/bloom", tags=["bloom"])
+    logger.info("Registered bloom router")
+except Exception as e:
+    logger.exception("Failed to register bloom router: %s", e)
+
+
+# --- Wordnet router ---
+try:
+    from services.wordnet_service import router as wordnet_router
+    app.include_router(wordnet_router, prefix="", tags=["wordnet"])
+    logger.info("Registered wordnet router")
+except Exception as e:
+    logger.exception("Failed to register wordnet router: %s", e)
+
+
 # --- Pillow router (new) ---
 try:
     from services.pillow_service import router as pillow_router
@@ -99,6 +117,32 @@ try:
 except Exception as e:
     logger.exception("Failed to register pillow router: %s", e)
 
+
+# --- Style router ---
+try:
+    from services.style_service import router as style_router
+    app.include_router(style_router, prefix="/style", tags=["style"])
+    logger.info("Registered style router")
+except Exception as e:
+    logger.exception("Failed to register style router: %s", e)
+
+# --- aiprovider router ---
+try:
+    from services.aiprovider_service import router as aiprovider_router
+    app.include_router(aiprovider_router, prefix="/aiprovider", tags=["aiprovider"])
+    logger.info("Registered aiprovider router")
+except Exception as e:
+    logger.exception("Failed to register aiprovider router: %s", e)
+
+# --- OpenAI Compatible router (NEW) ---
+try:
+    from services.openai_compatible_service import router as openai_router
+    # We use a blank prefix to get the /v1/chat/completions path
+    # If you prefer /openai/v1/chat/completions, use prefix="/openai"
+    app.include_router(openai_router, prefix="", tags=["openai_compatible"])
+    logger.info("Registered openai_compatible router")
+except Exception as e:
+    logger.exception("Failed to register openai_compatible router: %s", e)
 
 
 # ---------------------------
@@ -129,3 +173,5 @@ if __name__ == "__main__":
         reload=True,
         log_level="info"
     )
+
+

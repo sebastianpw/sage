@@ -233,6 +233,67 @@ class TaskLockManager
         return $released;
     }
 
+
+
+
+
+
+    public function forceReleaseLock(int $lockId): bool
+    {
+        $this->pdo->beginTransaction();
+        try {
+            // First, find the run_id associated with this lock before we release it.
+            // Use FOR UPDATE to prevent race conditions if this were called concurrently.
+            $stmtFindRun = $this->pdo->prepare("SELECT run_id FROM task_locks WHERE id = :id FOR UPDATE");
+            $stmtFindRun->execute([':id' => $lockId]);
+            $runId = $stmtFindRun->fetchColumn();
+
+            // Now, release the lock
+            $stmtRelease = $this->pdo->prepare("
+                UPDATE task_locks
+                SET status = 'released', released_at = UTC_TIMESTAMP()
+                WHERE id = :id AND status = 'active'
+            ");
+            $stmtRelease->execute([':id' => $lockId]);
+            $released = $stmtRelease->rowCount() > 0;
+
+            if ($released) {
+                $this->logger->log('WARNING', ["Force released lock $lockId"]);
+
+                // If a run was associated, mark it as stale.
+                if ($runId) {
+                    $logMessage = 'Associated lock was forcibly released from UI at ' . gmdate('Y-m-d H:i:s') . ' UTC.';
+                    $stmtUpdateRun = $this->pdo->prepare("
+                        UPDATE task_runs
+                        SET status = 'stale', 
+                            finished_at = UTC_TIMESTAMP(),
+                            stderr_log = CONCAT(IFNULL(stderr_log, ''), :log_message)
+                        WHERE id = :run_id AND status IN ('running', 'pending')
+                    ");
+                    $stmtUpdateRun->execute([
+                        ':run_id' => $runId,
+                        ':log_message' => "\n" . $logMessage
+                    ]);
+                    $this->logger->log('WARNING', ["Marked run_id $runId as stale due to forced lock release"]);
+                }
+            }
+            
+            $this->pdo->commit();
+            return $released;
+
+        } catch (\Exception $e) {
+            $this->pdo->rollBack();
+            $this->logger->log('ERROR', ["Failed to force release lock $lockId: " . $e->getMessage()]);
+            return false;
+        }
+    }
+
+
+
+
+
+
+/*
     public function forceReleaseLock(int $lockId): bool
     {
         $stmt = $this->pdo->prepare("
@@ -247,6 +308,7 @@ class TaskLockManager
         }
         return $released;
     }
+ */
 
     public function renewLock($lockIdOrInfo, int $additionalMinutes = 30, ?string $ownerToken = null): bool
     {

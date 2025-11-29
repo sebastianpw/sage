@@ -3,9 +3,9 @@ namespace App\Gallery;
 
 /**
  * SpawnsGalleryReference - Gallery for reference images
- * Shows high-quality reference images for style matching
+ * Updated to use AbstractNuGallery and include spawn_type hidden field.
  */
-class SpawnsGalleryReference extends AbstractGallery
+class SpawnsGalleryReference extends AbstractNuGallery
 {
     private ?array $spawnType = null;
 
@@ -70,19 +70,40 @@ class SpawnsGalleryReference extends AbstractGallery
     protected function getCaptionFields(): array
     {
         return [
-            'Frame ID' => 'frame_id',
+            'Frame ID'       => 'frame_id',
             'Reference Name' => 'name',
-            'Description' => 'description',
-            'Style' => 'style'
+            'Description'    => 'description',
+            'Style'          => 'style'
         ];
     }
 
-    protected function getGalleryUrl() {
-	return 'upload_spawns.php?spawn_type=reference';
+    protected function getGalleryUrl(): string
+    {
+        return 'upload_spawns.php?spawn_type=reference';
     }
 
     protected function getBaseQuery(): string
     {
         return "v_gallery_spawns";
+    }
+
+    /**
+     * Inject the spawn_type hidden field so Ajax requests include the spawn type code.
+     */
+    protected function renderFilters(): void
+    {
+        if ($this->spawnType) {
+            echo '<input type="hidden" name="spawn_type" value="' . htmlspecialchars($this->spawnType['code']) . '">';
+        }
+
+        parent::renderFilters();
+    }
+    
+        /**
+     * Override the AJAX endpoint to use the dedicated spawns handler.
+     */
+    protected function getAjaxEndpoint(): string
+    {
+        return '/ajax_spawns_gallery.php';
     }
 }

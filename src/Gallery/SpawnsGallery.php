@@ -2,9 +2,10 @@
 namespace App\Gallery;
 
 /**
- * Updated SpawnsGallery - Default gallery with type filtering
+ * SpawnsGallery - Migrated to AbstractNuGallery
+ * Clean implementation using the new modular base class
  */
-class SpawnsGallery extends AbstractGallery
+class SpawnsGallery extends AbstractNuGallery
 {
     private ?array $spawnType = null;
 
@@ -75,12 +76,35 @@ class SpawnsGallery extends AbstractGallery
         ];
     }
 
-    protected function getGalleryUrl() {
-	return 'upload_spawns.php?spawn_type=default';
+    protected function getGalleryUrl(): string
+    {
+        return 'upload_spawns.php?spawn_type=default';
     }
 
     protected function getBaseQuery(): string
     {
         return "v_gallery_spawns";
+    }
+
+    /**
+     * Override renderFilters to include spawn_type as hidden field
+     */
+    protected function renderFilters(): void
+    {
+        // Add hidden field for spawn type if present
+        if ($this->spawnType) {
+            echo '<input type="hidden" name="spawn_type" value="' . htmlspecialchars($this->spawnType['code']) . '">';
+        }
+        
+        // Call parent implementation for regular filters
+        parent::renderFilters();
+    }
+
+    /**
+     * Override the AJAX endpoint to use the dedicated spawns handler.
+     */
+    protected function getAjaxEndpoint(): string
+    {
+        return '/ajax_spawns_gallery.php';
     }
 }

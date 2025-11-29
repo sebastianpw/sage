@@ -6,7 +6,6 @@ $pdo = $spw->getPDO();
 $styles = $pdo->query("SELECT * FROM styles ORDER BY `order`, id")->fetchAll(PDO::FETCH_ASSOC);
 
 // echo $eruda;
-
 ?>
 
 <?php ob_start(); ?>
@@ -15,7 +14,6 @@ $styles = $pdo->query("SELECT * FROM styles ORDER BY `order`, id")->fetchAll(PDO
         <div class="title">🎨🖌️ Styles</div>
         <div class="subtitle">Quick toggles — active / visible</div>
     </div>
-
 
     <div class="spw-styles-list" role="list">
         <?php foreach ($styles as $style): ?>
@@ -48,17 +46,32 @@ $styles = $pdo->query("SELECT * FROM styles ORDER BY `order`, id")->fetchAll(PDO
     </div>
 
     <div class="spw-footer">
-<div id="spw-status" class="spw-status" aria-live="polite" style="display:none;"></div>
+        <div id="spw-status" class="spw-status" aria-live="polite" style="display:none;"></div>
         <small class="muted">Minimal • quick • keyboard friendly (enter / space)</small>
     </div>
 </div>
-
 <style>
-/* Scoped to the modal content — minimal visual pimping */
+/* Use base.css variables where possible to integrate with the theme */
+/* Fallbacks included for environments without base.css loaded */
+
+:root {
+  --spw-bg: var(--card, #161b22);
+  --spw-border-rgb: var(--muted-border-rgb, 48,54,61);
+  --spw-text: var(--text, #c9d1d9);
+  --spw-text-muted: var(--text-muted, #8b949e);
+  --spw-accent: var(--accent, #3b82f6);
+  --spw-green: var(--green, #238636);
+  --spw-shadow: var(--card-elevation, 0 6px 18px rgba(2,6,23,0.4));
+  --spw-blue-light-bg: var(--blue-light-bg, rgba(56, 139, 253, 0.1));
+  --spw-blue-light-text: var(--blue-light-text, #79c0ff);
+  --spw-blue-light-border: var(--blue-light-border, rgba(59,130,246,0.3));
+}
+
+/* Scoped to the modal content — minimal visual integration */
 .spw-styles-modal {
-    color: #EAEAEA;
-    padding: 10px 12px;
-    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    color: var(--spw-text);
+    padding: 12px;
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     background: transparent;
     height: 100%;
     box-sizing: border-box;
@@ -66,42 +79,45 @@ $styles = $pdo->query("SELECT * FROM styles ORDER BY `order`, id")->fetchAll(PDO
     flex-direction: column;
 }
 
+/* Header */
 .spw-styles-header {
     display:flex;
     justify-content:space-between;
     align-items:baseline;
     gap:12px;
-    margin-bottom:8px;
+    margin-bottom:10px;
 }
 .spw-styles-header .title {
     font-weight:700;
     font-size:16px;
-    color: #fff;
+    color: var(--spw-text);
 }
 .spw-styles-header .subtitle {
     font-size:12px;
-    color: #bfc7cf;
-    opacity:0.9;
+    color: var(--spw-text-muted);
+    opacity:0.95;
 }
 
 /* status toast */
 .spw-status {
-    margin: 6px 0;
-    padding: 6px 10px;
+    margin: 8px 0;
+    padding: 8px 10px;
     border-radius: 8px;
     font-size: 13px;
-    color: #0f172a;
-    background: #d1fae5; /* green success by default */
+    color: var(--spw-text);
+    background: var(--spw-bg);
+    border: 1px solid rgba(var(--spw-border-rgb), 0.06);
+    display: none;
 }
 
-/* list rows */
+/* list wrapper */
 .spw-styles-list {
     overflow: auto;
     border-radius: 8px;
-    margin: 6px 0 10px 0;
+    margin: 6px 0 12px 0;
     padding: 6px;
-    background: rgba(255,255,255,0.02);
-    border: 1px solid rgba(255,255,255,0.03);
+    background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(0,0,0,0.01));
+    border: 1px solid rgba(var(--spw-border-rgb), 0.06);
     flex: 1 1 auto;
 }
 
@@ -111,13 +127,14 @@ $styles = $pdo->query("SELECT * FROM styles ORDER BY `order`, id")->fetchAll(PDO
     align-items:center;
     gap:12px;
     padding:10px 8px;
-    border-bottom: 1px solid #ccc;
+    border-bottom: 1px solid rgba(var(--spw-border-rgb), 0.06);
     transition: background 0.12s, transform 0.08s;
+    background: transparent;
 }
 .spw-row:last-child { border-bottom: none; }
 
 .spw-row:hover {
-    background: rgba(255,255,255,0.02);
+    background: rgba(var(--spw-border-rgb), 0.03);
     transform: translateY(-1px);
 }
 
@@ -125,8 +142,11 @@ $styles = $pdo->query("SELECT * FROM styles ORDER BY `order`, id")->fetchAll(PDO
 .spw-name {
     font-weight: 600;
     font-size: 14px;
-    width: 200px;
-    overflow: auto;
+    width: 220px;
+    overflow: hidden;
+    color: var(--spw-text);
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 /* toggles column (right) */
@@ -141,43 +161,67 @@ $styles = $pdo->query("SELECT * FROM styles ORDER BY `order`, id")->fetchAll(PDO
 .spw-switch {
     display:inline-flex;
     align-items:center;
-    gap:8px;
-    padding:6px 10px;
-    min-width:72px;
+    gap:10px;
+    padding:6px 12px;
+    min-width:84px;
     border-radius:999px;
-    border: 1px solid rgba(255,255,255,0.04);
-    background: rgba(255,255,255,0.02);
-    color: #d1d5db;
+    border: 1px solid rgba(var(--spw-border-rgb), 0.06);
+    background: rgba(255,255,255,0.01);
+    color: var(--spw-text);
     font-size:13px;
     cursor:pointer;
     transition: all 0.16s ease;
     box-shadow: none;
     outline: none;
+    justify-content: center;
 }
 .spw-switch .dot {
-    width:10px; height:10px; border-radius:50%; display:inline-block;
-    background: rgba(255,255,255,0.18);
+    width:12px; height:12px; border-radius:50%; display:inline-block;
+    background: rgba(255,255,255,0.06);
     transition: transform 0.18s, background 0.18s;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.15) inset;
 }
-.spw-switch .label { font-weight:600; }
+.spw-switch .label { font-weight:600; color: inherit; font-size:13px; }
 
-/* ON state — subtle color */
+
 .spw-switch.on {
-    color: #042f2e;
-    background: linear-gradient(90deg, rgba(45,212,191,0.95), rgba(96,165,250,0.95));
-    border-color: rgba(255,255,255,0.06);
-    box-shadow: 0 6px 18px rgba(60,130,180,0.06);
+    /* gentle blue gradient (soft -> vivid) based on badge-blue / accent */
+    background: linear-gradient(90deg,
+                var(--spw-blue-light-bg) 0%,
+                rgba(59,130,246,0.38) 45%,
+                var(--spw-accent) 100%);
+    border-color: var(--spw-blue-light-border) !important;
+    /* CHANGED: Use a dark anthracite color for high contrast */
+    color: #1f2937 !important;
+    box-shadow: 0 6px 18px rgba(59,130,246,0.08);
+    transition: transform .12s ease, filter .12s ease;
 }
+
+/* ensure label remains readable */
+.spw-switch.on .label {
+    /* CHANGED: Use the same dark color here */
+    color: #1f2937;
+}
+
+/* Dot: bright/contrasty so it reads on both ends of the gradient */
 .spw-switch.on .dot {
-    transform: translateX(2px);
-    background: rgba(255,255,255,0.95);
+    transform: translateX(4px);
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.12);
 }
+
+/* subtle hover & active affordances */
+.spw-switch.on:hover {
+    filter: brightness(1.03);
+    transform: translateY(-0.6px);
+}
+.spw-switch.on:active { transform: translateY(0); }
 
 /* OFF state — muted */
 .spw-switch.off {
-    opacity:0.78;
+    opacity:0.88;
     background: transparent;
-    color: #c1c7cf;
+    color: var(--spw-text-muted);
 }
 .spw-switch:active { transform: translateY(1px); }
 
@@ -187,40 +231,40 @@ $styles = $pdo->query("SELECT * FROM styles ORDER BY `order`, id")->fetchAll(PDO
 }
 @keyframes spw-pulse {
     0% { transform: scale(1); }
-    50% { transform: scale(0.98); }
+    50% { transform: scale(0.985); }
     100% { transform: scale(1); }
 }
 
 /* footer */
-.spw-footer { margin-top:8px; text-align:center; color:#9aa4ad; font-size:12px; }
+.spw-footer { margin-top:8px; text-align:center; color:var(--spw-text-muted); font-size:12px; }
 
 /* responsive: stack on very small widths */
 @media (max-width:480px) {
-    .spw-row { flex-direction: column; align-items:flex-start; gap:6px; padding:8px; }
+    .spw-row { flex-direction: column; align-items:flex-start; gap:8px; padding:8px; }
     .spw-toggles { width:100%; justify-content:flex-end; }
-}
-
-/* make sure style names are always visible */
-.spw-name {
-    color: #111 !important;   /* dark text for light backgrounds */
-}
-.spw-row:hover .spw-name {
-    color: #000 !important;   /* a bit stronger on hover */
 }
 
 </style>
 
+
 <script>
 (function(){
-    // helper: show temporary status
+    // helper: show temporary status (uses notification classes if present)
     function showStatus(msg, type = 'success') {
         var el = document.getElementById('spw-status');
+        if (!el) return;
         el.textContent = msg;
         el.style.display = 'block';
-        el.style.background = (type === 'success') ? '#d1fae5' : '#fde68a';
-        el.style.color = (type === 'success') ? '#064e3b' : '#92400e';
+        el.className = 'spw-status';
+        if (type === 'success') {
+            el.classList.add('notification', 'notification-success');
+        } else if (type === 'error') {
+            el.classList.add('notification', 'notification-error');
+        } else {
+            el.classList.add('notification');
+        }
         clearTimeout(showStatus._t);
-        showStatus._t = setTimeout(function(){ el.style.display = 'none'; }, 1600);
+        showStatus._t = setTimeout(function(){ el.style.display = 'none'; el.className = 'spw-status'; }, 1600);
     }
 
     // attach handlers
@@ -251,14 +295,14 @@ $styles = $pdo->query("SELECT * FROM styles ORDER BY `order`, id")->fetchAll(PDO
 
             // update the button state
             var target = row.querySelector('[data-field="' + field + '"]');
-            if (json.value == 1) {
+            if (json.value == 1 || json.value === true || json.value === '1') {
                 target.classList.remove('off'); target.classList.add('on');
                 target.setAttribute('aria-checked', 'true');
-                target.querySelector('.label').textContent = 'On';
+                var lbl = target.querySelector('.label'); if (lbl) lbl.textContent = 'On';
             } else {
                 target.classList.remove('on'); target.classList.add('off');
                 target.setAttribute('aria-checked', 'false');
-                target.querySelector('.label').textContent = 'Off';
+                var lbl2 = target.querySelector('.label'); if (lbl2) lbl2.textContent = 'Off';
             }
 
             showStatus('Saved', 'success');
@@ -287,5 +331,5 @@ $styles = $pdo->query("SELECT * FROM styles ORDER BY `order`, id")->fetchAll(PDO
 </script>
 <?php
 $content = ob_get_clean();
-$spw->renderLayout($content, "Styles");
+$spw->renderLayout($content, "Styles", $spw->getProjectPath() . '/templates/styles.php'   );
 ?>

@@ -1,1 +1,1 @@
-genframe_db.sh.pollinations.ai
+genframe_db.sh.pollinana

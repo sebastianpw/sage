@@ -101,97 +101,164 @@ ob_start();
 
 $sessionUser = SetupManager::getSessionUser($pdo);
 ?>
-<div style="max-width:400px; margin:50px auto; font-family:sans-serif; border:1px solid #ddd; padding:25px; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.1);">
-    <h2 style="text-align:center;">Initial Setup</h2>
 
-    <?php if ($alreadyAdmin): ?>
-        <p style="color:#666; font-size:0.9rem; text-align:center;">An admin account already exists. DEV_MODE is enabled so you may still create another admin.</p>
-    <?php else: ?>
-        <p style="color:#666; font-size:0.95rem; text-align:center;">Create the first admin account or sign in with Google. After signing in with Google you can promote that account to admin from here.</p>
-    <?php endif; ?>
 
-    <?php if (!empty($errors)): ?>
-        <div style="color:#a00; margin-bottom:12px;">
-            <ul style="margin:0; padding-left:18px;"><?php foreach ($errors as $e) echo "<li>" . htmlspecialchars($e) . "</li>"; ?></ul>
+<link rel="stylesheet" href="/css/base.css">
+
+<style>
+.sage-logo-icon {
+    width: 55%;
+    aspect-ratio: 1 / 1;
+    clip-path: inset(5% 5% 5% 5% round 18%);
+    object-fit: cover;
+    border-radius: 18%;
+    display: block;
+    margin: 0 auto 20px;
+}
+</style>
+
+<script>
+  (function() {
+    try {
+      var theme = localStorage.getItem('spw_theme');
+      if (theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else if (theme === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    } catch (e) {
+      // ignore
+    }
+  })();
+</script>
+
+
+
+<div class="container">
+    <div style="text-align:center; margin-bottom:12px;">
+      <img class="sage-logo-icon" src="SAGE_nuicon.jpg" alt="SAGE" style="width:55%; max-width:180px; display:inline-block;">
+    </div>
+  <div class="card" style="max-width:760px; margin: 32px auto;">
+    <div class="card-header">Initial Setup</div>
+    <div class="card-body">
+
+      <?php if ($alreadyAdmin): ?>
+        <p class="text-muted" style="margin-top:0;">
+          An admin account already exists. <strong>DEV_MODE</strong> is enabled so you may still create another admin.
+        </p>
+      <?php else: ?>
+        <p class="text-muted" style="margin-top:0;">
+          Create the first admin account or sign in with Google. After signing in with Google you can promote that account to admin from here.
+        </p>
+      <?php endif; ?>
+
+      <?php if (!empty($errors)): ?>
+        <div class="notification notification-error" role="alert">
+          <ul style="margin:0; padding-left:18px;">
+            <?php foreach ($errors as $e): ?>
+              <li><?= htmlspecialchars($e) ?></li>
+            <?php endforeach; ?>
+          </ul>
         </div>
-    <?php endif; ?>
+      <?php endif; ?>
 
-    <?php if ($sessionUser && !$alreadyAdmin): ?>
-        <div style="margin-bottom:12px; padding:10px; border:1px solid #eee; border-radius:6px;">
+      <?php if (!empty($success)): ?>
+        <div class="notification notification-success" role="status">
+          Admin created. Redirecting to login...
+        </div>
+      <?php endif; ?>
+
+      <?php if ($sessionUser && !$alreadyAdmin): ?>
+        <div class="card" style="margin-bottom:12px;">
+          <div class="card-body">
             <p style="margin:0 0 8px 0;"><strong>Signed in:</strong> <?= htmlspecialchars($sessionUser['username'] ?? 'n/a') ?></p>
-            <p style="margin:0 0 8px 0; color:#666;">
-                <?php if (!empty($sessionUser['google_id'])): ?>
-                    Signed in through Google (<?= htmlspecialchars($sessionUser['google_email'] ?? '') ?>)
-                <?php else: ?>
-                    Local account
-                <?php endif; ?>
+            <p class="text-muted" style="margin:0 0 8px 0;">
+              <?php if (!empty($sessionUser['google_id'])): ?>
+                Signed in through Google (<?= htmlspecialchars($sessionUser['google_email'] ?? '') ?>)
+              <?php else: ?>
+                Local account
+              <?php endif; ?>
             </p>
-            <form method="post">
-                <input type="hidden" name="action" value="promote_current">
-                <button type="submit" style="width:100%; padding:10px; background:#4CAF50; color:white; border:none; border-radius:5px;">Promote this account to admin</button>
+
+            <form method="post" style="margin-top:8px;">
+              <input type="hidden" name="action" value="promote_current">
+              <button type="submit" class="btn btn-primary" style="width:100%;">Promote this account to admin</button>
             </form>
+          </div>
         </div>
-        <p style="text-align:center;"><a href="/logout.php">Sign out and use a different account</a></p>
-    <?php endif; ?>
 
-    <?php if (!$sessionUser): ?>
+        <p style="text-align:center; margin-bottom:12px;">
+          <a class="btn btn-link" href="/logout.php">Sign out and use a different account</a>
+        </p>
+      <?php endif; ?>
 
-<?php
-// --- Determine if Google login is available ---
-$googleJsonPath = PROJECT_ROOT . '/token/client_secret_google_oauth.json';
-$googleLoginEnabled = file_exists($googleJsonPath) && is_readable($googleJsonPath);
-$googleLoginUrl = '';
-?>
-
-	<div style="margin-bottom:12px; text-align:center;">
-
-    <!-- Google login button: enabled only if JSON exists -->
-    <?php if ($googleLoginEnabled): ?>
-        <p style="color:#666;">Sign in with Google first and return here to promote that account.</p>
-        <a href="/google_login.php?redirect=<?= urlencode($_SESSION['redirect_after_google']) ?>"
-               style="display:flex; align-items:center; justify-content:center; text-decoration:none; border:1px solid #ddd; padding:10px; border-radius:5px; color:#444; font-weight:bold; background:#fff;">
-            <i class="fab fa-google" style="margin-right:10px; font-size:18px;"></i> Sign in with Google
-        </a>
-    <?php else: ?>
-        <button disabled style="display:flex; align-items:center; justify-content:center; text-decoration:none; border:1px solid #ddd; padding:10px; border-radius:5px; color:#aaa; font-weight:bold; background:#f9f9f9; cursor:not-allowed;">
-            <i class="fab fa-google" style="margin-right:10px; font-size:18px;"></i> Google login unavailable
-        </button>
-    <?php endif; ?>
-
-
-
+      <?php if (!$sessionUser): ?>
+        <?php
+        // --- Determine if Google login is available ---
+        $googleJsonPath = PROJECT_ROOT . '/token/client_secret_google_oauth.json';
+        $googleLoginEnabled = file_exists($googleJsonPath) && is_readable($googleJsonPath);
+        ?>
+        <div style="margin-bottom:12px; text-align:center;">
+          <?php if ($googleLoginEnabled): ?>
+            <p class="text-muted">Sign in with Google first and return here to promote that account.</p>
+            <a href="/google_login.php?redirect=<?= urlencode($_SESSION['redirect_after_google']) ?>"
+               class="btn btn-secondary" style="display:inline-flex; align-items:center; justify-content:center; gap:8px;">
+             <i class="fab fa-google" style="margin-right:0px; font-size:18px;"></i> Sign in with Google
+                        </a>
+          <?php else: ?>
+            <button disabled class="btn btn-secondary" style="opacity:0.6; cursor:not-allowed; display:inline-flex; align-items:center; gap:8px;">
+             <i class="fab fa-google" style="margin-right:0px; font-size:18px;"></i> Google login unavailable
+            </button>
+          <?php endif; ?>
         </div>
-    <?php endif; ?>
+      <?php endif; ?>
 
-    <?php if (!$sessionUser || $devMode): ?>
-        <form method="post">
-            <input type="hidden" name="action" value="create_manual">
-            <label>Username:
-                <input name="username" required style="width:100%; padding:8px; margin-top:5px;" value="<?= htmlspecialchars($_POST['username'] ?? '') ?>">
-            </label><br><br>
-            <label>Password:
-                <input name="password" type="password" required style="width:100%; padding:8px; margin-top:5px;">
-            </label><br><br>
-            <label>Confirm Password:
-                <input name="password2" type="password" required style="width:100%; padding:8px; margin-top:5px;">
-            </label><br><br>
-            <label>Full name (optional):
-                <input name="name" style="width:100%; padding:8px; margin-top:5px;" value="<?= htmlspecialchars($_POST['name'] ?? '') ?>">
-            </label><br><br>
-            <label>Email (optional):
-                <input name="email" style="width:100%; padding:8px; margin-top:5px;" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>">
-            </label><br><br>
-            <button type="submit" style="width:100%; padding:10px; background:#4CAF50; color:white; border:none; border-radius:5px;">Create admin</button>
+      <?php if (!$sessionUser || $devMode): ?>
+        <form method="post" class="form-container" style="margin-top:8px;">
+          <input type="hidden" name="action" value="create_manual">
+
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input id="username" name="username" class="form-control" required value="<?= htmlspecialchars($_POST['username'] ?? '') ?>">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group" style="flex:1">
+              <label for="password">Password</label>
+              <input id="password" name="password" type="password" class="form-control" required>
+            </div>
+            <div class="form-group" style="flex:1">
+              <label for="password2">Confirm Password</label>
+              <input id="password2" name="password2" type="password" class="form-control" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="name">Full name (optional)</label>
+            <input id="name" name="name" class="form-control" value="<?= htmlspecialchars($_POST['name'] ?? '') ?>">
+          </div>
+
+          <div class="form-group">
+            <label for="email">Email (optional)</label>
+            <input id="email" name="email" class="form-control" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>">
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Create admin</button>
+            <a href="/login.php" class="btn btn-link" style="align-self:center;">Back to login</a>
+          </div>
         </form>
-    <?php endif; ?>
+      <?php endif; ?>
 
-    <p style="text-align:center; margin-top:12px;"><a href="/login.php" style="color:#666;">Back to login</a></p>
-    <hr style="margin-top:16px;">
-    <p style="font-size:0.9rem;color:#666;">
+      <hr style="margin-top:16px;">
+      <p class="text-muted" style="font-size:0.95rem;">
         Notes: Inserts admin directly. In production set <code>DEV_MODE=false</code> or remove <code>setup.php</code> after use.
-    </p>
+      </p>
+    </div>
+  </div>
 </div>
+
 <?php
 $content = ob_get_clean();
 $content .= $eruda ?? '';
-$spw->renderLayout($content, $pageTitle);	
+$spw->renderLayout($content, $pageTitle);

@@ -367,22 +367,197 @@ def download_dataset(req: DatasetDownloadRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+
+
+
+
+
+
+
 @router.post("/datasets/create")
 def create_dataset(req: dict):
+    """
+    Creates a new Kaggle dataset from a local path.
+    The folder at the path must contain a dataset-metadata.json file.
+    """
     try:
-        args = ["datasets", "create", "-p", req['path'], "--dir-mode", req.get('dir_mode', 'skip')]
+        path = req.get('path')
+        if not path or not Path(path).exists():
+            raise HTTPException(status_code=400, detail={"error": "A valid 'path' is required."})
+
+        # Use --dir-mode zip for predictable packaging
+        args = ["datasets", "create", "-p", path, "--dir-mode", "zip"]
         if req.get('public', False):
             args.append("--public")
-        if req.get('quiet', False):
-            args.append("--quiet")
 
         result = run_kaggle_command(args)
         if result["returncode"] != 0:
-            raise HTTPException(status_code=500, detail={"error": result["stderr"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")})
-        return {"status": "success", "message": "Dataset created", "stdout": result["stdout"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")}
+            raise HTTPException(
+                status_code=500,
+                detail={"error": result["stderr"], "cmd": result["command"], "raw_stdout": result.get("raw_stdout")}
+            )
+        return {
+            "status": "success",
+            "message": "Dataset created successfully.",
+            "stdout": result["stdout"],
+            "cmd": result["command"]
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post("/datasets/version")
+def version_dataset(req: dict):
+    """
+    Creates a new version of a dataset. If the dataset does not exist (e.g., 404 error),
+    it gracefully falls back to creating it for the first time.
+    This provides a robust "sync" or "upsert" operation, hiding the create vs. version
+    distinction from the client.
+    Expects: { "path": "/path/to/dataset/folder", "message": "Update message" }
+    """
+    try:
+        path = req.get('path')
+        message = req.get('message', 'Automated data sync')
+        if not path or not Path(path).exists():
+            raise HTTPException(status_code=400, detail={"error": "A valid 'path' is required."})
+
+        # --- 1. Attempt to create a new version (the most common case) ---
+        logger.info("Attempting to version dataset at path: %s", path)
+        # Use --dir-mode zip for robustness and consistency
+        version_args = ["datasets", "version", "-p", path, "-m", message, "--dir-mode", "zip"]
+        version_result = run_kaggle_command(version_args)
+
+        # --- 2. Check if versioning succeeded ---
+        if version_result["returncode"] == 0:
+            logger.info("Successfully versioned dataset.")
+            return {
+                "status": "success",
+                "operation": "versioned",
+                "message": "Dataset version created successfully.",
+                "stdout": version_result["stdout"],
+                "cmd": version_result["command"]
+            }
+
+        # --- 3. If versioning failed, check if it's a "Not Found" error ---
+        stderr = version_result.get("stderr", "").lower()
+        if "404" in stderr or "not found" in stderr or "could not find dataset" in stderr:
+            logger.info("Dataset not found (404). Falling back to create command.")
+
+            # --- 4. Fallback: Create the dataset for the first time ---
+            create_args = ["datasets", "create", "-p", path, "--dir-mode", "zip"]
+            create_result = run_kaggle_command(create_args)
+
+            if create_result["returncode"] == 0:
+                logger.info("Successfully created new dataset.")
+                return {
+                    "status": "success",
+                    "operation": "created",
+                    "message": "Dataset created successfully.",
+                    "stdout": create_result["stdout"],
+                    "cmd": create_result["command"]
+                }
+            else:
+                # The create command also failed. Return a detailed error.
+                logger.error("Fallback create command failed. Stderr: %s", create_result["stderr"])
+                raise HTTPException(
+                    status_code=500,
+                    detail={
+                        "error": "Dataset creation failed after versioning attempt failed.",
+                        "version_error": version_result["stderr"],
+                        "create_error": create_result["stderr"],
+                        "cmd": create_result["command"]
+                    }
+                )
+
+        # --- 5. If versioning failed for any other reason, it's a genuine error ---
+        logger.error("Dataset versioning failed for a reason other than 404. Stderr: %s", version_result["stderr"])
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "Dataset versioning failed.",
+                "details": version_result["stderr"],
+                "cmd": version_result["command"]
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("An unexpected error occurred in version_dataset endpoint.")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@router.post("/datasets/delete")
+def delete_dataset(req: dict):
+    """
+    Expects: { "dataset_ref": "owner/dataset-slug" }
+    Runs: kaggle datasets delete <owner/dataset-slug> --yes
+    Gracefully handles "404 Not Found" as a success condition.
+    """
+    try:
+        dataset_ref = req.get('dataset_ref')
+        if not dataset_ref:
+            raise HTTPException(status_code=400, detail={"error": "dataset_ref is required"})
+
+        args = ["datasets", "delete", dataset_ref, "--yes"]
+        result = run_kaggle_command(args)
+
+        # Success case: dataset was deleted
+        if result["returncode"] == 0:
+            return {
+                "status": "success",
+                "message": f"Dataset '{dataset_ref}' deleted successfully.",
+                "stdout": result["stdout"],
+                "cmd": result["command"],
+                "raw_stdout": result.get("raw_stdout")
+            }
+
+        # Handle non-zero return code: check if it's a "Not Found" error
+        stderr = result.get("stderr", "").lower()
+        if "404" in stderr or "not found" in stderr:
+            # This is an acceptable outcome for our use case.
+            return {
+                "status": "success",
+                "message": f"Dataset '{dataset_ref}' did not exist or was already deleted.",
+                "stdout": result["stdout"], # will be empty
+                "stderr": result["stderr"],
+                "cmd": result["command"],
+                "raw_stdout": result.get("raw_stdout")
+            }
+
+        # Any other error is a genuine failure.
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": result["stderr"],
+                "cmd": result["command"],
+                "raw_stdout": result.get("raw_stdout")
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+        
+        
+        
 
 @router.post("/kernels/list")
 def list_kernels(req: KernelListRequest):

@@ -180,6 +180,11 @@ class KaggleAPI
             'output_dir' => $outputDir
         ], 'POST');
     }
+    
+    
+    
+    
+    
 
     public function createDataset($path, $public = false, $quiet = false, $dirMode = 'zip')
     {
@@ -190,7 +195,33 @@ class KaggleAPI
             'dir_mode' => $dirMode
         ], 'POST');
     }
+    
+    /**
+     * New method to call the robust versioning endpoint in the Python API.
+     */
+    public function versionDataset(string $path, string $message)
+    {
+        return $this->call('/datasets/version', [
+            'path' => $path,
+            'message' => $message,
+        ], 'POST');
+    }
 
+    
+    
+    
+    
+    
+    public function deleteDataset(string $datasetRef, bool $quiet = true)
+    {
+        // mirror your existing createDataset signature / call pattern
+        // this calls the pyapi route /datasets/delete
+        return $this->call('/datasets/delete', [
+            'dataset_ref' => $datasetRef,
+            'quiet' => (bool)$quiet
+        ], 'POST');
+    }
+    
     // Kernels
     public function listKernels($search = null, $mine = false, $user = null, $dataset = null, $competition = null, $parent_kernel = null, $sort_by = 'hotness', $page = 1)
     {

@@ -61,9 +61,7 @@ echo ""
 echo "Restarting scheduler..."
 
 # Stop and restart scheduler (no need to restart MariaDB/NGINX)
-php /data/data/com.termux/files/home/www/spwbase/public/scheduler_stop.php
-sleep 2
-php /data/data/com.termux/files/home/www/spwbase/public/scheduler_start.php &
+"$SCRIPT_DIR/scheduler_startup.sh" &
 
 echo "✓ Scheduler restarted"
 echo ""

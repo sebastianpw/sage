@@ -41,6 +41,7 @@
 
 ## 9. ControlNet
 - Create images using an assigned ControlNet image.
+- Only works with selected **Notebooks (NOT LCM) genframe option**.
 
 ## 10. Chat
 - Use **multiple chat models**.

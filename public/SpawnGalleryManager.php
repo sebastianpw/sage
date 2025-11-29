@@ -60,6 +60,11 @@ class SpawnGalleryManager
             $activeStyle = ($code === $this->activeTypeCode)
                 ? 'background: #007bff; color: white; border-bottom: 2px solid #007bff;'
                 : 'background: #f8f9fa; color: #333;';
+                
+                $activeStyle = ($code === $this->activeTypeCode)
+    ? 'background: var(--card); color: var(--text); font-weight: bold; border-bottom: 2px solid rgba(0,0,0,0.06);'
+    :  'background: var(--accent-2); color: var(--text); border-bottom: 2px solid var(--accent-2);';
+    
 
             $html .= sprintf(
                 '<a href="?spawn_type=%s" class="spawn-tab %s" style="display: inline-block; padding: 10px 20px; margin-right: 5px; text-decoration: none; border: 1px solid #ddd; border-bottom: none; border-radius: 5px 5px 0 0; %s">%s</a>',
@@ -123,6 +128,12 @@ class SpawnGalleryManager
 
             if ($instance !== null) {
                 try {
+                    
+                    
+
+                    
+                    
+                    
                     return $instance->render();
                 } catch (\Throwable $e) {
                     return sprintf(
@@ -145,7 +156,9 @@ class SpawnGalleryManager
         $classMap = [
             'default'   => 'SpawnsGallery',
             'reference' => 'SpawnsGalleryReference',
-            'texture'   => 'SpawnsGalleryTexture',
+            'location'  => 'SpawnsGallersLocatoon',
+            'prop'      => 'SpawnsGalleryProp',
+            //'texture'   => 'SpawnsGalleryTexture',
         ];
 
         return $classMap[$typeCode] ?? 'SpawnsGallery';

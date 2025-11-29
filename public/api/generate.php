@@ -50,6 +50,7 @@ try {
                 'model' => $config->getModel(),
                 'parameters' => $config->getParameters(),
                 'output_schema' => $config->getOutputSchema(),
+                'uses_oracle' => $config->getOracleConfig() !== null,
             ]
         ], JSON_UNESCAPED_UNICODE);
         exit;

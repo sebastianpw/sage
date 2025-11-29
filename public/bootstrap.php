@@ -25,6 +25,10 @@ $pdo = $spw->getPDO();
 $mysqliSys = $spw->getSysMysqli();
 $pdoSys    = $spw->getSysPDO();
 
+$pdoRoot   = $spw->getRootPDO();
+
+$pdoWN     = $spw->getWNPDO();
+
 $dbname     = $spw->getDbName();
 $sysDbName  = $spw->getSysDbName();
 

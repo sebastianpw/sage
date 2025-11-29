@@ -148,8 +148,6 @@ class FramesManager
         $modeVal = $mode ?? '';
         $noteVal = $note ?? '';
 
-        // types: chain_id(i), parent_frame_id(i), derived_frame_id(i), derived_filename(s), map_run_id(i),
-        // tool(s), mode(s), coords_json(s), created_by(i), note(s)
         $types = 'iiisisssis';
         if (!$stmt->bind_param($types, $chainId, $parentFrameId, $derivedFrameIdVal, $derivedFilename, $mapRunIdVal, $toolVal, $modeVal, $coordsJson, $userIdVal, $noteVal)) {
             $this->lastError = "bind_param failed: " . $stmt->error;
@@ -167,54 +165,48 @@ class FramesManager
 
     /**
     * Copy mappings from parent frame to new frame for the correct entity type.
-    * Determines entity type from parent frame and uses corresponding mapping table.
-    *
-    * @param int $parentFrameId
-    * @param int $newFrameId
-    * @return bool
-    * @throws \Exception
+    * This function correctly performs a "copy" without deleting the source mappings.
     */
     public function copyEntityMappings(int $parentFrameId, int $newFrameId): bool
     {
         $parentId = intval($parentFrameId);
         $newId = intval($newFrameId);
     
-        // 1. Determine entity type from parent frame
         $res = $this->mysqli->query("SELECT entity_type FROM frames WHERE id = $parentId LIMIT 1");
         if (!$res || $res->num_rows === 0) {
-            throw new \Exception("Parent frame not found for ID $parentId");
+            $this->lastError = "Parent frame not found for ID $parentId";
+            return false;
         }
         $row = $res->fetch_assoc();
         $entityType = $row['entity_type'] ?? null;
-        if (!$entityType) {
-            throw new \Exception("Parent frame has no entity_type set");
+        if (empty($entityType)) {
+            // It's possible for a frame to have no entity, which is not an error.
+            return true;
         }
     
-        // 2. Determine mapping table based on entity type
         $mappingTable = 'frames_2_' . $entityType;
     
-        // 3. Copy mappings
-        $res = $this->mysqli->query("SELECT to_id FROM $mappingTable WHERE from_id = $parentId");
-        if (!$res) return false;
+        // Check if mapping table exists to prevent SQL errors
+        $tableCheck = $this->mysqli->query("SHOW TABLES LIKE '{$this->mysqli->real_escape_string($mappingTable)}'");
+        if ($tableCheck->num_rows === 0) {
+            $this->lastError = "Mapping table '{$mappingTable}' does not exist.";
+            return false;
+        }
+
+        $res = $this->mysqli->query("SELECT to_id FROM `{$mappingTable}` WHERE from_id = $parentId");
+        if (!$res) {
+            $this->lastError = "Failed to query mappings from {$mappingTable}: " . $this->mysqli->error;
+            return false;
+        }
     
         while ($r = $res->fetch_assoc()) {
             $to = intval($r['to_id']);
-            $this->mysqli->query("INSERT IGNORE INTO $mappingTable (from_id, to_id) VALUES ($newId, $to)");
+            $this->mysqli->query("INSERT IGNORE INTO `{$mappingTable}` (from_id, to_id) VALUES ($newId, $to)");
         }
     
         return true;
     }
 
-    // ---------------------------------------------------------------------
-    // Public high-level registration method (DB-only)
-    //
-    // Registers a derived frame based on an original frame row.
-    // - $orig: associative array of original frame (from loadFrameRow)
-    // - $derivedRel: relative path to derived file (relative to public/, e.g. "frames/.../file.jpg")
-    // - $mapRunId: optional existing map_run id; if null, a new map_run will be created
-    // - $opts: ['coords'=>array, 'tool'=>string, 'mode'=>string, 'userId'=>int, 'note'=>string]
-    //
-    // Returns same structure as old createVersionFromFrame: success true/false and ids or message.
     public function registerDerivedFrameFromOriginal(array $orig, string $derivedRel, ?int $mapRunId = null, array $opts = []): array
     {
         $coords = $opts['coords'] ?? [];
@@ -223,44 +215,34 @@ class FramesManager
         $userId = $opts['userId'] ?? null;
         $note = $opts['note'] ?? null;
 
-        // verify derived file exists (defensive)
-        $derivedPathCandidates = [
-            $this->projectRoot . '/public/' . ltrim($derivedRel, '/'),
-            $this->projectRoot . '/' . ltrim($derivedRel, '/'),
-            $this->framesDir . '/' . basename($derivedRel),
-        ];
-        $found = false;
-        foreach ($derivedPathCandidates as $p) {
-            if (file_exists($p) && is_file($p)) { $found = true; break; }
-        }
-        if (!$found) {
-            $this->lastError = "Derived file not found: tried " . implode(' ; ', $derivedPathCandidates);
+        // Verify derived file exists
+        $derivedPath = $this->projectRoot . '/public/' . ltrim($derivedRel, '/');
+        if (!file_exists($derivedPath)) {
+            $this->lastError = "Derived file not found: " . $derivedPath;
             return ['success' => false, 'message' => $this->lastError];
         }
 
         $this->mysqli->begin_transaction();
         try {
-            // create map_run if necessary
             if (!$mapRunId) {
-                $mapRunId = $this->createMapRun($orig['entity_type'] ?? '', $note ?? ("Derived frame for parent " . intval($orig['id'] ?? 0)));
+                $mapRunId = $this->createMapRun($orig['entity_type'] ?? '', $note ?? ("Derived from frame " . intval($orig['id'] ?? 0)));
                 if (!$mapRunId) throw new Exception('Failed to create map_run: ' . $this->lastError);
             }
 
-            // insert new frames row
             $newFrameId = $this->insertFrameFromOriginal($orig, $mapRunId, $derivedRel);
             if (!$newFrameId) throw new Exception('Failed to insert new frame: ' . $this->lastError);
 
-            // insert frames_chains record
             $parentId = intval($orig['id'] ?? 0);
             $chainId = $this->insertFramesChain($newFrameId, $parentId);
             if (!$chainId) throw new Exception('Failed to insert frames_chains: ' . $this->lastError);
 
-            // insert image_edits metadata row
             $imageEditId = $this->insertImageEdit($chainId, $parentId, $newFrameId, $derivedRel, $mapRunId, $coords, $tool, $mode, $userId, $note);
             if (!$imageEditId) throw new Exception('Failed to insert image_edits: ' . $this->lastError);
 
-            // copy mappings
-            $this->copyEntityMappings($parentId, $newFrameId);
+            // This correctly copies the mappings upon creation.
+            if (!$this->copyEntityMappings($parentId, $newFrameId)) {
+                throw new Exception('Failed to copy entity mappings: ' . $this->lastError);
+            }
 
             $this->mysqli->commit();
 
@@ -282,9 +264,6 @@ class FramesManager
         }
     }
 
-    /**
-     * List versions (image_edits) for a parent frame
-     */
     public function listVersions(int $parentFrameId): array
     {
         $p = intval($parentFrameId);
@@ -292,7 +271,7 @@ class FramesManager
                 FROM image_edits ie
                 LEFT JOIN frames_chains fc ON fc.id = ie.chain_id
                 LEFT JOIN frames f ON f.id = ie.derived_frame_id
-                LEFT JOIN users u ON u.id = ie.created_by
+                LEFT JOIN user u ON u.id = ie.created_by
                 WHERE ie.parent_frame_id = $p
                 ORDER BY ie.created_at DESC";
         $res = $this->mysqli->query($sql);
@@ -302,15 +281,6 @@ class FramesManager
         return $out;
     }
 
-
-
-
-
-
-/**
-     * Generate the next unique frame base name from DB counter.
-     * Uses frame_counter.next_frame atomically.
-     */
     public function getNextFrameBasenameFromDB(): string
     {
         $sql = "UPDATE frame_counter SET next_frame = LAST_INSERT_ID(next_frame + 1)";
@@ -325,52 +295,50 @@ class FramesManager
         return 'frame' . str_pad((string)$num, 7, '0', STR_PAD_LEFT);
     }
 
-
-
-
-
-
     /**
-     * Apply a version (make it canonical): swap mappings to the derived frame, mark image_edits.applied=1
+     * CORRECTED: Apply a version. This function's ONLY job is to mark the
+     * image_edit record as 'applied'. All mapping logic has been removed
+     * because it was redundant and destructive.
      */
     public function applyVersion(?int $imageEditId = null, ?int $derivedFrameId = null): array
     {
-        if (!$imageEditId && !$derivedFrameId) return ['success' => false, 'message' => 'No identifier provided'];
+        if (!$imageEditId && !$derivedFrameId) {
+            return ['success' => false, 'message' => 'No identifier provided for applying version'];
+        }
+
         $this->mysqli->begin_transaction();
         try {
+            // Find the image_edits record to get its ID
             if ($imageEditId) {
-                $res = $this->mysqli->query("SELECT * FROM image_edits WHERE id = " . intval($imageEditId) . " LIMIT 1");
+                $res = $this->mysqli->query("SELECT id, parent_frame_id, derived_frame_id FROM image_edits WHERE id = " . intval($imageEditId) . " LIMIT 1");
             } else {
-                $res = $this->mysqli->query("SELECT * FROM image_edits WHERE derived_frame_id = " . intval($derivedFrameId) . " LIMIT 1");
+                $res = $this->mysqli->query("SELECT id, parent_frame_id, derived_frame_id FROM image_edits WHERE derived_frame_id = " . intval($derivedFrameId) . " LIMIT 1");
             }
-            if (!$res || $res->num_rows === 0) throw new Exception('image_edits record not found');
 
+            if (!$res || $res->num_rows === 0) {
+                throw new Exception('image_edits record not found');
+            }
             $row = $res->fetch_assoc();
-            $parent = intval($row['parent_frame_id']);
-            $derived = intval($row['derived_frame_id']);
-            if (!$derived) throw new Exception('derived_frame_id missing in image_edits');
+            $editIdToUpdate = intval($row['id']);
+            $parentFrameId = intval($row['parent_frame_id']);
+            $derivedFrameId = intval($row['derived_frame_id']);
 
-            // get parent mappings
-            $mapRes = $this->mysqli->query("SELECT to_id FROM frames_2_characters WHERE from_id = " . $parent);
-            $charIds = [];
-            while ($r = $mapRes->fetch_assoc()) $charIds[] = intval($r['to_id']);
+            // *** THE FIX: The mapping logic that deleted parent mappings has been removed. ***
+            // The mappings are already correctly copied when the version is first created.
+            // This function now only marks the version as applied.
 
-            // Remove parent mappings (making derived canonical)
-            $this->mysqli->query("DELETE FROM frames_2_characters WHERE from_id = " . $parent);
-
-            // Insert mappings for derived frame
-            foreach ($charIds as $cid) {
-                $this->mysqli->query("INSERT IGNORE INTO frames_2_characters (from_id, to_id) VALUES (" . $derived . ", " . $cid . ")");
-            }
-
-            // mark applied
             $stmt = $this->mysqli->prepare("UPDATE image_edits SET applied = 1, applied_at = NOW() WHERE id = ?");
-            if (!$stmt) throw new Exception('prepare failed');
-            $stmt->bind_param('i', $row['id']);
-            if (!$stmt->execute()) throw new Exception('failed to mark applied: ' . $stmt->error);
+            if (!$stmt) throw new Exception('prepare failed for update');
+            $stmt->bind_param('i', $editIdToUpdate);
+            if (!$stmt->execute()) throw new Exception('failed to mark image_edit as applied: ' . $stmt->error);
 
             $this->mysqli->commit();
-            return ['success' => true, 'message' => 'Applied version', 'derived_frame_id' => $derived, 'parent_frame_id' => $parent];
+            return [
+                'success' => true, 
+                'message' => 'Version marked as applied', 
+                'derived_frame_id' => $derivedFrameId, 
+                'parent_frame_id' => $parentFrameId
+            ];
         } catch (Exception $e) {
             $this->mysqli->rollback();
             return ['success' => false, 'message' => $e->getMessage()];
@@ -378,52 +346,44 @@ class FramesManager
     }
 
     /**
-     * Revert a version: swap mappings back, mark rolled_back on frames_chains and mark image_edits.applied=0
+     * Revert a version: un-applies the edit.
+     * For now, this just means setting applied = 0. We will NOT change mappings here either,
+     * to keep the logic consistent and non-destructive.
      */
     public function revertVersion(?int $imageEditId = null, ?int $derivedFrameId = null): array
     {
-        if (!$imageEditId && !$derivedFrameId) return ['success' => false, 'message' => 'No identifier provided'];
+        if (!$imageEditId && !$derivedFrameId) {
+            return ['success' => false, 'message' => 'No identifier provided for reverting version'];
+        }
+        
         $this->mysqli->begin_transaction();
         try {
             if ($imageEditId) {
-                $res = $this->mysqli->query("SELECT * FROM image_edits WHERE id = " . intval($imageEditId) . " LIMIT 1");
+                $res = $this->mysqli->query("SELECT id FROM image_edits WHERE id = " . intval($imageEditId) . " LIMIT 1");
             } else {
-                $res = $this->mysqli->query("SELECT * FROM image_edits WHERE derived_frame_id = " . intval($derivedFrameId) . " LIMIT 1");
+                $res = $this->mysqli->query("SELECT id FROM image_edits WHERE derived_frame_id = " . intval($derivedFrameId) . " LIMIT 1");
             }
-            if (!$res || $res->num_rows === 0) throw new Exception('image_edits record not found');
-
+            if (!$res || $res->num_rows === 0) {
+                throw new Exception('image_edits record not found');
+            }
             $row = $res->fetch_assoc();
-            $parent = intval($row['parent_frame_id']);
-            $derived = intval($row['derived_frame_id']);
-            if (!$derived) throw new Exception('derived_frame_id missing');
+            $editIdToUpdate = intval($row['id']);
 
-            // get current mappings from derived
-            $mapRes = $this->mysqli->query("SELECT to_id FROM frames_2_characters WHERE from_id = " . $derived);
-            $charIds = [];
-            while ($r = $mapRes->fetch_assoc()) $charIds[] = intval($r['to_id']);
-
-            // delete derived mappings
-            $this->mysqli->query("DELETE FROM frames_2_characters WHERE from_id = " . $derived);
-
-            // restore parent mappings
-            foreach ($charIds as $cid) {
-                $this->mysqli->query("INSERT IGNORE INTO frames_2_characters (from_id, to_id) VALUES (" . $parent . ", " . $cid . ")");
-            }
-
-            // mark image_edits.applied = 0
+            // Mark image_edits.applied = 0
             $stmt = $this->mysqli->prepare("UPDATE image_edits SET applied = 0 WHERE id = ?");
-            if (!$stmt) throw new Exception('prepare failed');
-            $stmt->bind_param('i', $row['id']);
-            if (!$stmt->execute()) throw new Exception('failed to update image_edits');
+            if (!$stmt) throw new Exception('prepare failed for revert');
+            $stmt->bind_param('i', $editIdToUpdate);
+            if (!$stmt->execute()) throw new Exception('failed to update image_edits for revert');
 
-            // mark frames_chains rolled_back = 1 for chain row
-            $this->mysqli->query("UPDATE frames_chains SET rolled_back = 1 WHERE frame_id = " . intval($derived));
+            // Optionally mark the chain as rolled back
+            // $this->mysqli->query("UPDATE frames_chains SET rolled_back = 1 WHERE frame_id = " . intval($derivedFrameId));
 
             $this->mysqli->commit();
-            return ['success' => true, 'message' => 'Reverted version', 'derived_frame_id' => $derived, 'parent_frame_id' => $parent];
+            return ['success' => true, 'message' => 'Reverted version'];
         } catch (Exception $e) {
             $this->mysqli->rollback();
             return ['success' => false, 'message' => $e->getMessage()];
         }
     }
 }
+

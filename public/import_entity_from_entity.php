@@ -217,19 +217,36 @@ if ($isAjax) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Import Entity from Entity</title>
+
+<script>
+  (function() {
+    try {
+      var theme = localStorage.getItem('spw_theme');
+      if (theme === 'dark') document.documentElement.setAttribute('data-theme','dark');
+      else if (theme === 'light') document.documentElement.setAttribute('data-theme','light');
+    } catch(e){}
+  })();
+</script>
+<script src="/js/theme-manager.js"></script>
+
+<!-- base styles -->
+<link rel="stylesheet" href="/css/base.css">
     <link rel="stylesheet" href="css/form.css">
 </head>
 <body>
-<?php require "floatool.php"; ?>
+<?php 
+//require "floatool.php"; 
+?>
 <div style="position: absolute; top: 50px; margin: 0 20px 80px 20px;">
     <div style="position: absolute;">
+<!--
         <a href="/dashboard.php" 
            title="Dashboard" 
            style="text-decoration: none; font-size: 24px; display: inline-block; position: absolute; top: 10px; left: 10px; z-index: 999;">
             &#x1F5C3;
         </a>
-
-        <h2 style="margin: 0; padding: 0 0 20px 0; position: absolute; top: 10px; left: 50px;">
+-->
+        <h2 style="display:none; margin: 0; padding: 0 0 20px 0; position: absolute; top: 10px; left: 50px;">
             Importer
         </h2>          
     </div>
@@ -242,7 +259,7 @@ if ($isAjax) {
 <div style="display: flex; align-items: center; margin: 20px 20px 0 20px; gap: 10px;">
 
 <form method="get">
-    <h2>Import Entity from Entity</h2>
+    <h2 style="display:none;" >Import Entity from Entity</h2>
 
     <?php if ($controlNetMode): ?>
         <!-- persist controlnet flag on submit -->
@@ -330,6 +347,16 @@ document.addEventListener('DOMContentLoaded', function() {
     <button type="submit">Start Import</button>
 </form>
 
+
+
+
+</div>
+
+
+
+
+<div style="display:none;clear:both;width:100%;"></div>
+
 <?php if ($controlNetMode && !empty($controlNetMissing)): ?>
     <div class="result">
         <div class="error">
@@ -359,7 +386,21 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 <?php endif; ?>
 
+
+
+
+
+
+
+<!--
 </div>
+-->
+
+
+
+
+
+
 
 </body>
 </html>

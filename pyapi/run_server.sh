@@ -72,8 +72,28 @@ echo "  ReDoc:      http://127.0.0.1:$PORT/redoc"
 echo ""
 
 # --- Start server in background with nohup ---
-nohup python -m uvicorn main:app --host 0.0.0.0 --port $PORT > "$LOG_FILE" 2>&1 &
+#nohup gunicorn main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 300 > "$LOG_FILE" 2>&1 &
+
+
+# nohup gunicorn main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 300 --keep-alive 300 > "$LOG_FILE" 2>&1 &
+
+
+
+#nohup gunicorn main:app --workers 4 --worker-class uvicorn_worker.CustomUvicornWorker --bind 0.0.0.0:$PORT --timeout 300 > "$LOG_FILE" 2>&1 &
+
+
+
+#nohup python -m uvicorn main:app --host 0.0.0.0 --port $PORT > "$LOG_FILE" 2>&1 &
+
+
+nohup python -m uvicorn main:app --host 0.0.0.0 --port $PORT \
+    --timeout-keep-alive 300 \
+    --timeout-graceful-shutdown 30 \
+    > "$LOG_FILE" 2>&1 &
 SERVER_PID=$!
+echo $SERVER_PID > server.pid
+
+
 
 # Save PID to file
 echo "$SERVER_PID" > "$PID_FILE"

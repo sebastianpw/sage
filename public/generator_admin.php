@@ -1,528 +1,568 @@
 <?php
-// generator_admin.php
+// public/generator_admin.php
 require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
 
-$pdo = $pdo ?? $spw->getPDO(); // env_locals provides $pdo
-$errors = [];
-$success = null;
-
-// Helper: generate random session_id string (32 hex chars)
-function genSessionId(): string {
-    return bin2hex(random_bytes(16));
+$userId = $_SESSION['user_id'] ?? null;
+if (!$userId) {
+    die('Not authenticated');
 }
 
-// Handle actions
-$action = $_POST['action'] ?? $_GET['action'] ?? null;
-
-if ($action === 'create') {
-    $session_id_str = trim($_POST['session_id_str'] ?? '');
-    $title = trim($_POST['title'] ?? 'Generator');
-    $model = trim($_POST['model'] ?? 'openai');
-    $type = 'generator';
-    $message_json = trim($_POST['message_json'] ?? '');
-
-    if ($session_id_str === '') {
-        $session_id_str = genSessionId();
-    }
-
-    if ($message_json === '') {
-        $errors[] = "Message JSON must not be empty.";
-    }
-
-    if (empty($errors)) {
-        try {
-            $pdo->beginTransaction();
-
-            $stmt = $pdo->prepare("INSERT INTO chat_session (session_id, user_id, title, created_at, model, `type`) VALUES (:session_id, :user_id, :title, NOW(), :model, :type)");
-            $stmt->execute([
-                ':session_id' => $session_id_str,
-                ':user_id' => $_SESSION['user_id'],
-                ':title' => $title,
-                ':model' => $model,
-                ':type' => $type,
-            ]);
-            $sessionPk = (int)$pdo->lastInsertId();
-
-            $stmt2 = $pdo->prepare("INSERT INTO chat_message (session_id, role, content, created_at) VALUES (:sid, :role, :content, NOW())");
-            $stmt2->execute([
-                ':sid' => $sessionPk,
-                ':role' => 'system',
-                ':content' => $message_json,
-            ]);
-
-            $pdo->commit();
-            $success = "Generator session created (id={$sessionPk}, session_id={$session_id_str})";
-        } catch (\Throwable $e) {
-            $pdo->rollBack();
-            $errors[] = "DB error: " . $e->getMessage();
-        }
-    }
-} elseif ($action === 'delete' && !empty($_POST['id'])) {
-    $id = (int)$_POST['id'];
-    try {
-        $pdo->beginTransaction();
-        $st = $pdo->prepare("DELETE FROM chat_message WHERE session_id = :id");
-        $st->execute([':id' => $id]);
-        $st2 = $pdo->prepare("DELETE FROM chat_session WHERE id = :id");
-        $st2->execute([':id' => $id]);
-        $pdo->commit();
-        $success = "Deleted generator session id {$id}";
-    } catch (\Throwable $e) {
-        $pdo->rollBack();
-        $errors[] = "Delete failed: " . $e->getMessage();
-    }
-} elseif ($action === 'update' && !empty($_POST['id'])) {
-    $id = (int)$_POST['id'];
-    $title = trim($_POST['title'] ?? '');
-    $model = trim($_POST['model'] ?? 'openai');
-    $session_id_str = trim($_POST['session_id_str'] ?? '');
-    $message_json = trim($_POST['message_json'] ?? '');
-
-    try {
-        $pdo->beginTransaction();
-        $st = $pdo->prepare("UPDATE chat_session SET session_id = :sidstr, title = :title, model = :model WHERE id = :id");
-        $st->execute([
-            ':sidstr' => $session_id_str,
-            ':title' => $title,
-            ':model' => $model,
-            ':id' => $id,
-        ]);
-
-        // update first system message (assumes first message is instruction)
-        $stm = $pdo->prepare("SELECT id FROM chat_message WHERE session_id = :sid ORDER BY created_at ASC LIMIT 1");
-        $stm->execute([':sid' => $id]);
-        $first = $stm->fetchColumn();
-        if ($first) {
-            $stu = $pdo->prepare("UPDATE chat_message SET content = :content WHERE id = :mid");
-            $stu->execute([':content' => $message_json, ':mid' => $first]);
-        } else {
-            // create if none
-            $sti = $pdo->prepare("INSERT INTO chat_message (session_id, role, content, created_at) VALUES (:sid, 'system', :content, NOW())");
-            $sti->execute([':sid' => $id, ':content' => $message_json]);
-        }
-
-        $pdo->commit();
-        $success = "Updated session id {$id}";
-    } catch (\Throwable $e) {
-        $pdo->rollBack();
-        $errors[] = "Update failed: " . $e->getMessage();
-    }
-}
-
-// Fetch generator sessions
-$rows = $pdo->prepare("SELECT id, session_id, user_id, title, created_at, model FROM chat_session WHERE `type` = 'generator' ORDER BY created_at DESC");
-$rows->execute();
-$sessions = $rows->fetchAll(PDO::FETCH_ASSOC);
-
-// Helper: pretty default JSON for new entries
-$defaultJSON = json_encode([
-    "system" => [
-        "role" => "Zungenbrecher Oracle",
-        "instructions" => [
-            "You are an expert Zungenbrecher generator (tongue-twister generator) in German and English.",
-            "Generate creative, linguistically challenging, and fun tongue-twisters.",
-            "Always produce output in JSON format with the structure defined below.",
-            "Do not provide explanations, only the JSON output."
-        ]
-    ],
-    "parameters" => new stdClass()
-], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+$pageTitle = "Generator Admin";
+ob_start();
 ?>
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Generator admin</title>
-    <style>
-        :root{
-            --bg:#f7f8fb;
-            --card:#ffffff;
-            --muted:#6b7280;
-            --accent:#111827;
-            --accent-2:#2563eb;
-            --danger:#ef4444;
-            --radius:10px;
-            --glass: rgba(255,255,255,0.6);
-            --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
-            --gap:14px;
-        }
 
-        *{box-sizing:border-box}
-        body{
-            margin:0;
-            font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-            background:linear-gradient(180deg,#f3f6f9,var(--bg));
-            color:#111827;
-            padding:18px;
-            -webkit-font-smoothing:antialiased;
-        }
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/toast.css">
 
-        header{
-            display:flex;
-            gap:12px;
-            align-items:center;
-            justify-content:space-between;
-            margin-bottom:18px;
-        }
-        header h1{
-            font-size:18px;
-            margin:0;
-            letter-spacing:-0.2px;
-        }
-        header .meta{
-            color:var(--muted);
-            font-size:13px;
-        }
+<style>
+/* Admin wrapper - consistent with other admin pages */
+.admin-wrap { max-width: 1100px; margin: 0 auto; padding: 18px; color: var(--text); }
+.admin-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+.admin-head h2 { margin: 0; font-weight: 600; font-size: 1.3rem; color: var(--text); }
+.admin-head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-        .container{
-            display:grid;
-            grid-template-columns: 1fr;
-            gap:18px;
-            max-width:1100px;
-            margin:0 auto;
-        }
+/* Generator list container */
+.generator-list-container {
+    background: var(--card);
+    border: 1px solid rgba(var(--muted-border-rgb), 0.08);
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: var(--card-elevation);
+}
 
-        /* Card */
-        .card{
-            background:var(--card);
-            border-radius:var(--radius);
-            padding:16px;
-            box-shadow: 0 6px 18px rgba(16,24,40,0.06);
-            border:1px solid rgba(15,23,42,0.04);
-        }
+/* Generator items */
+.generator-item {
+    background: var(--bg);
+    border: 1px solid rgba(var(--muted-border-rgb), 0.12);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.generator-item:last-child { margin-bottom: 0; }
+.generator-item:hover { border-color: var(--accent); }
 
-        .notice { padding:10px 12px; border-radius:8px; font-size:14px; margin-bottom:10px; }
-        .ok{ background: rgba(16,185,129,0.08); color:#065f46; border:1px solid rgba(16,185,129,0.12); }
-        .err{ background: rgba(239,68,68,0.06); color:var(--danger); border:1px solid rgba(239,68,68,0.08); }
+.generator-info { flex: 1; min-width: 0; }
+.generator-name { 
+    font-weight: 600; 
+    font-size: 1rem; 
+    color: var(--text); 
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.generator-meta { font-size: 0.85rem; color: var(--text-muted); }
+.generator-meta span { margin-right: 12px; display: inline-block; vertical-align: middle; }
+.generator-meta .area-badge {
+    background: rgba(var(--muted-border-rgb), 0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    margin-right: 4px;
+    display: inline-block;
+    margin-bottom: 4px;
+}
 
-        form.inline-row{
-            display:grid;
-            grid-template-columns: 1fr auto;
-            gap:10px;
-            align-items:start;
-        }
+.generator-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-        label{ display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }
-        input[type=text], select {
-            width:100%;
-            padding:10px 12px;
-            border-radius:8px;
-            border:1px solid #e6e9ee;
-            background: linear-gradient(180deg,#fff,#fbfdff);
-            font-size:14px;
-        }
-        textarea{
-            width:100%;
-            min-height:220px;
-            padding:12px;
-            border-radius:8px;
-            border:1px solid #e6e9ee;
-            resize:vertical;
-            font-family: var(--mono);
-            font-size:13px;
-            background:#fafbff;
-        }
-        .muted{ color:var(--muted); font-size:13px; margin-bottom:8px; }
+/* Status badges */
+.status-badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+.status-badge.active { background: rgba(35,134,54,0.12); color: var(--green); }
+.status-badge.inactive { background: rgba(var(--muted-border-rgb), 0.12); color: var(--text-muted); }
+.status-badge.public-badge { background: rgba(59, 130, 246, 0.12); color: #3b82f6; }
+.status-badge.owner-badge { background: rgba(139, 92, 246, 0.12); color: #8b5cf6; }
 
-        .btn {
-            display:inline-flex;
-            align-items:center;
-            gap:8px;
-            padding:10px 12px;
-            background:var(--accent-2);
-            color:#fff;
-            border-radius:8px;
-            border:0;
-            cursor:pointer;
-            font-size:14px;
-            text-decoration:none;
-        }
-        .btn.secondary{
-            background:transparent;
-            color:var(--accent);
-            border:1px solid #e6e9ee;
-        }
-        .btn.ghost{ background:transparent; color:var(--accent-2); border:1px dashed rgba(37,99,235,0.12); }
-        .btn.danger{ background:var(--danger); color:#fff; }
+/* Empty state & Modals */
+.empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 120000; padding: 12px; }
+.modal-overlay.active { display: flex; }
+.modal-card { width: 100%; max-width: 700px; background: var(--card); border-radius: 10px; box-shadow: 0 8px 30px rgba(2,6,23,0.35); display: flex; flex-direction: column; max-height: 90vh; border: 1px solid rgba(var(--muted-border-rgb),0.06); }
+.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid rgba(var(--muted-border-rgb),0.08); }
+.modal-body { padding: 20px; overflow-y: auto; color: var(--text); }
+.modal-footer { padding: 12px 20px; border-top: 1px solid rgba(var(--muted-border-rgb),0.08); background: var(--bg); display: flex; justify-content: flex-end; gap: 8px; }
 
-        /* Table: responsive stack */
-        .table-wrap { overflow:hidden; border-radius:10px; border:1px solid rgba(15,23,42,0.04); }
-        table.admin-table{ width:100%; border-collapse:collapse; min-width:400px;}
-        thead th{
-            text-align:left;
-            padding:12px 14px;
-            font-size:13px;
-            color:var(--muted);
-            background:linear-gradient(180deg, rgba(0,0,0,0.01), transparent);
-            border-bottom:1px solid #eef2f7;
-        }
-        tbody td{
-            padding:12px 14px;
-            border-bottom:1px solid #f1f5f9;
-            vertical-align:middle;
-            font-size:14px;
-            color:var(--accent);
-        }
-        td.actions{ white-space:nowrap; }
+/* Form elements */
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
+.form-input, .form-select, .form-textarea { width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid rgba(var(--muted-border-rgb), 0.12); font-size: 0.9rem; background: var(--bg); color: var(--text); transition: border-color 0.15s ease; }
+.form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: var(--accent); }
+.form-textarea { min-height: 300px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace; resize: vertical; font-size: 0.85rem; }
+.form-grid { display: grid; gap: 16px; grid-template-columns: repeat(3, 1fr); }
+.form-checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.form-checkbox-label input[type="checkbox"] { cursor: pointer; }
 
-        .small-muted{ color:var(--muted); font-size:13px; }
+.form-section {
+    border-top: 1px solid rgba(var(--muted-border-rgb), 0.1);
+    margin-top: 20px;
+    padding-top: 20px;
+}
+.form-section-header {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 16px;
+}
 
-        /* mobile: collapse rows into cards */
-        @media (max-width:820px){
-            table.admin-table{ border:none; min-width:unset; }
-            thead{ display:none; }
-            tbody tr{
-                display:block;
-                margin:10px;
-                box-shadow:none;
-                border-radius:10px;
-                background:linear-gradient(180deg,#fff,#fcfeff);
-                border:1px solid rgba(15,23,42,0.03);
-            }
-            tbody td{
-                display:flex;
-                justify-content:space-between;
-                align-items:center;
-                padding:12px;
-                border-bottom:0;
-                font-size:14px;
-            }
-            tbody td[data-label]:before{
-                content: attr(data-label) ": ";
-                color:var(--muted);
-                margin-right:8px;
-                font-weight:600;
-            }
-            .row-actions{ display:flex; gap:8px; align-items:center; }
-        }
+/* Test parameters */
+.test-params { display: grid; gap: 16px; margin-bottom: 20px; }
+.test-result { background: var(--bg); padding: 16px; border-radius: 8px; border: 1px solid rgba(var(--muted-border-rgb), 0.12); margin-top: 20px; }
+.test-result-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.test-result pre { margin: 0; font-size: 0.8rem; max-height: 300px; overflow: auto; white-space: pre-wrap; word-break: break-word; background: var(--card); padding: 12px; border-radius: 6px; }
 
-        /* desktop tweaks */
-        @media (min-width:821px){
-            .form-grid{
-                display:grid;
-                grid-template-columns: 1fr 360px;
-                gap:16px;
-                align-items:start;
-            }
-            .form-actions{ display:flex; gap:8px; justify-content:flex-end; align-items:center; }
-        }
+/* Loading spinner */
+.loading-container { text-align: center; padding: 40px 20px; }
+.spinner { width: 40px; height: 40px; margin: 0 auto 16px; border: 4px solid rgba(var(--muted-border-rgb), 0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-        footer{ color:var(--muted); font-size:13px; text-align:center; margin-top:18px; }
-        a.small-link{ color:var(--accent-2); text-decoration:none; font-size:13px; }
-        code.sid { background:#f3f4f6; padding:4px 8px; border-radius:6px; font-family:var(--mono); font-size:12px; color:#0f172a; }
-    </style>
-</head>
-<body>
-<header>
-    <div>
-        <h1>Generator Admin (JSON-driven)</h1>
-        <div class="meta">Create, edit and run JSON-driven generator sessions</div>
-    </div>
-    <div class="meta">Logged in as user #<?=htmlspecialchars($_SESSION['user_id'] ?? 'guest')?></div>
-</header>
+/* Drag and Drop */
+.drag-handle { cursor: grab; color: var(--text-muted); }
+.drag-handle:hover { color: var(--accent); }
+.dragging-ghost { opacity: 0.4; background: var(--accent-translucent); border: 1px dashed var(--accent); }
+.sortable-chosen .drag-handle { cursor: grabbing; }
 
-<div class="container">
+/* Multi-select component styles */
+.multi-select-container { position: relative; }
+.multi-select-button { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid rgba(var(--muted-border-rgb), 0.12); font-size: 0.9rem; background: var(--bg); color: var(--text); cursor: pointer; user-select: none; }
+.multi-select-button:after { content: '▼'; font-size: 0.7rem; color: var(--text-muted); }
+.multi-select-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--card); border: 1px solid rgba(var(--muted-border-rgb), 0.12); border-radius: 6px; box-shadow: var(--card-elevation); z-index: 10; max-height: 200px; overflow-y: auto; display: none; }
+.multi-select-dropdown.visible { display: block; }
+.multi-select-dropdown label { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; font-size: 0.9rem; }
+.multi-select-dropdown label:hover { background: rgba(var(--muted-border-rgb), 0.08); }
+.multi-select-dropdown input[type="checkbox"] { cursor: pointer; }
 
-    <div class="card">
-        <?php if ($success): ?>
-            <div class="notice ok"><?=htmlspecialchars($success)?></div>
-        <?php endif; ?>
-        <?php if ($errors): foreach ($errors as $er): ?>
-            <div class="notice err"><?=htmlspecialchars($er)?></div>
-        <?php endforeach; endif; ?>
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .admin-head { flex-direction: column; align-items: flex-start; }
+    .form-grid { grid-template-columns: 1fr; }
+    .generator-item { flex-direction: column; align-items: flex-start; }
+    .generator-actions { width: 100%; }
+    .generator-actions .btn { flex: 1; }
+    .modal-card { max-height: 95vh; }
+}
+@media (max-width: 480px) { .admin-wrap { padding: 12px; } .generator-meta span { display: block; margin: 4px 0; } }
+</style>
 
-        <h2 style="margin:0 0 10px 0; font-size:15px;">Create new generator session</h2>
-
-        <form method="post" class="form-grid" onsubmit="return confirmCreate(this);">
-            <div>
-                <input type="hidden" name="action" value="create">
-
-                <label>session_id (leave empty to auto-generate)</label>
-                <input type="text" name="session_id_str" placeholder="auto-generated if empty">
-
-                <div style="height:12px"></div>
-
-                <label>Title</label>
-                <input type="text" name="title" value="New Generator">
-
-                <div style="height:12px"></div>
-
-                <label>Model</label>
-                <input type="text" name="model" value="openai">
-            </div>
-
-            <div>
-                <label>Instruction JSON (system message)</label>
-                <textarea name="message_json" id="message_json"><?php echo htmlspecialchars($defaultJSON); ?></textarea>
-
-                <div style="display:flex; gap:8px; margin-top:10px; justify-content:flex-end;">
-                    <button type="button" class="btn secondary" onclick="document.getElementById('message_json').value = `<?=str_replace("`","\\`",htmlspecialchars($defaultJSON))?>`;document.getElementById('message_json').focus();">Reset</button>
-                    <button type="submit" class="btn">Create generator session</button>
-                </div>
-            </div>
-        </form>
-    </div>
-
-    <div class="card">
-        <h2 style="margin:0 0 10px 0; font-size:15px;">Existing generator sessions</h2>
-
-        <div class="table-wrap" role="region" aria-label="Generator sessions">
-            <table class="admin-table" role="table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>session_id</th>
-                        <th>title</th>
-                        <th>model</th>
-                        <th>created_at</th>
-                        <th>actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                <?php foreach ($sessions as $s): ?>
-                    <tr>
-                        <td data-label="ID"><?=htmlspecialchars($s['id'])?></td>
-                        <td data-label="session_id">
-                            <code class="sid" id="sid-<?=htmlspecialchars($s['id'])?>"><?=htmlspecialchars($s['session_id'])?></code>
-                            <button onclick="copySid('sid-<?=htmlspecialchars($s['id'])?>')" title="Copy session id" style="margin-left:8px" class="btn secondary" type="button">Copy</button>
-                        </td>
-                        <td data-label="title"><?=htmlspecialchars($s['title'] ?: '-');?></td>
-                        <td data-label="model"><?=htmlspecialchars($s['model'] ?: '-');?></td>
-                        <td data-label="created_at"><span class="small-muted"><?=htmlspecialchars($s['created_at'])?></span></td>
-                        <td class="actions" data-label="actions">
-                            <div class="row-actions">
-                                <a class="btn ghost" target="_blank" href="/generate_ajax.php?sessionId=<?=urlencode($s['session_id'])?>">Run</a>
-                                <a class="btn secondary" href="?action=edit&id=<?=urlencode($s['id'])?>">Edit</a>
-
-                                <form method="post" style="display:inline" onsubmit="return confirm('Delete session?');">
-                                    <input type="hidden" name="action" value="delete">
-                                    <input type="hidden" name="id" value="<?=htmlspecialchars($s['id'])?>">
-                                    <button type="submit" class="btn danger">Delete</button>
-                                </form>
-                            </div>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-                <?php if (count($sessions) === 0): ?>
-                    <tr><td colspan="6" style="text-align:center; color:var(--muted); padding:28px;">No generator sessions yet.</td></tr>
-                <?php endif; ?>
-                </tbody>
-            </table>
+<div class="admin-wrap">
+    <div class="admin-head">
+        <h2>Generator Admin</h2>
+        <div class="admin-head-actions">
+            <a href="/generator_display_areas_admin.php" class="btn btn-sm btn-outline-secondary">Manage Display Areas</a>
+            <button class="btn btn-sm btn-primary" onclick="openCreateModal()">+ New Generator</button>
         </div>
     </div>
-
-    <?php
-    // Edit view
-    if (($editId = (int)($_GET['id'] ?? 0)) > 0) {
-        $stmt = $pdo->prepare("SELECT id, session_id, title, model FROM chat_session WHERE id = :id AND `type` = 'generator' LIMIT 1");
-        $stmt->execute([':id' => $editId]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        if ($row) {
-            $stm2 = $pdo->prepare("SELECT content FROM chat_message WHERE session_id = :sid ORDER BY created_at ASC LIMIT 1");
-            $stm2->execute([':sid' => $row['id']]);
-            $firstMsg = $stm2->fetchColumn();
-            ?>
-            <div class="card" id="edit-card">
-                <h2 style="margin:0 0 10px 0; font-size:15px;">Edit session #<?=htmlspecialchars($row['id'])?></h2>
-                <form method="post">
-                    <input type="hidden" name="action" value="update">
-                    <input type="hidden" name="id" value="<?=htmlspecialchars($row['id'])?>">
-                    <label>session_id string</label>
-                    <input type="text" name="session_id_str" value="<?=htmlspecialchars($row['session_id'])?>">
-
-                    <div style="height:12px"></div>
-
-                    <label>Title</label>
-                    <input type="text" name="title" value="<?=htmlspecialchars($row['title'])?>">
-
-                    <div style="height:12px"></div>
-
-                    <label>Model</label>
-                    <input type="text" name="model" value="<?=htmlspecialchars($row['model'])?>">
-
-                    <div style="height:12px"></div>
-
-                    <label>Instruction JSON (system message)</label>
-                    <textarea name="message_json" id="edit_message_json"><?=htmlspecialchars($firstMsg)?></textarea>
-
-                    <div style="display:flex; gap:8px; margin-top:10px;">
-                        <button type="submit" class="btn">Save</button>
-                        <a class="btn secondary" href="generator_admin.php">Close</a>
-                    </div>
-                </form>
-            </div>
-            <?php
-        } else {
-            echo "<div class='card'><p>No such generator session.</p></div>";
-        }
-    }
-    ?>
-
-    <footer class="card" style="text-align:center;">
-        <div class="small-muted">Minimalist admin • Responsive • Mobile friendly</div>
-        <div style="margin-top:6px"><a class="small-link" href="/chat.php">Back to Chat</a></div>
-    </footer>
+    <div id="noticeContainer"></div>
+    <div class="generator-list-container" id="generatorListContainer">
+        <div class="empty-state">Loading generators...</div>
+    </div>
 </div>
 
+<!-- Create/Edit Modal -->
+<div id="formModal" class="modal-overlay">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3 id="modalTitle">Create Generator</h3>
+            <button class="btn btn-sm modal-close-btn" onclick="closeFormModal()">Close</button>
+        </div>
+        <div class="modal-body">
+            <form id="generatorForm">
+                <input type="hidden" id="generatorId" name="id">
+                <div class="form-group">
+                    <label class="form-label">Title</label>
+                    <input type="text" id="title" name="title" class="form-input" required>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Model</label>
+                        <select id="model" name="model" class="form-select" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Display Area(s)</label>
+                        <div class="multi-select-container" id="displayAreaMultiSelect">
+                            <div class="multi-select-button" id="multiSelectButton">Select areas...</div>
+                            <div class="multi-select-dropdown" id="multiSelectDropdown"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Access Control</label>
+                        <label class="form-checkbox-label">
+                            <input type="checkbox" id="isPublic" name="is_public">
+                            <span>Public</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Configuration JSON</label>
+                    <textarea id="configJson" name="config_json" class="form-textarea" required></textarea>
+                </div>
+                
+                <div class="form-section">
+                    <h4 class="form-section-header">🔮 Creative Oracle (Optional)</h4>
+                    <div class="form-group">
+                        <label class="form-label">Source Dictionaries</label>
+                        <select id="oracleDictionaries" name="oracle_dictionaries" class="form-select" multiple size="4"></select>
+                        <small>Select one or more dictionaries to source inspirational words from. Hold Ctrl/Cmd to select multiple.</small>
+                    </div>
+                    <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
+                        <div class="form-group">
+                            <label class="form-label">Words to Sample</label>
+                            <input type="number" id="oracleNumWords" class="form-input" value="200" placeholder="e.g., 200">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Error Rate</label>
+                            <input type="number" id="oracleErrorRate" class="form-input" value="0.01" step="0.001" placeholder="e.g., 0.01">
+                        </div>
+                    </div>
+                </div>
+
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-sm btn-outline-secondary" onclick="closeFormModal()">Cancel</button>
+            <button class="btn btn-sm btn-primary" onclick="saveGenerator()">Save Generator</button>
+        </div>
+    </div>
+</div>
+
+<!-- Test Modal -->
+<div id="testModal" class="modal-overlay">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3 id="testModalTitle">Test Generator</h3>
+            <button class="btn btn-sm modal-close-btn" onclick="closeTestModal()">Close</button>
+        </div>
+        <div class="modal-body">
+            <div class="test-params" id="testParams"></div>
+            <div id="testLoading" class="loading-container" style="display:none;">
+                <div class="spinner"></div>
+                <p style="color:var(--text-muted);">Generating...</p>
+            </div>
+            <div id="testResult" class="test-result" style="display:none;">
+                <div class="test-result-header">
+                    <strong>Result:</strong>
+                    <button class="btn btn-sm btn-outline-success" onclick="copyTestResult()">📋 Copy</button>
+                </div>
+                <pre id="testResultContent"></pre>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-sm btn-outline-secondary" onclick="closeTestModal()">Close</button>
+            <button class="btn btn-sm btn-success" id="runTestBtn" onclick="runTest()">⚗️ Generate</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+<script src="js/toast.js"></script>
 <script>
-    // copy session id
-    function copySid(elemId){
-        try{
-            const el = document.getElementById(elemId);
-            if(!el) return;
-            const text = el.textContent.trim();
-            navigator.clipboard.writeText(text).then(function(){
-                const btn = el.nextElementSibling;
-                const old = btn.innerHTML;
-                btn.innerHTML = 'Copied';
-                setTimeout(()=> btn.innerHTML = old, 1200);
-            });
-        }catch(e){
-            console.warn('copy failed', e);
-            alert('Copy failed — please select and copy manually.');
-        }
-    }
+const API_URL = '/generator_actions.php';
+const defaultTemplate = { system: { role: 'Content Generator', instructions: [ 'You are an expert content generator.', 'Always return valid JSON matching the output schema.', 'If you cannot comply, return {"error": "schema_noncompliant", "reason": "brief explanation"}' ] }, parameters: { mode: { type: 'string', enum: ['simple', 'detailed'], default: 'simple', label: 'Generation Mode' } }, output: { type: 'object', properties: { result: { type: 'string' }, metadata: { type: 'object' } }, required: ['result', 'metadata'] }, examples: [] };
+let currentEditId = null;
+let currentTestConfig = null;
+let isAdmin = false;
+let sortableInstance = null;
+let allDisplayAreas = [];
+let allDictionaries = [];
 
-    // confirm create: validate JSON roughly
-    function confirmCreate(form){
-        const ta = form.querySelector('textarea[name="message_json"]');
-        if(!ta) return true;
-        const val = ta.value.trim();
-        if(val === ''){
-            alert('Instruction JSON must not be empty.');
-            return false;
-        }
-        // quick sanity: try to parse
-        try{
-            JSON.parse(val);
-            return true;
-        }catch(e){
-            if(!confirm('Instruction JSON is not valid JSON. Create anyway?')) return false;
-            return true;
-        }
-    }
+document.addEventListener('DOMContentLoaded', () => {
+    loadModels();
+    loadDisplayAreas();
+    loadDictionaries();
+    checkAdminStatus();
+    loadGenerators();
+    initMultiSelect();
+});
 
-    // auto-resize textareas
-    (function(){
-        function autosize(el){
-            el.style.height = 'auto';
-            el.style.height = (el.scrollHeight + 4) + 'px';
+async function apiCall(action, data = {}) {
+    const response = await fetch(`${API_URL}?action=${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...data }) });
+    return response.json();
+}
+
+function showToast(message, type = 'info') { if (typeof Toast !== 'undefined' && Toast.show) { Toast.show(message, type); } }
+async function checkAdminStatus() { const result = await apiCall('check_admin'); if (result.ok) isAdmin = result.is_admin; }
+
+async function loadModels() {
+    const result = await apiCall('get_models');
+    if (result.ok) document.getElementById('model').innerHTML = result.data.map(m => `<option value="${m}">${m}</option>`).join('');
+}
+
+async function loadDictionaries() {
+    try {
+        const result = await apiCall('get_dictionaries');
+        if (result.ok) {
+            allDictionaries = result.data;
+            const select = document.getElementById('oracleDictionaries');
+            select.innerHTML = allDictionaries.map(d => `<option value="${d.id}">${escapeHtml(d.title)}</option>`).join('');
         }
-        document.querySelectorAll('textarea').forEach(function(t){
-            autosize(t);
-            t.addEventListener('input',function(){ autosize(t); });
+    } catch (e) { console.error('Failed to load dictionaries:', e); }
+}
+
+async function loadDisplayAreas() {
+    try {
+        const result = await apiCall('get_display_areas');
+        if (result.ok) {
+            allDisplayAreas = result.data;
+            document.getElementById('multiSelectDropdown').innerHTML = allDisplayAreas.map(area => `<label><input type="checkbox" value="${area.key}" data-label="${escapeHtml(area.label)}"><span>${escapeHtml(area.label)}</span></label>`).join('');
+        }
+    } catch (e) { console.error('Failed to load display areas:', e); }
+}
+
+async function loadGenerators() {
+    try {
+        const result = await apiCall('list');
+        if (result.ok) {
+            renderGenerators(result.data);
+            initSortable();
+        }
+    } catch (e) { showToast('Failed to load generators', 'error'); }
+}
+
+function renderGenerators(generators) {
+    const container = document.getElementById('generatorListContainer');
+    if (generators.length === 0) { container.innerHTML = '<div class="empty-state">No generators yet. Create one!</div>'; return; }
+    container.innerHTML = generators.map(gen => {
+        const publicBadge = gen.is_public ? `<span class="status-badge public-badge">PUBLIC</span>` : '';
+        const ownerBadge = gen.is_owner ? `<span class="status-badge owner-badge">MY GENERATOR</span>` : '';
+        const canEdit = gen.is_owner || (gen.is_public && isAdmin);
+        const canCopy = gen.is_owner || gen.is_public;
+        const dragHandle = gen.is_owner ? `<span class="drag-handle" title="Drag to reorder">☰</span>` : ``;
+        const displayAreasHtml = gen.display_areas.length > 0 ? gen.display_areas.map(a => `<span class="area-badge">${escapeHtml(a.label)}</span>`).join('') : `<span class="area-badge" style="opacity:0.6;">None</span>`;
+
+        return `
+        <div class="generator-item" data-id="${gen.id}">
+            <div class="generator-info">
+                <div class="generator-name">${dragHandle} ${escapeHtml(gen.title)} ${publicBadge} ${ownerBadge}</div>
+                <div class="generator-meta">
+                    <span>${displayAreasHtml}</span>
+                    <span><strong>Model:</strong> ${escapeHtml(gen.model)}</span>
+                    <span class="status-badge ${gen.active ? 'active' : 'inactive'}">${gen.active ? 'Active' : 'Inactive'}</span>
+                </div>
+            </div>
+            <div class="generator-actions">
+                ${canEdit ? `<button class="btn btn-sm btn-outline-primary" onclick="openEditModal(${gen.id})">Edit</button>
+                             <button class="btn btn-sm btn-outline-secondary" onclick="openCopyModal(${gen.id})">Copy</button>
+                             <button class="btn btn-sm btn-outline-secondary" onclick="toggleGenerator(${gen.id})">${gen.active ? 'Disable' : 'Enable'}</button>
+                             <button class="btn btn-sm btn-outline-danger" onclick="deleteGenerator(${gen.id})">Delete</button>`
+                          : (canCopy ? `<button class="btn btn-sm btn-outline-secondary" onclick="openCopyModal(${gen.id})">Copy</button>` : '')}
+                <button class="btn btn-sm btn-outline-success" onclick="openTestModal(${gen.id})">⚗️ Test</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function initSortable() {
+    const listContainer = document.getElementById('generatorListContainer');
+    if (sortableInstance) sortableInstance.destroy();
+    sortableInstance = new Sortable(listContainer, { animation: 150, handle: '.drag-handle', ghostClass: 'dragging-ghost', onEnd: (evt) => saveOrder(Array.from(evt.to.children).map(item => item.dataset.id)) });
+}
+
+async function saveOrder(ids) {
+    const result = await apiCall('update_order', { ids });
+    if (result.ok) showToast('Order saved!', 'success');
+    else { showToast('Failed to save order: ' + (result.error || 'Unknown error'), 'error'); loadGenerators(); }
+}
+
+function initMultiSelect() {
+    const container = document.getElementById('displayAreaMultiSelect');
+    const button = document.getElementById('multiSelectButton');
+    const dropdown = document.getElementById('multiSelectDropdown');
+    button.addEventListener('click', () => dropdown.classList.toggle('visible'));
+    document.addEventListener('click', (e) => { if (!container.contains(e.target)) dropdown.classList.remove('visible'); });
+    dropdown.addEventListener('change', updateMultiSelectButtonText);
+}
+
+function updateMultiSelectButtonText() {
+    const button = document.getElementById('multiSelectButton');
+    const checkboxes = document.querySelectorAll('#multiSelectDropdown input:checked');
+    if (checkboxes.length === 0) button.textContent = 'Select areas...';
+    else if (checkboxes.length <= 2) button.textContent = Array.from(checkboxes).map(cb => cb.dataset.label).join(', ');
+    else button.textContent = `${checkboxes.length} areas selected`;
+}
+
+async function openEditModal(id) {
+    currentEditId = id;
+    const result = await apiCall('get', { id });
+    if (result.ok) {
+        const data = result.data;
+        document.getElementById('modalTitle').textContent = 'Edit Generator';
+        document.getElementById('generatorId').value = data.id;
+        document.getElementById('title').value = data.title;
+        document.getElementById('model').value = data.model;
+        document.getElementById('isPublic').checked = data.is_public;
+        document.getElementById('isPublic').disabled = !isAdmin;
+        document.getElementById('configJson').value = data.config_json;
+        
+        document.querySelectorAll('#multiSelectDropdown input[type="checkbox"]').forEach(cb => { cb.checked = data.display_area_keys.includes(cb.value); });
+        updateMultiSelectButtonText();
+
+        const oracleConfig = data.oracle_config || {};
+        document.getElementById('oracleNumWords').value = oracleConfig.num_words || 200;
+        document.getElementById('oracleErrorRate').value = oracleConfig.error_rate || 0.01;
+        const dictSelect = document.getElementById('oracleDictionaries');
+        const selectedIds = (oracleConfig.dictionary_ids || []).map(String);
+        Array.from(dictSelect.options).forEach(opt => {
+            opt.selected = selectedIds.includes(opt.value);
         });
-    })();
+        
+        document.getElementById('formModal').classList.add('active');
+    } else { showToast('Failed to load generator: ' + result.error, 'error'); }
+}
 
-    // small enhancement: show/hide edit card on open (smooth scroll)
-    (function(){
-        const editCard = document.getElementById('edit-card');
-        if(editCard){
-            editCard.scrollIntoView({behavior:'smooth', block:'center'});
+function openCreateModal() {
+    currentEditId = null;
+    document.getElementById('generatorForm').reset();
+    document.getElementById('configJson').value = JSON.stringify(defaultTemplate, null, 2);
+    document.getElementById('modalTitle').textContent = 'Create Generator';
+    document.getElementById('isPublic').disabled = !isAdmin;
+    document.querySelectorAll('#multiSelectDropdown input:checked').forEach(cb => cb.checked = false);
+    updateMultiSelectButtonText();
+    
+    document.getElementById('oracleDictionaries').selectedIndex = -1;
+    document.getElementById('oracleNumWords').value = 200;
+    document.getElementById('oracleErrorRate').value = 0.01;
+    
+    document.getElementById('formModal').classList.add('active');
+}
+
+async function openCopyModal(id) {
+    showToast('Creating a copy...', 'info');
+    const result = await apiCall('copy', { id });
+    if (result.ok && result.data.new_id) {
+        showToast('Copy created successfully!', 'success');
+        loadGenerators();
+        openEditModal(result.data.new_id);
+    } else { showToast('Failed to create copy: ' + (result.error || 'Unknown error'), 'error'); }
+}
+
+function closeFormModal() { document.getElementById('formModal').classList.remove('active'); }
+
+async function saveGenerator() {
+    const selectedAreaKeys = Array.from(document.querySelectorAll('#multiSelectDropdown input:checked')).map(cb => cb.value);
+    const data = {
+        title: document.getElementById('title').value,
+        model: document.getElementById('model').value,
+        config_json: document.getElementById('configJson').value,
+        is_public: document.getElementById('isPublic').checked,
+        display_area_keys: selectedAreaKeys
+    };
+    
+    const selectedDicts = Array.from(document.getElementById('oracleDictionaries').selectedOptions).map(opt => parseInt(opt.value));
+    if (selectedDicts.length > 0) {
+        data.oracle_config = {
+            dictionary_ids: selectedDicts,
+            num_words: parseInt(document.getElementById('oracleNumWords').value) || 200,
+            error_rate: parseFloat(document.getElementById('oracleErrorRate').value) || 0.01
+        };
+    } else {
+        data.oracle_config = null;
+    }
+    
+    const action = currentEditId ? 'update' : 'create';
+    if (currentEditId) data.id = currentEditId;
+
+    try {
+        const result = await apiCall(action, data);
+        if (result.ok) {
+            showToast(result.message, 'success');
+            closeFormModal();
+            loadGenerators();
+        } else { showToast(result.error, 'error'); }
+    } catch (e) { showToast('Failed to save generator: ' + e.message, 'error'); }
+}
+
+async function deleteGenerator(id) {
+    if (!confirm('Delete this generator? This cannot be undone.')) return;
+    const result = await apiCall('delete', { id });
+    if (result.ok) { showToast(result.message, 'success'); loadGenerators(); }
+    else { showToast(result.error, 'error'); }
+}
+
+async function toggleGenerator(id) {
+    try {
+        const result = await apiCall('toggle', { id });
+        if (result.ok) {
+            showToast(result.message, 'success');
+            loadGenerators();
+        } else { showToast(result.error, 'error'); }
+    } catch (e) { showToast('Failed to toggle generator', 'error'); }
+}
+
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Test Modal Functions
+async function openTestModal(id) {
+    currentTestConfig = { id, params: {} };
+    document.getElementById('testResult').style.display = 'none';
+    document.getElementById('testLoading').style.display = 'none';
+    
+    const result = await apiCall('get', { id });
+    if (result.ok) {
+        const configData = JSON.parse(result.data.config_json);
+        document.getElementById('testModalTitle').textContent = `Test: ${escapeHtml(result.data.title)}`;
+        renderTestParams(configData.parameters || {});
+        document.getElementById('testModal').classList.add('active');
+    } else { showToast('Failed to load generator config', 'error'); }
+}
+
+function renderTestParams(params) {
+    const container = document.getElementById('testParams');
+    container.innerHTML = '';
+    for (const [key, def] of Object.entries(params)) {
+        const formGroup = document.createElement('div'); formGroup.className = 'form-group';
+        const label = document.createElement('label'); label.className = 'form-label'; label.textContent = def.label || key;
+        formGroup.appendChild(label);
+        let input;
+        if (def.type === 'string' && def.enum) {
+            input = document.createElement('select'); input.className = 'form-select'; input.name = key;
+            def.enum.forEach(val => { const opt = document.createElement('option'); opt.value = val; opt.textContent = val; if (val === def.default) opt.selected = true; input.appendChild(opt); });
+        } else if (def.type === 'string' && def.multiline) {
+            input = document.createElement('textarea'); input.className = 'form-textarea'; input.name = key; input.value = def.default || ''; input.style.minHeight = '100px';
+        } else {
+            input = document.createElement('input'); input.type = 'text'; input.className = 'form-input'; input.name = key; input.value = def.default || '';
         }
-    })();
+        formGroup.appendChild(input); container.appendChild(formGroup);
+    }
+}
+
+function closeTestModal() { document.getElementById('testModal').classList.remove('active'); }
+
+async function runTest() {
+    const params = {};
+    document.querySelectorAll('#testParams input, #testParams select, #testParams textarea').forEach(input => { params[input.name] = input.value; });
+    document.getElementById('testResult').style.display = 'none';
+    document.getElementById('testLoading').style.display = 'block';
+    document.getElementById('runTestBtn').disabled = true;
+    try {
+        const result = await apiCall('test', { id: currentTestConfig.id, params });
+        if (result.ok && result.result) {
+            document.getElementById('testResultContent').textContent = JSON.stringify(result.result, null, 2);
+            document.getElementById('testResult').style.display = 'block';
+        } else { showToast('Test failed: ' + (result.error || 'Unknown error'), 'error'); }
+    } catch (e) { showToast('Test request failed: ' + e.message, 'error'); }
+    finally { document.getElementById('testLoading').style.display = 'none'; document.getElementById('runTestBtn').disabled = false; }
+}
+
+function copyTestResult() {
+    navigator.clipboard.writeText(document.getElementById('testResultContent').textContent).then(() => showToast('Copied to clipboard!', 'success')).catch(() => showToast('Failed to copy', 'error'));
+}
+
+// Modal event listeners
+document.getElementById('formModal').addEventListener('click', (e) => { if (e.target.id === 'formModal') closeFormModal(); });
+document.getElementById('testModal').addEventListener('click', (e) => { if (e.target.id === 'testModal') closeTestModal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeFormModal(); closeTestModal(); } });
 </script>
-</body>
-</html>
+
+<?php
+$content = ob_get_clean();
+$spw->renderLayout($content.$eruda, $pageTitle);
+?>
