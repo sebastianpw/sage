@@ -2,10 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=0.6">
 <title><?= $title ?? '' ?></title>
-<link rel="manifest" href="/site.webmanifest">
-
 
 <script>
   (function() {
@@ -23,21 +21,19 @@
   })();
 </script>
 
-<script src="/js/theme-manager.js"></script>
-<script src="/js/sage-home-button.js" data-home="/dashboard.php"></script>
 
-<link rel="stylesheet" href="base.css">
+    <script src="/js/theme-manager.js"></script> 
+
 <link rel="stylesheet" href="gallery.css">
 
-<?php echo \App\Core\SpwBase::getInstance()->getJquery(); ?>
-
 <?php if (\App\Core\SpwBase::CDN_USAGE): ?>
-    <!-- Font Awesome CSS via CDN -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <!-- jQuery via CDN -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 <?php else: ?>
-    <!-- Font Awesome CSS via local copy -->
-    <link rel="stylesheet" href="/vendor/font-awesome/css/all.min.css">
+    <!-- jQuery via local copy -->
+    <script src="/vendor/jquery/jquery-3.7.0.min.js"></script>
 <?php endif; ?>
+
 <!-- REPLACE the entire <style> block in templates/gallery.php with this -->
 <style>
     /* NEW: Add theme variables so this layout is self-sufficient */
@@ -161,6 +157,46 @@
 </main>
 
 <?php if (file_exists(__DIR__.'/footer.php')) include __DIR__.'/footer.php'; ?>
+
+
+    <style>
+        /*
+         * Gallery-specific Floatool Override
+         * Increases floatool size to compensate for the page's initial-scale=0.6
+         */
+        #floatool {
+            /* Original size was 180%, we increase it to ~300% to counteract the 0.6 scale */
+            font-size: 300%;
+        }
+
+        /* Also override the responsive size */
+        @media (max-width: 768px) {
+            #floatool, #floatool {
+                /* Original responsive size was 150%, we increase it to ~250% */
+                font-size: 240%;
+            }
+
+
+            .floatool-buttons button {
+                min-width: 50px;
+                min-height: 65px;
+                margin: 0 !important;
+                padding: 0 7px;
+
+            }
+
+            .floatool-handle { 
+                font-size: 30px;
+            }
+
+            #floatool {
+            min-width: 70px;
+            min-height: 70px;
+            }
+
+
+        }
+    </style>
 
 
 </body>

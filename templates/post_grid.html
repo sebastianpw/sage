@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SAGE — Posts</title>
+<style>
+  :root{--bg:#070707;--card:#0f0f0f;--accent:#3b82f6;--muted:#bdbdbd;}html,body{height:100%;margin:0;background:var(--bg);color:#fff;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;}.wrap{max-width:1100px;margin:18px auto;padding:12px;}header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}header h1{font-size:18px;margin:0}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}.post-card{background:var(--card);border-radius:6px;overflow:visible;position:relative;cursor:pointer;display:block;text-decoration:none;color:inherit;min-width:0;}.thumb-wrapper{width:100%;aspect-ratio:1/1;display:block;background:#111;border-radius:6px 6px 0 0;overflow:hidden;display:flex;align-items:center;justify-content:center;}.post-thumb{width:100%;height:100%;object-fit:contain;object-position:center center;display:block;transition:transform .28s ease;background:transparent;}.post-card:hover .post-thumb{transform:scale(1.04);}.post-meta{padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;color:var(--muted);min-width:0;}.post-title{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;min-width:0;}.load-more{display:block;margin:18px auto 60px;padding:10px 14px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);cursor:pointer;}.empty{opacity:.6;text-align:center;padding:40px 0;color:var(--muted)}#sentinel{height:1px}@media (max-width:420px){.wrap{padding:8px;}.post-meta{padding:6px 8px;font-size:12px}}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>SAGE — Posts</h1>
+      <div style="font-size:13px;color:var(--muted)">Storyboard AI Generation Engine</div>
+    </header>
+
+    <main>
+      <div id="grid" class="grid" aria-live="polite" role="list"></div>
+      <div style="text-align:center;">
+        <button id="loadMore" class="load-more" aria-label="Load more posts">Load more</button>
+      </div>
+      <div id="empty" class="empty" hidden>No posts found.</div>
+      <div id="sentinel" aria-hidden="true"></div>
+    </main>
+  </div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* 30 explicit posts (same as before) */
+  const posts = {{POSTS_JSON}};
+
+  /* loading configs (unchanged from previous) */
+  const firstEagerCount = 18;
+  const imageRootMargin = '1000px';
+  const initialCount = 12;
+  const batchSize = 6;
+  let rendered = 0;
+
+  const grid = document.getElementById('grid');
+  const loadMoreBtn = document.getElementById('loadMore');
+  const emptyNotice = document.getElementById('empty');
+  const sentinel = document.getElementById('sentinel');
+
+  const imageObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      const img = entry.target;
+      const dataSrc = img.getAttribute('data-src');
+      if (dataSrc) {
+        img.src = dataSrc;
+        img.removeAttribute('data-src');
+        try { img.setAttribute('fetchpriority','auto'); } catch(e){}
+      }
+      imageObserver.unobserve(img);
+    });
+  }, {
+    root: null,
+    rootMargin: imageRootMargin,
+    threshold: 0.01
+  });
+
+  function makeCard(post, index){
+    const a = document.createElement('a');
+    a.className = 'post-card';
+    a.href = post.file;
+    a.setAttribute('role', 'listitem');
+    a.setAttribute('aria-label', post.title + ' — open post');
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'thumb-wrapper';
+
+    const img = document.createElement('img');
+    img.className = 'post-thumb';
+    img.decoding = 'async';
+    img.alt = post.title;
+    img.width = 1024;
+    img.height = 1024;
+
+    if (index < firstEagerCount) {
+      img.loading = 'eager';
+      img.setAttribute('fetchpriority','high');
+      img.src = post.preview;
+    } else {
+      img.loading = 'lazy';
+      img.setAttribute('data-src', post.preview);
+    }
+
+    wrapper.appendChild(img);
+
+    const meta = document.createElement('div');
+    meta.className = 'post-meta';
+    const title = document.createElement('div');
+    title.className = 'post-title';
+    title.textContent = post.title;
+    const idx = document.createElement('div');
+    idx.style.opacity = '0.7';
+    idx.style.fontSize = '12px';
+    idx.textContent = `#${index + 1}`;
+
+    meta.appendChild(title);
+    meta.appendChild(idx);
+
+    a.appendChild(wrapper);
+    a.appendChild(meta);
+    return a;
+  }
+
+  function renderNext(count){
+    if (rendered >= posts.length) return;
+    const until = Math.min(posts.length, rendered + count);
+    const frag = document.createDocumentFragment();
+
+    for (let i = rendered; i < until; i++){
+      const card = makeCard(posts[i], i);
+      frag.appendChild(card);
+    }
+    grid.appendChild(frag);
+
+    // observe lazy images that were added
+    const lazyImgs = grid.querySelectorAll('img[data-src]');
+    lazyImgs.forEach(img => {
+      if (!img._observing) {
+        imageObserver.observe(img);
+        img._observing = true;
+      }
+    });
+
+    rendered = until;
+    loadMoreBtn.style.display = (rendered < posts.length) ? 'inline-block' : 'none';
+    emptyNotice.hidden = rendered !== 0;
+  }
+
+  // initial render
+  renderNext(initialCount);
+
+  // Load more button
+  loadMoreBtn.addEventListener('click', () => {
+    renderNext(batchSize);
+  });
+
+  // sentinel observer to append more cards
+  const sentinelObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        sentinelObserver.unobserve(sentinel);
+        setTimeout(() => {
+          renderNext(batchSize);
+          if (rendered < posts.length) sentinelObserver.observe(sentinel);
+        }, 200);
+      }
+    });
+  }, {
+    root: null,
+    rootMargin: '400px',
+    threshold: 0.01
+  });
+
+  if (posts.length > rendered) {
+    sentinelObserver.observe(sentinel);
+  } else {
+    loadMoreBtn.style.display = 'none';
+  }
+
+  // keyboard nav
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft') {
+      const focusable = Array.from(grid.querySelectorAll('.post-card'));
+      if (!focusable.length) return;
+      const idx = focusable.indexOf(document.activeElement);
+      let next = 0;
+      if (idx === -1) {
+        next = (ev.key === 'ArrowRight') ? 0 : focusable.length - 1;
+      } else {
+        next = (ev.key === 'ArrowRight') ? Math.min(focusable.length - 1, idx + 1) : Math.max(0, idx - 1);
+      }
+      focusable[next].focus();
+      ev.preventDefault();
+    }
+  });
+
+  // helper to rebuild
+  window.__gridReload = function(){
+    grid.innerHTML = '';
+    rendered = 0;
+    renderNext(initialCount);
+    if (posts.length > rendered) sentinelObserver.observe(sentinel);
+  };
+
+  window.__posts = posts;
+})();
+</script>
+</body>
+</html>
+

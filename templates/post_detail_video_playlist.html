@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>{{POST_TITLE}}</title>
+<link href="https://vjs.zencdn.net/8.23.3/video-js.css" rel="stylesheet"/>
+<style>
+  :root{--bg:#060608;--panel:#0b0b0d;--muted:#9aa3b2;--muted-2:#6f7780;--accent:#3b82f6;--card:#0f1113;--border:rgba(255,255,255,0.04);--glass:rgba(255,255,255,0.02);}html,body{height:100%;margin:0;background:var(--bg);color:#e6eef8;font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,Arial;}.wrap{max-width:1100px;margin:18px auto;padding:12px;}header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}header h1{font-size:18px;margin:0;color:#fff}header .hint{color:var(--muted);font-size:13px}.video-player-container{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));margin-bottom:12px;border-radius:8px;overflow:hidden;border:1px solid var(--border);}.video-js{width:100% !important;height:480px;max-height:70vh;background:#000;}.controls{display:flex;gap:12px;align-items:center;justify-content:flex-end;margin-bottom:0;}.control-group{display:flex;gap:10px;align-items:center;}.btn{padding:0 14px;background:transparent;color:#e6eef8;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-weight:600;}.btn:disabled{opacity:0.35;cursor:not-allowed;}.btn:hover:not(:disabled){background:rgba(59,130,246,0.07);border-color:rgba(59,130,246,0.25);}.video-info{margin:0 8px 0 0;padding:0;background:var(--panel);border-radius:8px;color:var(--muted);display:inline-block;}.video-info h4{margin:0 0 6px 6px;color:#fff;font-size:15px;}.video-meta{display:none;color:var(--muted-2);font-size:13px;}.playlist-wrapper{height:220px;max-width:1100px;margin-top:5px;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px;background:var(--panel);border-radius:8px;border:1px solid var(--border);}.playlist-container{display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:10px;align-content:start;padding-bottom:8px;}.playlist-item{cursor:pointer;border-radius:6px;overflow:hidden;transition:transform .18s ease, box-shadow .18s ease;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(0,0,0,0.02));border:1px solid rgba(255,255,255,0.02);display:flex;flex-direction:column;}.playlist-item:hover{transform:translateY(-4px);box-shadow:0 8px 22px rgba(0,0,0,0.6);}.playlist-item.active{outline:2px solid rgba(59,130,246,0.22);box-shadow:0 8px 28px rgba(59,130,246,0.06);}.playlist-thumbnail{width:100%;height:120px;object-fit:cover;background:#111;display:block;}.playlist-info{padding:8px;display:flex;gap:8px;align-items:center;justify-content:space-between;}.playlist-title{font-size:14px;color:#e6eef8;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.playlist-duration{color:var(--muted-2);font-size:13px;min-width:48px;text-align:right;}.loading-indicator{text-align:center;padding:12px;color:var(--muted);display:none;}.controls .label{color:var(--muted);font-size:13px;margin-right:6px;}@media (max-width:720px){.video-js{height:340px;}.playlist-container{grid-template-columns:repeat(auto-fill, minmax(160px, 1fr));}}@media (max-width:420px){.video-js{height:260px;}.playlist-container{grid-template-columns:repeat(auto-fill, minmax(120px, 1fr));}}.back-row{display:flex;align-items:center;gap:10px;}.back-link{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;min-width:40px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.04);color:#e6eef8;text-decoration:none;transition:background .15s ease, transform .12s ease, box-shadow .12s ease;}.back-link:hover{background:rgba(255,255,255,0.03);transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,0.55);}.back-link:focus{outline:3px solid rgba(59,130,246,0.25);outline-offset:2px;}.back-icon{width:18px;height:18px;display:block;stroke:currentColor;fill:none;stroke-width:1.5;}.post-title{font-size:16px;color:#fff;font-weight:600;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}@media (max-width:420px){.back-link{width:44px;height:44px;}.back-icon{width:20px;height:20px;}}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="back-row">
+        <a class="back-link" href="{{BACK_TO_GRID_URL}}" id="backToGrid" title="Back to gallery" aria-label="Back to gallery">
+          <svg class="back-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.2"/><rect x="14" y="3" width="7" height="7" rx="1.2"/><rect x="3" y="14" width="7" height="7" rx="1.2"/><rect x="14" y="14" width="7" height="7" rx="1.2"/></svg>
+        </a>
+        <div class="header">
+          <div class="post-title">{{POST_CONTENT}}</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="video-player-container"><video id="main-video-player" class="video-js vjs-default-skin vjs-big-play-centered" controls preload="auto" playsinline data-setup='{}'><p class="vjs-no-js" style="color:#fff">To view this video please enable JavaScript, and consider upgrading to a web browser that <a href="https://videojs.com/html5-video-support/" target="_blank">supports HTML5 video</a></p></video></div>
+    <div style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
+      <div class="video-info" id="current-video-info" aria-live="polite" style="display:none"><h4 id="video-title">Video Title</h4><div class="video-meta">Duration: <span id="video-duration">0:00</span> · Added: <span id="video-added">Unknown</span></div></div>
+      <div class="controls" style="margin-left:auto;"><div class="control-group"><button id="prev-video" class="btn" disabled>Previous</button><button id="next-video" class="btn" disabled>Next</button></div><div class="control-group" title="Autoplay next"><label style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px"><input id="autoplay-checkbox" type="checkbox" checked /><span style="font-weight:600;color:#e6eef8">Autoplay</span></label></div><div style="display: none;" class="control-group" title="Volume"><label class="label">Volume</label><input id="volume-slider" type="range" min="0" max="100" value="80" /></div></div>
+    </div>
+    <div class="loading-indicator" id="loading-indicator">Loading video...</div>
+    <div class="playlist-wrapper" id="playlist-wrapper" aria-label="Video playlist"><div class="playlist-container" id="playlist-container" role="list"></div></div>
+  </div>
+
+  <script src="https://vjs.zencdn.net/8.23.3/video.min.js"></script>
+  <script>
+  (function () {
+    'use strict';
+    const videos = {{MEDIA_ITEMS_JSON}};
+    const playlistContainer = document.getElementById('playlist-container');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const prevBtn = document.getElementById('prev-video');
+    const nextBtn = document.getElementById('next-video');
+    const autoplayCheckbox = document.getElementById('autoplay-checkbox');
+    const volumeSlider = document.getElementById('volume-slider');
+    const currentVideoInfo = document.getElementById('current-video-info');
+    const videoTitle = document.getElementById('video-title');
+    const videoDuration = document.getElementById('video-duration');
+    const videoAdded = document.getElementById('video-added');
+    let player = null;
+    let currentVideoIndex = 0;
+    let userInteracted = false;
+    const placeholderSVG = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><rect width="100%" height="100%" fill="#0b0b0d"/><g fill="#6f7780" font-family="Arial, sans-serif" font-size="18" text-anchor="middle"><text x="50%" y="48%">thumbnail</text><text x="50%" y="62%">not found</text></g></svg>');
+    function formatDuration(seconds) { if (!seconds) return '0:00'; const m = Math.floor(seconds / 60); const s = Math.floor(seconds % 60).toString().padStart(2,'0'); return `${m}:${s}`; }
+    function formatDate(dateString) { if (!dateString) return 'Unknown'; const d = new Date(dateString + 'Z'); return d.toLocaleDateString(); }
+    function showLoading(show) { loadingIndicator.style.display = show ? 'block' : 'none'; }
+    function renderPlaylist() {
+      playlistContainer.innerHTML = '';
+      if (!videos || videos.length === 0) { playlistContainer.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:16px;color:var(--muted);">No videos found</div>'; return; }
+      videos.forEach((video, idx) => {
+        const div = document.createElement('div');
+        div.className = 'playlist-item' + (idx === currentVideoIndex ? ' active' : '');
+        div.setAttribute('role','listitem');
+        div.tabIndex = 0;
+        div.innerHTML = `<img class="playlist-thumbnail" src="${video.thumbnail || ''}" alt="${escapeHtml(video.title)}" onerror="this.onerror=null;this.src='${placeholderSVG}';"><div class="playlist-info"><div class="playlist-title" title="${escapeHtml(video.title)}">${escapeHtml(video.title)}</div><div class="playlist-duration">${formatDuration(video.duration)}</div></div>`;
+        div.addEventListener('click', () => { loadVideo(idx, true); });
+        div.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); loadVideo(idx, true); } });
+        playlistContainer.appendChild(div);
+      });
+    }
+    function updateButtonStates() { prevBtn.disabled = currentVideoIndex <= 0; nextBtn.disabled = currentVideoIndex >= videos.length - 1; }
+    function updateVideoInfo(video) { if (!video) { currentVideoInfo.style.display = 'none'; return; } videoTitle.textContent = video.title || 'Untitled'; videoDuration.textContent = formatDuration(video.duration); videoAdded.textContent = formatDate(video.created_at); currentVideoInfo.style.display = 'block'; }
+    function loadVideo(index, shouldAutoplay = false) {
+      if (index < 0 || index >= videos.length) return; currentVideoIndex = index; const video = videos[index]; showLoading(true);
+      if (!player) { player = videojs('main-video-player', { controls: true, autoplay: false, preload: 'auto', fluid: true, playbackRates: [0.5, 1, 1.5, 2] }); player.on('play', () => { userInteracted = true; }); player.on('click', () => { userInteracted = true; }); player.on('ended', () => { if (autoplayCheckbox.checked) { playNextVideo(); } }); player.on('error', (err) => { console.error('Video.js error', err); showLoading(false); }); }
+      player.src({ src: video.url, type: video.type || 'video/mp4' });
+      try { player.load(); } catch (e) {}
+      document.querySelectorAll('.playlist-item').forEach((el, i) => { el.classList.toggle('active', i === currentVideoIndex); }); updateVideoInfo(video); updateButtonStates();
+      player.ready(() => { showLoading(false); if (shouldAutoplay && userInteracted) { player.play().catch(e => { console.log('Autoplay blocked by browser:', e?.message || e); }); } });
+    }
+    function playNextVideo() { if (currentVideoIndex < videos.length - 1) { loadVideo(currentVideoIndex + 1, true); } }
+    function playPrevVideo() { if (currentVideoIndex > 0) { loadVideo(currentVideoIndex - 1, true); } }
+    function escapeHtml(str = '') { return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    prevBtn.addEventListener('click', () => { userInteracted = true; playPrevVideo(); });
+    nextBtn.addEventListener('click', () => { userInteracted = true; playNextVideo(); });
+    autoplayCheckbox.addEventListener('change', () => { userInteracted = true; });
+    volumeSlider.addEventListener('input', (e) => { if (player) player.volume(e.target.value / 100); });
+    document.addEventListener('click', () => { userInteracted = true; });
+    (function init() { renderPlaylist(); if (videos.length) { loadVideo(0, false); } updateButtonStates(); })();
+    window.__videos = videos; window.__player = () => player;
+  })();
+  </script>
+</body>
+</html>
+
