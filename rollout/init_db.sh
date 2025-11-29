@@ -216,20 +216,27 @@ create_db_if_not_exists "$WN_USER" "$WN_PASS" "$WN_HOST" "$WN_PORT" "$WN_DB"
 
 
 # Import main database
-echo "Importing main database $MAIN_DB..."
-mysql -h "$MAIN_HOST" -P "${MAIN_PORT:-3306}" -u "$MAIN_USER" -p"$MAIN_PASS" "$MAIN_DB" < "$SCRIPT_DIR/init_main.sql"
+echo "Importing structure for main database $MAIN_DB..."
+mysql -h "$MAIN_HOST" -P "${MAIN_PORT:-3306}" -u "$MAIN_USER" -p"$MAIN_PASS" "$MAIN_DB" < "$SCRIPT_DIR/init_main_structure.sql"
+
+echo "Importing data for main database $MAIN_DB..."
+mysql -h "$MAIN_HOST" -P "${MAIN_PORT:-3306}" -u "$MAIN_USER" -p"$MAIN_PASS" "$MAIN_DB" < "$SCRIPT_DIR/init_main_data.sql"
 
 # Import system database
-echo "Importing system database $SYS_DB..."
-mysql -h "$SYS_HOST" -P "${SYS_PORT:-3306}" -u "$SYS_USER" -p"$SYS_PASS" "$SYS_DB" < "$SCRIPT_DIR/init_sys.sql"
+echo "Importing structure for system database $SYS_DB..."
+mysql -h "$SYS_HOST" -P "${SYS_PORT:-3306}" -u "$SYS_USER" -p"$SYS_PASS" "$SYS_DB" < "$SCRIPT_DIR/init_sys_structure.sql"
+
+echo "Importing data for system database $SYS_DB..."
+mysql -h "$SYS_HOST" -P "${SYS_PORT:-3306}" -u "$SYS_USER" -p"$SYS_PASS" "$SYS_DB" < "$SCRIPT_DIR/init_sys_data.sql"
 
 # Import WordNet database
-echo "Importing WordNet database $WN_DB..."
-
+echo "Importing structure for WordNet database $WN_DB..."
 mysql -h "$WN_HOST" -P "${WN_PORT:-3306}" -u "$WN_USER" -p"$WN_PASS" "$WN_DB" < "$SCRIPT_DIR/init_wordnet_structure.sql"
+
+echo "Importing data for WordNet database $WN_DB..."
 mysql -h "$WN_HOST" -P "${WN_PORT:-3306}" -u "$WN_USER" -p"$WN_PASS" "$WN_DB" < "$SCRIPT_DIR/init_wordnet_data.sql"
 
-echo "Wordnet import finished."
+echo "Structure and data imports finished."
 
 
 
