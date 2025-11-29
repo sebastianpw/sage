@@ -1,38 +1,48 @@
--- Multi-Table Export
--- Database: starlight_guardians_nu
--- Generated: 2025-11-29 01:44:35
--- Tables with structure: 159
--- Tables with data: 0
+-- phpMyAdmin SQL Dump
+-- version 5.2.2
+-- https://www.phpmyadmin.net/
+--
+-- Host: 127.0.0.1:3306
+-- Erstellungszeit: 29. Nov 2025 um 02:31
+-- Server-Version: 12.0.2-MariaDB
+-- PHP-Version: 8.4.2
 
--- Export order: Tables first, then Views
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
 
--- ========================================================
--- TABLES
--- ========================================================
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
+
+--
+-- Datenbank: `starlight_guardians_nu`
+--
 
 -- --------------------------------------------------------
--- Table: `angles`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `angles`;
+--
+-- Tabellenstruktur für Tabelle `angles`
+--
 
 CREATE TABLE `angles` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
   `description` varchar(255) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `animas`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `animas`;
+--
+-- Tabellenstruktur für Tabelle `animas`
+--
 
 CREATE TABLE `animas` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `character_id` int(11) DEFAULT NULL,
   `name` varchar(255) DEFAULT NULL,
   `description` text DEFAULT NULL,
@@ -53,20 +63,17 @@ CREATE TABLE `animas` (
   `cnmap` tinyint(1) NOT NULL DEFAULT 0,
   `cnmap_frame_id` int(11) DEFAULT NULL,
   `cnmap_frame_filename` varchar(100) DEFAULT NULL,
-  `cnmap_prompt` text DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `idx_character_animas_character` (`character_id`),
-  KEY `idx_character_animas_name` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=23 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `cnmap_prompt` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `artifacts`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `artifacts`;
+--
+-- Tabellenstruktur für Tabelle `artifacts`
+--
 
 CREATE TABLE `artifacts` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
   `order` int(11) NOT NULL DEFAULT 0 COMMENT 'Display order for interface/menu',
   `type` varchar(50) DEFAULT NULL,
@@ -84,40 +91,33 @@ CREATE TABLE `artifacts` (
   `cnmap` tinyint(1) NOT NULL DEFAULT 0,
   `cnmap_frame_id` int(11) DEFAULT NULL,
   `cnmap_frame_filename` varchar(100) DEFAULT NULL,
-  `cnmap_prompt` text DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_artifacts_name` (`name`),
-  KEY `idx_artifacts_type` (`type`),
-  KEY `idx_artifacts_status` (`status`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `cnmap_prompt` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `audio_assets`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `audio_assets`;
+--
+-- Tabellenstruktur für Tabelle `audio_assets`
+--
 
 CREATE TABLE `audio_assets` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(150) NOT NULL,
   `type` enum('voice','music','sfx') NOT NULL,
   `file_url` varchar(500) NOT NULL,
   `description` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_audio_name` (`name`),
-  KEY `idx_audio_type` (`type`)
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `backgrounds`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `backgrounds`;
+--
+-- Tabellenstruktur für Tabelle `backgrounds`
+--
 
 CREATE TABLE `backgrounds` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
   `order` int(11) NOT NULL DEFAULT 0 COMMENT 'Display order for interface/menu',
   `description` text DEFAULT NULL,
@@ -135,50 +135,41 @@ CREATE TABLE `backgrounds` (
   `cnmap` tinyint(1) NOT NULL DEFAULT 0,
   `cnmap_frame_id` int(11) DEFAULT NULL,
   `cnmap_frame_filename` varchar(100) DEFAULT NULL,
-  `cnmap_prompt` text DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_backgrounds_name` (`name`),
-  KEY `idx_backgrounds_type` (`type`),
-  KEY `idx_backgrounds_location` (`location_id`),
-  CONSTRAINT `fk_backgrounds_location` FOREIGN KEY (`location_id`) REFERENCES `locations` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `cnmap_prompt` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `camera_angles`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `camera_angles`;
+--
+-- Tabellenstruktur für Tabelle `camera_angles`
+--
 
 CREATE TABLE `camera_angles` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
--- Table: `camera_perspectives`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `camera_perspectives`;
+--
+-- Tabellenstruktur für Tabelle `camera_perspectives`
+--
 
 CREATE TABLE `camera_perspectives` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
--- Table: `characters`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `characters`;
+--
+-- Tabellenstruktur für Tabelle `characters`
+--
 
 CREATE TABLE `characters` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
   `order` int(11) NOT NULL DEFAULT 0 COMMENT 'Display order for interface/menu',
   `role` varchar(100) DEFAULT NULL,
@@ -199,20 +190,17 @@ CREATE TABLE `characters` (
   `cnmap` tinyint(1) NOT NULL DEFAULT 0,
   `cnmap_frame_id` int(11) DEFAULT NULL,
   `cnmap_frame_filename` varchar(100) DEFAULT NULL,
-  `cnmap_prompt` text DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_characters_name` (`name`),
-  KEY `idx_characters_role` (`role`)
-) ENGINE=InnoDB AUTO_INCREMENT=762 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `cnmap_prompt` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `character_poses`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `character_poses`;
+--
+-- Tabellenstruktur für Tabelle `character_poses`
+--
 
 CREATE TABLE `character_poses` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
   `order` int(11) NOT NULL DEFAULT 0 COMMENT 'Display order for interface/menu',
   `description` text NOT NULL,
@@ -226,74 +214,62 @@ CREATE TABLE `character_poses` (
   `img2img_frame_id` int(11) DEFAULT NULL,
   `img2img_prompt` text DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uniq_character_pose_angle` (`character_id`,`pose_id`,`angle_id`),
-  KEY `character_id` (`character_id`),
-  KEY `pose_id` (`pose_id`),
-  KEY `angle_id` (`angle_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=185 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `chat_message`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `chat_message`;
+--
+-- Tabellenstruktur für Tabelle `chat_message`
+--
 
 CREATE TABLE `chat_message` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `session_id` int(11) NOT NULL,
   `role` varchar(10) NOT NULL,
   `content` longtext NOT NULL,
   `token_count` int(11) DEFAULT NULL,
-  `created_at` datetime NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `session_id` (`session_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=11340 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `created_at` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `chat_session`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `chat_session`;
+--
+-- Tabellenstruktur für Tabelle `chat_session`
+--
 
 CREATE TABLE `chat_session` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `session_id` varchar(36) NOT NULL,
   `user_id` int(11) NOT NULL,
   `title` varchar(100) DEFAULT NULL,
   `created_at` datetime NOT NULL,
   `model` varchar(50) DEFAULT 'openai',
-  `type` varchar(32) NOT NULL DEFAULT 'standard',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `session_id` (`session_id`),
-  KEY `idx_chat_session_type` (`type`)
-) ENGINE=InnoDB AUTO_INCREMENT=10274 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
--- Table: `chat_summary`
--- --------------------------------------------------------
-
-DROP TABLE IF EXISTS `chat_summary`;
-
-CREATE TABLE `chat_summary` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `session_id` int(11) NOT NULL,
-  `summary` longtext NOT NULL,
-  `tokens` int(11) DEFAULT NULL,
-  `created_at` datetime NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `session_id` (`session_id`)
+  `type` varchar(32) NOT NULL DEFAULT 'standard'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `composites`
+
+--
+-- Tabellenstruktur für Tabelle `chat_summary`
+--
+
+CREATE TABLE `chat_summary` (
+  `id` int(11) NOT NULL,
+  `session_id` int(11) NOT NULL,
+  `summary` longtext NOT NULL,
+  `tokens` int(11) DEFAULT NULL,
+  `created_at` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `composites`;
+--
+-- Tabellenstruktur für Tabelle `composites`
+--
 
 CREATE TABLE `composites` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
   `order` int(11) NOT NULL DEFAULT 0 COMMENT 'Display order for interface/menu',
   `description` text DEFAULT NULL,
@@ -308,49 +284,44 @@ CREATE TABLE `composites` (
   `cnmap` tinyint(1) NOT NULL DEFAULT 0,
   `cnmap_frame_id` int(11) DEFAULT NULL,
   `cnmap_frame_filename` varchar(100) DEFAULT NULL,
-  `cnmap_prompt` text DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=73 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `cnmap_prompt` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `composite_frames`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `composite_frames`;
+--
+-- Tabellenstruktur für Tabelle `composite_frames`
+--
 
 CREATE TABLE `composite_frames` (
   `composite_id` int(11) NOT NULL,
   `frame_id` int(11) NOT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`composite_id`,`frame_id`)
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `content_elements`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `content_elements`;
+--
+-- Tabellenstruktur für Tabelle `content_elements`
+--
 
 CREATE TABLE `content_elements` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `page_id` int(11) NOT NULL,
   `name` varchar(255) DEFAULT NULL,
   `html` mediumtext NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `page_id` (`page_id`),
-  CONSTRAINT `content_elements_ibfk_1` FOREIGN KEY (`page_id`) REFERENCES `pages` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=29 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `controlnet_maps`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `controlnet_maps`;
+--
+-- Tabellenstruktur für Tabelle `controlnet_maps`
+--
 
 CREATE TABLE `controlnet_maps` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
   `order` int(11) NOT NULL DEFAULT 0 COMMENT 'Display order for interface/menu',
   `description` text DEFAULT NULL,
@@ -366,38 +337,34 @@ CREATE TABLE `controlnet_maps` (
   `cnmap` tinyint(1) NOT NULL DEFAULT 0,
   `cnmap_frame_id` int(11) DEFAULT NULL,
   `cnmap_frame_filename` varchar(100) DEFAULT NULL,
-  `cnmap_prompt` text DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=452 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `cnmap_prompt` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `design_axes`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `design_axes`;
+--
+-- Tabellenstruktur für Tabelle `design_axes`
+--
 
 CREATE TABLE `design_axes` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `id` int(10) UNSIGNED NOT NULL,
   `axis_name` varchar(128) NOT NULL,
   `axis_group` varchar(64) DEFAULT 'visual_style',
   `category` varchar(128) DEFAULT NULL,
   `pole_left` varchar(128) NOT NULL,
   `pole_right` varchar(128) NOT NULL,
   `notes` text DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `idx_axis_group` (`axis_group`),
-  KEY `idx_group_category` (`axis_group`,`category`)
-) ENGINE=InnoDB AUTO_INCREMENT=62 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 -- --------------------------------------------------------
--- Table: `dict_dictionaries`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `dict_dictionaries`;
+--
+-- Tabellenstruktur für Tabelle `dict_dictionaries`
+--
 
 CREATE TABLE `dict_dictionaries` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `title` varchar(255) NOT NULL,
   `slug` varchar(255) NOT NULL,
   `description` text DEFAULT NULL,
@@ -407,60 +374,46 @@ CREATE TABLE `dict_dictionaries` (
   `total_lemmas` int(11) DEFAULT 0 COMMENT 'Cached count',
   `sort_order` int(11) NOT NULL DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `slug` (`slug`),
-  KEY `sort_order_index` (`sort_order`),
-  KEY `language_code` (`language_code`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
--- Table: `dict_lemmas`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `dict_lemmas`;
+--
+-- Tabellenstruktur für Tabelle `dict_lemmas`
+--
 
 CREATE TABLE `dict_lemmas` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `lemma` varchar(255) NOT NULL COMMENT 'Base form of the word',
   `language_code` varchar(10) DEFAULT 'en',
   `pos` varchar(50) DEFAULT NULL COMMENT 'Part of speech: noun, verb, adj, etc.',
   `frequency` int(11) DEFAULT 1 COMMENT 'Global frequency count',
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `lemma_language` (`lemma`,`language_code`),
-  KEY `lemma_index` (`lemma`),
-  KEY `frequency_index` (`frequency`)
-) ENGINE=InnoDB AUTO_INCREMENT=26070 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
--- Table: `dict_lemma_2_dictionary`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `dict_lemma_2_dictionary`;
+--
+-- Tabellenstruktur für Tabelle `dict_lemma_2_dictionary`
+--
 
 CREATE TABLE `dict_lemma_2_dictionary` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `dictionary_id` int(11) NOT NULL,
   `lemma_id` int(11) NOT NULL,
   `frequency_in_dict` int(11) DEFAULT 1 COMMENT 'How often this lemma appears in this dictionary',
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `dict_lemma_unique` (`dictionary_id`,`lemma_id`),
-  KEY `dictionary_id` (`dictionary_id`),
-  KEY `lemma_id` (`lemma_id`),
-  CONSTRAINT `fk_dict_id` FOREIGN KEY (`dictionary_id`) REFERENCES `dict_dictionaries` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_lemma_id` FOREIGN KEY (`lemma_id`) REFERENCES `dict_lemmas` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=39940 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
--- Table: `dict_source_files`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `dict_source_files`;
+--
+-- Tabellenstruktur für Tabelle `dict_source_files`
+--
 
 CREATE TABLE `dict_source_files` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `dictionary_id` int(11) NOT NULL,
   `filename` varchar(255) NOT NULL,
   `original_filename` varchar(255) NOT NULL,
@@ -472,64 +425,50 @@ CREATE TABLE `dict_source_files` (
   `parse_completed_at` timestamp NULL DEFAULT NULL,
   `lemmas_extracted` int(11) DEFAULT 0,
   `error_message` text DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `dictionary_id` (`dictionary_id`),
-  KEY `parse_status` (`parse_status`),
-  CONSTRAINT `fk_source_dict_id` FOREIGN KEY (`dictionary_id`) REFERENCES `dict_dictionaries` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
--- Table: `export_flags`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `export_flags`;
+--
+-- Tabellenstruktur für Tabelle `export_flags`
+--
 
 CREATE TABLE `export_flags` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `scene_part_id` int(11) NOT NULL,
   `ready_for_export` tinyint(1) NOT NULL DEFAULT 0,
   `export_type` enum('script','art','audio','full_package') NOT NULL,
   `last_exported_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `fk_export_scene_part` (`scene_part_id`),
-  KEY `idx_export_ready` (`ready_for_export`),
-  KEY `idx_export_type` (`export_type`),
-  CONSTRAINT `fk_export_scene_part` FOREIGN KEY (`scene_part_id`) REFERENCES `scene_parts` (`id`) ON DELETE CASCADE
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `feedback_notes`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `feedback_notes`;
+--
+-- Tabellenstruktur für Tabelle `feedback_notes`
+--
 
 CREATE TABLE `feedback_notes` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `source` varchar(100) NOT NULL,
   `scene_part_id` int(11) DEFAULT NULL,
   `content` text NOT NULL,
   `action_required` tinyint(1) NOT NULL DEFAULT 0,
   `resolved_status` enum('pending','resolved') NOT NULL DEFAULT 'pending',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `idx_feedback_source` (`source`),
-  KEY `idx_feedback_status` (`resolved_status`),
-  KEY `idx_feedback_scene_part` (`scene_part_id`),
-  CONSTRAINT `fk_feedback_scene_part` FOREIGN KEY (`scene_part_id`) REFERENCES `scene_parts` (`id`) ON DELETE CASCADE
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `frames`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `frames`;
+--
+-- Tabellenstruktur für Tabelle `frames`
+--
 
 CREATE TABLE `frames` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `map_run_id` int(11) DEFAULT NULL,
   `name` varchar(255) NOT NULL,
   `filename` varchar(255) NOT NULL,
@@ -546,240 +485,197 @@ CREATE TABLE `frames` (
   `cnmap` tinyint(1) NOT NULL DEFAULT 0,
   `cnmap_frame_id` int(11) DEFAULT NULL,
   `cnmap_frame_filename` varchar(100) DEFAULT NULL,
-  `cnmap_prompt` text DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=7022 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `cnmap_prompt` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `frames_2_animas`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `frames_2_animas`;
+--
+-- Tabellenstruktur für Tabelle `frames_2_animas`
+--
 
 CREATE TABLE `frames_2_animas` (
   `from_id` int(11) NOT NULL,
-  `to_id` int(11) NOT NULL,
-  PRIMARY KEY (`from_id`,`to_id`),
-  KEY `anima_id` (`to_id`)
+  `to_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `frames_2_artifacts`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `frames_2_artifacts`;
+--
+-- Tabellenstruktur für Tabelle `frames_2_artifacts`
+--
 
 CREATE TABLE `frames_2_artifacts` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `from_id` int(11) NOT NULL,
-  `to_id` int(11) NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `idx_frame_artifact_from` (`from_id`),
-  KEY `idx_frame_artifact_to` (`to_id`),
-  CONSTRAINT `fk_frames_artifacts_artifact` FOREIGN KEY (`to_id`) REFERENCES `artifacts` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=58 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `to_id` int(11) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `frames_2_backgrounds`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `frames_2_backgrounds`;
+--
+-- Tabellenstruktur für Tabelle `frames_2_backgrounds`
+--
 
 CREATE TABLE `frames_2_backgrounds` (
   `from_id` int(11) NOT NULL,
-  `to_id` int(11) NOT NULL,
-  PRIMARY KEY (`from_id`,`to_id`),
-  KEY `background_id` (`to_id`)
+  `to_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `frames_2_characters`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `frames_2_characters`;
+--
+-- Tabellenstruktur für Tabelle `frames_2_characters`
+--
 
 CREATE TABLE `frames_2_characters` (
   `from_id` int(11) NOT NULL,
-  `to_id` int(11) NOT NULL,
-  PRIMARY KEY (`from_id`,`to_id`),
-  KEY `character_id` (`to_id`)
+  `to_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `frames_2_character_poses`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `frames_2_character_poses`;
+--
+-- Tabellenstruktur für Tabelle `frames_2_character_poses`
+--
 
 CREATE TABLE `frames_2_character_poses` (
   `from_id` int(11) NOT NULL,
-  `to_id` int(11) NOT NULL,
-  PRIMARY KEY (`from_id`,`to_id`),
-  KEY `from_id` (`to_id`)
+  `to_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `frames_2_composites`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `frames_2_composites`;
+--
+-- Tabellenstruktur für Tabelle `frames_2_composites`
+--
 
 CREATE TABLE `frames_2_composites` (
   `from_id` int(11) NOT NULL,
-  `to_id` int(11) NOT NULL,
-  PRIMARY KEY (`from_id`,`to_id`),
-  KEY `composite_id` (`to_id`)
+  `to_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `frames_2_controlnet_maps`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `frames_2_controlnet_maps`;
+--
+-- Tabellenstruktur für Tabelle `frames_2_controlnet_maps`
+--
 
 CREATE TABLE `frames_2_controlnet_maps` (
   `from_id` int(11) NOT NULL,
-  `to_id` int(11) NOT NULL,
-  PRIMARY KEY (`from_id`,`to_id`),
-  KEY `to_id_idx` (`to_id`)
+  `to_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 -- --------------------------------------------------------
--- Table: `frames_2_generatives`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `frames_2_generatives`;
+--
+-- Tabellenstruktur für Tabelle `frames_2_generatives`
+--
 
 CREATE TABLE `frames_2_generatives` (
   `from_id` int(11) NOT NULL,
-  `to_id` int(11) NOT NULL,
-  PRIMARY KEY (`from_id`,`to_id`),
-  KEY `idx_frame_generative_from` (`from_id`),
-  KEY `idx_frame_generative_to` (`to_id`),
-  CONSTRAINT `fk_frames_generatives_generative` FOREIGN KEY (`to_id`) REFERENCES `generatives` (`id`) ON DELETE CASCADE
+  `to_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `frames_2_locations`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `frames_2_locations`;
+--
+-- Tabellenstruktur für Tabelle `frames_2_locations`
+--
 
 CREATE TABLE `frames_2_locations` (
   `from_id` int(11) NOT NULL,
-  `to_id` int(11) NOT NULL,
-  PRIMARY KEY (`from_id`,`to_id`),
-  KEY `location_id` (`to_id`)
+  `to_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `frames_2_pastebin`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `frames_2_pastebin`;
+--
+-- Tabellenstruktur für Tabelle `frames_2_pastebin`
+--
 
 CREATE TABLE `frames_2_pastebin` (
   `from_id` int(11) NOT NULL,
-  `to_id` int(11) NOT NULL,
-  PRIMARY KEY (`from_id`,`to_id`),
-  KEY `location_id` (`to_id`)
+  `to_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `frames_2_prompt_matrix_blueprints`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `frames_2_prompt_matrix_blueprints`;
+--
+-- Tabellenstruktur für Tabelle `frames_2_prompt_matrix_blueprints`
+--
 
 CREATE TABLE `frames_2_prompt_matrix_blueprints` (
   `from_id` int(11) NOT NULL,
-  `to_id` int(11) NOT NULL,
-  PRIMARY KEY (`from_id`,`to_id`),
-  KEY `prompt_matrix_blueprint_id` (`to_id`)
+  `to_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `frames_2_scene_parts`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `frames_2_scene_parts`;
+--
+-- Tabellenstruktur für Tabelle `frames_2_scene_parts`
+--
 
 CREATE TABLE `frames_2_scene_parts` (
   `from_id` int(11) NOT NULL,
-  `to_id` int(11) NOT NULL,
-  PRIMARY KEY (`from_id`,`to_id`),
-  KEY `to_id` (`to_id`),
-  CONSTRAINT `frames_2_scene_parts_ibfk_2` FOREIGN KEY (`to_id`) REFERENCES `scene_parts` (`id`) ON DELETE CASCADE
+  `to_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `frames_2_sketches`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `frames_2_sketches`;
+--
+-- Tabellenstruktur für Tabelle `frames_2_sketches`
+--
 
 CREATE TABLE `frames_2_sketches` (
   `from_id` int(11) NOT NULL,
-  `to_id` int(11) NOT NULL,
-  PRIMARY KEY (`from_id`,`to_id`),
-  KEY `idx_frame_sketch_from` (`from_id`),
-  KEY `idx_frame_sketch_to` (`to_id`),
-  CONSTRAINT `fk_frames_sketches_sketch` FOREIGN KEY (`to_id`) REFERENCES `sketches` (`id`) ON DELETE CASCADE
+  `to_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `frames_2_spawns`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `frames_2_spawns`;
+--
+-- Tabellenstruktur für Tabelle `frames_2_spawns`
+--
 
 CREATE TABLE `frames_2_spawns` (
   `from_id` int(11) NOT NULL,
-  `to_id` int(11) NOT NULL,
-  PRIMARY KEY (`from_id`,`to_id`),
-  KEY `seed_id` (`to_id`)
+  `to_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `frames_2_vehicles`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `frames_2_vehicles`;
+--
+-- Tabellenstruktur für Tabelle `frames_2_vehicles`
+--
 
 CREATE TABLE `frames_2_vehicles` (
   `from_id` int(11) NOT NULL,
-  `to_id` int(11) NOT NULL,
-  PRIMARY KEY (`from_id`,`to_id`),
-  KEY `idx_from_id` (`from_id`),
-  KEY `idx_to_id` (`to_id`),
-  CONSTRAINT `fk_frames_2_vehicles_to` FOREIGN KEY (`to_id`) REFERENCES `vehicles` (`id`) ON DELETE CASCADE
+  `to_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `frames_chains`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `frames_chains`;
+--
+-- Tabellenstruktur für Tabelle `frames_chains`
+--
 
 CREATE TABLE `frames_chains` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `frame_id` int(11) NOT NULL COMMENT 'The frame that is part of this chain step',
   `parent_frame_id` int(11) DEFAULT NULL COMMENT 'Previous frame in the chain (NULL if first in chain)',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `rolled_back` tinyint(1) NOT NULL DEFAULT 0 COMMENT '1 = this chain step has been rolled back',
-  PRIMARY KEY (`id`),
-  KEY `idx_frame_id` (`frame_id`),
-  KEY `idx_parent_frame_id` (`parent_frame_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=92 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `rolled_back` tinyint(1) NOT NULL DEFAULT 0 COMMENT '1 = this chain step has been rolled back'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `frames_failed`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `frames_failed`;
+--
+-- Tabellenstruktur für Tabelle `frames_failed`
+--
 
 CREATE TABLE `frames_failed` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `prompt` text DEFAULT NULL,
   `entity_type` varchar(50) DEFAULT NULL,
   `entity_id` int(11) DEFAULT NULL,
@@ -789,18 +685,17 @@ CREATE TABLE `frames_failed` (
   `img2img_entity` varchar(50) DEFAULT NULL,
   `img2img_id` int(11) DEFAULT NULL,
   `img2img_filename` varchar(255) DEFAULT NULL,
-  `failed_at` timestamp NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`)
+  `failed_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `frames_trashcan`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `frames_trashcan`;
+--
+-- Tabellenstruktur für Tabelle `frames_trashcan`
+--
 
 CREATE TABLE `frames_trashcan` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `original_frame_id` int(11) NOT NULL,
   `map_run_id` int(11) DEFAULT NULL,
   `name` varchar(255) NOT NULL,
@@ -814,30 +709,28 @@ CREATE TABLE `frames_trashcan` (
   `img2img_entity` varchar(64) DEFAULT NULL,
   `img2img_id` int(11) DEFAULT NULL,
   `img2img_filename` varchar(255) DEFAULT NULL,
-  `deleted_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=123 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
--- Table: `frame_counter`
--- --------------------------------------------------------
-
-DROP TABLE IF EXISTS `frame_counter`;
-
-CREATE TABLE `frame_counter` (
-  `id` int(11) NOT NULL DEFAULT 1,
-  `next_frame` bigint(20) NOT NULL,
-  PRIMARY KEY (`id`)
+  `deleted_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `generated_phrase_maps`
+
+--
+-- Tabellenstruktur für Tabelle `frame_counter`
+--
+
+CREATE TABLE `frame_counter` (
+  `id` int(11) NOT NULL DEFAULT 1,
+  `next_frame` bigint(20) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `generated_phrase_maps`;
+--
+-- Tabellenstruktur für Tabelle `generated_phrase_maps`
+--
 
 CREATE TABLE `generated_phrase_maps` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `id` int(10) UNSIGNED NOT NULL,
   `profile_hash` varchar(64) NOT NULL,
   `profile_id` int(11) DEFAULT NULL,
   `model_name` varchar(128) NOT NULL,
@@ -846,21 +739,17 @@ CREATE TABLE `generated_phrase_maps` (
   `raw_model_response` longtext DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `last_used_at` timestamp NULL DEFAULT NULL,
-  `usage_count` int(10) unsigned NOT NULL DEFAULT 0,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `ux_profile_hash_model` (`profile_hash`,`model_name`),
-  KEY `idx_profile_id` (`profile_id`),
-  KEY `idx_created_at` (`created_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=52 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+  `usage_count` int(10) UNSIGNED NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 -- --------------------------------------------------------
--- Table: `generatives`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `generatives`;
+--
+-- Tabellenstruktur für Tabelle `generatives`
+--
 
 CREATE TABLE `generatives` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) DEFAULT NULL,
   `order` int(11) NOT NULL DEFAULT 0 COMMENT 'Display order for interface/menu',
   `description` text DEFAULT NULL COMMENT 'raw or random prompt text',
@@ -876,18 +765,17 @@ CREATE TABLE `generatives` (
   `cnmap` tinyint(1) NOT NULL DEFAULT 0,
   `cnmap_frame_id` int(11) DEFAULT NULL,
   `cnmap_frame_filename` varchar(100) DEFAULT NULL,
-  `cnmap_prompt` text DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1104 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `cnmap_prompt` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `generator_config`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `generator_config`;
+--
+-- Tabellenstruktur für Tabelle `generator_config`
+--
 
 CREATE TABLE `generator_config` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `config_id` varchar(255) NOT NULL,
   `user_id` int(11) DEFAULT NULL COMMENT 'NULL = public generator, int = private generator owned by user',
   `title` varchar(255) NOT NULL,
@@ -902,58 +790,43 @@ CREATE TABLE `generator_config` (
   `updated_at` datetime NOT NULL,
   `active` tinyint(1) NOT NULL DEFAULT 1,
   `is_public` tinyint(1) NOT NULL DEFAULT 0 COMMENT '0 = private (only owner), 1 = public (all users)',
-  `list_order` int(11) NOT NULL DEFAULT 0 COMMENT 'Order for drag-and-drop listing',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `config_id` (`config_id`),
-  KEY `user_id` (`user_id`),
-  KEY `active` (`active`),
-  KEY `idx_user_active` (`user_id`,`active`),
-  KEY `idx_public` (`user_id`),
-  KEY `idx_is_public` (`is_public`,`active`),
-  KEY `idx_list_order` (`list_order`)
-) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Generator configurations. user_id=NULL indicates public/system generators accessible to all users.';
+  `list_order` int(11) NOT NULL DEFAULT 0 COMMENT 'Order for drag-and-drop listing'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Generator configurations. user_id=NULL indicates public/system generators accessible to all users.';
 
 -- --------------------------------------------------------
--- Table: `generator_config_display_area`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `generator_config_display_area`;
+--
+-- Tabellenstruktur für Tabelle `generator_config_display_area`
+--
 
 CREATE TABLE `generator_config_display_area` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `area_key` varchar(100) NOT NULL,
   `label` varchar(255) NOT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` datetime NOT NULL,
-  `updated_at` datetime NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uniq_area_key` (`area_key`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Configurable display areas for generators';
+  `updated_at` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Configurable display areas for generators';
 
 -- --------------------------------------------------------
--- Table: `generator_config_to_display_area`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `generator_config_to_display_area`;
+--
+-- Tabellenstruktur für Tabelle `generator_config_to_display_area`
+--
 
 CREATE TABLE `generator_config_to_display_area` (
   `generator_config_id` int(11) NOT NULL,
-  `display_area_id` int(11) NOT NULL,
-  PRIMARY KEY (`generator_config_id`,`display_area_id`),
-  KEY `idx_generator_config_id` (`generator_config_id`),
-  KEY `idx_display_area_id` (`display_area_id`),
-  CONSTRAINT `fk_display_area` FOREIGN KEY (`display_area_id`) REFERENCES `generator_config_display_area` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_generator_config` FOREIGN KEY (`generator_config_id`) REFERENCES `generator_config` (`id`) ON DELETE CASCADE
+  `display_area_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
--- Table: `image_edits`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `image_edits`;
+--
+-- Tabellenstruktur für Tabelle `image_edits`
+--
 
 CREATE TABLE `image_edits` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `chain_id` int(11) DEFAULT NULL,
   `parent_frame_id` int(11) NOT NULL,
   `derived_frame_id` int(11) DEFAULT NULL,
@@ -966,36 +839,30 @@ CREATE TABLE `image_edits` (
   `note` varchar(255) DEFAULT NULL,
   `applied` tinyint(1) NOT NULL DEFAULT 0,
   `applied_at` timestamp NULL DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `idx_parent_frame` (`parent_frame_id`),
-  KEY `idx_chain` (`chain_id`),
-  KEY `idx_derived_frame` (`derived_frame_id`),
-  KEY `idx_map_run` (`map_run_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=92 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `image_stash`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `image_stash`;
+--
+-- Tabellenstruktur für Tabelle `image_stash`
+--
 
 CREATE TABLE `image_stash` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `file_path` varchar(255) NOT NULL,
   `title` varchar(255) DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=35 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `interactions`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `interactions`;
+--
+-- Tabellenstruktur für Tabelle `interactions`
+--
 
 CREATE TABLE `interactions` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(180) NOT NULL,
   `description` text NOT NULL,
   `interaction_group` varchar(50) NOT NULL,
@@ -1003,57 +870,46 @@ CREATE TABLE `interactions` (
   `example_prompt` text NOT NULL,
   `active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT NULL ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `interaction_group` (`interaction_group`),
-  KEY `category` (`category`),
-  KEY `active` (`active`)
-) ENGINE=InnoDB AUTO_INCREMENT=101 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `updated_at` timestamp NULL DEFAULT NULL ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
--- Table: `interaction_audio`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `interaction_audio`;
+--
+-- Tabellenstruktur für Tabelle `interaction_audio`
+--
 
 CREATE TABLE `interaction_audio` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `interaction_id` int(11) NOT NULL,
   `audio_asset_id` int(11) NOT NULL,
-  `notes` text DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_ia_unique` (`interaction_id`,`audio_asset_id`),
-  KEY `fk_ia_audio` (`audio_asset_id`),
-  CONSTRAINT `fk_ia_audio` FOREIGN KEY (`audio_asset_id`) REFERENCES `audio_assets` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_ia_interaction` FOREIGN KEY (`interaction_id`) REFERENCES `interactions` (`id`) ON DELETE CASCADE
+  `notes` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `lightings`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `lightings`;
+--
+-- Tabellenstruktur für Tabelle `lightings`
+--
 
 CREATE TABLE `lightings` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
   `description` text DEFAULT NULL,
   `angle_id` int(11) DEFAULT NULL,
   `intensity` varchar(50) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `angle_id` (`angle_id`)
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `locations`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `locations`;
+--
+-- Tabellenstruktur für Tabelle `locations`
+--
 
 CREATE TABLE `locations` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
   `order` int(11) NOT NULL DEFAULT 0 COMMENT 'Display order for interface/menu',
   `description` text DEFAULT NULL,
@@ -1071,20 +927,17 @@ CREATE TABLE `locations` (
   `cnmap` tinyint(1) NOT NULL DEFAULT 0,
   `cnmap_frame_id` int(11) DEFAULT NULL,
   `cnmap_frame_filename` varchar(100) DEFAULT NULL,
-  `cnmap_prompt` text DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_locations_name` (`name`),
-  KEY `idx_locations_type` (`type`)
-) ENGINE=InnoDB AUTO_INCREMENT=1055 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `cnmap_prompt` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `locations_abstract`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `locations_abstract`;
+--
+-- Tabellenstruktur für Tabelle `locations_abstract`
+--
 
 CREATE TABLE `locations_abstract` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
   `order` int(11) NOT NULL DEFAULT 0 COMMENT 'Display order for interface/menu',
   `description` text DEFAULT NULL,
@@ -1097,51 +950,45 @@ CREATE TABLE `locations_abstract` (
   `state_id_active` int(11) DEFAULT NULL,
   `img2img` tinyint(1) NOT NULL DEFAULT 0,
   `img2img_frame_id` int(11) DEFAULT NULL,
-  `img2img_prompt` text DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_locations_name` (`name`),
-  KEY `idx_locations_type` (`type`)
-) ENGINE=InnoDB AUTO_INCREMENT=594 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `img2img_prompt` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `logs`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `logs`;
+--
+-- Tabellenstruktur für Tabelle `logs`
+--
 
 CREATE TABLE `logs` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `level` varchar(10) NOT NULL,
   `message` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL CHECK (json_valid(`message`)),
-  `log_time` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`)
+  `log_time` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 -- --------------------------------------------------------
--- Table: `map_runs`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `map_runs`;
+--
+-- Tabellenstruktur für Tabelle `map_runs`
+--
 
 CREATE TABLE `map_runs` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `entity_type` varchar(100) NOT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `note` text DEFAULT NULL,
-  `parent_map_run_id` int(11) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `parent_map_run_idx` (`parent_map_run_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1412 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `parent_map_run_id` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `meta_entities`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `meta_entities`;
+--
+-- Tabellenstruktur für Tabelle `meta_entities`
+--
 
 CREATE TABLE `meta_entities` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
   `type` varchar(50) NOT NULL DEFAULT 'BASE TABLE' COMMENT 'BASE TABLE, VIEW, etc.',
   `order` int(11) NOT NULL DEFAULT 0 COMMENT 'Display order for interface/menu',
@@ -1152,36 +999,32 @@ CREATE TABLE `meta_entities` (
   `state_id_active` int(11) DEFAULT NULL,
   `img2img` tinyint(1) NOT NULL DEFAULT 0,
   `img2img_frame_id` int(11) DEFAULT NULL,
-  `img2img_prompt` text DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=28 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `img2img_prompt` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `pages`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `pages`;
+--
+-- Tabellenstruktur für Tabelle `pages`
+--
 
 CREATE TABLE `pages` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(255) DEFAULT NULL,
   `level` tinyint(4) NOT NULL DEFAULT 1,
   `parent_id` int(11) DEFAULT NULL,
   `href` varchar(2048) NOT NULL DEFAULT '',
-  `position` int(11) NOT NULL DEFAULT 0,
-  PRIMARY KEY (`id`),
-  KEY `parent_id` (`parent_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1001 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `position` int(11) NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `pastebin`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `pastebin`;
+--
+-- Tabellenstruktur für Tabelle `pastebin`
+--
 
 CREATE TABLE `pastebin` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `user_id` int(11) DEFAULT NULL,
   `name` varchar(255) DEFAULT NULL,
   `order` int(11) DEFAULT 0 COMMENT 'Display order for interface/menu',
@@ -1196,77 +1039,74 @@ CREATE TABLE `pastebin` (
   `img2img` tinyint(1) NOT NULL DEFAULT 0,
   `img2img_frame_id` int(11) DEFAULT NULL,
   `img2img_prompt` text DEFAULT NULL,
-  `url_token` char(64) NOT NULL COMMENT 'Unique token for API access',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `url_token` (`url_token`),
-  KEY `idx_user_id` (`user_id`),
-  KEY `idx_visibility` (`visibility`),
-  KEY `idx_expires_at` (`expires_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+  `url_token` char(64) NOT NULL COMMENT 'Unique token for API access'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+
+--
+-- Trigger `pastebin`
+--
+DELIMITER $$
+CREATE TRIGGER `pastebin_before_insert` BEFORE INSERT ON `pastebin` FOR EACH ROW BEGIN
+  IF NEW.url_token IS NULL OR NEW.url_token = '' THEN
+    SET NEW.url_token = SHA2(UUID(), 256);
+  END IF;
+END
+$$
+DELIMITER ;
 
 -- --------------------------------------------------------
--- Table: `perspectives`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `perspectives`;
+--
+-- Tabellenstruktur für Tabelle `perspectives`
+--
 
 CREATE TABLE `perspectives` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `scene_part_id` int(11) NOT NULL,
   `angle` varchar(500) DEFAULT NULL,
   `description` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `idx_perspectives_scene_part` (`scene_part_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `playlist_videos`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `playlist_videos`;
+--
+-- Tabellenstruktur für Tabelle `playlist_videos`
+--
 
 CREATE TABLE `playlist_videos` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `playlist_id` int(11) NOT NULL,
   `video_id` int(11) NOT NULL,
   `sort_order` int(11) DEFAULT 0,
-  `added_at` timestamp NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `unique_playlist_video` (`playlist_id`,`video_id`),
-  KEY `idx_playlist` (`playlist_id`),
-  KEY `idx_video` (`video_id`),
-  KEY `idx_sort` (`sort_order`),
-  CONSTRAINT `fk_playlist` FOREIGN KEY (`playlist_id`) REFERENCES `video_playlists` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_video` FOREIGN KEY (`video_id`) REFERENCES `videos` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `added_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `poses`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `poses`;
+--
+-- Tabellenstruktur für Tabelle `poses`
+--
 
 CREATE TABLE `poses` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
   `description` text DEFAULT NULL,
   `category` varchar(50) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `active` tinyint(1) NOT NULL DEFAULT 0,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `active` tinyint(1) NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `posts`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `posts`;
+--
+-- Tabellenstruktur für Tabelle `posts`
+--
 
 CREATE TABLE `posts` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `title` varchar(255) NOT NULL,
   `slug` varchar(255) NOT NULL,
   `post_type` enum('image_grid','image_swiper','video_playlist','youtube_playlist') NOT NULL,
@@ -1275,41 +1115,33 @@ CREATE TABLE `posts` (
   `media_items` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`media_items`)),
   `sort_order` int(11) NOT NULL DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `slug` (`slug`),
-  KEY `sort_order_index` (`sort_order`)
-) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
--- Table: `production_status`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `production_status`;
+--
+-- Tabellenstruktur für Tabelle `production_status`
+--
 
 CREATE TABLE `production_status` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `scene_part_id` int(11) NOT NULL,
   `stage` enum('draft','review','approved','locked') NOT NULL DEFAULT 'draft',
   `assigned_to` varchar(100) DEFAULT NULL,
   `notes` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `fk_prodstatus_scene_part` (`scene_part_id`),
-  KEY `idx_prodstatus_stage` (`stage`),
-  KEY `idx_prodstatus_assignee` (`assigned_to`),
-  CONSTRAINT `fk_prodstatus_scene_part` FOREIGN KEY (`scene_part_id`) REFERENCES `scene_parts` (`id`) ON DELETE CASCADE
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `prompt_additions`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `prompt_additions`;
+--
+-- Tabellenstruktur für Tabelle `prompt_additions`
+--
 
 CREATE TABLE `prompt_additions` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `id` int(10) UNSIGNED NOT NULL,
   `entity_type` varchar(100) DEFAULT NULL,
   `entity_id` int(11) DEFAULT NULL,
   `slot` int(11) NOT NULL,
@@ -1317,104 +1149,90 @@ CREATE TABLE `prompt_additions` (
   `description` text DEFAULT NULL,
   `active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `idx_slot_order` (`slot`,`order`),
-  KEY `idx_active_slot` (`active`,`slot`),
-  KEY `idx_entity` (`entity_type`,`entity_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=38 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
--- Table: `prompt_globals`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `prompt_globals`;
+--
+-- Tabellenstruktur für Tabelle `prompt_globals`
+--
 
 CREATE TABLE `prompt_globals` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
   `order` int(11) NOT NULL DEFAULT 0,
   `active` tinyint(1) NOT NULL DEFAULT 1,
   `description` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_prompt_globals_name` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `prompt_ideations`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `prompt_ideations`;
+--
+-- Tabellenstruktur für Tabelle `prompt_ideations`
+--
 
 CREATE TABLE `prompt_ideations` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `id` int(10) UNSIGNED NOT NULL,
   `order` int(11) NOT NULL DEFAULT 0 COMMENT 'Display order for interface/menu',
   `description` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
--- Table: `prompt_matrix`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `prompt_matrix`;
+--
+-- Tabellenstruktur für Tabelle `prompt_matrix`
+--
 
 CREATE TABLE `prompt_matrix` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `id` int(10) UNSIGNED NOT NULL,
   `entity_type` varchar(100) DEFAULT NULL,
   `entity_id` int(11) DEFAULT NULL,
   `order` int(11) NOT NULL DEFAULT 0,
   `description` text DEFAULT NULL,
   `additions_snapshot` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'Immutable snapshot: [{slot, addition_id|null, text}]' CHECK (json_valid(`additions_snapshot`)),
   `additions_count` int(11) DEFAULT NULL,
-  `total_combinations` bigint(20) unsigned DEFAULT NULL,
+  `total_combinations` bigint(20) UNSIGNED DEFAULT NULL,
   `regenerate_images` tinyint(1) NOT NULL DEFAULT 0,
   `active_map_run_id` int(11) DEFAULT NULL,
   `state_id_active` int(11) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `idx_entity` (`entity_type`,`entity_id`),
-  KEY `idx_map_run` (`active_map_run_id`),
-  KEY `idx_state` (`state_id_active`)
-) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
--- Table: `prompt_matrix_additions`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `prompt_matrix_additions`;
+--
+-- Tabellenstruktur für Tabelle `prompt_matrix_additions`
+--
 
 CREATE TABLE `prompt_matrix_additions` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `matrix_id` int(10) unsigned NOT NULL,
-  `addition_id` int(10) unsigned DEFAULT NULL,
+  `id` int(10) UNSIGNED NOT NULL,
+  `matrix_id` int(10) UNSIGNED NOT NULL,
+  `addition_id` int(10) UNSIGNED DEFAULT NULL,
   `entity_type` varchar(100) DEFAULT NULL,
   `entity_id` int(11) DEFAULT NULL,
   `slot` int(11) NOT NULL,
   `order` int(11) NOT NULL DEFAULT 0,
   `description` text DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `idx_matrix_slot` (`matrix_id`,`slot`),
-  KEY `idx_addition_id` (`addition_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=167 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
--- Table: `prompt_matrix_blueprints`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `prompt_matrix_blueprints`;
+--
+-- Tabellenstruktur für Tabelle `prompt_matrix_blueprints`
+--
 
 CREATE TABLE `prompt_matrix_blueprints` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
-  `matrix_id` int(10) unsigned NOT NULL,
-  `matrix_additions_id` int(10) unsigned DEFAULT NULL,
+  `matrix_id` int(10) UNSIGNED NOT NULL,
+  `matrix_additions_id` int(10) UNSIGNED DEFAULT NULL,
   `entity_type` varchar(100) DEFAULT NULL,
   `entity_id` int(11) DEFAULT NULL,
   `order` int(11) NOT NULL DEFAULT 0 COMMENT 'Display order for interface/menu',
@@ -1431,40 +1249,34 @@ CREATE TABLE `prompt_matrix_blueprints` (
   `cnmap` tinyint(1) NOT NULL DEFAULT 0,
   `cnmap_frame_id` int(11) DEFAULT NULL,
   `cnmap_frame_filename` varchar(100) DEFAULT NULL,
-  `cnmap_prompt` text DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_sketches_name` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=498 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `cnmap_prompt` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `scenes`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `scenes`;
+--
+-- Tabellenstruktur für Tabelle `scenes`
+--
 
 CREATE TABLE `scenes` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `title` varchar(255) NOT NULL,
   `description` text DEFAULT NULL,
   `planet` varchar(100) DEFAULT NULL,
   `sequence` int(11) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `arc_id` int(11) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `idx_scenes_sequence` (`sequence`),
-  KEY `fk_scene_arc` (`arc_id`),
-  CONSTRAINT `fk_scene_arc` FOREIGN KEY (`arc_id`) REFERENCES `story_arcs` (`id`) ON DELETE SET NULL
+  `arc_id` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `scene_parts`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `scene_parts`;
+--
+-- Tabellenstruktur für Tabelle `scene_parts`
+--
 
 CREATE TABLE `scene_parts` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `scene_id` int(11) NOT NULL,
   `name` varchar(255) DEFAULT NULL,
   `order` int(11) NOT NULL DEFAULT 0 COMMENT 'Display order for interface/menu',
@@ -1477,143 +1289,106 @@ CREATE TABLE `scene_parts` (
   `state_id_active` int(11) DEFAULT NULL,
   `img2img` tinyint(1) NOT NULL DEFAULT 0,
   `img2img_frame_id` int(11) DEFAULT NULL,
-  `img2img_prompt` text DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `idx_scene_parts_scene` (`scene_id`),
-  KEY `idx_scene_parts_scene_seq` (`scene_id`,`sequence`),
-  CONSTRAINT `fk_scene_parts_scene` FOREIGN KEY (`scene_id`) REFERENCES `scenes` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `img2img_prompt` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `scene_part_animas`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `scene_part_animas`;
+--
+-- Tabellenstruktur für Tabelle `scene_part_animas`
+--
 
 CREATE TABLE `scene_part_animas` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `scene_part_id` int(11) NOT NULL,
   `character_anima_id` int(11) NOT NULL,
   `action_type` enum('misfire','assist','comic_beat','strategic_move') NOT NULL,
   `notes` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_span_unique` (`scene_part_id`,`character_anima_id`,`action_type`),
-  KEY `idx_span_scene_part` (`scene_part_id`),
-  KEY `idx_span_character_anima` (`character_anima_id`),
-  CONSTRAINT `fk_span_character_anima` FOREIGN KEY (`character_anima_id`) REFERENCES `animas` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_span_scene_part` FOREIGN KEY (`scene_part_id`) REFERENCES `scene_parts` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=30 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `scene_part_artifacts`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `scene_part_artifacts`;
+--
+-- Tabellenstruktur für Tabelle `scene_part_artifacts`
+--
 
 CREATE TABLE `scene_part_artifacts` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `scene_part_id` int(11) NOT NULL,
   `artifact_id` int(11) NOT NULL,
   `notes` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_spa_unique` (`scene_part_id`,`artifact_id`),
-  KEY `idx_spa_artifact` (`artifact_id`),
-  KEY `idx_spa_scene_part` (`scene_part_id`),
-  CONSTRAINT `fk_spa_artifact` FOREIGN KEY (`artifact_id`) REFERENCES `artifacts` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_spa_scene_part` FOREIGN KEY (`scene_part_id`) REFERENCES `scene_parts` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `scene_part_backgrounds`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `scene_part_backgrounds`;
+--
+-- Tabellenstruktur für Tabelle `scene_part_backgrounds`
+--
 
 CREATE TABLE `scene_part_backgrounds` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `perspective_id` int(11) NOT NULL,
   `background_id` int(11) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_spb_unique` (`perspective_id`,`background_id`),
-  KEY `idx_spb_background` (`background_id`),
-  KEY `idx_spb_perspective` (`perspective_id`),
-  CONSTRAINT `fk_spb_background` FOREIGN KEY (`background_id`) REFERENCES `backgrounds` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_spb_perspective` FOREIGN KEY (`perspective_id`) REFERENCES `perspectives` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `scene_part_characters`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `scene_part_characters`;
+--
+-- Tabellenstruktur für Tabelle `scene_part_characters`
+--
 
 CREATE TABLE `scene_part_characters` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `scene_part_id` int(11) NOT NULL,
   `character_id` int(11) NOT NULL,
   `role_in_part` varchar(50) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_spc_unique` (`scene_part_id`,`character_id`),
-  KEY `idx_spc_char` (`character_id`),
-  KEY `idx_spc_scene_part` (`scene_part_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
--- Table: `scene_part_tags`
--- --------------------------------------------------------
-
-DROP TABLE IF EXISTS `scene_part_tags`;
-
-CREATE TABLE `scene_part_tags` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `scene_part_id` int(11) NOT NULL,
-  `tag_id` int(11) NOT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_spt_unique` (`scene_part_id`,`tag_id`),
-  KEY `idx_spt_tag` (`tag_id`),
-  KEY `idx_spt_scene_part` (`scene_part_id`),
-  CONSTRAINT `fk_spt_scene_part` FOREIGN KEY (`scene_part_id`) REFERENCES `scene_parts` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_spt_tag` FOREIGN KEY (`tag_id`) REFERENCES `tags` (`id`) ON DELETE CASCADE
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `scene_part_versions`
+
+--
+-- Tabellenstruktur für Tabelle `scene_part_tags`
+--
+
+CREATE TABLE `scene_part_tags` (
+  `id` int(11) NOT NULL,
+  `scene_part_id` int(11) NOT NULL,
+  `tag_id` int(11) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `scene_part_versions`;
+--
+-- Tabellenstruktur für Tabelle `scene_part_versions`
+--
 
 CREATE TABLE `scene_part_versions` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `scene_part_id` int(11) NOT NULL,
   `version_number` int(11) NOT NULL,
   `description` text DEFAULT NULL,
   `created_by` varchar(100) DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_spv_unique` (`scene_part_id`,`version_number`),
-  KEY `idx_spv_scene_part` (`scene_part_id`),
-  KEY `idx_spv_version` (`version_number`),
-  CONSTRAINT `fk_spv_scene_part` FOREIGN KEY (`scene_part_id`) REFERENCES `scene_parts` (`id`) ON DELETE CASCADE
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `scheduled_tasks`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `scheduled_tasks`;
+--
+-- Tabellenstruktur für Tabelle `scheduled_tasks`
+--
 
 CREATE TABLE `scheduled_tasks` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(255) DEFAULT NULL,
   `order` int(11) NOT NULL DEFAULT 0 COMMENT 'Display order for interface/menu',
   `script_path` varchar(512) DEFAULT NULL,
@@ -1630,62 +1405,53 @@ CREATE TABLE `scheduled_tasks` (
   `lock_scope` enum('global','entity','none') DEFAULT 'global' COMMENT 'Scope of the lock: global (task-wide), entity (per-entity), none',
   `created_at` datetime DEFAULT current_timestamp(),
   `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `run_now` tinyint(1) DEFAULT 0,
-  PRIMARY KEY (`id`),
-  KEY `idx_active_time` (`active`,`schedule_time`),
-  KEY `idx_active_interval` (`active`,`schedule_interval`),
-  KEY `idx_last_run` (`last_run`)
-) ENGINE=InnoDB AUTO_INCREMENT=33 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
--- Table: `scheduler_heartbeat`
--- --------------------------------------------------------
-
-DROP TABLE IF EXISTS `scheduler_heartbeat`;
-
-CREATE TABLE `scheduler_heartbeat` (
-  `id` tinyint(4) NOT NULL,
-  `last_seen` datetime NOT NULL,
-  PRIMARY KEY (`id`)
+  `run_now` tinyint(1) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `seeds`
+
+--
+-- Tabellenstruktur für Tabelle `scheduler_heartbeat`
+--
+
+CREATE TABLE `scheduler_heartbeat` (
+  `id` tinyint(4) NOT NULL,
+  `last_seen` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `seeds`;
+--
+-- Tabellenstruktur für Tabelle `seeds`
+--
 
 CREATE TABLE `seeds` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `id` int(10) UNSIGNED NOT NULL,
   `value` int(11) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_seeds_value` (`value`)
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
--- Table: `shot_types`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `shot_types`;
+--
+-- Tabellenstruktur für Tabelle `shot_types`
+--
 
 CREATE TABLE `shot_types` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
--- Table: `sketches`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `sketches`;
+--
+-- Tabellenstruktur für Tabelle `sketches`
+--
 
 CREATE TABLE `sketches` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
   `order` int(11) NOT NULL DEFAULT 0 COMMENT 'Display order for interface/menu',
   `description` text DEFAULT NULL COMMENT 'raw or random prompt text',
@@ -1702,19 +1468,17 @@ CREATE TABLE `sketches` (
   `cnmap` tinyint(1) NOT NULL DEFAULT 0,
   `cnmap_frame_id` int(11) DEFAULT NULL,
   `cnmap_frame_filename` varchar(100) DEFAULT NULL,
-  `cnmap_prompt` text DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_sketches_name` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=318 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `cnmap_prompt` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `sketch_templates`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `sketch_templates`;
+--
+-- Tabellenstruktur für Tabelle `sketch_templates`
+--
 
 CREATE TABLE `sketch_templates` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
   `core_idea` varchar(255) NOT NULL,
   `shot_type` varchar(50) NOT NULL,
@@ -1725,20 +1489,17 @@ CREATE TABLE `sketch_templates` (
   `example_prompt` text NOT NULL,
   `entity_type` varchar(50) NOT NULL DEFAULT 'sketches',
   `active` tinyint(1) NOT NULL DEFAULT 1,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `entity_type` (`entity_type`),
-  KEY `active` (`active`)
-) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
--- Table: `spawns`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `spawns`;
+--
+-- Tabellenstruktur für Tabelle `spawns`
+--
 
 CREATE TABLE `spawns` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) DEFAULT NULL,
   `order` int(11) NOT NULL DEFAULT 0 COMMENT 'Display order for interface/menu',
   `type` varchar(50) DEFAULT NULL,
@@ -1756,21 +1517,17 @@ CREATE TABLE `spawns` (
   `cnmap` tinyint(1) NOT NULL DEFAULT 0,
   `cnmap_frame_id` int(11) DEFAULT NULL,
   `cnmap_frame_filename` varchar(100) DEFAULT NULL,
-  `cnmap_prompt` text DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `idx_seeds_type` (`type`),
-  KEY `idx_spawn_type_id` (`spawn_type_id`),
-  CONSTRAINT `fk_spawns_spawn_type` FOREIGN KEY (`spawn_type_id`) REFERENCES `spawn_types` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=651 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `cnmap_prompt` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `spawn_types`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `spawn_types`;
+--
+-- Tabellenstruktur für Tabelle `spawn_types`
+--
 
 CREATE TABLE `spawn_types` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `code` varchar(50) NOT NULL COMMENT 'Machine-readable identifier',
   `label` varchar(100) NOT NULL COMMENT 'Human-readable name',
   `description` text DEFAULT NULL,
@@ -1779,50 +1536,44 @@ CREATE TABLE `spawn_types` (
   `batch_import_enabled` tinyint(1) NOT NULL DEFAULT 1,
   `sort_order` int(11) NOT NULL DEFAULT 0,
   `active` tinyint(1) NOT NULL DEFAULT 1,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `code` (`code`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
--- Table: `states`
--- --------------------------------------------------------
-
-DROP TABLE IF EXISTS `states`;
-
-CREATE TABLE `states` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `name` varchar(100) NOT NULL,
-  `description` text DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_states_name` (`name`)
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `storyboards`
+
+--
+-- Tabellenstruktur für Tabelle `states`
+--
+
+CREATE TABLE `states` (
+  `id` int(11) NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `description` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `storyboards`;
+--
+-- Tabellenstruktur für Tabelle `storyboards`
+--
 
 CREATE TABLE `storyboards` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(255) NOT NULL,
   `description` text DEFAULT NULL,
   `directory` varchar(255) NOT NULL COMMENT 'Relative path like /storyboards/storyboard001',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `directory` (`directory`)
-) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `storyboard_frames`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `storyboard_frames`;
+--
+-- Tabellenstruktur für Tabelle `storyboard_frames`
+--
 
 CREATE TABLE `storyboard_frames` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `storyboard_id` int(11) NOT NULL,
   `frame_id` int(11) DEFAULT NULL COMMENT 'Reference to frames table, NULL if standalone',
   `name` varchar(255) NOT NULL,
@@ -1832,21 +1583,17 @@ CREATE TABLE `storyboard_frames` (
   `is_copied` tinyint(1) NOT NULL DEFAULT 0 COMMENT '1 if physically copied to storyboard dir',
   `original_filename` varchar(255) DEFAULT NULL COMMENT 'Original filename before copy/rename',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `idx_storyboard` (`storyboard_id`),
-  KEY `idx_frame` (`frame_id`),
-  KEY `idx_sort` (`storyboard_id`,`sort_order`)
-) ENGINE=InnoDB AUTO_INCREMENT=228 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `story_arcs`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `story_arcs`;
+--
+-- Tabellenstruktur für Tabelle `story_arcs`
+--
 
 CREATE TABLE `story_arcs` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `title` varchar(255) NOT NULL,
   `description` text DEFAULT NULL,
   `themes` text DEFAULT NULL,
@@ -1854,18 +1601,17 @@ CREATE TABLE `story_arcs` (
   `tone` varchar(255) DEFAULT NULL,
   `story_beats` text DEFAULT NULL,
   `notes` text DEFAULT NULL,
-  `status` enum('planned','in_progress','completed') DEFAULT 'planned',
-  PRIMARY KEY (`id`)
+  `status` enum('planned','in_progress','completed') DEFAULT 'planned'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `styles`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `styles`;
+--
+-- Tabellenstruktur für Tabelle `styles`
+--
 
 CREATE TABLE `styles` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `active` tinyint(1) NOT NULL DEFAULT 1,
   `visible` tinyint(1) NOT NULL DEFAULT 1,
   `name` varchar(100) NOT NULL,
@@ -1874,19 +1620,17 @@ CREATE TABLE `styles` (
   `keywords` text DEFAULT NULL,
   `color_tone` varchar(50) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_styles_name` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=27 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `style_profiles`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `style_profiles`;
+--
+-- Tabellenstruktur für Tabelle `style_profiles`
+--
 
 CREATE TABLE `style_profiles` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `id` int(10) UNSIGNED NOT NULL,
   `name` varchar(255) DEFAULT NULL,
   `description` text DEFAULT NULL,
   `axis_group` varchar(64) DEFAULT 'visual_style',
@@ -1894,96 +1638,80 @@ CREATE TABLE `style_profiles` (
   `json_payload` longtext DEFAULT NULL,
   `convert_result` text DEFAULT NULL,
   `created_at` datetime DEFAULT current_timestamp(),
-  `created_by` int(11) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `created_at` (`created_at`),
-  KEY `idx_axis_group` (`axis_group`),
-  KEY `name` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+  `created_by` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 -- --------------------------------------------------------
--- Table: `style_profile_axes`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `style_profile_axes`;
+--
+-- Tabellenstruktur für Tabelle `style_profile_axes`
+--
 
 CREATE TABLE `style_profile_axes` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `profile_id` int(10) unsigned NOT NULL,
-  `axis_id` int(10) unsigned NOT NULL,
-  `value` tinyint(3) unsigned NOT NULL DEFAULT 50,
-  `created_at` datetime DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `ux_profile_axis` (`profile_id`,`axis_id`),
-  KEY `profile_id` (`profile_id`),
-  KEY `axis_id` (`axis_id`),
-  CONSTRAINT `fk_spa_axis` FOREIGN KEY (`axis_id`) REFERENCES `design_axes` (`id`),
-  CONSTRAINT `fk_spa_profile` FOREIGN KEY (`profile_id`) REFERENCES `style_profiles` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=404 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+  `id` int(10) UNSIGNED NOT NULL,
+  `profile_id` int(10) UNSIGNED NOT NULL,
+  `axis_id` int(10) UNSIGNED NOT NULL,
+  `value` tinyint(3) UNSIGNED NOT NULL DEFAULT 50,
+  `created_at` datetime DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 -- --------------------------------------------------------
--- Table: `style_profile_config`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `style_profile_config`;
+--
+-- Tabellenstruktur für Tabelle `style_profile_config`
+--
 
 CREATE TABLE `style_profile_config` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `config_key` varchar(64) NOT NULL,
   `config_value` varchar(64) DEFAULT NULL,
-  `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `config_key` (`config_key`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
--- Table: `tags`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `tags`;
+--
+-- Tabellenstruktur für Tabelle `tags`
+--
 
 CREATE TABLE `tags` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(50) NOT NULL,
   `description` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_tags_name` (`name`)
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `tags2poses`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `tags2poses`;
+--
+-- Tabellenstruktur für Tabelle `tags2poses`
+--
 
 CREATE TABLE `tags2poses` (
   `from_id` int(11) NOT NULL,
-  `to_id` int(11) NOT NULL,
-  PRIMARY KEY (`from_id`,`to_id`)
+  `to_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `tags_2_frames`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `tags_2_frames`;
+--
+-- Tabellenstruktur für Tabelle `tags_2_frames`
+--
 
 CREATE TABLE `tags_2_frames` (
   `from_id` int(11) NOT NULL COMMENT 'Tag ID',
-  `to_id` int(11) NOT NULL COMMENT 'Frame ID',
-  UNIQUE KEY `uq_tags_2_frames` (`from_id`,`to_id`)
+  `to_id` int(11) NOT NULL COMMENT 'Frame ID'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `task_execution_stats`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `task_execution_stats`;
+--
+-- Tabellenstruktur für Tabelle `task_execution_stats`
+--
 
 CREATE TABLE `task_execution_stats` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `id` bigint(20) NOT NULL,
   `task_id` int(11) NOT NULL,
   `date` date NOT NULL,
   `total_runs` int(11) DEFAULT 0,
@@ -1991,21 +1719,17 @@ CREATE TABLE `task_execution_stats` (
   `failed_runs` int(11) DEFAULT 0,
   `stale_runs` int(11) DEFAULT 0,
   `avg_duration_seconds` decimal(10,2) DEFAULT NULL,
-  `max_duration_seconds` int(11) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `unique_task_date` (`task_id`,`date`),
-  KEY `task_id` (`task_id`),
-  CONSTRAINT `task_execution_stats_ibfk_1` FOREIGN KEY (`task_id`) REFERENCES `scheduled_tasks` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=252 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `max_duration_seconds` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `task_locks`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `task_locks`;
+--
+-- Tabellenstruktur für Tabelle `task_locks`
+--
 
 CREATE TABLE `task_locks` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `id` bigint(20) NOT NULL,
   `task_id` int(11) NOT NULL,
   `lock_key` varchar(255) NOT NULL COMMENT 'Unique identifier for this lock (e.g., task_id:entity_type:entity_id)',
   `acquired_at` datetime NOT NULL,
@@ -2016,25 +1740,17 @@ CREATE TABLE `task_locks` (
   `pid` int(11) DEFAULT NULL,
   `hostname` varchar(255) DEFAULT NULL,
   `owner_token` char(36) NOT NULL DEFAULT '',
-  `status` enum('active','expired','released') DEFAULT 'active',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `unique_lock_key` (`lock_key`),
-  KEY `task_id` (`task_id`),
-  KEY `run_id` (`run_id`),
-  KEY `idx_status_expires` (`status`,`expires_at`),
-  KEY `idx_task_locks_owner_token` (`owner_token`),
-  CONSTRAINT `task_locks_ibfk_1` FOREIGN KEY (`task_id`) REFERENCES `scheduled_tasks` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `task_locks_ibfk_2` FOREIGN KEY (`run_id`) REFERENCES `task_runs` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=6548 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `status` enum('active','expired','released') DEFAULT 'active'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `task_runs`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `task_runs`;
+--
+-- Tabellenstruktur für Tabelle `task_runs`
+--
 
 CREATE TABLE `task_runs` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `id` bigint(20) NOT NULL,
   `task_id` int(11) NOT NULL,
   `pid` int(11) DEFAULT NULL,
   `started_at` datetime NOT NULL,
@@ -2048,24 +1764,17 @@ CREATE TABLE `task_runs` (
   `lock_id` bigint(20) DEFAULT NULL COMMENT 'Reference to task_locks.id',
   `lock_owner_token` char(36) DEFAULT NULL,
   `entity_type` varchar(191) DEFAULT NULL,
-  `entity_id` int(11) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `task_id` (`task_id`),
-  KEY `idx_status` (`status`),
-  KEY `lock_id` (`lock_id`),
-  KEY `idx_task_runs_status_pid` (`status`,`pid`),
-  CONSTRAINT `task_runs_ibfk_1` FOREIGN KEY (`task_id`) REFERENCES `scheduled_tasks` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `task_runs_ibfk_2` FOREIGN KEY (`lock_id`) REFERENCES `task_locks` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=2224 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `entity_id` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `user`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `user`;
+--
+-- Tabellenstruktur für Tabelle `user`
+--
 
 CREATE TABLE `user` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `username` varchar(50) NOT NULL,
   `password` varchar(255) NOT NULL,
   `name` varchar(100) DEFAULT NULL,
@@ -2079,20 +1788,17 @@ CREATE TABLE `user` (
   `google_given_name` varchar(100) DEFAULT NULL,
   `google_family_name` varchar(100) DEFAULT NULL,
   `google_picture` varchar(255) DEFAULT NULL,
-  `google_picture_blob` longblob DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `username` (`username`),
-  UNIQUE KEY `google_id_unique` (`google_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `google_picture_blob` longblob DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `vehicles`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `vehicles`;
+--
+-- Tabellenstruktur für Tabelle `vehicles`
+--
 
 CREATE TABLE `vehicles` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
   `order` int(11) NOT NULL DEFAULT 0 COMMENT 'Display order for interface/menu',
   `type` varchar(50) DEFAULT NULL COMMENT 'Land, Air, Water, Space, etc.',
@@ -2110,21 +1816,17 @@ CREATE TABLE `vehicles` (
   `cnmap` tinyint(1) NOT NULL DEFAULT 0,
   `cnmap_frame_id` int(11) DEFAULT NULL,
   `cnmap_frame_filename` varchar(100) DEFAULT NULL,
-  `cnmap_prompt` text DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_vehicles_name` (`name`),
-  KEY `idx_vehicles_type` (`type`),
-  KEY `idx_vehicles_status` (`status`)
-) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `cnmap_prompt` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `videos`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `videos`;
+--
+-- Tabellenstruktur für Tabelle `videos`
+--
 
 CREATE TABLE `videos` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(255) NOT NULL,
   `description` text DEFAULT NULL,
   `url` varchar(500) NOT NULL,
@@ -2138,41 +1840,34 @@ CREATE TABLE `videos` (
   `sort_order` int(11) DEFAULT 0,
   `is_active` tinyint(1) DEFAULT 1,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `idx_category` (`category_id`),
-  KEY `idx_active` (`is_active`),
-  KEY `idx_created` (`created_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `video_categories`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `video_categories`;
+--
+-- Tabellenstruktur für Tabelle `video_categories`
+--
 
 CREATE TABLE `video_categories` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(255) NOT NULL,
   `slug` varchar(255) NOT NULL,
   `description` text DEFAULT NULL,
   `sort_order` int(11) DEFAULT 0,
   `is_active` tinyint(1) DEFAULT 1,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `slug` (`slug`),
-  KEY `idx_active` (`is_active`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `video_playlists`
--- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `video_playlists`;
+--
+-- Tabellenstruktur für Tabelle `video_playlists`
+--
 
 CREATE TABLE `video_playlists` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(255) NOT NULL,
   `slug` varchar(255) NOT NULL,
   `description` text DEFAULT NULL,
@@ -2180,448 +1875,2850 @@ CREATE TABLE `video_playlists` (
   `is_active` tinyint(1) DEFAULT 1,
   `sort_order` int(11) DEFAULT 0,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `slug` (`slug`),
-  KEY `idx_active` (`is_active`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
--- Table: `weather_conditions`
+
+--
+-- Stellvertreter-Struktur des Views `v_anima_activity`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_anima_activity` (
+`scene_id` int(11)
+,`scene_sequence` int(11)
+,`scene_part_id` int(11)
+,`part_sequence` int(11)
+,`character_anima_id` int(11)
+,`character_name` varchar(100)
+,`anima_name` varchar(255)
+,`action_type` enum('misfire','assist','comic_beat','strategic_move')
+,`notes` text
+);
+
 -- --------------------------------------------------------
 
-DROP TABLE IF EXISTS `weather_conditions`;
+--
+-- Stellvertreter-Struktur des Views `v_artifact_usage`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_artifact_usage` (
+`scene_id` int(11)
+,`scene_sequence` int(11)
+,`scene_part_id` int(11)
+,`part_sequence` int(11)
+,`artifact_id` int(11)
+,`artifact_name` varchar(100)
+,`artifact_type` varchar(50)
+,`artifact_status` enum('inactive','active','corrupted','purified')
+,`notes` text
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_character_pose_angle_combinations`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_character_pose_angle_combinations` (
+`character_id` int(11)
+,`character_name` varchar(100)
+,`pose_id` int(11)
+,`pose_name` varchar(100)
+,`angle_id` int(11)
+,`angle_name` varchar(100)
+,`description` mediumtext
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_export_ready`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_export_ready` (
+`scene_id` int(11)
+,`scene_title` varchar(255)
+,`scene_part_id` int(11)
+,`export_type` enum('script','art','audio','full_package')
+,`last_exported_at` timestamp
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_gallery_animas`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_gallery_animas` (
+`frame_id` int(11)
+,`entity_id` int(11)
+,`filename` varchar(255)
+,`prompt` text
+,`style` text
+,`anima_id` int(11)
+,`anima_name` varchar(255)
+,`traits` text
+,`abilities` text
+,`character_id` int(11)
+,`character_name` varchar(100)
+,`character_role` varchar(100)
+,`entity_type` varchar(6)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_gallery_artifacts`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_gallery_artifacts` (
+`frame_id` int(11)
+,`entity_id` int(11)
+,`filename` varchar(255)
+,`prompt` text
+,`style` text
+,`artifact_id` int(11)
+,`artifact_name` varchar(100)
+,`artifact_type` varchar(50)
+,`artifact_status` enum('inactive','active','corrupted','purified')
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_gallery_backgrounds`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_gallery_backgrounds` (
+`frame_id` int(11)
+,`entity_id` int(11)
+,`filename` varchar(255)
+,`prompt` text
+,`style` text
+,`background_id` int(11)
+,`background_name` varchar(100)
+,`background_type` varchar(50)
+,`location_id` int(11)
+,`location_name` varchar(100)
+,`entity_type` varchar(11)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_gallery_characters`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_gallery_characters` (
+`frame_id` int(11)
+,`map_run_id` int(11)
+,`entity_id` int(11)
+,`filename` varchar(255)
+,`prompt` text
+,`style` text
+,`character_id` int(11)
+,`character_name` varchar(100)
+,`character_role` varchar(100)
+,`entity_type` varchar(10)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_gallery_character_poses`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_gallery_character_poses` (
+`frame_id` int(11)
+,`entity_id` int(11)
+,`filename` varchar(255)
+,`prompt` text
+,`style` varchar(100)
+,`character_pose_id` int(11)
+,`character_id` int(11)
+,`character_name` varchar(100)
+,`pose_id` int(11)
+,`pose_name` varchar(100)
+,`angle_id` int(11)
+,`angle_name` varchar(100)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_gallery_composites`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_gallery_composites` (
+`frame_id` int(11)
+,`entity_id` int(11)
+,`filename` varchar(255)
+,`prompt` text
+,`style` text
+,`composite_id` int(11)
+,`composite_name` varchar(100)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_gallery_controlnet_maps`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_gallery_controlnet_maps` (
+`frame_id` int(11)
+,`entity_id` int(11)
+,`filename` varchar(255)
+,`prompt` text
+,`style` text
+,`map_id` int(11)
+,`map_name` varchar(100)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_gallery_generatives`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_gallery_generatives` (
+`frame_id` int(11)
+,`entity_id` int(11)
+,`filename` varchar(255)
+,`prompt` text
+,`style` text
+,`generative_id` int(11)
+,`name` varchar(100)
+,`description` text
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_gallery_locations`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_gallery_locations` (
+`frame_id` int(11)
+,`entity_id` int(11)
+,`filename` varchar(255)
+,`prompt` text
+,`style` text
+,`location_id` int(11)
+,`location_name` varchar(100)
+,`location_type` varchar(50)
+,`entity_type` varchar(9)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_gallery_prompt_matrix_blueprints`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_gallery_prompt_matrix_blueprints` (
+`frame_id` int(11)
+,`filename` varchar(255)
+,`prompt` text
+,`style` text
+,`map_run_id` int(11)
+,`entity_id` int(11)
+,`blueprint_name` varchar(100)
+,`blueprint_entity_type` varchar(100)
+,`blueprint_entity_id` int(11)
+,`blueprint_description` text
+,`blueprint_matrix_id` int(10) unsigned
+,`blueprint_matrix_additions_id` int(10) unsigned
+,`blueprint_active_map_run_id` int(11)
+,`blueprint_state_id_active` int(11)
+,`blueprint_regenerate_images` tinyint(1)
+,`blueprint_img2img` tinyint(1)
+,`blueprint_cnmap` tinyint(1)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_gallery_scene_parts`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_gallery_scene_parts` (
+`frame_id` int(11)
+,`entity_id` int(11)
+,`filename` varchar(255)
+,`style` text
+,`scene_part_id` int(11)
+,`scene_part_name` varchar(255)
+,`scene_part_description` text
+,`characters` varchar(500)
+,`animas` varchar(500)
+,`artifacts` varchar(300)
+,`backgrounds` varchar(300)
+,`prompt` mediumtext
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_gallery_sketches`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_gallery_sketches` (
+`frame_id` int(11)
+,`entity_id` int(11)
+,`filename` varchar(255)
+,`prompt` text
+,`style` text
+,`sketch_id` int(11)
+,`name` varchar(100)
+,`description` text
+,`mood` text
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_gallery_spawns`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_gallery_spawns` (
+`frame_id` int(11)
+,`entity_id` int(11)
+,`filename` varchar(255)
+,`prompt` text
+,`style` text
+,`spawn_id` int(11)
+,`name` varchar(100)
+,`description` text
+,`type` varchar(50)
+,`type_label` varchar(100)
+,`spawn_type_id` int(11)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_gallery_spawns_location`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_gallery_spawns_location` (
+`frame_id` int(11)
+,`entity_id` int(11)
+,`filename` varchar(255)
+,`prompt` text
+,`style` text
+,`spawn_id` int(11)
+,`name` varchar(100)
+,`description` text
+,`type` varchar(50)
+,`type_label` varchar(100)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_gallery_spawns_prop`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_gallery_spawns_prop` (
+`frame_id` int(11)
+,`entity_id` int(11)
+,`filename` varchar(255)
+,`prompt` text
+,`style` text
+,`spawn_id` int(11)
+,`name` varchar(100)
+,`description` text
+,`type` varchar(50)
+,`type_label` varchar(100)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_gallery_spawns_reference`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_gallery_spawns_reference` (
+`frame_id` int(11)
+,`entity_id` int(11)
+,`filename` varchar(255)
+,`prompt` text
+,`style` text
+,`spawn_id` int(11)
+,`name` varchar(100)
+,`description` text
+,`type` varchar(50)
+,`type_label` varchar(100)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_gallery_spawns_texture`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_gallery_spawns_texture` (
+`frame_id` int(11)
+,`entity_id` int(11)
+,`filename` varchar(255)
+,`prompt` text
+,`style` text
+,`spawn_id` int(11)
+,`name` varchar(100)
+,`description` text
+,`type` varchar(50)
+,`type_label` varchar(100)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_gallery_vehicles`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_gallery_vehicles` (
+`frame_id` int(11)
+,`entity_id` int(11)
+,`filename` varchar(255)
+,`prompt` text
+,`style` text
+,`vehicle_id` int(11)
+,`vehicle_name` varchar(100)
+,`vehicle_type` varchar(50)
+,`vehicle_status` enum('inactive','active','damaged','decommissioned')
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_gallery_wall_of_images`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_gallery_wall_of_images` (
+`entity_type` varchar(11)
+,`frame_id` int(11)
+,`entity_id` int(11)
+,`filename` varchar(255)
+,`prompt` mediumtext
+,`entity_name` varchar(255)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_map_runs_animas`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_map_runs_animas` (
+`id` int(11)
+,`created_at` datetime
+,`note` text
+,`entity_id` int(11)
+,`is_active` int(1)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_map_runs_artifacts`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_map_runs_artifacts` (
+`id` int(11)
+,`created_at` datetime
+,`note` text
+,`entity_id` int(11)
+,`is_active` int(1)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_map_runs_backgrounds`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_map_runs_backgrounds` (
+`id` int(11)
+,`created_at` datetime
+,`note` text
+,`entity_id` int(11)
+,`is_active` int(1)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_map_runs_characters`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_map_runs_characters` (
+`id` int(11)
+,`created_at` datetime
+,`note` text
+,`entity_id` int(11)
+,`is_active` int(1)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_map_runs_character_poses`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_map_runs_character_poses` (
+`id` int(11)
+,`created_at` datetime
+,`note` text
+,`entity_id` int(11)
+,`is_active` int(1)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_map_runs_composites`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_map_runs_composites` (
+`id` int(11)
+,`created_at` datetime
+,`note` text
+,`entity_id` int(11)
+,`is_active` int(1)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_map_runs_controlnet_maps`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_map_runs_controlnet_maps` (
+`id` int(11)
+,`created_at` datetime
+,`note` text
+,`entity_id` int(11)
+,`is_active` int(1)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_map_runs_generatives`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_map_runs_generatives` (
+`id` int(11)
+,`created_at` datetime
+,`note` text
+,`entity_id` int(11)
+,`is_active` int(1)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_map_runs_locations`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_map_runs_locations` (
+`id` int(11)
+,`created_at` datetime
+,`note` text
+,`entity_id` int(11)
+,`is_active` int(1)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_map_runs_prompt_matrix_blueprints`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_map_runs_prompt_matrix_blueprints` (
+`id` int(11)
+,`created_at` datetime
+,`note` text
+,`entity_id` int(11)
+,`is_active` int(1)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_map_runs_scene_parts`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_map_runs_scene_parts` (
+`id` int(11)
+,`created_at` datetime
+,`note` text
+,`entity_id` int(11)
+,`is_active` int(1)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_map_runs_sketches`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_map_runs_sketches` (
+`id` int(11)
+,`created_at` datetime
+,`note` text
+,`entity_id` int(11)
+,`is_active` int(1)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_map_runs_vehicles`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_map_runs_vehicles` (
+`id` int(11)
+,`created_at` datetime
+,`note` text
+,`entity_id` int(11)
+,`is_active` int(1)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_prompts_animas`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_prompts_animas` (
+`id` int(11)
+,`regenerate_images` tinyint(1)
+,`prompt` mediumtext
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_prompts_artifacts`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_prompts_artifacts` (
+`id` int(11)
+,`regenerate_images` tinyint(1)
+,`prompt` mediumtext
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_prompts_backgrounds`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_prompts_backgrounds` (
+`id` int(11)
+,`regenerate_images` tinyint(1)
+,`prompt` mediumtext
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_prompts_characters`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_prompts_characters` (
+`id` int(11)
+,`regenerate_images` tinyint(1)
+,`prompt` mediumtext
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_prompts_character_poses`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_prompts_character_poses` (
+`id` int(11)
+,`regenerate_images` tinyint(1)
+,`prompt` mediumtext
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_prompts_composites`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_prompts_composites` (
+`id` int(11)
+,`regenerate_images` tinyint(1)
+,`prompt` mediumtext
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_prompts_controlnet_maps`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_prompts_controlnet_maps` (
+`id` int(11)
+,`regenerate_images` tinyint(1)
+,`prompt` mediumtext
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_prompts_generatives`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_prompts_generatives` (
+`id` int(11)
+,`regenerate_images` tinyint(1)
+,`prompt` mediumtext
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_prompts_locations`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_prompts_locations` (
+`id` int(11)
+,`regenerate_images` tinyint(1)
+,`prompt` mediumtext
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_prompts_prompt_matrix_blueprints`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_prompts_prompt_matrix_blueprints` (
+`id` int(11)
+,`regenerate_images` tinyint(1)
+,`prompt` mediumtext
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_prompts_scene_parts`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_prompts_scene_parts` (
+`scene_part_id` int(11)
+,`id` int(11)
+,`scene_id` int(11)
+,`name` varchar(255)
+,`description` text
+,`characters` varchar(500)
+,`animas` varchar(500)
+,`artifacts` varchar(300)
+,`backgrounds` varchar(300)
+,`prompt` mediumtext
+,`regenerate_images` tinyint(1)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_prompts_sketches`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_prompts_sketches` (
+`id` int(11)
+,`regenerate_images` tinyint(1)
+,`prompt` mediumtext
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_prompts_vehicles`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_prompts_vehicles` (
+`id` int(11)
+,`regenerate_images` tinyint(1)
+,`prompt` mediumtext
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_scenes_under_review`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_scenes_under_review` (
+`scene_id` int(11)
+,`scene_title` varchar(255)
+,`scene_part_id` int(11)
+,`stage` enum('draft','review','approved','locked')
+,`assigned_to` varchar(100)
+,`updated_at` timestamp
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_scene_part_full`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_scene_part_full` (
+`scene_part_id` int(11)
+,`scene_part_name` varchar(255)
+,`scene_part_description` text
+,`perspective_angle` varchar(500)
+,`perspective_notes` text
+,`background_name` varchar(100)
+,`background_description` text
+,`animas_in_scene` mediumtext
+,`animas_details` mediumtext
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stellvertreter-Struktur des Views `v_styles_helper`
+-- (Siehe unten für die tatsächliche Ansicht)
+--
+CREATE TABLE `v_styles_helper` (
+`id` int(11)
+,`regenerate_images` int(1)
+,`prompt` mediumtext
+);
+
+-- --------------------------------------------------------
+
+--
+-- Tabellenstruktur für Tabelle `weather_conditions`
+--
 
 CREATE TABLE `weather_conditions` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL COMMENT 'Short name of the weather condition (e.g. Sunny, Stormy, Foggy)',
   `order` int(11) NOT NULL DEFAULT 0 COMMENT 'Display order for UI/menus',
   `description` text DEFAULT NULL COMMENT 'Optional details (e.g. light rain at dusk, heavy snowstorm)',
   `intensity` varchar(50) DEFAULT NULL COMMENT 'Optional intensity scale (e.g. light, moderate, heavy)',
   `time_of_day_hint` varchar(50) DEFAULT NULL COMMENT 'Optional hint like morning, dusk, night',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_weather_name` (`name`)
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- ========================================================
--- VIEWS (created after tables)
--- ========================================================
-
--- --------------------------------------------------------
--- View: `v_anima_activity`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_anima_activity`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_anima_activity` AS select `s`.`id` AS `scene_id`,`s`.`sequence` AS `scene_sequence`,`sp`.`id` AS `scene_part_id`,`sp`.`sequence` AS `part_sequence`,`a`.`id` AS `character_anima_id`,`ch`.`name` AS `character_name`,`a`.`name` AS `anima_name`,`span`.`action_type` AS `action_type`,`span`.`notes` AS `notes` from ((((`scenes` `s` join `scene_parts` `sp` on(`sp`.`scene_id` = `s`.`id`)) join `scene_part_animas` `span` on(`span`.`scene_part_id` = `sp`.`id`)) join `animas` `a` on(`a`.`id` = `span`.`character_anima_id`)) join `characters` `ch` on(`ch`.`id` = `a`.`character_id`)) order by `s`.`sequence`,`sp`.`sequence`,`ch`.`name`,`a`.`name`;
-
--- --------------------------------------------------------
--- View: `v_artifact_usage`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_artifact_usage`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_artifact_usage` AS select `s`.`id` AS `scene_id`,`s`.`sequence` AS `scene_sequence`,`sp`.`id` AS `scene_part_id`,`sp`.`sequence` AS `part_sequence`,`a`.`id` AS `artifact_id`,`a`.`name` AS `artifact_name`,`a`.`type` AS `artifact_type`,`a`.`status` AS `artifact_status`,`spa`.`notes` AS `notes` from (((`scenes` `s` join `scene_parts` `sp` on(`sp`.`scene_id` = `s`.`id`)) join `scene_part_artifacts` `spa` on(`spa`.`scene_part_id` = `sp`.`id`)) join `artifacts` `a` on(`a`.`id` = `spa`.`artifact_id`)) order by `s`.`sequence`,`sp`.`sequence`,`a`.`name`;
-
--- --------------------------------------------------------
--- View: `v_character_pose_angle_combinations`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_character_pose_angle_combinations`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_character_pose_angle_combinations` AS select `c`.`id` AS `character_id`,`c`.`name` AS `character_name`,`p`.`id` AS `pose_id`,`p`.`name` AS `pose_name`,`a`.`id` AS `angle_id`,`a`.`name` AS `angle_name`,concat(`c`.`name`,' (',`c`.`description`,') - ',`p`.`name`,' (',`p`.`description`,') - ',`a`.`name`,' (',`a`.`description`,')') AS `description` from ((`characters` `c` join `poses` `p`) join `angles` `a`);
-
--- --------------------------------------------------------
--- View: `v_export_ready`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_export_ready`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_export_ready` AS select `s`.`id` AS `scene_id`,`s`.`title` AS `scene_title`,`sp`.`id` AS `scene_part_id`,`ef`.`export_type` AS `export_type`,`ef`.`last_exported_at` AS `last_exported_at` from ((`scenes` `s` join `scene_parts` `sp` on(`sp`.`scene_id` = `s`.`id`)) join `export_flags` `ef` on(`ef`.`scene_part_id` = `sp`.`id`)) where `ef`.`ready_for_export` = 1;
-
--- --------------------------------------------------------
--- View: `v_gallery_animas`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_gallery_animas`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_animas` AS select `f`.`id` AS `frame_id`,`a`.`id` AS `entity_id`,`f`.`filename` AS `filename`,`f`.`prompt` AS `prompt`,`f`.`style` AS `style`,`a`.`id` AS `anima_id`,`a`.`name` AS `anima_name`,`a`.`traits` AS `traits`,`a`.`abilities` AS `abilities`,`c`.`id` AS `character_id`,`c`.`name` AS `character_name`,`c`.`role` AS `character_role`,'animas' AS `entity_type` from ((((`frames` `f` join `frames_2_animas` `m` on(`m`.`from_id` = `f`.`id`)) join `animas` `a` on(`a`.`id` = `m`.`to_id`)) left join `characters` `c` on(`c`.`id` = `a`.`character_id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) where `s`.`visible` = 1 order by `s`.`order`,`f`.`created_at` desc;
-
--- --------------------------------------------------------
--- View: `v_gallery_artifacts`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_gallery_artifacts`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_artifacts` AS select `f`.`id` AS `frame_id`,`a`.`id` AS `entity_id`,`f`.`filename` AS `filename`,`f`.`prompt` AS `prompt`,`f`.`style` AS `style`,`a`.`id` AS `artifact_id`,`a`.`name` AS `artifact_name`,`a`.`type` AS `artifact_type`,`a`.`status` AS `artifact_status` from (((`frames` `f` join `frames_2_artifacts` `m` on(`f`.`id` = `m`.`from_id`)) join `artifacts` `a` on(`m`.`to_id` = `a`.`id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) where `s`.`visible` = 1 order by `f`.`created_at` desc;
-
--- --------------------------------------------------------
--- View: `v_gallery_backgrounds`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_gallery_backgrounds`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_backgrounds` AS select `f`.`id` AS `frame_id`,`b`.`id` AS `entity_id`,`f`.`filename` AS `filename`,`f`.`prompt` AS `prompt`,`f`.`style` AS `style`,`b`.`id` AS `background_id`,`b`.`name` AS `background_name`,`b`.`type` AS `background_type`,`l`.`id` AS `location_id`,`l`.`name` AS `location_name`,'backgrounds' AS `entity_type` from ((((`frames` `f` join `frames_2_backgrounds` `m` on(`f`.`id` = `m`.`from_id`)) join `backgrounds` `b` on(`m`.`to_id` = `b`.`id`)) left join `locations` `l` on(`b`.`location_id` = `l`.`id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) where `s`.`visible` = 1 order by `f`.`created_at` desc;
-
--- --------------------------------------------------------
--- View: `v_gallery_characters`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_gallery_characters`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_characters` AS select `f`.`id` AS `frame_id`,`f`.`map_run_id` AS `map_run_id`,`c`.`id` AS `entity_id`,`f`.`filename` AS `filename`,`f`.`prompt` AS `prompt`,`f`.`style` AS `style`,`c`.`id` AS `character_id`,`c`.`name` AS `character_name`,`c`.`role` AS `character_role`,'characters' AS `entity_type` from (((`frames` `f` join `frames_2_characters` `m` on(`f`.`id` = `m`.`from_id`)) join `characters` `c` on(`m`.`to_id` = `c`.`id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) where `s`.`visible` = 1 order by `s`.`order`,`f`.`created_at` desc;
-
--- --------------------------------------------------------
--- View: `v_gallery_character_poses`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_gallery_character_poses`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_character_poses` AS select `f`.`id` AS `frame_id`,`cp`.`id` AS `entity_id`,`f`.`filename` AS `filename`,`cp`.`description` AS `prompt`,`s`.`name` AS `style`,`cp`.`id` AS `character_pose_id`,`c`.`id` AS `character_id`,`c`.`name` AS `character_name`,`cp`.`pose_id` AS `pose_id`,`p`.`name` AS `pose_name`,`cp`.`angle_id` AS `angle_id`,`a`.`name` AS `angle_name` from ((((((`frames` `f` join `frames_2_character_poses` `m` on(`f`.`id` = `m`.`from_id`)) join `character_poses` `cp` on(`m`.`to_id` = `cp`.`id`)) join `characters` `c` on(`cp`.`character_id` = `c`.`id`)) join `poses` `p` on(`cp`.`pose_id` = `p`.`id`)) join `angles` `a` on(`cp`.`angle_id` = `a`.`id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) where `s`.`visible` = 1 and `f`.`map_run_id` = `cp`.`active_map_run_id` order by `s`.`order`,`f`.`created_at` desc;
-
--- --------------------------------------------------------
--- View: `v_gallery_composites`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_gallery_composites`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_composites` AS select `f`.`id` AS `frame_id`,`c`.`id` AS `entity_id`,`f`.`filename` AS `filename`,`f`.`prompt` AS `prompt`,`f`.`style` AS `style`,`c`.`id` AS `composite_id`,`c`.`name` AS `composite_name` from (((`frames` `f` join `frames_2_composites` `m` on(`f`.`id` = `m`.`from_id`)) join `composites` `c` on(`m`.`to_id` = `c`.`id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) where `s`.`visible` = 1 order by `f`.`created_at` desc;
-
--- --------------------------------------------------------
--- View: `v_gallery_controlnet_maps`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_gallery_controlnet_maps`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`adminer`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_controlnet_maps` AS select `f`.`id` AS `frame_id`,`c`.`id` AS `entity_id`,`f`.`filename` AS `filename`,`f`.`prompt` AS `prompt`,`f`.`style` AS `style`,`c`.`id` AS `map_id`,`c`.`name` AS `map_name` from ((`frames` `f` join `frames_2_controlnet_maps` `m` on(`f`.`id` = `m`.`from_id`)) join `controlnet_maps` `c` on(`m`.`to_id` = `c`.`id`)) where `f`.`map_run_id` = `c`.`active_map_run_id` order by `f`.`created_at` desc;
-
--- --------------------------------------------------------
--- View: `v_gallery_generatives`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_gallery_generatives`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_generatives` AS select `f`.`id` AS `frame_id`,`g`.`id` AS `entity_id`,`f`.`filename` AS `filename`,`f`.`prompt` AS `prompt`,`f`.`style` AS `style`,`g`.`id` AS `generative_id`,`g`.`name` AS `name`,`g`.`description` AS `description` from (((`frames` `f` join `frames_2_generatives` `m` on(`f`.`id` = `m`.`from_id`)) join `generatives` `g` on(`m`.`to_id` = `g`.`id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) where `s`.`visible` = 1 order by `f`.`created_at` desc;
-
--- --------------------------------------------------------
--- View: `v_gallery_locations`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_gallery_locations`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_locations` AS select `f`.`id` AS `frame_id`,`l`.`id` AS `entity_id`,`f`.`filename` AS `filename`,`f`.`prompt` AS `prompt`,`f`.`style` AS `style`,`l`.`id` AS `location_id`,`l`.`name` AS `location_name`,`l`.`type` AS `location_type`,'locations' AS `entity_type` from (((`frames` `f` join `frames_2_locations` `m` on(`f`.`id` = `m`.`from_id`)) join `locations` `l` on(`m`.`to_id` = `l`.`id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) where `s`.`visible` = 1 order by `f`.`created_at` desc;
-
--- --------------------------------------------------------
--- View: `v_gallery_prompt_matrix_blueprints`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_gallery_prompt_matrix_blueprints`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_prompt_matrix_blueprints` AS select `f`.`id` AS `frame_id`,`f`.`filename` AS `filename`,`f`.`prompt` AS `prompt`,`f`.`style` AS `style`,`f`.`map_run_id` AS `map_run_id`,`b`.`id` AS `entity_id`,`b`.`name` AS `blueprint_name`,`b`.`entity_type` AS `blueprint_entity_type`,`b`.`entity_id` AS `blueprint_entity_id`,`b`.`description` AS `blueprint_description`,`b`.`matrix_id` AS `blueprint_matrix_id`,`b`.`matrix_additions_id` AS `blueprint_matrix_additions_id`,`b`.`active_map_run_id` AS `blueprint_active_map_run_id`,`b`.`state_id_active` AS `blueprint_state_id_active`,`b`.`regenerate_images` AS `blueprint_regenerate_images`,`b`.`img2img` AS `blueprint_img2img`,`b`.`cnmap` AS `blueprint_cnmap` from (((`frames` `f` join `frames_2_prompt_matrix_blueprints` `m` on(`f`.`id` = `m`.`from_id`)) join `prompt_matrix_blueprints` `b` on(`m`.`to_id` = `b`.`id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) where `s`.`visible` = 1;
-
--- --------------------------------------------------------
--- View: `v_gallery_scene_parts`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_gallery_scene_parts`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_scene_parts` AS select `f`.`id` AS `frame_id`,`sp`.`scene_part_id` AS `entity_id`,`f`.`filename` AS `filename`,`f`.`style` AS `style`,`sp`.`scene_part_id` AS `scene_part_id`,`sp`.`name` AS `scene_part_name`,`sp`.`description` AS `scene_part_description`,`sp`.`characters` AS `characters`,`sp`.`animas` AS `animas`,`sp`.`artifacts` AS `artifacts`,`sp`.`backgrounds` AS `backgrounds`,`sp`.`prompt` AS `prompt` from (((`frames` `f` join `frames_2_scene_parts` `m` on(`f`.`id` = `m`.`from_id`)) join (select `sp`.`id` AS `scene_part_id`,`sp`.`name` AS `name`,`sp`.`description` AS `description`,`sp`.`regenerate_images` AS `regenerate_images`,`sp`.`active_map_run_id` AS `active_map_run_id`,substr(group_concat(distinct concat(`c`.`name`,if(`spc`.`role_in_part` is not null,concat(' (',`spc`.`role_in_part`,')'),'')) separator ', '),1,500) AS `characters`,substr(group_concat(distinct concat(`a`.`name`,' (',`spa`.`action_type`,')') separator ', '),1,500) AS `animas`,substr(group_concat(distinct `ar`.`name` separator ', '),1,300) AS `artifacts`,substr(group_concat(distinct concat(`b`.`name`,if(`b`.`type` is not null,concat(' (',`b`.`type`,')'),'')) separator ', '),1,300) AS `backgrounds`,concat_ws('. ',coalesce(`sp`.`name`,''),coalesce(`sp`.`description`,''),'Characters: ',substr(group_concat(distinct concat(`c`.`name`,if(`spc`.`role_in_part` is not null,concat(' (',`spc`.`role_in_part`,')'),'')) separator ', '),1,500),'. Animas: ',substr(group_concat(distinct concat(`a`.`name`,' (',`spa`.`action_type`,')') separator ', '),1,500),'. Artifacts: ',substr(group_concat(distinct `ar`.`name` separator ', '),1,300),'. Backgrounds: ',substr(group_concat(distinct concat(`b`.`name`,if(`b`.`type` is not null,concat(' (',`b`.`type`,')'),'')) separator ', '),1,300)) AS `prompt` from ((((((((`scene_parts` `sp` left join `scene_part_characters` `spc` on(`spc`.`scene_part_id` = `sp`.`id`)) left join `characters` `c` on(`c`.`id` = `spc`.`character_id`)) left join `scene_part_animas` `spa` on(`spa`.`scene_part_id` = `sp`.`id`)) left join `animas` `a` on(`a`.`id` = `spa`.`character_anima_id`)) left join `scene_part_artifacts` `spa2` on(`spa2`.`scene_part_id` = `sp`.`id`)) left join `artifacts` `ar` on(`ar`.`id` = `spa2`.`artifact_id`)) left join `scene_part_backgrounds` `spb` on(`spb`.`perspective_id` = `sp`.`id`)) left join `backgrounds` `b` on(`b`.`id` = `spb`.`background_id`)) group by `sp`.`id`) `sp` on(`m`.`to_id` = `sp`.`scene_part_id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) where `s`.`visible` = 1 and `f`.`map_run_id` = `sp`.`active_map_run_id` order by `f`.`created_at` desc;
-
--- --------------------------------------------------------
--- View: `v_gallery_sketches`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_gallery_sketches`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_sketches` AS select `f`.`id` AS `frame_id`,`s`.`id` AS `entity_id`,`f`.`filename` AS `filename`,`f`.`prompt` AS `prompt`,`f`.`style` AS `style`,`s`.`id` AS `sketch_id`,`s`.`name` AS `name`,`s`.`description` AS `description`,`s`.`mood` AS `mood` from (((`frames` `f` join `frames_2_sketches` `m` on(`f`.`id` = `m`.`from_id`)) join `sketches` `s` on(`m`.`to_id` = `s`.`id`)) join `styles` `st` on(`f`.`style_id` = `st`.`id`)) where `st`.`visible` = 1 order by `st`.`order`,`f`.`created_at` desc;
-
--- --------------------------------------------------------
--- View: `v_gallery_spawns`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_gallery_spawns`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`adminer`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_spawns` AS select `f`.`id` AS `frame_id`,`s`.`id` AS `entity_id`,`f`.`filename` AS `filename`,`f`.`prompt` AS `prompt`,`f`.`style` AS `style`,`s`.`id` AS `spawn_id`,`s`.`name` AS `name`,`s`.`description` AS `description`,coalesce(`st`.`code`,`s`.`type`) AS `type`,`st`.`label` AS `type_label`,`st`.`id` AS `spawn_type_id` from (((`frames` `f` join `frames_2_spawns` `m` on(`f`.`id` = `m`.`from_id`)) join `spawns` `s` on(`m`.`to_id` = `s`.`id`)) left join `spawn_types` `st` on(`s`.`spawn_type_id` = `st`.`id`)) order by `f`.`created_at` desc;
-
--- --------------------------------------------------------
--- View: `v_gallery_spawns_location`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_gallery_spawns_location`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`adminer`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_spawns_location` AS select `f`.`id` AS `frame_id`,`s`.`id` AS `entity_id`,`f`.`filename` AS `filename`,`f`.`prompt` AS `prompt`,`f`.`style` AS `style`,`s`.`id` AS `spawn_id`,`s`.`name` AS `name`,`s`.`description` AS `description`,`st`.`code` AS `type`,`st`.`label` AS `type_label` from (((`frames` `f` join `frames_2_spawns` `m` on(`f`.`id` = `m`.`from_id`)) join `spawns` `s` on(`m`.`to_id` = `s`.`id`)) join `spawn_types` `st` on(`s`.`spawn_type_id` = `st`.`id`)) where `st`.`code` = 'location' order by `f`.`created_at` desc;
-
--- --------------------------------------------------------
--- View: `v_gallery_spawns_prop`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_gallery_spawns_prop`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`adminer`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_spawns_prop` AS select `f`.`id` AS `frame_id`,`s`.`id` AS `entity_id`,`f`.`filename` AS `filename`,`f`.`prompt` AS `prompt`,`f`.`style` AS `style`,`s`.`id` AS `spawn_id`,`s`.`name` AS `name`,`s`.`description` AS `description`,`st`.`code` AS `type`,`st`.`label` AS `type_label` from (((`frames` `f` join `frames_2_spawns` `m` on(`f`.`id` = `m`.`from_id`)) join `spawns` `s` on(`m`.`to_id` = `s`.`id`)) join `spawn_types` `st` on(`s`.`spawn_type_id` = `st`.`id`)) where `st`.`code` = 'prop' order by `f`.`created_at` desc;
-
--- --------------------------------------------------------
--- View: `v_gallery_spawns_reference`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_gallery_spawns_reference`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`adminer`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_spawns_reference` AS select `f`.`id` AS `frame_id`,`s`.`id` AS `entity_id`,`f`.`filename` AS `filename`,`f`.`prompt` AS `prompt`,`f`.`style` AS `style`,`s`.`id` AS `spawn_id`,`s`.`name` AS `name`,`s`.`description` AS `description`,`st`.`code` AS `type`,`st`.`label` AS `type_label` from (((`frames` `f` join `frames_2_spawns` `m` on(`f`.`id` = `m`.`from_id`)) join `spawns` `s` on(`m`.`to_id` = `s`.`id`)) join `spawn_types` `st` on(`s`.`spawn_type_id` = `st`.`id`)) where `st`.`code` = 'reference' order by `f`.`created_at` desc;
-
--- --------------------------------------------------------
--- View: `v_gallery_spawns_texture`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_gallery_spawns_texture`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`adminer`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_spawns_texture` AS select `f`.`id` AS `frame_id`,`s`.`id` AS `entity_id`,`f`.`filename` AS `filename`,`f`.`prompt` AS `prompt`,`f`.`style` AS `style`,`s`.`id` AS `spawn_id`,`s`.`name` AS `name`,`s`.`description` AS `description`,`st`.`code` AS `type`,`st`.`label` AS `type_label` from (((`frames` `f` join `frames_2_spawns` `m` on(`f`.`id` = `m`.`from_id`)) join `spawns` `s` on(`m`.`to_id` = `s`.`id`)) join `spawn_types` `st` on(`s`.`spawn_type_id` = `st`.`id`)) where `st`.`code` = 'texture' order by `f`.`created_at` desc;
-
--- --------------------------------------------------------
--- View: `v_gallery_vehicles`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_gallery_vehicles`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_vehicles` AS select `f`.`id` AS `frame_id`,`v`.`id` AS `entity_id`,`f`.`filename` AS `filename`,`f`.`prompt` AS `prompt`,`f`.`style` AS `style`,`v`.`id` AS `vehicle_id`,`v`.`name` AS `vehicle_name`,`v`.`type` AS `vehicle_type`,`v`.`status` AS `vehicle_status` from (((`frames` `f` join `frames_2_vehicles` `m` on(`f`.`id` = `m`.`from_id`)) join `vehicles` `v` on(`m`.`to_id` = `v`.`id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) where `s`.`visible` = 1 order by `f`.`created_at` desc;
-
--- --------------------------------------------------------
--- View: `v_gallery_wall_of_images`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_gallery_wall_of_images`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`adminer`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_wall_of_images` AS select 'animas' AS `entity_type`,`v_gallery_animas`.`frame_id` AS `frame_id`,`v_gallery_animas`.`entity_id` AS `entity_id`,`v_gallery_animas`.`filename` AS `filename`,`v_gallery_animas`.`prompt` AS `prompt`,`v_gallery_animas`.`anima_name` AS `entity_name` from `v_gallery_animas` union all select 'artifacts' AS `entity_type`,`v_gallery_artifacts`.`frame_id` AS `frame_id`,`v_gallery_artifacts`.`entity_id` AS `entity_id`,`v_gallery_artifacts`.`filename` AS `filename`,`v_gallery_artifacts`.`prompt` AS `prompt`,`v_gallery_artifacts`.`artifact_name` AS `entity_name` from `v_gallery_artifacts` union all select 'backgrounds' AS `entity_type`,`v_gallery_backgrounds`.`frame_id` AS `frame_id`,`v_gallery_backgrounds`.`entity_id` AS `entity_id`,`v_gallery_backgrounds`.`filename` AS `filename`,`v_gallery_backgrounds`.`prompt` AS `prompt`,`v_gallery_backgrounds`.`background_name` AS `entity_name` from `v_gallery_backgrounds` union all select 'characters' AS `entity_type`,`v_gallery_characters`.`frame_id` AS `frame_id`,`v_gallery_characters`.`entity_id` AS `entity_id`,`v_gallery_characters`.`filename` AS `filename`,`v_gallery_characters`.`prompt` AS `prompt`,`v_gallery_characters`.`character_name` AS `entity_name` from `v_gallery_characters` union all select 'composites' AS `entity_type`,`v_gallery_composites`.`frame_id` AS `frame_id`,`v_gallery_composites`.`entity_id` AS `entity_id`,`v_gallery_composites`.`filename` AS `filename`,`v_gallery_composites`.`prompt` AS `prompt`,`v_gallery_composites`.`composite_name` AS `entity_name` from `v_gallery_composites` union all select 'generatives' AS `entity_type`,`v_gallery_generatives`.`frame_id` AS `frame_id`,`v_gallery_generatives`.`entity_id` AS `entity_id`,`v_gallery_generatives`.`filename` AS `filename`,`v_gallery_generatives`.`prompt` AS `prompt`,`v_gallery_generatives`.`name` AS `entity_name` from `v_gallery_generatives` union all select 'locations' AS `entity_type`,`v_gallery_locations`.`frame_id` AS `frame_id`,`v_gallery_locations`.`entity_id` AS `entity_id`,`v_gallery_locations`.`filename` AS `filename`,`v_gallery_locations`.`prompt` AS `prompt`,`v_gallery_locations`.`location_name` AS `entity_name` from `v_gallery_locations` union all select 'sketches' AS `entity_type`,`v_gallery_sketches`.`frame_id` AS `frame_id`,`v_gallery_sketches`.`entity_id` AS `entity_id`,`v_gallery_sketches`.`filename` AS `filename`,`v_gallery_sketches`.`prompt` AS `prompt`,`v_gallery_sketches`.`name` AS `entity_name` from `v_gallery_sketches` union all select 'vehicles' AS `entity_type`,`v_gallery_vehicles`.`frame_id` AS `frame_id`,`v_gallery_vehicles`.`entity_id` AS `entity_id`,`v_gallery_vehicles`.`filename` AS `filename`,`v_gallery_vehicles`.`prompt` AS `prompt`,`v_gallery_vehicles`.`vehicle_name` AS `entity_name` from `v_gallery_vehicles`;
-
--- --------------------------------------------------------
--- View: `v_map_runs_animas`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_map_runs_animas`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_animas` AS select distinct `mr`.`id` AS `id`,`mr`.`created_at` AS `created_at`,`mr`.`note` AS `note`,`m`.`to_id` AS `entity_id`,case when `mr`.`id` = `a`.`active_map_run_id` then 1 else 0 end AS `is_active` from (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_animas` `m` on(`f`.`id` = `m`.`from_id`)) join `animas` `a` on(`a`.`id` = `m`.`to_id`)) where `mr`.`entity_type` = 'animas';
-
--- --------------------------------------------------------
--- View: `v_map_runs_artifacts`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_map_runs_artifacts`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_artifacts` AS select distinct `mr`.`id` AS `id`,`mr`.`created_at` AS `created_at`,`mr`.`note` AS `note`,`m`.`to_id` AS `entity_id`,case when `mr`.`id` = `ar`.`active_map_run_id` then 1 else 0 end AS `is_active` from (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_artifacts` `m` on(`f`.`id` = `m`.`from_id`)) join `artifacts` `ar` on(`ar`.`id` = `m`.`to_id`)) where `mr`.`entity_type` = 'artifacts';
-
--- --------------------------------------------------------
--- View: `v_map_runs_backgrounds`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_map_runs_backgrounds`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_backgrounds` AS select distinct `mr`.`id` AS `id`,`mr`.`created_at` AS `created_at`,`mr`.`note` AS `note`,`m`.`to_id` AS `entity_id`,case when `mr`.`id` = `b`.`active_map_run_id` then 1 else 0 end AS `is_active` from (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_backgrounds` `m` on(`f`.`id` = `m`.`from_id`)) join `backgrounds` `b` on(`b`.`id` = `m`.`to_id`)) where `mr`.`entity_type` = 'backgrounds';
-
--- --------------------------------------------------------
--- View: `v_map_runs_characters`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_map_runs_characters`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_characters` AS select distinct `mr`.`id` AS `id`,`mr`.`created_at` AS `created_at`,`mr`.`note` AS `note`,`m`.`to_id` AS `entity_id`,case when `mr`.`id` = `c`.`active_map_run_id` then 1 else 0 end AS `is_active` from (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_characters` `m` on(`f`.`id` = `m`.`from_id`)) join `characters` `c` on(`c`.`id` = `m`.`to_id`)) where `mr`.`entity_type` = 'characters';
-
--- --------------------------------------------------------
--- View: `v_map_runs_character_poses`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_map_runs_character_poses`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_character_poses` AS select distinct `mr`.`id` AS `id`,`mr`.`created_at` AS `created_at`,`mr`.`note` AS `note`,`m`.`to_id` AS `entity_id`,case when `mr`.`id` = `cp`.`active_map_run_id` then 1 else 0 end AS `is_active` from (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_character_poses` `m` on(`f`.`id` = `m`.`from_id`)) join `character_poses` `cp` on(`cp`.`id` = `m`.`to_id`)) where `mr`.`entity_type` = 'character_poses';
-
--- --------------------------------------------------------
--- View: `v_map_runs_composites`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_map_runs_composites`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_composites` AS select distinct `mr`.`id` AS `id`,`mr`.`created_at` AS `created_at`,`mr`.`note` AS `note`,`m`.`to_id` AS `entity_id`,case when `mr`.`id` = `c`.`active_map_run_id` then 1 else 0 end AS `is_active` from (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_composites` `m` on(`f`.`id` = `m`.`from_id`)) join `composites` `c` on(`c`.`id` = `m`.`to_id`)) where `mr`.`entity_type` = 'composites';
-
--- --------------------------------------------------------
--- View: `v_map_runs_controlnet_maps`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_map_runs_controlnet_maps`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_controlnet_maps` AS select distinct `mr`.`id` AS `id`,`mr`.`created_at` AS `created_at`,`mr`.`note` AS `note`,`m`.`to_id` AS `entity_id`,case when `mr`.`id` = `c`.`active_map_run_id` then 1 else 0 end AS `is_active` from (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_controlnet_maps` `m` on(`f`.`id` = `m`.`from_id`)) join `controlnet_maps` `c` on(`c`.`id` = `m`.`to_id`)) where `mr`.`entity_type` = 'controlnet_maps';
-
--- --------------------------------------------------------
--- View: `v_map_runs_generatives`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_map_runs_generatives`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_generatives` AS select distinct `mr`.`id` AS `id`,`mr`.`created_at` AS `created_at`,`mr`.`note` AS `note`,`m`.`to_id` AS `entity_id`,case when `mr`.`id` = `g`.`active_map_run_id` then 1 else 0 end AS `is_active` from (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_generatives` `m` on(`f`.`id` = `m`.`from_id`)) join `generatives` `g` on(`g`.`id` = `m`.`to_id`)) where `mr`.`entity_type` = 'generatives';
-
--- --------------------------------------------------------
--- View: `v_map_runs_locations`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_map_runs_locations`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_locations` AS select distinct `mr`.`id` AS `id`,`mr`.`created_at` AS `created_at`,`mr`.`note` AS `note`,`m`.`to_id` AS `entity_id`,case when `mr`.`id` = `l`.`active_map_run_id` then 1 else 0 end AS `is_active` from (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_locations` `m` on(`f`.`id` = `m`.`from_id`)) join `locations` `l` on(`l`.`id` = `m`.`to_id`)) where `mr`.`entity_type` = 'locations';
-
--- --------------------------------------------------------
--- View: `v_map_runs_prompt_matrix_blueprints`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_map_runs_prompt_matrix_blueprints`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_prompt_matrix_blueprints` AS select distinct `mr`.`id` AS `id`,`mr`.`created_at` AS `created_at`,`mr`.`note` AS `note`,`m`.`to_id` AS `entity_id`,case when `mr`.`id` = `b`.`active_map_run_id` then 1 else 0 end AS `is_active` from (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_prompt_matrix_blueprints` `m` on(`f`.`id` = `m`.`from_id`)) join `prompt_matrix_blueprints` `b` on(`b`.`id` = `m`.`to_id`)) where `mr`.`entity_type` = 'prompt_matrix_blueprints';
-
--- --------------------------------------------------------
--- View: `v_map_runs_scene_parts`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_map_runs_scene_parts`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_scene_parts` AS select distinct `mr`.`id` AS `id`,`mr`.`created_at` AS `created_at`,`mr`.`note` AS `note`,`f2sp`.`to_id` AS `entity_id`,case when `mr`.`id` = `sp`.`active_map_run_id` then 1 else 0 end AS `is_active` from (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_scene_parts` `f2sp` on(`f2sp`.`from_id` = `f`.`id`)) join `scene_parts` `sp` on(`sp`.`id` = `f2sp`.`to_id`)) where `mr`.`entity_type` = 'scene_parts';
-
--- --------------------------------------------------------
--- View: `v_map_runs_sketches`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_map_runs_sketches`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_sketches` AS select distinct `mr`.`id` AS `id`,`mr`.`created_at` AS `created_at`,`mr`.`note` AS `note`,`m`.`to_id` AS `entity_id`,case when `mr`.`id` = `s`.`active_map_run_id` then 1 else 0 end AS `is_active` from (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_sketches` `m` on(`f`.`id` = `m`.`from_id`)) join `sketches` `s` on(`s`.`id` = `m`.`to_id`)) where `mr`.`entity_type` = 'sketches';
-
--- --------------------------------------------------------
--- View: `v_map_runs_vehicles`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_map_runs_vehicles`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_vehicles` AS select distinct `mr`.`id` AS `id`,`mr`.`created_at` AS `created_at`,`mr`.`note` AS `note`,`m`.`to_id` AS `entity_id`,case when `mr`.`id` = `v`.`active_map_run_id` then 1 else 0 end AS `is_active` from (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_vehicles` `m` on(`f`.`id` = `m`.`from_id`)) join `vehicles` `v` on(`v`.`id` = `m`.`to_id`)) where `mr`.`entity_type` = 'vehicles';
-
--- --------------------------------------------------------
--- View: `v_prompts_animas`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_prompts_animas`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_animas` AS select `a`.`id` AS `id`,`a`.`regenerate_images` AS `regenerate_images`,coalesce(`a`.`description`,'') AS `prompt` from `animas` `a`;
-
--- --------------------------------------------------------
--- View: `v_prompts_artifacts`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_prompts_artifacts`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_artifacts` AS select `ar`.`id` AS `id`,`ar`.`regenerate_images` AS `regenerate_images`,coalesce(`ar`.`description`,'') AS `prompt` from `artifacts` `ar`;
-
--- --------------------------------------------------------
--- View: `v_prompts_backgrounds`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_prompts_backgrounds`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_backgrounds` AS select `b`.`id` AS `id`,`b`.`regenerate_images` AS `regenerate_images`,coalesce(`b`.`description`,'') AS `prompt` from `backgrounds` `b`;
-
--- --------------------------------------------------------
--- View: `v_prompts_characters`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_prompts_characters`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_characters` AS select `c`.`id` AS `id`,`c`.`regenerate_images` AS `regenerate_images`,coalesce(`c`.`description`,'') AS `prompt` from `characters` `c`;
-
--- --------------------------------------------------------
--- View: `v_prompts_character_poses`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_prompts_character_poses`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_character_poses` AS select `cp`.`id` AS `id`,`cp`.`regenerate_images` AS `regenerate_images`,concat('((',`c`.`name`,': ',`c`.`description`,')) ','(Pose: ',`p`.`description`,') ','(Angle: ',`a`.`description`,')') AS `prompt` from (((`character_poses` `cp` join `characters` `c` on(`cp`.`character_id` = `c`.`id`)) join `poses` `p` on(`cp`.`pose_id` = `p`.`id`)) join `angles` `a` on(`cp`.`angle_id` = `a`.`id`));
-
--- --------------------------------------------------------
--- View: `v_prompts_composites`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_prompts_composites`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_composites` AS select `c`.`id` AS `id`,`c`.`regenerate_images` AS `regenerate_images`,coalesce(`c`.`description`,'') AS `prompt` from `composites` `c`;
-
--- --------------------------------------------------------
--- View: `v_prompts_controlnet_maps`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_prompts_controlnet_maps`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_controlnet_maps` AS select `c`.`id` AS `id`,`c`.`regenerate_images` AS `regenerate_images`,concat_ws(', ',`c`.`name`,coalesce(`c`.`description`,'')) AS `prompt` from `controlnet_maps` `c`;
-
--- --------------------------------------------------------
--- View: `v_prompts_generatives`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_prompts_generatives`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_generatives` AS select `g`.`id` AS `id`,`g`.`regenerate_images` AS `regenerate_images`,concat_ws(', ',`g`.`name`,coalesce(`g`.`description`,'')) AS `prompt` from `generatives` `g`;
-
--- --------------------------------------------------------
--- View: `v_prompts_locations`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_prompts_locations`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_locations` AS select `l`.`id` AS `id`,`l`.`regenerate_images` AS `regenerate_images`,coalesce(`l`.`description`,'') AS `prompt` from `locations` `l`;
-
--- --------------------------------------------------------
--- View: `v_prompts_prompt_matrix_blueprints`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_prompts_prompt_matrix_blueprints`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_prompt_matrix_blueprints` AS select `prompt_matrix_blueprints`.`id` AS `id`,`prompt_matrix_blueprints`.`regenerate_images` AS `regenerate_images`,coalesce(`prompt_matrix_blueprints`.`description`,'') AS `prompt` from `prompt_matrix_blueprints`;
-
--- --------------------------------------------------------
--- View: `v_prompts_scene_parts`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_prompts_scene_parts`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_scene_parts` AS select `sp`.`id` AS `scene_part_id`,`sp`.`id` AS `id`,`sp`.`scene_id` AS `scene_id`,`sp`.`name` AS `name`,`sp`.`description` AS `description`,substr(group_concat(distinct concat(`c`.`name`,if(`spc`.`role_in_part` is not null,concat(' (',`spc`.`role_in_part`,')'),'')) separator ', '),1,500) AS `characters`,substr(group_concat(distinct concat(`a`.`name`,' (',`spa`.`action_type`,')') separator ', '),1,500) AS `animas`,substr(group_concat(distinct `ar`.`name` separator ', '),1,300) AS `artifacts`,substr(group_concat(distinct concat(`b`.`name`,if(`b`.`type` is not null,concat(' (',`b`.`type`,')'),'')) separator ', '),1,300) AS `backgrounds`,concat_ws('. ',coalesce(`sp`.`name`,''),coalesce(`sp`.`description`,''),'Characters: ',substr(group_concat(distinct concat(`c`.`name`,if(`spc`.`role_in_part` is not null,concat(' (',`spc`.`role_in_part`,')'),'')) separator ', '),1,500),'. Animas: ',substr(group_concat(distinct concat(`a`.`name`,' (',`spa`.`action_type`,')') separator ', '),1,500),'. Artifacts: ',substr(group_concat(distinct `ar`.`name` separator ', '),1,300),'. Backgrounds: ',substr(group_concat(distinct concat(`b`.`name`,if(`b`.`type` is not null,concat(' (',`b`.`type`,')'),'')) separator ', '),1,300)) AS `prompt`,`sp`.`regenerate_images` AS `regenerate_images` from ((((((((`scene_parts` `sp` left join `scene_part_characters` `spc` on(`spc`.`scene_part_id` = `sp`.`id`)) left join `characters` `c` on(`c`.`id` = `spc`.`character_id`)) left join `scene_part_animas` `spa` on(`spa`.`scene_part_id` = `sp`.`id`)) left join `animas` `a` on(`a`.`id` = `spa`.`character_anima_id`)) left join `scene_part_artifacts` `spa2` on(`spa2`.`scene_part_id` = `sp`.`id`)) left join `artifacts` `ar` on(`ar`.`id` = `spa2`.`artifact_id`)) left join `scene_part_backgrounds` `spb` on(`spb`.`perspective_id` = `sp`.`id`)) left join `backgrounds` `b` on(`b`.`id` = `spb`.`background_id`)) group by `sp`.`id`;
-
--- --------------------------------------------------------
--- View: `v_prompts_sketches`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_prompts_sketches`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_sketches` AS select `s`.`id` AS `id`,`s`.`regenerate_images` AS `regenerate_images`,coalesce(`s`.`description`,'') AS `prompt` from `sketches` `s`;
-
--- --------------------------------------------------------
--- View: `v_prompts_vehicles`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_prompts_vehicles`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_vehicles` AS select `v`.`id` AS `id`,`v`.`regenerate_images` AS `regenerate_images`,coalesce(`v`.`description`,'') AS `prompt` from `vehicles` `v`;
-
--- --------------------------------------------------------
--- View: `v_scenes_under_review`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_scenes_under_review`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_scenes_under_review` AS select `s`.`id` AS `scene_id`,`s`.`title` AS `scene_title`,`sp`.`id` AS `scene_part_id`,`ps`.`stage` AS `stage`,`ps`.`assigned_to` AS `assigned_to`,`ps`.`updated_at` AS `updated_at` from ((`scenes` `s` join `scene_parts` `sp` on(`sp`.`scene_id` = `s`.`id`)) join `production_status` `ps` on(`ps`.`scene_part_id` = `sp`.`id`)) where `ps`.`stage` = 'review';
-
--- --------------------------------------------------------
--- View: `v_scene_part_full`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_scene_part_full`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_scene_part_full` AS select `sp`.`id` AS `scene_part_id`,`sp`.`name` AS `scene_part_name`,`sp`.`description` AS `scene_part_description`,`p`.`angle` AS `perspective_angle`,`p`.`description` AS `perspective_notes`,`b`.`name` AS `background_name`,`b`.`description` AS `background_description`,group_concat(distinct `a`.`name` separator ', ') AS `animas_in_scene`,group_concat(distinct concat(`a`.`name`,': ',`a`.`traits`,'; ',`a`.`abilities`) separator ' | ') AS `animas_details` from (((((`scene_parts` `sp` join `perspectives` `p` on(`p`.`scene_part_id` = `sp`.`id`)) left join `scene_part_backgrounds` `spb` on(`spb`.`perspective_id` = `p`.`id`)) left join `backgrounds` `b` on(`b`.`id` = `spb`.`background_id`)) left join `scene_part_animas` `spa` on(`spa`.`scene_part_id` = `sp`.`id`)) left join `animas` `a` on(`a`.`id` = `spa`.`character_anima_id`)) group by `sp`.`id`,`p`.`id`,`b`.`id` order by `sp`.`sequence`,`p`.`id`;
-
--- --------------------------------------------------------
--- View: `v_styles_helper`
--- --------------------------------------------------------
-
-DROP VIEW IF EXISTS `v_styles_helper`;
-
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_styles_helper` AS select `s`.`id` AS `id`,0 AS `regenerate_images`,concat('(',coalesce(`s`.`description`,''),')','(',(select `prompt_globals`.`description` from `prompt_globals` where `prompt_globals`.`id` = 1),')') AS `prompt` from `styles` `s` where `s`.`active` = 1 order by `s`.`order`;
-
+--
+-- Indizes der exportierten Tabellen
+--
+
+--
+-- Indizes für die Tabelle `angles`
+--
+ALTER TABLE `angles`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indizes für die Tabelle `animas`
+--
+ALTER TABLE `animas`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_character_animas_character` (`character_id`),
+  ADD KEY `idx_character_animas_name` (`name`);
+
+--
+-- Indizes für die Tabelle `artifacts`
+--
+ALTER TABLE `artifacts`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_artifacts_name` (`name`),
+  ADD KEY `idx_artifacts_type` (`type`),
+  ADD KEY `idx_artifacts_status` (`status`);
+
+--
+-- Indizes für die Tabelle `audio_assets`
+--
+ALTER TABLE `audio_assets`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_audio_name` (`name`),
+  ADD KEY `idx_audio_type` (`type`);
+
+--
+-- Indizes für die Tabelle `backgrounds`
+--
+ALTER TABLE `backgrounds`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_backgrounds_name` (`name`),
+  ADD KEY `idx_backgrounds_type` (`type`),
+  ADD KEY `idx_backgrounds_location` (`location_id`);
+
+--
+-- Indizes für die Tabelle `camera_angles`
+--
+ALTER TABLE `camera_angles`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `name` (`name`);
+
+--
+-- Indizes für die Tabelle `camera_perspectives`
+--
+ALTER TABLE `camera_perspectives`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `name` (`name`);
+
+--
+-- Indizes für die Tabelle `characters`
+--
+ALTER TABLE `characters`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_characters_name` (`name`),
+  ADD KEY `idx_characters_role` (`role`);
+
+--
+-- Indizes für die Tabelle `character_poses`
+--
+ALTER TABLE `character_poses`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uniq_character_pose_angle` (`character_id`,`pose_id`,`angle_id`),
+  ADD KEY `character_id` (`character_id`),
+  ADD KEY `pose_id` (`pose_id`),
+  ADD KEY `angle_id` (`angle_id`);
+
+--
+-- Indizes für die Tabelle `chat_message`
+--
+ALTER TABLE `chat_message`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `session_id` (`session_id`);
+
+--
+-- Indizes für die Tabelle `chat_session`
+--
+ALTER TABLE `chat_session`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `session_id` (`session_id`),
+  ADD KEY `idx_chat_session_type` (`type`);
+
+--
+-- Indizes für die Tabelle `chat_summary`
+--
+ALTER TABLE `chat_summary`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `session_id` (`session_id`);
+
+--
+-- Indizes für die Tabelle `composites`
+--
+ALTER TABLE `composites`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indizes für die Tabelle `composite_frames`
+--
+ALTER TABLE `composite_frames`
+  ADD PRIMARY KEY (`composite_id`,`frame_id`);
+
+--
+-- Indizes für die Tabelle `content_elements`
+--
+ALTER TABLE `content_elements`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `page_id` (`page_id`);
+
+--
+-- Indizes für die Tabelle `controlnet_maps`
+--
+ALTER TABLE `controlnet_maps`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indizes für die Tabelle `design_axes`
+--
+ALTER TABLE `design_axes`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_axis_group` (`axis_group`),
+  ADD KEY `idx_group_category` (`axis_group`,`category`);
+
+--
+-- Indizes für die Tabelle `dict_dictionaries`
+--
+ALTER TABLE `dict_dictionaries`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `slug` (`slug`),
+  ADD KEY `sort_order_index` (`sort_order`),
+  ADD KEY `language_code` (`language_code`);
+
+--
+-- Indizes für die Tabelle `dict_lemmas`
+--
+ALTER TABLE `dict_lemmas`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `lemma_language` (`lemma`,`language_code`),
+  ADD KEY `lemma_index` (`lemma`),
+  ADD KEY `frequency_index` (`frequency`);
+
+--
+-- Indizes für die Tabelle `dict_lemma_2_dictionary`
+--
+ALTER TABLE `dict_lemma_2_dictionary`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `dict_lemma_unique` (`dictionary_id`,`lemma_id`),
+  ADD KEY `dictionary_id` (`dictionary_id`),
+  ADD KEY `lemma_id` (`lemma_id`);
+
+--
+-- Indizes für die Tabelle `dict_source_files`
+--
+ALTER TABLE `dict_source_files`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `dictionary_id` (`dictionary_id`),
+  ADD KEY `parse_status` (`parse_status`);
+
+--
+-- Indizes für die Tabelle `export_flags`
+--
+ALTER TABLE `export_flags`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_export_scene_part` (`scene_part_id`),
+  ADD KEY `idx_export_ready` (`ready_for_export`),
+  ADD KEY `idx_export_type` (`export_type`);
+
+--
+-- Indizes für die Tabelle `feedback_notes`
+--
+ALTER TABLE `feedback_notes`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_feedback_source` (`source`),
+  ADD KEY `idx_feedback_status` (`resolved_status`),
+  ADD KEY `idx_feedback_scene_part` (`scene_part_id`);
+
+--
+-- Indizes für die Tabelle `frames`
+--
+ALTER TABLE `frames`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indizes für die Tabelle `frames_2_animas`
+--
+ALTER TABLE `frames_2_animas`
+  ADD PRIMARY KEY (`from_id`,`to_id`),
+  ADD KEY `anima_id` (`to_id`);
+
+--
+-- Indizes für die Tabelle `frames_2_artifacts`
+--
+ALTER TABLE `frames_2_artifacts`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_frame_artifact_from` (`from_id`),
+  ADD KEY `idx_frame_artifact_to` (`to_id`);
+
+--
+-- Indizes für die Tabelle `frames_2_backgrounds`
+--
+ALTER TABLE `frames_2_backgrounds`
+  ADD PRIMARY KEY (`from_id`,`to_id`),
+  ADD KEY `background_id` (`to_id`);
+
+--
+-- Indizes für die Tabelle `frames_2_characters`
+--
+ALTER TABLE `frames_2_characters`
+  ADD PRIMARY KEY (`from_id`,`to_id`),
+  ADD KEY `character_id` (`to_id`);
+
+--
+-- Indizes für die Tabelle `frames_2_character_poses`
+--
+ALTER TABLE `frames_2_character_poses`
+  ADD PRIMARY KEY (`from_id`,`to_id`),
+  ADD KEY `from_id` (`to_id`);
+
+--
+-- Indizes für die Tabelle `frames_2_composites`
+--
+ALTER TABLE `frames_2_composites`
+  ADD PRIMARY KEY (`from_id`,`to_id`),
+  ADD KEY `composite_id` (`to_id`);
+
+--
+-- Indizes für die Tabelle `frames_2_controlnet_maps`
+--
+ALTER TABLE `frames_2_controlnet_maps`
+  ADD PRIMARY KEY (`from_id`,`to_id`),
+  ADD KEY `to_id_idx` (`to_id`);
+
+--
+-- Indizes für die Tabelle `frames_2_generatives`
+--
+ALTER TABLE `frames_2_generatives`
+  ADD PRIMARY KEY (`from_id`,`to_id`),
+  ADD KEY `idx_frame_generative_from` (`from_id`),
+  ADD KEY `idx_frame_generative_to` (`to_id`);
+
+--
+-- Indizes für die Tabelle `frames_2_locations`
+--
+ALTER TABLE `frames_2_locations`
+  ADD PRIMARY KEY (`from_id`,`to_id`),
+  ADD KEY `location_id` (`to_id`);
+
+--
+-- Indizes für die Tabelle `frames_2_pastebin`
+--
+ALTER TABLE `frames_2_pastebin`
+  ADD PRIMARY KEY (`from_id`,`to_id`),
+  ADD KEY `location_id` (`to_id`);
+
+--
+-- Indizes für die Tabelle `frames_2_prompt_matrix_blueprints`
+--
+ALTER TABLE `frames_2_prompt_matrix_blueprints`
+  ADD PRIMARY KEY (`from_id`,`to_id`),
+  ADD KEY `prompt_matrix_blueprint_id` (`to_id`);
+
+--
+-- Indizes für die Tabelle `frames_2_scene_parts`
+--
+ALTER TABLE `frames_2_scene_parts`
+  ADD PRIMARY KEY (`from_id`,`to_id`),
+  ADD KEY `to_id` (`to_id`);
+
+--
+-- Indizes für die Tabelle `frames_2_sketches`
+--
+ALTER TABLE `frames_2_sketches`
+  ADD PRIMARY KEY (`from_id`,`to_id`),
+  ADD KEY `idx_frame_sketch_from` (`from_id`),
+  ADD KEY `idx_frame_sketch_to` (`to_id`);
+
+--
+-- Indizes für die Tabelle `frames_2_spawns`
+--
+ALTER TABLE `frames_2_spawns`
+  ADD PRIMARY KEY (`from_id`,`to_id`),
+  ADD KEY `seed_id` (`to_id`);
+
+--
+-- Indizes für die Tabelle `frames_2_vehicles`
+--
+ALTER TABLE `frames_2_vehicles`
+  ADD PRIMARY KEY (`from_id`,`to_id`),
+  ADD KEY `idx_from_id` (`from_id`),
+  ADD KEY `idx_to_id` (`to_id`);
+
+--
+-- Indizes für die Tabelle `frames_chains`
+--
+ALTER TABLE `frames_chains`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_frame_id` (`frame_id`),
+  ADD KEY `idx_parent_frame_id` (`parent_frame_id`);
+
+--
+-- Indizes für die Tabelle `frames_failed`
+--
+ALTER TABLE `frames_failed`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indizes für die Tabelle `frames_trashcan`
+--
+ALTER TABLE `frames_trashcan`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indizes für die Tabelle `frame_counter`
+--
+ALTER TABLE `frame_counter`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indizes für die Tabelle `generated_phrase_maps`
+--
+ALTER TABLE `generated_phrase_maps`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `ux_profile_hash_model` (`profile_hash`,`model_name`),
+  ADD KEY `idx_profile_id` (`profile_id`),
+  ADD KEY `idx_created_at` (`created_at`);
+
+--
+-- Indizes für die Tabelle `generatives`
+--
+ALTER TABLE `generatives`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indizes für die Tabelle `generator_config`
+--
+ALTER TABLE `generator_config`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `config_id` (`config_id`),
+  ADD KEY `user_id` (`user_id`),
+  ADD KEY `active` (`active`),
+  ADD KEY `idx_user_active` (`user_id`,`active`),
+  ADD KEY `idx_public` (`user_id`),
+  ADD KEY `idx_is_public` (`is_public`,`active`),
+  ADD KEY `idx_list_order` (`list_order`);
+
+--
+-- Indizes für die Tabelle `generator_config_display_area`
+--
+ALTER TABLE `generator_config_display_area`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uniq_area_key` (`area_key`);
+
+--
+-- Indizes für die Tabelle `generator_config_to_display_area`
+--
+ALTER TABLE `generator_config_to_display_area`
+  ADD PRIMARY KEY (`generator_config_id`,`display_area_id`),
+  ADD KEY `idx_generator_config_id` (`generator_config_id`),
+  ADD KEY `idx_display_area_id` (`display_area_id`);
+
+--
+-- Indizes für die Tabelle `image_edits`
+--
+ALTER TABLE `image_edits`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_parent_frame` (`parent_frame_id`),
+  ADD KEY `idx_chain` (`chain_id`),
+  ADD KEY `idx_derived_frame` (`derived_frame_id`),
+  ADD KEY `idx_map_run` (`map_run_id`);
+
+--
+-- Indizes für die Tabelle `image_stash`
+--
+ALTER TABLE `image_stash`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indizes für die Tabelle `interactions`
+--
+ALTER TABLE `interactions`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `interaction_group` (`interaction_group`),
+  ADD KEY `category` (`category`),
+  ADD KEY `active` (`active`);
+
+--
+-- Indizes für die Tabelle `interaction_audio`
+--
+ALTER TABLE `interaction_audio`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_ia_unique` (`interaction_id`,`audio_asset_id`),
+  ADD KEY `fk_ia_audio` (`audio_asset_id`);
+
+--
+-- Indizes für die Tabelle `lightings`
+--
+ALTER TABLE `lightings`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `angle_id` (`angle_id`);
+
+--
+-- Indizes für die Tabelle `locations`
+--
+ALTER TABLE `locations`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_locations_name` (`name`),
+  ADD KEY `idx_locations_type` (`type`);
+
+--
+-- Indizes für die Tabelle `locations_abstract`
+--
+ALTER TABLE `locations_abstract`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_locations_name` (`name`),
+  ADD KEY `idx_locations_type` (`type`);
+
+--
+-- Indizes für die Tabelle `logs`
+--
+ALTER TABLE `logs`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indizes für die Tabelle `map_runs`
+--
+ALTER TABLE `map_runs`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `parent_map_run_idx` (`parent_map_run_id`);
+
+--
+-- Indizes für die Tabelle `meta_entities`
+--
+ALTER TABLE `meta_entities`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `name` (`name`);
+
+--
+-- Indizes für die Tabelle `pages`
+--
+ALTER TABLE `pages`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `parent_id` (`parent_id`);
+
+--
+-- Indizes für die Tabelle `pastebin`
+--
+ALTER TABLE `pastebin`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `url_token` (`url_token`),
+  ADD KEY `idx_user_id` (`user_id`),
+  ADD KEY `idx_visibility` (`visibility`),
+  ADD KEY `idx_expires_at` (`expires_at`);
+
+--
+-- Indizes für die Tabelle `perspectives`
+--
+ALTER TABLE `perspectives`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_perspectives_scene_part` (`scene_part_id`);
+
+--
+-- Indizes für die Tabelle `playlist_videos`
+--
+ALTER TABLE `playlist_videos`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_playlist_video` (`playlist_id`,`video_id`),
+  ADD KEY `idx_playlist` (`playlist_id`),
+  ADD KEY `idx_video` (`video_id`),
+  ADD KEY `idx_sort` (`sort_order`);
+
+--
+-- Indizes für die Tabelle `poses`
+--
+ALTER TABLE `poses`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indizes für die Tabelle `posts`
+--
+ALTER TABLE `posts`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `slug` (`slug`),
+  ADD KEY `sort_order_index` (`sort_order`);
+
+--
+-- Indizes für die Tabelle `production_status`
+--
+ALTER TABLE `production_status`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_prodstatus_scene_part` (`scene_part_id`),
+  ADD KEY `idx_prodstatus_stage` (`stage`),
+  ADD KEY `idx_prodstatus_assignee` (`assigned_to`);
+
+--
+-- Indizes für die Tabelle `prompt_additions`
+--
+ALTER TABLE `prompt_additions`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_slot_order` (`slot`,`order`),
+  ADD KEY `idx_active_slot` (`active`,`slot`),
+  ADD KEY `idx_entity` (`entity_type`,`entity_id`);
+
+--
+-- Indizes für die Tabelle `prompt_globals`
+--
+ALTER TABLE `prompt_globals`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_prompt_globals_name` (`name`);
+
+--
+-- Indizes für die Tabelle `prompt_ideations`
+--
+ALTER TABLE `prompt_ideations`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indizes für die Tabelle `prompt_matrix`
+--
+ALTER TABLE `prompt_matrix`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_entity` (`entity_type`,`entity_id`),
+  ADD KEY `idx_map_run` (`active_map_run_id`),
+  ADD KEY `idx_state` (`state_id_active`);
+
+--
+-- Indizes für die Tabelle `prompt_matrix_additions`
+--
+ALTER TABLE `prompt_matrix_additions`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_matrix_slot` (`matrix_id`,`slot`),
+  ADD KEY `idx_addition_id` (`addition_id`);
+
+--
+-- Indizes für die Tabelle `prompt_matrix_blueprints`
+--
+ALTER TABLE `prompt_matrix_blueprints`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_sketches_name` (`name`);
+
+--
+-- Indizes für die Tabelle `scenes`
+--
+ALTER TABLE `scenes`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_scenes_sequence` (`sequence`),
+  ADD KEY `fk_scene_arc` (`arc_id`);
+
+--
+-- Indizes für die Tabelle `scene_parts`
+--
+ALTER TABLE `scene_parts`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_scene_parts_scene` (`scene_id`),
+  ADD KEY `idx_scene_parts_scene_seq` (`scene_id`,`sequence`);
+
+--
+-- Indizes für die Tabelle `scene_part_animas`
+--
+ALTER TABLE `scene_part_animas`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_span_unique` (`scene_part_id`,`character_anima_id`,`action_type`),
+  ADD KEY `idx_span_scene_part` (`scene_part_id`),
+  ADD KEY `idx_span_character_anima` (`character_anima_id`);
+
+--
+-- Indizes für die Tabelle `scene_part_artifacts`
+--
+ALTER TABLE `scene_part_artifacts`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_spa_unique` (`scene_part_id`,`artifact_id`),
+  ADD KEY `idx_spa_artifact` (`artifact_id`),
+  ADD KEY `idx_spa_scene_part` (`scene_part_id`);
+
+--
+-- Indizes für die Tabelle `scene_part_backgrounds`
+--
+ALTER TABLE `scene_part_backgrounds`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_spb_unique` (`perspective_id`,`background_id`),
+  ADD KEY `idx_spb_background` (`background_id`),
+  ADD KEY `idx_spb_perspective` (`perspective_id`);
+
+--
+-- Indizes für die Tabelle `scene_part_characters`
+--
+ALTER TABLE `scene_part_characters`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_spc_unique` (`scene_part_id`,`character_id`),
+  ADD KEY `idx_spc_char` (`character_id`),
+  ADD KEY `idx_spc_scene_part` (`scene_part_id`);
+
+--
+-- Indizes für die Tabelle `scene_part_tags`
+--
+ALTER TABLE `scene_part_tags`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_spt_unique` (`scene_part_id`,`tag_id`),
+  ADD KEY `idx_spt_tag` (`tag_id`),
+  ADD KEY `idx_spt_scene_part` (`scene_part_id`);
+
+--
+-- Indizes für die Tabelle `scene_part_versions`
+--
+ALTER TABLE `scene_part_versions`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_spv_unique` (`scene_part_id`,`version_number`),
+  ADD KEY `idx_spv_scene_part` (`scene_part_id`),
+  ADD KEY `idx_spv_version` (`version_number`);
+
+--
+-- Indizes für die Tabelle `scheduled_tasks`
+--
+ALTER TABLE `scheduled_tasks`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_active_time` (`active`,`schedule_time`),
+  ADD KEY `idx_active_interval` (`active`,`schedule_interval`),
+  ADD KEY `idx_last_run` (`last_run`);
+
+--
+-- Indizes für die Tabelle `scheduler_heartbeat`
+--
+ALTER TABLE `scheduler_heartbeat`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indizes für die Tabelle `seeds`
+--
+ALTER TABLE `seeds`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_seeds_value` (`value`);
+
+--
+-- Indizes für die Tabelle `shot_types`
+--
+ALTER TABLE `shot_types`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `name` (`name`);
+
+--
+-- Indizes für die Tabelle `sketches`
+--
+ALTER TABLE `sketches`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_sketches_name` (`name`);
+
+--
+-- Indizes für die Tabelle `sketch_templates`
+--
+ALTER TABLE `sketch_templates`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `entity_type` (`entity_type`),
+  ADD KEY `active` (`active`);
+
+--
+-- Indizes für die Tabelle `spawns`
+--
+ALTER TABLE `spawns`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_seeds_type` (`type`),
+  ADD KEY `idx_spawn_type_id` (`spawn_type_id`);
+
+--
+-- Indizes für die Tabelle `spawn_types`
+--
+ALTER TABLE `spawn_types`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `code` (`code`);
+
+--
+-- Indizes für die Tabelle `states`
+--
+ALTER TABLE `states`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_states_name` (`name`);
+
+--
+-- Indizes für die Tabelle `storyboards`
+--
+ALTER TABLE `storyboards`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `directory` (`directory`);
+
+--
+-- Indizes für die Tabelle `storyboard_frames`
+--
+ALTER TABLE `storyboard_frames`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_storyboard` (`storyboard_id`),
+  ADD KEY `idx_frame` (`frame_id`),
+  ADD KEY `idx_sort` (`storyboard_id`,`sort_order`);
+
+--
+-- Indizes für die Tabelle `story_arcs`
+--
+ALTER TABLE `story_arcs`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indizes für die Tabelle `styles`
+--
+ALTER TABLE `styles`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_styles_name` (`name`);
+
+--
+-- Indizes für die Tabelle `style_profiles`
+--
+ALTER TABLE `style_profiles`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `created_at` (`created_at`),
+  ADD KEY `idx_axis_group` (`axis_group`),
+  ADD KEY `name` (`name`);
+
+--
+-- Indizes für die Tabelle `style_profile_axes`
+--
+ALTER TABLE `style_profile_axes`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `ux_profile_axis` (`profile_id`,`axis_id`),
+  ADD KEY `profile_id` (`profile_id`),
+  ADD KEY `axis_id` (`axis_id`);
+
+--
+-- Indizes für die Tabelle `style_profile_config`
+--
+ALTER TABLE `style_profile_config`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `config_key` (`config_key`);
+
+--
+-- Indizes für die Tabelle `tags`
+--
+ALTER TABLE `tags`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_tags_name` (`name`);
+
+--
+-- Indizes für die Tabelle `tags2poses`
+--
+ALTER TABLE `tags2poses`
+  ADD PRIMARY KEY (`from_id`,`to_id`);
+
+--
+-- Indizes für die Tabelle `tags_2_frames`
+--
+ALTER TABLE `tags_2_frames`
+  ADD UNIQUE KEY `uq_tags_2_frames` (`from_id`,`to_id`);
+
+--
+-- Indizes für die Tabelle `task_execution_stats`
+--
+ALTER TABLE `task_execution_stats`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_task_date` (`task_id`,`date`),
+  ADD KEY `task_id` (`task_id`);
+
+--
+-- Indizes für die Tabelle `task_locks`
+--
+ALTER TABLE `task_locks`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_lock_key` (`lock_key`),
+  ADD KEY `task_id` (`task_id`),
+  ADD KEY `run_id` (`run_id`),
+  ADD KEY `idx_status_expires` (`status`,`expires_at`),
+  ADD KEY `idx_task_locks_owner_token` (`owner_token`);
+
+--
+-- Indizes für die Tabelle `task_runs`
+--
+ALTER TABLE `task_runs`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `task_id` (`task_id`),
+  ADD KEY `idx_status` (`status`),
+  ADD KEY `lock_id` (`lock_id`),
+  ADD KEY `idx_task_runs_status_pid` (`status`,`pid`);
+
+--
+-- Indizes für die Tabelle `user`
+--
+ALTER TABLE `user`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `username` (`username`),
+  ADD UNIQUE KEY `google_id_unique` (`google_id`);
+
+--
+-- Indizes für die Tabelle `vehicles`
+--
+ALTER TABLE `vehicles`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_vehicles_name` (`name`),
+  ADD KEY `idx_vehicles_type` (`type`),
+  ADD KEY `idx_vehicles_status` (`status`);
+
+--
+-- Indizes für die Tabelle `videos`
+--
+ALTER TABLE `videos`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_category` (`category_id`),
+  ADD KEY `idx_active` (`is_active`),
+  ADD KEY `idx_created` (`created_at`);
+
+--
+-- Indizes für die Tabelle `video_categories`
+--
+ALTER TABLE `video_categories`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `slug` (`slug`),
+  ADD KEY `idx_active` (`is_active`);
+
+--
+-- Indizes für die Tabelle `video_playlists`
+--
+ALTER TABLE `video_playlists`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `slug` (`slug`),
+  ADD KEY `idx_active` (`is_active`);
+
+--
+-- Indizes für die Tabelle `weather_conditions`
+--
+ALTER TABLE `weather_conditions`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_weather_name` (`name`);
+
+--
+-- AUTO_INCREMENT für exportierte Tabellen
+--
+
+--
+-- AUTO_INCREMENT für Tabelle `angles`
+--
+ALTER TABLE `angles`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `animas`
+--
+ALTER TABLE `animas`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `artifacts`
+--
+ALTER TABLE `artifacts`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `audio_assets`
+--
+ALTER TABLE `audio_assets`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `backgrounds`
+--
+ALTER TABLE `backgrounds`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `camera_angles`
+--
+ALTER TABLE `camera_angles`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `camera_perspectives`
+--
+ALTER TABLE `camera_perspectives`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `characters`
+--
+ALTER TABLE `characters`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `character_poses`
+--
+ALTER TABLE `character_poses`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `chat_message`
+--
+ALTER TABLE `chat_message`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `chat_session`
+--
+ALTER TABLE `chat_session`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `chat_summary`
+--
+ALTER TABLE `chat_summary`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `composites`
+--
+ALTER TABLE `composites`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `content_elements`
+--
+ALTER TABLE `content_elements`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `controlnet_maps`
+--
+ALTER TABLE `controlnet_maps`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `design_axes`
+--
+ALTER TABLE `design_axes`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `dict_dictionaries`
+--
+ALTER TABLE `dict_dictionaries`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `dict_lemmas`
+--
+ALTER TABLE `dict_lemmas`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `dict_lemma_2_dictionary`
+--
+ALTER TABLE `dict_lemma_2_dictionary`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `dict_source_files`
+--
+ALTER TABLE `dict_source_files`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `export_flags`
+--
+ALTER TABLE `export_flags`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `feedback_notes`
+--
+ALTER TABLE `feedback_notes`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `frames`
+--
+ALTER TABLE `frames`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `frames_2_artifacts`
+--
+ALTER TABLE `frames_2_artifacts`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `frames_chains`
+--
+ALTER TABLE `frames_chains`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `frames_failed`
+--
+ALTER TABLE `frames_failed`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `frames_trashcan`
+--
+ALTER TABLE `frames_trashcan`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `generated_phrase_maps`
+--
+ALTER TABLE `generated_phrase_maps`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `generatives`
+--
+ALTER TABLE `generatives`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `generator_config`
+--
+ALTER TABLE `generator_config`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `generator_config_display_area`
+--
+ALTER TABLE `generator_config_display_area`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `image_edits`
+--
+ALTER TABLE `image_edits`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `image_stash`
+--
+ALTER TABLE `image_stash`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `interactions`
+--
+ALTER TABLE `interactions`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `interaction_audio`
+--
+ALTER TABLE `interaction_audio`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `lightings`
+--
+ALTER TABLE `lightings`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `locations`
+--
+ALTER TABLE `locations`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `locations_abstract`
+--
+ALTER TABLE `locations_abstract`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `logs`
+--
+ALTER TABLE `logs`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `map_runs`
+--
+ALTER TABLE `map_runs`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `meta_entities`
+--
+ALTER TABLE `meta_entities`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `pages`
+--
+ALTER TABLE `pages`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `pastebin`
+--
+ALTER TABLE `pastebin`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `perspectives`
+--
+ALTER TABLE `perspectives`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `playlist_videos`
+--
+ALTER TABLE `playlist_videos`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `poses`
+--
+ALTER TABLE `poses`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `posts`
+--
+ALTER TABLE `posts`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `production_status`
+--
+ALTER TABLE `production_status`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `prompt_additions`
+--
+ALTER TABLE `prompt_additions`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `prompt_globals`
+--
+ALTER TABLE `prompt_globals`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `prompt_ideations`
+--
+ALTER TABLE `prompt_ideations`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `prompt_matrix`
+--
+ALTER TABLE `prompt_matrix`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `prompt_matrix_additions`
+--
+ALTER TABLE `prompt_matrix_additions`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `prompt_matrix_blueprints`
+--
+ALTER TABLE `prompt_matrix_blueprints`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `scenes`
+--
+ALTER TABLE `scenes`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `scene_parts`
+--
+ALTER TABLE `scene_parts`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `scene_part_animas`
+--
+ALTER TABLE `scene_part_animas`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `scene_part_artifacts`
+--
+ALTER TABLE `scene_part_artifacts`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `scene_part_backgrounds`
+--
+ALTER TABLE `scene_part_backgrounds`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `scene_part_characters`
+--
+ALTER TABLE `scene_part_characters`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `scene_part_tags`
+--
+ALTER TABLE `scene_part_tags`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `scene_part_versions`
+--
+ALTER TABLE `scene_part_versions`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `scheduled_tasks`
+--
+ALTER TABLE `scheduled_tasks`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `seeds`
+--
+ALTER TABLE `seeds`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `shot_types`
+--
+ALTER TABLE `shot_types`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `sketches`
+--
+ALTER TABLE `sketches`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `sketch_templates`
+--
+ALTER TABLE `sketch_templates`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `spawns`
+--
+ALTER TABLE `spawns`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `spawn_types`
+--
+ALTER TABLE `spawn_types`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `states`
+--
+ALTER TABLE `states`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `storyboards`
+--
+ALTER TABLE `storyboards`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `storyboard_frames`
+--
+ALTER TABLE `storyboard_frames`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `story_arcs`
+--
+ALTER TABLE `story_arcs`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `styles`
+--
+ALTER TABLE `styles`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `style_profiles`
+--
+ALTER TABLE `style_profiles`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `style_profile_axes`
+--
+ALTER TABLE `style_profile_axes`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `style_profile_config`
+--
+ALTER TABLE `style_profile_config`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `tags`
+--
+ALTER TABLE `tags`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `task_execution_stats`
+--
+ALTER TABLE `task_execution_stats`
+  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `task_locks`
+--
+ALTER TABLE `task_locks`
+  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `task_runs`
+--
+ALTER TABLE `task_runs`
+  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `user`
+--
+ALTER TABLE `user`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `vehicles`
+--
+ALTER TABLE `vehicles`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `videos`
+--
+ALTER TABLE `videos`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `video_categories`
+--
+ALTER TABLE `video_categories`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `video_playlists`
+--
+ALTER TABLE `video_playlists`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `weather_conditions`
+--
+ALTER TABLE `weather_conditions`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_anima_activity`
+--
+DROP TABLE IF EXISTS `v_anima_activity`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_anima_activity`  AS SELECT `s`.`id` AS `scene_id`, `s`.`sequence` AS `scene_sequence`, `sp`.`id` AS `scene_part_id`, `sp`.`sequence` AS `part_sequence`, `a`.`id` AS `character_anima_id`, `ch`.`name` AS `character_name`, `a`.`name` AS `anima_name`, `span`.`action_type` AS `action_type`, `span`.`notes` AS `notes` FROM ((((`scenes` `s` join `scene_parts` `sp` on(`sp`.`scene_id` = `s`.`id`)) join `scene_part_animas` `span` on(`span`.`scene_part_id` = `sp`.`id`)) join `animas` `a` on(`a`.`id` = `span`.`character_anima_id`)) join `characters` `ch` on(`ch`.`id` = `a`.`character_id`)) ORDER BY `s`.`sequence` ASC, `sp`.`sequence` ASC, `ch`.`name` ASC, `a`.`name` ASC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_artifact_usage`
+--
+DROP TABLE IF EXISTS `v_artifact_usage`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_artifact_usage`  AS SELECT `s`.`id` AS `scene_id`, `s`.`sequence` AS `scene_sequence`, `sp`.`id` AS `scene_part_id`, `sp`.`sequence` AS `part_sequence`, `a`.`id` AS `artifact_id`, `a`.`name` AS `artifact_name`, `a`.`type` AS `artifact_type`, `a`.`status` AS `artifact_status`, `spa`.`notes` AS `notes` FROM (((`scenes` `s` join `scene_parts` `sp` on(`sp`.`scene_id` = `s`.`id`)) join `scene_part_artifacts` `spa` on(`spa`.`scene_part_id` = `sp`.`id`)) join `artifacts` `a` on(`a`.`id` = `spa`.`artifact_id`)) ORDER BY `s`.`sequence` ASC, `sp`.`sequence` ASC, `a`.`name` ASC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_character_pose_angle_combinations`
+--
+DROP TABLE IF EXISTS `v_character_pose_angle_combinations`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_character_pose_angle_combinations`  AS SELECT `c`.`id` AS `character_id`, `c`.`name` AS `character_name`, `p`.`id` AS `pose_id`, `p`.`name` AS `pose_name`, `a`.`id` AS `angle_id`, `a`.`name` AS `angle_name`, concat(`c`.`name`,' (',`c`.`description`,') - ',`p`.`name`,' (',`p`.`description`,') - ',`a`.`name`,' (',`a`.`description`,')') AS `description` FROM ((`characters` `c` join `poses` `p`) join `angles` `a`) ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_export_ready`
+--
+DROP TABLE IF EXISTS `v_export_ready`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_export_ready`  AS SELECT `s`.`id` AS `scene_id`, `s`.`title` AS `scene_title`, `sp`.`id` AS `scene_part_id`, `ef`.`export_type` AS `export_type`, `ef`.`last_exported_at` AS `last_exported_at` FROM ((`scenes` `s` join `scene_parts` `sp` on(`sp`.`scene_id` = `s`.`id`)) join `export_flags` `ef` on(`ef`.`scene_part_id` = `sp`.`id`)) WHERE `ef`.`ready_for_export` = 1 ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_gallery_animas`
+--
+DROP TABLE IF EXISTS `v_gallery_animas`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_animas`  AS SELECT `f`.`id` AS `frame_id`, `a`.`id` AS `entity_id`, `f`.`filename` AS `filename`, `f`.`prompt` AS `prompt`, `f`.`style` AS `style`, `a`.`id` AS `anima_id`, `a`.`name` AS `anima_name`, `a`.`traits` AS `traits`, `a`.`abilities` AS `abilities`, `c`.`id` AS `character_id`, `c`.`name` AS `character_name`, `c`.`role` AS `character_role`, 'animas' AS `entity_type` FROM ((((`frames` `f` join `frames_2_animas` `m` on(`m`.`from_id` = `f`.`id`)) join `animas` `a` on(`a`.`id` = `m`.`to_id`)) left join `characters` `c` on(`c`.`id` = `a`.`character_id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) WHERE `s`.`visible` = 1 ORDER BY `s`.`order` ASC, `f`.`created_at` DESC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_gallery_artifacts`
+--
+DROP TABLE IF EXISTS `v_gallery_artifacts`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_artifacts`  AS SELECT `f`.`id` AS `frame_id`, `a`.`id` AS `entity_id`, `f`.`filename` AS `filename`, `f`.`prompt` AS `prompt`, `f`.`style` AS `style`, `a`.`id` AS `artifact_id`, `a`.`name` AS `artifact_name`, `a`.`type` AS `artifact_type`, `a`.`status` AS `artifact_status` FROM (((`frames` `f` join `frames_2_artifacts` `m` on(`f`.`id` = `m`.`from_id`)) join `artifacts` `a` on(`m`.`to_id` = `a`.`id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) WHERE `s`.`visible` = 1 ORDER BY `f`.`created_at` DESC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_gallery_backgrounds`
+--
+DROP TABLE IF EXISTS `v_gallery_backgrounds`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_backgrounds`  AS SELECT `f`.`id` AS `frame_id`, `b`.`id` AS `entity_id`, `f`.`filename` AS `filename`, `f`.`prompt` AS `prompt`, `f`.`style` AS `style`, `b`.`id` AS `background_id`, `b`.`name` AS `background_name`, `b`.`type` AS `background_type`, `l`.`id` AS `location_id`, `l`.`name` AS `location_name`, 'backgrounds' AS `entity_type` FROM ((((`frames` `f` join `frames_2_backgrounds` `m` on(`f`.`id` = `m`.`from_id`)) join `backgrounds` `b` on(`m`.`to_id` = `b`.`id`)) left join `locations` `l` on(`b`.`location_id` = `l`.`id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) WHERE `s`.`visible` = 1 ORDER BY `f`.`created_at` DESC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_gallery_characters`
+--
+DROP TABLE IF EXISTS `v_gallery_characters`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_characters`  AS SELECT `f`.`id` AS `frame_id`, `f`.`map_run_id` AS `map_run_id`, `c`.`id` AS `entity_id`, `f`.`filename` AS `filename`, `f`.`prompt` AS `prompt`, `f`.`style` AS `style`, `c`.`id` AS `character_id`, `c`.`name` AS `character_name`, `c`.`role` AS `character_role`, 'characters' AS `entity_type` FROM (((`frames` `f` join `frames_2_characters` `m` on(`f`.`id` = `m`.`from_id`)) join `characters` `c` on(`m`.`to_id` = `c`.`id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) WHERE `s`.`visible` = 1 ORDER BY `s`.`order` ASC, `f`.`created_at` DESC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_gallery_character_poses`
+--
+DROP TABLE IF EXISTS `v_gallery_character_poses`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_character_poses`  AS SELECT `f`.`id` AS `frame_id`, `cp`.`id` AS `entity_id`, `f`.`filename` AS `filename`, `cp`.`description` AS `prompt`, `s`.`name` AS `style`, `cp`.`id` AS `character_pose_id`, `c`.`id` AS `character_id`, `c`.`name` AS `character_name`, `cp`.`pose_id` AS `pose_id`, `p`.`name` AS `pose_name`, `cp`.`angle_id` AS `angle_id`, `a`.`name` AS `angle_name` FROM ((((((`frames` `f` join `frames_2_character_poses` `m` on(`f`.`id` = `m`.`from_id`)) join `character_poses` `cp` on(`m`.`to_id` = `cp`.`id`)) join `characters` `c` on(`cp`.`character_id` = `c`.`id`)) join `poses` `p` on(`cp`.`pose_id` = `p`.`id`)) join `angles` `a` on(`cp`.`angle_id` = `a`.`id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) WHERE `s`.`visible` = 1 AND `f`.`map_run_id` = `cp`.`active_map_run_id` ORDER BY `s`.`order` ASC, `f`.`created_at` DESC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_gallery_composites`
+--
+DROP TABLE IF EXISTS `v_gallery_composites`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_composites`  AS SELECT `f`.`id` AS `frame_id`, `c`.`id` AS `entity_id`, `f`.`filename` AS `filename`, `f`.`prompt` AS `prompt`, `f`.`style` AS `style`, `c`.`id` AS `composite_id`, `c`.`name` AS `composite_name` FROM (((`frames` `f` join `frames_2_composites` `m` on(`f`.`id` = `m`.`from_id`)) join `composites` `c` on(`m`.`to_id` = `c`.`id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) WHERE `s`.`visible` = 1 ORDER BY `f`.`created_at` DESC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_gallery_controlnet_maps`
+--
+DROP TABLE IF EXISTS `v_gallery_controlnet_maps`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`adminer`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_controlnet_maps`  AS SELECT `f`.`id` AS `frame_id`, `c`.`id` AS `entity_id`, `f`.`filename` AS `filename`, `f`.`prompt` AS `prompt`, `f`.`style` AS `style`, `c`.`id` AS `map_id`, `c`.`name` AS `map_name` FROM ((`frames` `f` join `frames_2_controlnet_maps` `m` on(`f`.`id` = `m`.`from_id`)) join `controlnet_maps` `c` on(`m`.`to_id` = `c`.`id`)) WHERE `f`.`map_run_id` = `c`.`active_map_run_id` ORDER BY `f`.`created_at` DESC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_gallery_generatives`
+--
+DROP TABLE IF EXISTS `v_gallery_generatives`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_generatives`  AS SELECT `f`.`id` AS `frame_id`, `g`.`id` AS `entity_id`, `f`.`filename` AS `filename`, `f`.`prompt` AS `prompt`, `f`.`style` AS `style`, `g`.`id` AS `generative_id`, `g`.`name` AS `name`, `g`.`description` AS `description` FROM (((`frames` `f` join `frames_2_generatives` `m` on(`f`.`id` = `m`.`from_id`)) join `generatives` `g` on(`m`.`to_id` = `g`.`id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) WHERE `s`.`visible` = 1 ORDER BY `f`.`created_at` DESC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_gallery_locations`
+--
+DROP TABLE IF EXISTS `v_gallery_locations`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_locations`  AS SELECT `f`.`id` AS `frame_id`, `l`.`id` AS `entity_id`, `f`.`filename` AS `filename`, `f`.`prompt` AS `prompt`, `f`.`style` AS `style`, `l`.`id` AS `location_id`, `l`.`name` AS `location_name`, `l`.`type` AS `location_type`, 'locations' AS `entity_type` FROM (((`frames` `f` join `frames_2_locations` `m` on(`f`.`id` = `m`.`from_id`)) join `locations` `l` on(`m`.`to_id` = `l`.`id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) WHERE `s`.`visible` = 1 ORDER BY `f`.`created_at` DESC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_gallery_prompt_matrix_blueprints`
+--
+DROP TABLE IF EXISTS `v_gallery_prompt_matrix_blueprints`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_prompt_matrix_blueprints`  AS SELECT `f`.`id` AS `frame_id`, `f`.`filename` AS `filename`, `f`.`prompt` AS `prompt`, `f`.`style` AS `style`, `f`.`map_run_id` AS `map_run_id`, `b`.`id` AS `entity_id`, `b`.`name` AS `blueprint_name`, `b`.`entity_type` AS `blueprint_entity_type`, `b`.`entity_id` AS `blueprint_entity_id`, `b`.`description` AS `blueprint_description`, `b`.`matrix_id` AS `blueprint_matrix_id`, `b`.`matrix_additions_id` AS `blueprint_matrix_additions_id`, `b`.`active_map_run_id` AS `blueprint_active_map_run_id`, `b`.`state_id_active` AS `blueprint_state_id_active`, `b`.`regenerate_images` AS `blueprint_regenerate_images`, `b`.`img2img` AS `blueprint_img2img`, `b`.`cnmap` AS `blueprint_cnmap` FROM (((`frames` `f` join `frames_2_prompt_matrix_blueprints` `m` on(`f`.`id` = `m`.`from_id`)) join `prompt_matrix_blueprints` `b` on(`m`.`to_id` = `b`.`id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) WHERE `s`.`visible` = 1 ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_gallery_scene_parts`
+--
+DROP TABLE IF EXISTS `v_gallery_scene_parts`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_scene_parts`  AS SELECT `f`.`id` AS `frame_id`, `sp`.`scene_part_id` AS `entity_id`, `f`.`filename` AS `filename`, `f`.`style` AS `style`, `sp`.`scene_part_id` AS `scene_part_id`, `sp`.`name` AS `scene_part_name`, `sp`.`description` AS `scene_part_description`, `sp`.`characters` AS `characters`, `sp`.`animas` AS `animas`, `sp`.`artifacts` AS `artifacts`, `sp`.`backgrounds` AS `backgrounds`, `sp`.`prompt` AS `prompt` FROM (((`frames` `f` join `frames_2_scene_parts` `m` on(`f`.`id` = `m`.`from_id`)) join (select `sp`.`id` AS `scene_part_id`,`sp`.`name` AS `name`,`sp`.`description` AS `description`,`sp`.`regenerate_images` AS `regenerate_images`,`sp`.`active_map_run_id` AS `active_map_run_id`,substr(group_concat(distinct concat(`c`.`name`,if(`spc`.`role_in_part` is not null,concat(' (',`spc`.`role_in_part`,')'),'')) separator ', '),1,500) AS `characters`,substr(group_concat(distinct concat(`a`.`name`,' (',`spa`.`action_type`,')') separator ', '),1,500) AS `animas`,substr(group_concat(distinct `ar`.`name` separator ', '),1,300) AS `artifacts`,substr(group_concat(distinct concat(`b`.`name`,if(`b`.`type` is not null,concat(' (',`b`.`type`,')'),'')) separator ', '),1,300) AS `backgrounds`,concat_ws('. ',coalesce(`sp`.`name`,''),coalesce(`sp`.`description`,''),'Characters: ',substr(group_concat(distinct concat(`c`.`name`,if(`spc`.`role_in_part` is not null,concat(' (',`spc`.`role_in_part`,')'),'')) separator ', '),1,500),'. Animas: ',substr(group_concat(distinct concat(`a`.`name`,' (',`spa`.`action_type`,')') separator ', '),1,500),'. Artifacts: ',substr(group_concat(distinct `ar`.`name` separator ', '),1,300),'. Backgrounds: ',substr(group_concat(distinct concat(`b`.`name`,if(`b`.`type` is not null,concat(' (',`b`.`type`,')'),'')) separator ', '),1,300)) AS `prompt` from ((((((((`scene_parts` `sp` left join `scene_part_characters` `spc` on(`spc`.`scene_part_id` = `sp`.`id`)) left join `characters` `c` on(`c`.`id` = `spc`.`character_id`)) left join `scene_part_animas` `spa` on(`spa`.`scene_part_id` = `sp`.`id`)) left join `animas` `a` on(`a`.`id` = `spa`.`character_anima_id`)) left join `scene_part_artifacts` `spa2` on(`spa2`.`scene_part_id` = `sp`.`id`)) left join `artifacts` `ar` on(`ar`.`id` = `spa2`.`artifact_id`)) left join `scene_part_backgrounds` `spb` on(`spb`.`perspective_id` = `sp`.`id`)) left join `backgrounds` `b` on(`b`.`id` = `spb`.`background_id`)) group by `sp`.`id`) `sp` on(`m`.`to_id` = `sp`.`scene_part_id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) WHERE `s`.`visible` = 1 AND `f`.`map_run_id` = `sp`.`active_map_run_id` ORDER BY `f`.`created_at` DESC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_gallery_sketches`
+--
+DROP TABLE IF EXISTS `v_gallery_sketches`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_sketches`  AS SELECT `f`.`id` AS `frame_id`, `s`.`id` AS `entity_id`, `f`.`filename` AS `filename`, `f`.`prompt` AS `prompt`, `f`.`style` AS `style`, `s`.`id` AS `sketch_id`, `s`.`name` AS `name`, `s`.`description` AS `description`, `s`.`mood` AS `mood` FROM (((`frames` `f` join `frames_2_sketches` `m` on(`f`.`id` = `m`.`from_id`)) join `sketches` `s` on(`m`.`to_id` = `s`.`id`)) join `styles` `st` on(`f`.`style_id` = `st`.`id`)) WHERE `st`.`visible` = 1 ORDER BY `st`.`order` ASC, `f`.`created_at` DESC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_gallery_spawns`
+--
+DROP TABLE IF EXISTS `v_gallery_spawns`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`adminer`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_spawns`  AS SELECT `f`.`id` AS `frame_id`, `s`.`id` AS `entity_id`, `f`.`filename` AS `filename`, `f`.`prompt` AS `prompt`, `f`.`style` AS `style`, `s`.`id` AS `spawn_id`, `s`.`name` AS `name`, `s`.`description` AS `description`, coalesce(`st`.`code`,`s`.`type`) AS `type`, `st`.`label` AS `type_label`, `st`.`id` AS `spawn_type_id` FROM (((`frames` `f` join `frames_2_spawns` `m` on(`f`.`id` = `m`.`from_id`)) join `spawns` `s` on(`m`.`to_id` = `s`.`id`)) left join `spawn_types` `st` on(`s`.`spawn_type_id` = `st`.`id`)) ORDER BY `f`.`created_at` DESC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_gallery_spawns_location`
+--
+DROP TABLE IF EXISTS `v_gallery_spawns_location`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`adminer`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_spawns_location`  AS SELECT `f`.`id` AS `frame_id`, `s`.`id` AS `entity_id`, `f`.`filename` AS `filename`, `f`.`prompt` AS `prompt`, `f`.`style` AS `style`, `s`.`id` AS `spawn_id`, `s`.`name` AS `name`, `s`.`description` AS `description`, `st`.`code` AS `type`, `st`.`label` AS `type_label` FROM (((`frames` `f` join `frames_2_spawns` `m` on(`f`.`id` = `m`.`from_id`)) join `spawns` `s` on(`m`.`to_id` = `s`.`id`)) join `spawn_types` `st` on(`s`.`spawn_type_id` = `st`.`id`)) WHERE `st`.`code` = 'location' ORDER BY `f`.`created_at` DESC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_gallery_spawns_prop`
+--
+DROP TABLE IF EXISTS `v_gallery_spawns_prop`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`adminer`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_spawns_prop`  AS SELECT `f`.`id` AS `frame_id`, `s`.`id` AS `entity_id`, `f`.`filename` AS `filename`, `f`.`prompt` AS `prompt`, `f`.`style` AS `style`, `s`.`id` AS `spawn_id`, `s`.`name` AS `name`, `s`.`description` AS `description`, `st`.`code` AS `type`, `st`.`label` AS `type_label` FROM (((`frames` `f` join `frames_2_spawns` `m` on(`f`.`id` = `m`.`from_id`)) join `spawns` `s` on(`m`.`to_id` = `s`.`id`)) join `spawn_types` `st` on(`s`.`spawn_type_id` = `st`.`id`)) WHERE `st`.`code` = 'prop' ORDER BY `f`.`created_at` DESC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_gallery_spawns_reference`
+--
+DROP TABLE IF EXISTS `v_gallery_spawns_reference`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`adminer`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_spawns_reference`  AS SELECT `f`.`id` AS `frame_id`, `s`.`id` AS `entity_id`, `f`.`filename` AS `filename`, `f`.`prompt` AS `prompt`, `f`.`style` AS `style`, `s`.`id` AS `spawn_id`, `s`.`name` AS `name`, `s`.`description` AS `description`, `st`.`code` AS `type`, `st`.`label` AS `type_label` FROM (((`frames` `f` join `frames_2_spawns` `m` on(`f`.`id` = `m`.`from_id`)) join `spawns` `s` on(`m`.`to_id` = `s`.`id`)) join `spawn_types` `st` on(`s`.`spawn_type_id` = `st`.`id`)) WHERE `st`.`code` = 'reference' ORDER BY `f`.`created_at` DESC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_gallery_spawns_texture`
+--
+DROP TABLE IF EXISTS `v_gallery_spawns_texture`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`adminer`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_spawns_texture`  AS SELECT `f`.`id` AS `frame_id`, `s`.`id` AS `entity_id`, `f`.`filename` AS `filename`, `f`.`prompt` AS `prompt`, `f`.`style` AS `style`, `s`.`id` AS `spawn_id`, `s`.`name` AS `name`, `s`.`description` AS `description`, `st`.`code` AS `type`, `st`.`label` AS `type_label` FROM (((`frames` `f` join `frames_2_spawns` `m` on(`f`.`id` = `m`.`from_id`)) join `spawns` `s` on(`m`.`to_id` = `s`.`id`)) join `spawn_types` `st` on(`s`.`spawn_type_id` = `st`.`id`)) WHERE `st`.`code` = 'texture' ORDER BY `f`.`created_at` DESC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_gallery_vehicles`
+--
+DROP TABLE IF EXISTS `v_gallery_vehicles`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_vehicles`  AS SELECT `f`.`id` AS `frame_id`, `v`.`id` AS `entity_id`, `f`.`filename` AS `filename`, `f`.`prompt` AS `prompt`, `f`.`style` AS `style`, `v`.`id` AS `vehicle_id`, `v`.`name` AS `vehicle_name`, `v`.`type` AS `vehicle_type`, `v`.`status` AS `vehicle_status` FROM (((`frames` `f` join `frames_2_vehicles` `m` on(`f`.`id` = `m`.`from_id`)) join `vehicles` `v` on(`m`.`to_id` = `v`.`id`)) join `styles` `s` on(`f`.`style_id` = `s`.`id`)) WHERE `s`.`visible` = 1 ORDER BY `f`.`created_at` DESC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_gallery_wall_of_images`
+--
+DROP TABLE IF EXISTS `v_gallery_wall_of_images`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`adminer`@`localhost` SQL SECURITY DEFINER VIEW `v_gallery_wall_of_images`  AS SELECT 'animas' AS `entity_type`, `v_gallery_animas`.`frame_id` AS `frame_id`, `v_gallery_animas`.`entity_id` AS `entity_id`, `v_gallery_animas`.`filename` AS `filename`, `v_gallery_animas`.`prompt` AS `prompt`, `v_gallery_animas`.`anima_name` AS `entity_name` FROM `v_gallery_animas`union all select 'artifacts' AS `entity_type`,`v_gallery_artifacts`.`frame_id` AS `frame_id`,`v_gallery_artifacts`.`entity_id` AS `entity_id`,`v_gallery_artifacts`.`filename` AS `filename`,`v_gallery_artifacts`.`prompt` AS `prompt`,`v_gallery_artifacts`.`artifact_name` AS `entity_name` from `v_gallery_artifacts` union all select 'backgrounds' AS `entity_type`,`v_gallery_backgrounds`.`frame_id` AS `frame_id`,`v_gallery_backgrounds`.`entity_id` AS `entity_id`,`v_gallery_backgrounds`.`filename` AS `filename`,`v_gallery_backgrounds`.`prompt` AS `prompt`,`v_gallery_backgrounds`.`background_name` AS `entity_name` from `v_gallery_backgrounds` union all select 'characters' AS `entity_type`,`v_gallery_characters`.`frame_id` AS `frame_id`,`v_gallery_characters`.`entity_id` AS `entity_id`,`v_gallery_characters`.`filename` AS `filename`,`v_gallery_characters`.`prompt` AS `prompt`,`v_gallery_characters`.`character_name` AS `entity_name` from `v_gallery_characters` union all select 'composites' AS `entity_type`,`v_gallery_composites`.`frame_id` AS `frame_id`,`v_gallery_composites`.`entity_id` AS `entity_id`,`v_gallery_composites`.`filename` AS `filename`,`v_gallery_composites`.`prompt` AS `prompt`,`v_gallery_composites`.`composite_name` AS `entity_name` from `v_gallery_composites` union all select 'generatives' AS `entity_type`,`v_gallery_generatives`.`frame_id` AS `frame_id`,`v_gallery_generatives`.`entity_id` AS `entity_id`,`v_gallery_generatives`.`filename` AS `filename`,`v_gallery_generatives`.`prompt` AS `prompt`,`v_gallery_generatives`.`name` AS `entity_name` from `v_gallery_generatives` union all select 'locations' AS `entity_type`,`v_gallery_locations`.`frame_id` AS `frame_id`,`v_gallery_locations`.`entity_id` AS `entity_id`,`v_gallery_locations`.`filename` AS `filename`,`v_gallery_locations`.`prompt` AS `prompt`,`v_gallery_locations`.`location_name` AS `entity_name` from `v_gallery_locations` union all select 'sketches' AS `entity_type`,`v_gallery_sketches`.`frame_id` AS `frame_id`,`v_gallery_sketches`.`entity_id` AS `entity_id`,`v_gallery_sketches`.`filename` AS `filename`,`v_gallery_sketches`.`prompt` AS `prompt`,`v_gallery_sketches`.`name` AS `entity_name` from `v_gallery_sketches` union all select 'vehicles' AS `entity_type`,`v_gallery_vehicles`.`frame_id` AS `frame_id`,`v_gallery_vehicles`.`entity_id` AS `entity_id`,`v_gallery_vehicles`.`filename` AS `filename`,`v_gallery_vehicles`.`prompt` AS `prompt`,`v_gallery_vehicles`.`vehicle_name` AS `entity_name` from `v_gallery_vehicles`  ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_map_runs_animas`
+--
+DROP TABLE IF EXISTS `v_map_runs_animas`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_animas`  AS SELECT DISTINCT `mr`.`id` AS `id`, `mr`.`created_at` AS `created_at`, `mr`.`note` AS `note`, `m`.`to_id` AS `entity_id`, CASE WHEN `mr`.`id` = `a`.`active_map_run_id` THEN 1 ELSE 0 END AS `is_active` FROM (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_animas` `m` on(`f`.`id` = `m`.`from_id`)) join `animas` `a` on(`a`.`id` = `m`.`to_id`)) WHERE `mr`.`entity_type` = 'animas' ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_map_runs_artifacts`
+--
+DROP TABLE IF EXISTS `v_map_runs_artifacts`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_artifacts`  AS SELECT DISTINCT `mr`.`id` AS `id`, `mr`.`created_at` AS `created_at`, `mr`.`note` AS `note`, `m`.`to_id` AS `entity_id`, CASE WHEN `mr`.`id` = `ar`.`active_map_run_id` THEN 1 ELSE 0 END AS `is_active` FROM (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_artifacts` `m` on(`f`.`id` = `m`.`from_id`)) join `artifacts` `ar` on(`ar`.`id` = `m`.`to_id`)) WHERE `mr`.`entity_type` = 'artifacts' ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_map_runs_backgrounds`
+--
+DROP TABLE IF EXISTS `v_map_runs_backgrounds`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_backgrounds`  AS SELECT DISTINCT `mr`.`id` AS `id`, `mr`.`created_at` AS `created_at`, `mr`.`note` AS `note`, `m`.`to_id` AS `entity_id`, CASE WHEN `mr`.`id` = `b`.`active_map_run_id` THEN 1 ELSE 0 END AS `is_active` FROM (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_backgrounds` `m` on(`f`.`id` = `m`.`from_id`)) join `backgrounds` `b` on(`b`.`id` = `m`.`to_id`)) WHERE `mr`.`entity_type` = 'backgrounds' ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_map_runs_characters`
+--
+DROP TABLE IF EXISTS `v_map_runs_characters`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_characters`  AS SELECT DISTINCT `mr`.`id` AS `id`, `mr`.`created_at` AS `created_at`, `mr`.`note` AS `note`, `m`.`to_id` AS `entity_id`, CASE WHEN `mr`.`id` = `c`.`active_map_run_id` THEN 1 ELSE 0 END AS `is_active` FROM (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_characters` `m` on(`f`.`id` = `m`.`from_id`)) join `characters` `c` on(`c`.`id` = `m`.`to_id`)) WHERE `mr`.`entity_type` = 'characters' ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_map_runs_character_poses`
+--
+DROP TABLE IF EXISTS `v_map_runs_character_poses`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_character_poses`  AS SELECT DISTINCT `mr`.`id` AS `id`, `mr`.`created_at` AS `created_at`, `mr`.`note` AS `note`, `m`.`to_id` AS `entity_id`, CASE WHEN `mr`.`id` = `cp`.`active_map_run_id` THEN 1 ELSE 0 END AS `is_active` FROM (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_character_poses` `m` on(`f`.`id` = `m`.`from_id`)) join `character_poses` `cp` on(`cp`.`id` = `m`.`to_id`)) WHERE `mr`.`entity_type` = 'character_poses' ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_map_runs_composites`
+--
+DROP TABLE IF EXISTS `v_map_runs_composites`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_composites`  AS SELECT DISTINCT `mr`.`id` AS `id`, `mr`.`created_at` AS `created_at`, `mr`.`note` AS `note`, `m`.`to_id` AS `entity_id`, CASE WHEN `mr`.`id` = `c`.`active_map_run_id` THEN 1 ELSE 0 END AS `is_active` FROM (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_composites` `m` on(`f`.`id` = `m`.`from_id`)) join `composites` `c` on(`c`.`id` = `m`.`to_id`)) WHERE `mr`.`entity_type` = 'composites' ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_map_runs_controlnet_maps`
+--
+DROP TABLE IF EXISTS `v_map_runs_controlnet_maps`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_controlnet_maps`  AS SELECT DISTINCT `mr`.`id` AS `id`, `mr`.`created_at` AS `created_at`, `mr`.`note` AS `note`, `m`.`to_id` AS `entity_id`, CASE WHEN `mr`.`id` = `c`.`active_map_run_id` THEN 1 ELSE 0 END AS `is_active` FROM (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_controlnet_maps` `m` on(`f`.`id` = `m`.`from_id`)) join `controlnet_maps` `c` on(`c`.`id` = `m`.`to_id`)) WHERE `mr`.`entity_type` = 'controlnet_maps' ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_map_runs_generatives`
+--
+DROP TABLE IF EXISTS `v_map_runs_generatives`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_generatives`  AS SELECT DISTINCT `mr`.`id` AS `id`, `mr`.`created_at` AS `created_at`, `mr`.`note` AS `note`, `m`.`to_id` AS `entity_id`, CASE WHEN `mr`.`id` = `g`.`active_map_run_id` THEN 1 ELSE 0 END AS `is_active` FROM (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_generatives` `m` on(`f`.`id` = `m`.`from_id`)) join `generatives` `g` on(`g`.`id` = `m`.`to_id`)) WHERE `mr`.`entity_type` = 'generatives' ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_map_runs_locations`
+--
+DROP TABLE IF EXISTS `v_map_runs_locations`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_locations`  AS SELECT DISTINCT `mr`.`id` AS `id`, `mr`.`created_at` AS `created_at`, `mr`.`note` AS `note`, `m`.`to_id` AS `entity_id`, CASE WHEN `mr`.`id` = `l`.`active_map_run_id` THEN 1 ELSE 0 END AS `is_active` FROM (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_locations` `m` on(`f`.`id` = `m`.`from_id`)) join `locations` `l` on(`l`.`id` = `m`.`to_id`)) WHERE `mr`.`entity_type` = 'locations' ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_map_runs_prompt_matrix_blueprints`
+--
+DROP TABLE IF EXISTS `v_map_runs_prompt_matrix_blueprints`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_prompt_matrix_blueprints`  AS SELECT DISTINCT `mr`.`id` AS `id`, `mr`.`created_at` AS `created_at`, `mr`.`note` AS `note`, `m`.`to_id` AS `entity_id`, CASE WHEN `mr`.`id` = `b`.`active_map_run_id` THEN 1 ELSE 0 END AS `is_active` FROM (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_prompt_matrix_blueprints` `m` on(`f`.`id` = `m`.`from_id`)) join `prompt_matrix_blueprints` `b` on(`b`.`id` = `m`.`to_id`)) WHERE `mr`.`entity_type` = 'prompt_matrix_blueprints' ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_map_runs_scene_parts`
+--
+DROP TABLE IF EXISTS `v_map_runs_scene_parts`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_scene_parts`  AS SELECT DISTINCT `mr`.`id` AS `id`, `mr`.`created_at` AS `created_at`, `mr`.`note` AS `note`, `f2sp`.`to_id` AS `entity_id`, CASE WHEN `mr`.`id` = `sp`.`active_map_run_id` THEN 1 ELSE 0 END AS `is_active` FROM (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_scene_parts` `f2sp` on(`f2sp`.`from_id` = `f`.`id`)) join `scene_parts` `sp` on(`sp`.`id` = `f2sp`.`to_id`)) WHERE `mr`.`entity_type` = 'scene_parts' ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_map_runs_sketches`
+--
+DROP TABLE IF EXISTS `v_map_runs_sketches`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_sketches`  AS SELECT DISTINCT `mr`.`id` AS `id`, `mr`.`created_at` AS `created_at`, `mr`.`note` AS `note`, `m`.`to_id` AS `entity_id`, CASE WHEN `mr`.`id` = `s`.`active_map_run_id` THEN 1 ELSE 0 END AS `is_active` FROM (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_sketches` `m` on(`f`.`id` = `m`.`from_id`)) join `sketches` `s` on(`s`.`id` = `m`.`to_id`)) WHERE `mr`.`entity_type` = 'sketches' ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_map_runs_vehicles`
+--
+DROP TABLE IF EXISTS `v_map_runs_vehicles`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_map_runs_vehicles`  AS SELECT DISTINCT `mr`.`id` AS `id`, `mr`.`created_at` AS `created_at`, `mr`.`note` AS `note`, `m`.`to_id` AS `entity_id`, CASE WHEN `mr`.`id` = `v`.`active_map_run_id` THEN 1 ELSE 0 END AS `is_active` FROM (((`map_runs` `mr` join `frames` `f` on(`f`.`map_run_id` = `mr`.`id`)) join `frames_2_vehicles` `m` on(`f`.`id` = `m`.`from_id`)) join `vehicles` `v` on(`v`.`id` = `m`.`to_id`)) WHERE `mr`.`entity_type` = 'vehicles' ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_prompts_animas`
+--
+DROP TABLE IF EXISTS `v_prompts_animas`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_animas`  AS SELECT `a`.`id` AS `id`, `a`.`regenerate_images` AS `regenerate_images`, coalesce(`a`.`description`,'') AS `prompt` FROM `animas` AS `a` ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_prompts_artifacts`
+--
+DROP TABLE IF EXISTS `v_prompts_artifacts`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_artifacts`  AS SELECT `ar`.`id` AS `id`, `ar`.`regenerate_images` AS `regenerate_images`, coalesce(`ar`.`description`,'') AS `prompt` FROM `artifacts` AS `ar` ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_prompts_backgrounds`
+--
+DROP TABLE IF EXISTS `v_prompts_backgrounds`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_backgrounds`  AS SELECT `b`.`id` AS `id`, `b`.`regenerate_images` AS `regenerate_images`, coalesce(`b`.`description`,'') AS `prompt` FROM `backgrounds` AS `b` ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_prompts_characters`
+--
+DROP TABLE IF EXISTS `v_prompts_characters`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_characters`  AS SELECT `c`.`id` AS `id`, `c`.`regenerate_images` AS `regenerate_images`, coalesce(`c`.`description`,'') AS `prompt` FROM `characters` AS `c` ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_prompts_character_poses`
+--
+DROP TABLE IF EXISTS `v_prompts_character_poses`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_character_poses`  AS SELECT `cp`.`id` AS `id`, `cp`.`regenerate_images` AS `regenerate_images`, concat('((',`c`.`name`,': ',`c`.`description`,')) ','(Pose: ',`p`.`description`,') ','(Angle: ',`a`.`description`,')') AS `prompt` FROM (((`character_poses` `cp` join `characters` `c` on(`cp`.`character_id` = `c`.`id`)) join `poses` `p` on(`cp`.`pose_id` = `p`.`id`)) join `angles` `a` on(`cp`.`angle_id` = `a`.`id`)) ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_prompts_composites`
+--
+DROP TABLE IF EXISTS `v_prompts_composites`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_composites`  AS SELECT `c`.`id` AS `id`, `c`.`regenerate_images` AS `regenerate_images`, coalesce(`c`.`description`,'') AS `prompt` FROM `composites` AS `c` ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_prompts_controlnet_maps`
+--
+DROP TABLE IF EXISTS `v_prompts_controlnet_maps`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_controlnet_maps`  AS SELECT `c`.`id` AS `id`, `c`.`regenerate_images` AS `regenerate_images`, concat_ws(', ',`c`.`name`,coalesce(`c`.`description`,'')) AS `prompt` FROM `controlnet_maps` AS `c` ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_prompts_generatives`
+--
+DROP TABLE IF EXISTS `v_prompts_generatives`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_generatives`  AS SELECT `g`.`id` AS `id`, `g`.`regenerate_images` AS `regenerate_images`, concat_ws(', ',`g`.`name`,coalesce(`g`.`description`,'')) AS `prompt` FROM `generatives` AS `g` ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_prompts_locations`
+--
+DROP TABLE IF EXISTS `v_prompts_locations`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_locations`  AS SELECT `l`.`id` AS `id`, `l`.`regenerate_images` AS `regenerate_images`, coalesce(`l`.`description`,'') AS `prompt` FROM `locations` AS `l` ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_prompts_prompt_matrix_blueprints`
+--
+DROP TABLE IF EXISTS `v_prompts_prompt_matrix_blueprints`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_prompt_matrix_blueprints`  AS SELECT `prompt_matrix_blueprints`.`id` AS `id`, `prompt_matrix_blueprints`.`regenerate_images` AS `regenerate_images`, coalesce(`prompt_matrix_blueprints`.`description`,'') AS `prompt` FROM `prompt_matrix_blueprints` ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_prompts_scene_parts`
+--
+DROP TABLE IF EXISTS `v_prompts_scene_parts`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_scene_parts`  AS SELECT `sp`.`id` AS `scene_part_id`, `sp`.`id` AS `id`, `sp`.`scene_id` AS `scene_id`, `sp`.`name` AS `name`, `sp`.`description` AS `description`, substr(group_concat(distinct concat(`c`.`name`,if(`spc`.`role_in_part` is not null,concat(' (',`spc`.`role_in_part`,')'),'')) separator ', '),1,500) AS `characters`, substr(group_concat(distinct concat(`a`.`name`,' (',`spa`.`action_type`,')') separator ', '),1,500) AS `animas`, substr(group_concat(distinct `ar`.`name` separator ', '),1,300) AS `artifacts`, substr(group_concat(distinct concat(`b`.`name`,if(`b`.`type` is not null,concat(' (',`b`.`type`,')'),'')) separator ', '),1,300) AS `backgrounds`, concat_ws('. ',coalesce(`sp`.`name`,''),coalesce(`sp`.`description`,''),'Characters: ',substr(group_concat(distinct concat(`c`.`name`,if(`spc`.`role_in_part` is not null,concat(' (',`spc`.`role_in_part`,')'),'')) separator ', '),1,500),'. Animas: ',substr(group_concat(distinct concat(`a`.`name`,' (',`spa`.`action_type`,')') separator ', '),1,500),'. Artifacts: ',substr(group_concat(distinct `ar`.`name` separator ', '),1,300),'. Backgrounds: ',substr(group_concat(distinct concat(`b`.`name`,if(`b`.`type` is not null,concat(' (',`b`.`type`,')'),'')) separator ', '),1,300)) AS `prompt`, `sp`.`regenerate_images` AS `regenerate_images` FROM ((((((((`scene_parts` `sp` left join `scene_part_characters` `spc` on(`spc`.`scene_part_id` = `sp`.`id`)) left join `characters` `c` on(`c`.`id` = `spc`.`character_id`)) left join `scene_part_animas` `spa` on(`spa`.`scene_part_id` = `sp`.`id`)) left join `animas` `a` on(`a`.`id` = `spa`.`character_anima_id`)) left join `scene_part_artifacts` `spa2` on(`spa2`.`scene_part_id` = `sp`.`id`)) left join `artifacts` `ar` on(`ar`.`id` = `spa2`.`artifact_id`)) left join `scene_part_backgrounds` `spb` on(`spb`.`perspective_id` = `sp`.`id`)) left join `backgrounds` `b` on(`b`.`id` = `spb`.`background_id`)) GROUP BY `sp`.`id` ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_prompts_sketches`
+--
+DROP TABLE IF EXISTS `v_prompts_sketches`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_sketches`  AS SELECT `s`.`id` AS `id`, `s`.`regenerate_images` AS `regenerate_images`, coalesce(`s`.`description`,'') AS `prompt` FROM `sketches` AS `s` ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_prompts_vehicles`
+--
+DROP TABLE IF EXISTS `v_prompts_vehicles`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_prompts_vehicles`  AS SELECT `v`.`id` AS `id`, `v`.`regenerate_images` AS `regenerate_images`, coalesce(`v`.`description`,'') AS `prompt` FROM `vehicles` AS `v` ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_scenes_under_review`
+--
+DROP TABLE IF EXISTS `v_scenes_under_review`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_scenes_under_review`  AS SELECT `s`.`id` AS `scene_id`, `s`.`title` AS `scene_title`, `sp`.`id` AS `scene_part_id`, `ps`.`stage` AS `stage`, `ps`.`assigned_to` AS `assigned_to`, `ps`.`updated_at` AS `updated_at` FROM ((`scenes` `s` join `scene_parts` `sp` on(`sp`.`scene_id` = `s`.`id`)) join `production_status` `ps` on(`ps`.`scene_part_id` = `sp`.`id`)) WHERE `ps`.`stage` = 'review' ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_scene_part_full`
+--
+DROP TABLE IF EXISTS `v_scene_part_full`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_scene_part_full`  AS SELECT `sp`.`id` AS `scene_part_id`, `sp`.`name` AS `scene_part_name`, `sp`.`description` AS `scene_part_description`, `p`.`angle` AS `perspective_angle`, `p`.`description` AS `perspective_notes`, `b`.`name` AS `background_name`, `b`.`description` AS `background_description`, group_concat(distinct `a`.`name` separator ', ') AS `animas_in_scene`, group_concat(distinct concat(`a`.`name`,': ',`a`.`traits`,'; ',`a`.`abilities`) separator ' | ') AS `animas_details` FROM (((((`scene_parts` `sp` join `perspectives` `p` on(`p`.`scene_part_id` = `sp`.`id`)) left join `scene_part_backgrounds` `spb` on(`spb`.`perspective_id` = `p`.`id`)) left join `backgrounds` `b` on(`b`.`id` = `spb`.`background_id`)) left join `scene_part_animas` `spa` on(`spa`.`scene_part_id` = `sp`.`id`)) left join `animas` `a` on(`a`.`id` = `spa`.`character_anima_id`)) GROUP BY `sp`.`id`, `p`.`id`, `b`.`id` ORDER BY `sp`.`sequence` ASC, `p`.`id` ASC ;
+
+-- --------------------------------------------------------
+
+--
+-- Struktur des Views `v_styles_helper`
+--
+DROP TABLE IF EXISTS `v_styles_helper`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_styles_helper`  AS SELECT `s`.`id` AS `id`, 0 AS `regenerate_images`, concat('(',coalesce(`s`.`description`,''),')','(',(select `prompt_globals`.`description` from `prompt_globals` where `prompt_globals`.`id` = 1),')') AS `prompt` FROM `styles` AS `s` WHERE `s`.`active` = 1 ORDER BY `s`.`order` ASC ;
+
+--
+-- Constraints der exportierten Tabellen
+--
+
+--
+-- Constraints der Tabelle `backgrounds`
+--
+ALTER TABLE `backgrounds`
+  ADD CONSTRAINT `fk_backgrounds_location` FOREIGN KEY (`location_id`) REFERENCES `locations` (`id`) ON DELETE SET NULL;
+
+--
+-- Constraints der Tabelle `content_elements`
+--
+ALTER TABLE `content_elements`
+  ADD CONSTRAINT `content_elements_ibfk_1` FOREIGN KEY (`page_id`) REFERENCES `pages` (`id`);
+
+--
+-- Constraints der Tabelle `dict_lemma_2_dictionary`
+--
+ALTER TABLE `dict_lemma_2_dictionary`
+  ADD CONSTRAINT `fk_dict_id` FOREIGN KEY (`dictionary_id`) REFERENCES `dict_dictionaries` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_lemma_id` FOREIGN KEY (`lemma_id`) REFERENCES `dict_lemmas` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `dict_source_files`
+--
+ALTER TABLE `dict_source_files`
+  ADD CONSTRAINT `fk_source_dict_id` FOREIGN KEY (`dictionary_id`) REFERENCES `dict_dictionaries` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `export_flags`
+--
+ALTER TABLE `export_flags`
+  ADD CONSTRAINT `fk_export_scene_part` FOREIGN KEY (`scene_part_id`) REFERENCES `scene_parts` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `feedback_notes`
+--
+ALTER TABLE `feedback_notes`
+  ADD CONSTRAINT `fk_feedback_scene_part` FOREIGN KEY (`scene_part_id`) REFERENCES `scene_parts` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `frames_2_artifacts`
+--
+ALTER TABLE `frames_2_artifacts`
+  ADD CONSTRAINT `fk_frames_artifacts_artifact` FOREIGN KEY (`to_id`) REFERENCES `artifacts` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `frames_2_generatives`
+--
+ALTER TABLE `frames_2_generatives`
+  ADD CONSTRAINT `fk_frames_generatives_generative` FOREIGN KEY (`to_id`) REFERENCES `generatives` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `frames_2_scene_parts`
+--
+ALTER TABLE `frames_2_scene_parts`
+  ADD CONSTRAINT `frames_2_scene_parts_ibfk_2` FOREIGN KEY (`to_id`) REFERENCES `scene_parts` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `frames_2_sketches`
+--
+ALTER TABLE `frames_2_sketches`
+  ADD CONSTRAINT `fk_frames_sketches_sketch` FOREIGN KEY (`to_id`) REFERENCES `sketches` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `frames_2_vehicles`
+--
+ALTER TABLE `frames_2_vehicles`
+  ADD CONSTRAINT `fk_frames_2_vehicles_to` FOREIGN KEY (`to_id`) REFERENCES `vehicles` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `generator_config_to_display_area`
+--
+ALTER TABLE `generator_config_to_display_area`
+  ADD CONSTRAINT `fk_display_area` FOREIGN KEY (`display_area_id`) REFERENCES `generator_config_display_area` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_generator_config` FOREIGN KEY (`generator_config_id`) REFERENCES `generator_config` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `interaction_audio`
+--
+ALTER TABLE `interaction_audio`
+  ADD CONSTRAINT `fk_ia_audio` FOREIGN KEY (`audio_asset_id`) REFERENCES `audio_assets` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_ia_interaction` FOREIGN KEY (`interaction_id`) REFERENCES `interactions` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `playlist_videos`
+--
+ALTER TABLE `playlist_videos`
+  ADD CONSTRAINT `fk_playlist` FOREIGN KEY (`playlist_id`) REFERENCES `video_playlists` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_video` FOREIGN KEY (`video_id`) REFERENCES `videos` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `production_status`
+--
+ALTER TABLE `production_status`
+  ADD CONSTRAINT `fk_prodstatus_scene_part` FOREIGN KEY (`scene_part_id`) REFERENCES `scene_parts` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `scenes`
+--
+ALTER TABLE `scenes`
+  ADD CONSTRAINT `fk_scene_arc` FOREIGN KEY (`arc_id`) REFERENCES `story_arcs` (`id`) ON DELETE SET NULL;
+
+--
+-- Constraints der Tabelle `scene_parts`
+--
+ALTER TABLE `scene_parts`
+  ADD CONSTRAINT `fk_scene_parts_scene` FOREIGN KEY (`scene_id`) REFERENCES `scenes` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `scene_part_animas`
+--
+ALTER TABLE `scene_part_animas`
+  ADD CONSTRAINT `fk_span_character_anima` FOREIGN KEY (`character_anima_id`) REFERENCES `animas` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_span_scene_part` FOREIGN KEY (`scene_part_id`) REFERENCES `scene_parts` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `scene_part_artifacts`
+--
+ALTER TABLE `scene_part_artifacts`
+  ADD CONSTRAINT `fk_spa_artifact` FOREIGN KEY (`artifact_id`) REFERENCES `artifacts` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_spa_scene_part` FOREIGN KEY (`scene_part_id`) REFERENCES `scene_parts` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `scene_part_backgrounds`
+--
+ALTER TABLE `scene_part_backgrounds`
+  ADD CONSTRAINT `fk_spb_background` FOREIGN KEY (`background_id`) REFERENCES `backgrounds` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_spb_perspective` FOREIGN KEY (`perspective_id`) REFERENCES `perspectives` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `scene_part_tags`
+--
+ALTER TABLE `scene_part_tags`
+  ADD CONSTRAINT `fk_spt_scene_part` FOREIGN KEY (`scene_part_id`) REFERENCES `scene_parts` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_spt_tag` FOREIGN KEY (`tag_id`) REFERENCES `tags` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `scene_part_versions`
+--
+ALTER TABLE `scene_part_versions`
+  ADD CONSTRAINT `fk_spv_scene_part` FOREIGN KEY (`scene_part_id`) REFERENCES `scene_parts` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `spawns`
+--
+ALTER TABLE `spawns`
+  ADD CONSTRAINT `fk_spawns_spawn_type` FOREIGN KEY (`spawn_type_id`) REFERENCES `spawn_types` (`id`) ON DELETE SET NULL;
+
+--
+-- Constraints der Tabelle `style_profile_axes`
+--
+ALTER TABLE `style_profile_axes`
+  ADD CONSTRAINT `fk_spa_axis` FOREIGN KEY (`axis_id`) REFERENCES `design_axes` (`id`),
+  ADD CONSTRAINT `fk_spa_profile` FOREIGN KEY (`profile_id`) REFERENCES `style_profiles` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `task_execution_stats`
+--
+ALTER TABLE `task_execution_stats`
+  ADD CONSTRAINT `task_execution_stats_ibfk_1` FOREIGN KEY (`task_id`) REFERENCES `scheduled_tasks` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints der Tabelle `task_locks`
+--
+ALTER TABLE `task_locks`
+  ADD CONSTRAINT `task_locks_ibfk_1` FOREIGN KEY (`task_id`) REFERENCES `scheduled_tasks` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `task_locks_ibfk_2` FOREIGN KEY (`run_id`) REFERENCES `task_runs` (`id`) ON DELETE SET NULL;
+
+--
+-- Constraints der Tabelle `task_runs`
+--
+ALTER TABLE `task_runs`
+  ADD CONSTRAINT `task_runs_ibfk_1` FOREIGN KEY (`task_id`) REFERENCES `scheduled_tasks` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `task_runs_ibfk_2` FOREIGN KEY (`lock_id`) REFERENCES `task_locks` (`id`) ON DELETE SET NULL;
+COMMIT;
+
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
