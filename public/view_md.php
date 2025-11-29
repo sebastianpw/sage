@@ -12,7 +12,7 @@
 require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
 
-use Parsedown;
+//use Parsedown;
 
 $spw = \App\Core\SpwBase::getInstance();
 
