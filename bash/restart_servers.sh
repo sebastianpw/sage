@@ -56,9 +56,9 @@ sleep 5
 echo "PHP-FPM, NGINX, and MariaDB restarted in background."
 echo "NGINX server running at http://localhost:8080"
 
-sleep 10
-
 "$SCRIPT_DIR/../pyapi/run_server.sh"
+
+sleep 10
 
 
 check_wake_lock() {
