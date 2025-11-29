@@ -483,7 +483,7 @@ def get_or_create_phrase_map(generator_config_id: str, merged_profile: StyleProf
     Returns (phrase_map, fallback_fn, raw_model_response).
     raw_model_response is the raw text returned by the model when generating phrase_map (may be empty).
     """
-    model_name = model_name or cfg.model_name or os.environ.get("SAGE_DEFAULT_STYLE_MODEL", "gemini-2.5-flash")
+    model_name = model_name or cfg.model_name or os.environ.get("SAGE_DEFAULT_STYLE_MODEL", "openai")
     profile_hash = _profile_fingerprint(merged_profile)
     cached = _cache_get(profile_hash)
     if cached:
@@ -809,7 +809,7 @@ def convert_style_profiles(req: ConvertRequest):
         if cfg.post_process_with_ai:
             polish_id = cfg.polish_generator_config_id or generator_config_id
             polish_used_config = polish_id
-            post_model = cfg.post_process_model or cfg.model_name or os.environ.get("SAGE_DEFAULT_STYLE_MODEL", "gemini-2.5-flash")
+            post_model = cfg.post_process_model or cfg.model_name or os.environ.get("SAGE_DEFAULT_STYLE_MODEL", "openai")
             ok, polished, polish_raw = _ai_finalize_prompt(polish_id, merged, raw_textual, fragments, post_model, max_tokens=cfg.polish_max_tokens)
             if ok and polished:
                 final_prompt = polished
@@ -823,7 +823,7 @@ def convert_style_profiles(req: ConvertRequest):
             debug_obj = {
                 "profile_hash": _profile_fingerprint(merged),
                 "phrase_map_raw": phrase_map_raw,
-                "phrase_map_used_model": cfg.model_name or os.environ.get("SAGE_DEFAULT_STYLE_MODEL", "gemini-2.5-flash"),
+                "phrase_map_used_model": cfg.model_name or os.environ.get("SAGE_DEFAULT_STYLE_MODEL", "openai"),
                 "polish_used_config": polish_used_config,
                 "polish_raw_response": polish_raw
             }
@@ -873,7 +873,7 @@ if __name__ == "__main__":
             "post_process_with_ai": True,
             "polish_generator_config_id": "your_polish_config_id_here",
             "polish_max_tokens": 20000,
-            "post_process_model": "gemini-2.5-flash-lite",
+            "post_process_model": "openai-lite",
             "include_debug_responses": True
         }
     }

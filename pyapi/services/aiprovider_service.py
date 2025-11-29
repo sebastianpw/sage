@@ -36,7 +36,7 @@ class AIMessageModel(BaseModel):
 
 class AIPromptRequest(BaseModel):
     """Simple prompt request"""
-    model: str = Field(default="gemini-2.5-flash-lite", description="AI model to use")
+    model: str = Field(default="openai", description="AI model to use")
     prompt: str = Field(..., description="User prompt text")
     system_prompt: Optional[str] = Field(None, description="Optional system prompt")
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0, description="Temperature (0.0-2.0)")
@@ -45,7 +45,7 @@ class AIPromptRequest(BaseModel):
 
 class AIMessageRequest(BaseModel):
     """Multi-message conversation request"""
-    model: str = Field(default="gemini-2.5-flash-lite", description="AI model to use")
+    model: str = Field(default="openai", description="AI model to use")
     messages: List[AIMessageModel] = Field(..., description="Array of conversation messages")
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0, description="Temperature (0.0-2.0)")
     max_tokens: Optional[int] = Field(None, ge=1, description="Maximum tokens to generate")
@@ -53,7 +53,7 @@ class AIMessageRequest(BaseModel):
 
 class AIStreamPromptRequest(BaseModel):
     """Streaming prompt request (for future SSE implementation)"""
-    model: str = Field(default="gemini-2.5-flash-lite", description="AI model to use")
+    model: str = Field(default="openai", description="AI model to use")
     prompt: str = Field(..., description="User prompt text")
     system_prompt: Optional[str] = Field(None, description="Optional system prompt")
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0, description="Temperature (0.0-2.0)")
