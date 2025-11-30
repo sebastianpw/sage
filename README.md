@@ -6,7 +6,8 @@
 [![MariaDB](https://img.shields.io/badge/MariaDB-10.11-blue?logo=mariadb)](https://mariadb.org/)
 [![Runs on Termux](https://img.shields.io/badge/Termux-Android-green?logo=android)](https://termux.dev/)
 [![Debian](https://img.shields.io/badge/Debian-Linux-red?logo=debian)](https://www.debian.org/)
-
+[![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 
 > Open-source multimedia AI orchestration platform for creative storytelling — runs fully on Android via Termux
 
@@ -18,7 +19,7 @@
 ## ⚡ Quick Summary
 
 Transform your Android device into a complete AI movie storyboard production studio:
-- Generate storyboards with Stable Diffusion
+- Generate storyboards with Stable Diffusion XL
 - Orchestrate batch workflows via PHP + bash automation
 - Manage projects through intuitive web GUI
 
@@ -30,32 +31,56 @@ Transform your Android device into a complete AI movie storyboard production stu
 - **Stable Diffusion XL** with txt2img/img2img pipelines
 - Supports **ControlNet**, **LCM (Latent Conditioning Mixing)** for multi-image consistency and VRAM efficiency
 - **Multi-image conditioning** including multi-source img2img
+- **Design axes** that auto-inject creative parameters into prompts for consistent visual worlds
+- **Style profiles** with UI sliders for project-level visual coherence
+- **Extended templates** and reliable prompt mixing for controlled outputs
 - Integration with **Pollinations.ai**, **Groq**, **Colab**, and **Kaggle**
 
 ### 📚 Content Management
-- **Multi-Gallery System**: 
+- **NuGallery**: Unified gallery engine with lazy-loading, detail modals, context menus, and frame chain navigation
   - SwiperJS for smooth mobile-friendly swipe navigation
   - PhotoSwipe for zoomable, touch-enabled lightbox
   - ScrollMagic for infinity scroll-driven animations
   - 3D Gallery Viewer for interactive model inspection
   - Slideshow Mode for auto-play sequences
   - Native Video Player for MP4/WebM files
-- **Simple CMS**: WYSIWYG editor, dynamic pages, template system with database integration
-- **Storyboard View**: Sequential frame timeline for project visualization
+- **Video Management System**: Comprehensive admin workflow for playlists, reorder UI, metadata import, scene navigation, and thumbnails
+- **Posts & Content**: Markdown viewer, admin post UI, rich-media attachments for devlogs and story notes
+- **Storyboard View**: Sequential frame timeline with rich metadata for visual narrative organization
+- **Frame Chains**: Context networks linking entities, scenes, and characters for story navigation
+
+### 🧠 Semantic & Creative Tools
+- **Princeton WordNet Integration**: Dictionary subsystem with lemma viewer, term parser, WordNet API + proxy, and word-sense networks linking to entities and generators
+- **Oracle Bloom Engine**: Semantic inspiration through bloom oracles, word clouds, stylistic semantic blooms, and prompt enrichment
+- **Enhanced Search**: WordNet-backed queries, cross-indexed document and image lookup with optimized performance
 
 ### 🤖 AI-Assisted Workflow
 - **GPT Conversations**: Automated ChatGPT conversation.json importer with syntax highlighting, timestamps, and full-text search
 - **SAGE TODOs**: AI-powered intelligent ticket system with smart summarization and priority suggestions
 - **Codeboard**: Code analysis and review with cross-file context integration
 - **AI Chat & Helpdesk**: Multi-API, multi-model chat UI with prompt templates and model profiles
-- **AI JSON based generator**: AI-powered Brainstorming tool
+- **AI JSON based generator**: AI-powered brainstorming tool
+- **Rapid Create**: Streamlined workflows with new interaction templates, shot types, and context-aware selections
 
 ### 🔧 Automation & Tools
-- **Batch Importers**: Easily add frames, prompts, datasets, and multi-image references
+- **Batch Importers & Mass Import**: High-speed ingestion for frames, prompts, datasets, multi-image references, templates, WordNet data, and migration histories
 - **Image Tools**: Normalize, squarify, upscale, and prepare inputs (imglab tools)
+- **Pillow-based Image Editor**: Professional-grade editing pipeline with REST endpoints for crop/scale/rotate, color transforms, blending, and high-quality outputs
 - **PHP Heartbeat Scheduler** with bash orchestration scripts
 - **Tabs & Bookmarks System**: Dynamic manager with browser/JSON import
 - **Multi-endpoint Orchestration**: Webhooks, cloud tunnels (cloudflared/ngrok/zrok), notebook bridges
+
+### 🗄️ Database & Administration
+- **DB Tool**: Query interface and table viewer for database management
+- **DB Migration Tool**: Schema diffing and migration history tracking
+- **Admin utilities** and schema helpers for secure, efficient operations
+- **Installer** and scripted rollout helpers for reproducible setups
+
+### 🎨 Interface & Design
+- **Modern UI Theme**: Complete rewrite with consistent, responsive design across all modules
+- **Improved typography**, gallery navigation, and editor experiences
+- **Config display areas** showing generator settings and design axes clearly
+- Mobile and desktop optimized layouts
 
 ---
 
@@ -77,6 +102,7 @@ Transform your Android device into a complete AI movie storyboard production stu
 | **Frontend** | HTML5, JavaScript, jQuery, SwiperJS, PhotoSwipe, ScrollMagic |
 | **Database** | MariaDB 10.x / MySQL 8.x |
 | **AI Models** | Stable Diffusion XL, ControlNet, LCM |
+| **Python Services** | Kaggle clients, Pillow services (via PyAPI) |
 | **Deployment** | Termux (Android), Debian (proot), Docker |
 | **Orchestration** | PHP scheduler + Bash scripts |
 | **APIs** | OpenAI, Pollinations.ai, custom endpoints |
@@ -208,6 +234,21 @@ Some advanced AI image generation models and workflows use Kaggle and Google Col
 
 ---
 
+## 📚 Documentation
+
+The `docs/` directory contains detailed module documentation including:
+
+- **SAGE_SYS.md** — Architectural blueprint and semantic design philosophy
+- **GEN_CFG** — Generator configuration and setup
+- **DBTOOL** — Database tool usage and queries
+- **ORACLE_BLOOM** — Semantic bloom engine documentation
+- **VIDEO_ADMIN** — Video management workflows
+- **RELEASE_NOTES.md** — Detailed changelog and version history
+
+Additional documentation is available through Dashboard → Tools → Documentation.
+
+---
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and pull request process.
@@ -246,6 +287,7 @@ The project's complete architectural blueprint and semantic design philosophy ar
 - Stable Diffusion community
 - Symfony framework contributors
 - Termux development team
+- Princeton WordNet — for the lexical database used in WordNet integration
 - All open-source libraries utilized in this project
 - OpenAI and Anthropic for integration support
 
