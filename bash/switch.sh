@@ -13,6 +13,8 @@ declare -A OPTIONS=(
     ["pollinana"]="genframe_db.sh.pollinana"
     ["jupyter"]="genframe_db.sh.JUPYTER"
     ["jupyter_lcm"]="genframe_db.sh.JUPYTER_LCM"
+    ["jupyter_turbo"]="genframe_db.sh.JUPYTER_TURBO"
+    ["jupyter_async"]="genframe_db.sh.JUPYTER_ASYNC"
     ["freepik"]="genframe_db.sh.freepik"
 )
 
