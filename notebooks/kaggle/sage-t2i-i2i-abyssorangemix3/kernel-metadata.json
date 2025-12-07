@@ -1,0 +1,19 @@
+{
+    "id": "spw800621/sage-t2i-i2i-abyssorangemix3",
+    "title": "sage-t2i-i2i-abyssorangemix3",
+    "code_file": "sage-t2i-i2i-abyssorangemix3.ipynb",
+    "language": "python",
+    "kernel_type": "notebook",
+    "is_private": true,
+    "enable_gpu": true,
+    "enable_tpu": false,
+    "enable_internet": true,
+    "keywords": [],
+    "dataset_sources": [
+        "spw800621/controlnet-openpose",
+        "spw800621/abyssorangemix3"
+    ],
+    "kernel_sources": [],
+    "competition_sources": [],
+    "model_sources": []
+}

@@ -307,12 +307,12 @@ SEED=36
 
 if [ -n "$IMG2IMG_FILENAME" ]; then
   # image-to-image
-  curl -s -X POST "$ZROK_URL/generate" \
+  curl -s --max-time 300 -X POST "$ZROK_URL/generate" \
     -F "prompt=$prompt" \
     -F "negative_prompt=$negative_prompt" \
     -F "height=768" \
     -F "width=768" \
-    -F "num_inference_steps=40" \
+    -F "num_inference_steps=20" \
     -F "guidance_scale=7.5" \
     -F "init_image=@$IMG2IMG_FILENAME" \
     -F "strength=0.7" \
@@ -322,12 +322,12 @@ if [ -n "$IMG2IMG_FILENAME" ]; then
     --output "$outfile" 
 else
   # text-to-image only
-  curl -s -X POST "$ZROK_URL/generate" \
+  curl -s --max-time 300 -X POST "$ZROK_URL/generate" \
     -F "prompt=$prompt" \
     -F "negative_prompt=$negative_prompt" \
     -F "height=768" \
     -F "width=768" \
-    -F "num_inference_steps=50" \
+    -F "num_inference_steps=20" \
     -F "guidance_scale=7.5" \
     -F "use_controlnet=$USE_CONTROLNET" \
     -F "seed=$SEED" \

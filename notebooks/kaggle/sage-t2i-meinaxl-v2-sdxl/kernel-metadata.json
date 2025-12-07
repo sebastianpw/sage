@@ -1,0 +1,19 @@
+{
+    "title": "sage-t2i-meinaxl-v2-sdxl",
+    "code_file": "sage-t2i-meinaxl-v2-sdxl.ipynb",
+    "language": "python",
+    "kernel_type": "notebook",
+    "is_private": true,
+    "enable_gpu": true,
+    "enable_tpu": false,
+    "enable_internet": true,
+    "keywords": [],
+    "dataset_sources": [
+        "spw800621/meinaxl-v2-sdxl",
+        "spw800621/lcm-lora-sdxl"
+    ],
+    "kernel_sources": [],
+    "competition_sources": [],
+    "model_sources": [],
+    "id": "spw800621/sage-t2i-meinaxl-v2-sdxl"
+}

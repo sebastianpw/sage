@@ -1,0 +1,19 @@
+{
+    "title": "sage-sdxl-i2i-cn-counterfeit-xl-25",
+    "code_file": "sage-sdxl-i2i-cn-counterfeit-xl-25.ipynb",
+    "language": "python",
+    "kernel_type": "notebook",
+    "is_private": true,
+    "enable_gpu": true,
+    "enable_tpu": false,
+    "enable_internet": true,
+    "keywords": [],
+    "dataset_sources": [
+        "spw800621/counterfeit-xl-v25-sdxl",
+        "spw800621/controlnet-openpose-sdxl"
+    ],
+    "kernel_sources": [],
+    "competition_sources": [],
+    "model_sources": [],
+    "id": "spw800621/sage-sdxl-i2i-cn-counterfeit-xl-25"
+}

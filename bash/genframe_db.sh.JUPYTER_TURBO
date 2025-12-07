@@ -1,0 +1,257 @@
+#!/bin/bash
+
+# -----------------------------
+# Resolve script directory
+# -----------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MYSQL_ARGS=$("$SCRIPT_DIR"/db_name.sh main-conn)
+
+# -----------------------------
+# Load token & Roots
+# -----------------------------
+export PAI_TOKEN=$(cat "$SCRIPT_DIR/../token/.pollinationsaitoken")
+
+if [ -f "$SCRIPT_DIR/load_root.sh" ]; then
+  source "$SCRIPT_DIR/load_root.sh"
+fi
+
+if [ -z "$FRAMES_ROOT" ] || [ -z "$PROJECT_ROOT" ]; then
+  echo "ERROR: Roots not set. Check load_root.sh."
+  exit 1
+fi
+
+# -----------------------------
+# Directories
+# -----------------------------
+FRAMES_DIR="$FRAMES_ROOT"
+mkdir -p "$FRAMES_DIR"
+FRAMES_DIR_REL="${FRAMES_ROOT#$PROJECT_ROOT/public/}"
+
+# -----------------------------
+# Configuration
+# -----------------------------
+GEN_SOURCE="colab"
+ZROK_URL=$("$SCRIPT_DIR/zrok_echo.sh")
+MAX_RETRIES=2
+RETRY_DELAY=2
+
+# -----------------------------
+# Arguments
+# -----------------------------
+BASE_PROMPT="$1"
+MAP_RUN_ID="$2"
+ENTITY_TYPE="$3"
+ENTITY_ID="$4"
+LIMIT="$5"
+OFFSET="$6"
+NO_STYLES="$7"
+ADD_TO_PROMPT="$8"
+NO_STYLES=${NO_STYLES:-0}
+
+if [ -z "$BASE_PROMPT" ] || [ -z "$MAP_RUN_ID" ] || [ -z "$ENTITY_TYPE" ] || [ -z "$ENTITY_ID" ]; then
+  echo "Usage: $0 \"base prompt\" MAP_RUN_ID \"entity_type\" \"entity_id\" [limit] [offset] [no_styles] [add_to_prompt]"
+  exit 1
+fi
+
+# -----------------------------
+# Load styles
+# -----------------------------
+mapfile -t styles < <(mysql $MYSQL_ARGS -N -e "SELECT id, prompt FROM v_styles_helper;")
+TOTAL_STYLES=${#styles[@]}
+
+START=$((OFFSET > 0 ? OFFSET - 1 : 0))
+END=$((LIMIT > 0 ? START + LIMIT - 1 : TOTAL_STYLES - 1))
+[ "$END" -ge "$TOTAL_STYLES" ] && END=$((TOTAL_STYLES - 1))
+
+# -----------------------------
+# Check Mapping Table
+# -----------------------------
+MAPPING_TABLE="frames_2_${ENTITY_TYPE}"
+TABLE_EXISTS=$(mysql $MYSQL_ARGS -N -e "SHOW TABLES LIKE '$MAPPING_TABLE';")
+[ -z "$TABLE_EXISTS" ] && { echo "Mapping table '$MAPPING_TABLE' does not exist!"; exit 1; }
+
+# ==============================================================================
+# FETCH DB INFO (IMG2IMG & CONTROLNET)
+# ==============================================================================
+
+# 1. Fetch Img2Img Info
+read IMG2IMG_FLAG IMG2IMG_FRAME_ID IMG2IMG_PROMPT < <(
+  mysql $MYSQL_ARGS -N -e \
+    "SELECT COALESCE(img2img,0), COALESCE(img2img_frame_id,0), COALESCE(img2img_prompt,'') FROM $ENTITY_TYPE WHERE id=$ENTITY_ID;"
+)
+IMG2IMG_FLAG=${IMG2IMG_FLAG:-0}
+IMG2IMG_FILENAME=""
+if [ "$IMG2IMG_FRAME_ID" -gt 0 ]; then
+  IMG2IMG_FILENAME=$(mysql $MYSQL_ARGS -N -e "SELECT filename FROM frames WHERE id = $IMG2IMG_FRAME_ID LIMIT 1;" | tr -d '\r')
+fi
+
+# 2. Fetch ControlNet Info (cnmap)
+read CNMAP_FLAG CNMAP_FRAME_ID CNMAP_PROMPT < <(
+  mysql $MYSQL_ARGS -N -e \
+    "SELECT COALESCE(cnmap,0), COALESCE(cnmap_frame_id,0), COALESCE(cnmap_prompt,'') FROM $ENTITY_TYPE WHERE id=$ENTITY_ID;"
+)
+CNMAP_FLAG=${CNMAP_FLAG:-0}
+CNMAP_FILENAME=""
+if [ "$CNMAP_FRAME_ID" -gt 0 ]; then
+  CNMAP_FILENAME=$(mysql $MYSQL_ARGS -N -e "SELECT filename FROM frames WHERE id = $CNMAP_FRAME_ID LIMIT 1;" | tr -d '\r')
+fi
+
+# ==============================================================================
+# IMAGE CONVERSION LOGIC (SAFE TEMP HANDLING)
+# ==============================================================================
+
+TMP_DIR="${PROJECT_ROOT%/}/temp"
+mkdir -p "$TMP_DIR"
+TMP_FILES=()
+cleanup_tmp() {
+  for f in "${TMP_FILES[@]}"; do [ -f "$f" ] && rm -f "$f"; done
+}
+trap cleanup_tmp EXIT
+
+convert_to_png() {
+  local inp="$1"
+  local out="$2"
+  echo "Converting $inp -> $out"
+  if command -v magick >/dev/null 2>&1; then magick "$inp" -colorspace sRGB -alpha remove -strip "$out" 2>&1 || return $?; return 0; fi
+  if command -v convert >/dev/null 2>&1; then convert "$inp" -colorspace sRGB -alpha remove -strip "$out" 2>&1 || return $?; return 0; fi
+  if command -v ffmpeg >/dev/null 2>&1; then ffmpeg -y -loglevel error -i "$inp" -vf "format=rgba" "$out" 2>&1 || return $?; return 0; fi
+  return 10
+}
+
+# --- Process Img2Img File ---
+ABS_IMG2IMG_PATH=""
+if [ -n "$IMG2IMG_FILENAME" ]; then
+  ABS_IMG2IMG_PATH="$PROJECT_ROOT/public/$IMG2IMG_FILENAME"
+  if [ -f "$ABS_IMG2IMG_PATH" ]; then
+    if [[ "$ABS_IMG2IMG_PATH" =~ \.(jpg|jpeg|JPG|JPEG)$ ]]; then
+      TEMP_PNG="$TMP_DIR/img2img_${ENTITY_ID}_$$.png"
+      convert_to_png "$ABS_IMG2IMG_PATH" "$TEMP_PNG"
+      [ $? -eq 0 ] && ABS_IMG2IMG_PATH="$TEMP_PNG" && TMP_FILES+=("$TEMP_PNG")
+    fi
+  else
+    ABS_IMG2IMG_PATH=""
+  fi
+fi
+
+# --- Process ControlNet File ---
+ABS_CNMAP_PATH=""
+if [ -n "$CNMAP_FILENAME" ]; then
+  ABS_CNMAP_PATH="$PROJECT_ROOT/public/$CNMAP_FILENAME"
+  if [ -f "$ABS_CNMAP_PATH" ]; then
+    if [[ "$ABS_CNMAP_PATH" =~ \.(jpg|jpeg|JPG|JPEG)$ ]]; then
+      TEMP_PNG="$TMP_DIR/cnmap_${ENTITY_ID}_$$.png"
+      convert_to_png "$ABS_CNMAP_PATH" "$TEMP_PNG"
+      [ $? -eq 0 ] && ABS_CNMAP_PATH="$TEMP_PNG" && TMP_FILES+=("$TEMP_PNG")
+    fi
+  else
+    ABS_CNMAP_PATH=""
+  fi
+fi
+
+# ==============================================================================
+# GENERATION LOOP
+# ==============================================================================
+
+for ((i=START; i<=END; i++)); do
+  row="${styles[i]}"
+  style_id=$(echo "$row" | awk '{print $1}')
+  style=$(echo "$row" | cut -d' ' -f2-)
+
+  # Build Prompt
+  prompt="$BASE_PROMPT"
+  [ "$NO_STYLES" -eq 0 ] && prompt="$prompt, $style"
+  [ -n "$ADD_TO_PROMPT" ] && prompt="$prompt $ADD_TO_PROMPT"
+  [ -n "$IMG2IMG_PROMPT" ] && [ -n "$ABS_IMG2IMG_PATH" ] && prompt="$prompt $IMG2IMG_PROMPT"
+  [ -n "$CNMAP_PROMPT" ] && [ -n "$ABS_CNMAP_PATH" ] && prompt="$prompt $CNMAP_PROMPT"
+
+  # Next Frame ID
+  frame_basename=$(mysql $MYSQL_ARGS -N --batch --skip-column-names -e "
+    UPDATE frame_counter SET next_frame = LAST_INSERT_ID(next_frame + 1);
+    SELECT LPAD(LAST_INSERT_ID(), 7, '0');")
+  frame_basename="frame$frame_basename"
+  outfile="$FRAMES_DIR/$frame_basename.png"
+  filename_only="$frame_basename"
+
+  echo "Generating $filename_only | Style: $style_id"
+
+  # Defaults for Turbo
+  SEED=36
+  NEG_PROMPT="nudity, nude, naked, bare, topless, underwear, panties, erotic, sexual, explicit, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name"
+  
+  # --- SMART PARAMETERS ---
+  # Turbo default
+  STEPS=2
+  STRENGTH=0.5
+  
+  # If ControlNet is active, we need MORE steps and HIGHER strength to force the pose
+  if [ "${CNMAP_FLAG:-0}" -eq 1 ] && [ -n "$ABS_CNMAP_PATH" ]; then
+      STEPS=3         # Give the model time to listen to ControlNet
+      STRENGTH=0.85   # High strength allows the pose to change significantly
+      echo "  -> ControlNet Active: Boosted Steps to $STEPS and Strength to $STRENGTH"
+  fi
+
+  attempt=1
+  while [ $attempt -le $MAX_RETRIES ]; do
+    
+    # Build Curl Command
+    CURL_ARGS=(
+      curl -s -X POST "$ZROK_URL/generate"
+      -F "prompt=$prompt"
+      -F "negative_prompt=$NEG_PROMPT"
+      -F "seed=$SEED"
+      -F "num_inference_steps=$STEPS"
+      -F "guidance_scale=0.0"
+      -F "height=512"
+      -F "width=512"
+      --output "$outfile"
+    )
+
+    # 1. Add Img2Img (Init Image)
+    if [ -n "$ABS_IMG2IMG_PATH" ]; then
+      CURL_ARGS+=(-F "init_image=@$ABS_IMG2IMG_PATH")
+      CURL_ARGS+=(-F "strength=$STRENGTH")
+    fi
+
+    # 2. Add ControlNet (Control Image)
+    if [ "${CNMAP_FLAG:-0}" -eq 1 ] && [ -n "$ABS_CNMAP_PATH" ]; then
+      CURL_ARGS+=(-F "control_image=@$ABS_CNMAP_PATH")
+      CURL_ARGS+=(-F "controlnet_scale=1.0") # MAX SCALE to enforce pose
+    fi
+
+    # EXECUTE CURL
+    "${CURL_ARGS[@]}"
+
+    # Validate
+    if ffmpeg -v error -i "$outfile" -f null - 2>/dev/null; then
+      echo "  -> Saved: $outfile"
+
+      # DB Insert
+      SAFE_PROMPT=$(echo "$prompt" | sed "s/'/''/g")
+      SAFE_STYLE=$(echo "$style" | sed "s/'/''/g")
+      DB_IMG2IMG_FRAME_ID="NULL"
+      [ "$IMG2IMG_FRAME_ID" -gt 0 ] && DB_IMG2IMG_FRAME_ID="$IMG2IMG_FRAME_ID"
+      DB_IMG2IMG_PROMPT="NULL"
+      [ -n "$IMG2IMG_PROMPT" ] && DB_IMG2IMG_PROMPT="'$(echo "$IMG2IMG_PROMPT" | sed "s/'/''/g")'"
+
+      FRAME_ID=$(mysql $MYSQL_ARGS -N -e "
+        INSERT INTO frames
+        (filename, name, prompt, entity_type, entity_id, style, style_id, map_run_id, img2img_frame_id, img2img_prompt)
+        VALUES
+        ('$FRAMES_DIR_REL/$filename_only.png', '$filename_only', '$SAFE_PROMPT', '$ENTITY_TYPE', $ENTITY_ID, '$SAFE_STYLE', $style_id, $MAP_RUN_ID, $DB_IMG2IMG_FRAME_ID, $DB_IMG2IMG_PROMPT);
+        SELECT LAST_INSERT_ID();")
+
+      [ -n "$FRAME_ID" ] && mysql $MYSQL_ARGS -e "INSERT INTO $MAPPING_TABLE (from_id, to_id) VALUES ($FRAME_ID, $ENTITY_ID);"
+      break
+    else
+      echo "  -> Broken image. Retry $attempt/$MAX_RETRIES..."
+      rm -f "$outfile"
+      attempt=$((attempt+1))
+      sleep $RETRY_DELAY
+    fi
+  done
+
+  [ $attempt -gt $MAX_RETRIES ] && echo "Failed to generate $filename_only after max retries."
+done
+
+# Clear regenerate flag
+mysql $MYSQL_ARGS -e "UPDATE $ENTITY_TYPE SET regenerate_images=0 WHERE id=$ENTITY_ID;"

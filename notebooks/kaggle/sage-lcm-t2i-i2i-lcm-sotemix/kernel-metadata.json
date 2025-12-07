@@ -1,0 +1,17 @@
+{
+    "title": "sage-lcm-t2i-i2i-lcm-sotemix",
+    "code_file": "sage-lcm-t2i-i2i-lcm-sotemix.ipynb",
+    "language": "python",
+    "kernel_type": "notebook",
+    "is_private": true,
+    "enable_gpu": true,
+    "enable_tpu": false,
+    "enable_internet": true,
+    "keywords": [],
+    "dataset_sources": [
+        "spw800621/lcm-sotemix"
+    ],
+    "kernel_sources": [],
+    "competition_sources": [],
+    "model_sources": []
+}
