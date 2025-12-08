@@ -13,6 +13,11 @@
 
 **SAGE** (Storyboard Animation Generation Environment) is an open-source multimedia AI orchestration and automation platform. It merges creative generation, development assistance, and intelligent orchestration under one cohesive system — fully runnable in Termux on Android.
 
+---
+
+## 🎬 SAGE Setup Video Guide
+
+[![SAGE Setup Guide](https://img.youtube.com/vi/CoYXmyE8Bgw/maxresdefault.jpg)](https://youtu.be/CoYXmyE8Bgw)
 
 ---
 
