@@ -410,7 +410,7 @@ class AIProvider
         $isFreeModel = $this->isPollinationsFreeModel($model);
         $endpoint = $isFreeModel
             ? 'https://text.pollinations.ai/v1/chat/completions'
-            : 'https://enter.pollinations.ai/api/generate/v1/chat/completions';
+            : 'https://gen.pollinations.ai/v1/chat/completions';
         
         $apiKey = $this->getPollinationsApiKey();
         if (empty($apiKey) && !$isFreeModel) {
@@ -552,10 +552,6 @@ class AIProvider
     
     private function executeCurlRequest(string $endpoint, string $payload, array $headers, string $providerName): string
     {
-        // Add a default User-Agent header if not already present
-        if (!in_array('User-Agent', array_map(fn($h) => explode(':', $h, 2)[0], $headers))) {
-            $headers[] = 'User-Agent: spw-aiprovider/1.0';
-        }
 
         $this->log('info', "{$providerName} API request", [
             'endpoint' => $endpoint,
