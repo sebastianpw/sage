@@ -24,7 +24,7 @@ try {
                     FROM recipes r
                     JOIN recipe_groups rg ON r.recipe_group_id = rg.id
                     ORDER BY r.created_at DESC
-                    LIMIT 200";
+                    ";
             
             $stmt = $pdoSys->query($sql);
             $recipes = $stmt->fetchAll(PDO::FETCH_ASSOC);

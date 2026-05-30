@@ -5,11 +5,53 @@ require __DIR__ . '/env_locals.php';
 use App\Core\SpwBase;
 use App\Gallery\FrameDetails;
 use App\UI\Modules\ModuleRegistry;
+use App\Core\PyApiCVService;
 
 $spw = SpwBase::getInstance();
 $mysqli = $spw->getMysqli();
 
-// Get parameter
+// --- AJAX Handler for Computer Vision ---
+if (isset($_POST['action']) && $_POST['action'] === 'analyze_frame') {
+    // Ensure no previous output corrupts the JSON
+    while (ob_get_level()) ob_end_clean();
+    header('Content-Type: application/json');
+
+    try {
+        $fId = (int)($_POST['frame_id'] ?? 0);
+        if ($fId <= 0) throw new Exception("Invalid frame ID");
+
+        $fd = new FrameDetails($mysqli);
+        if (!$fd->load($fId)) throw new Exception("Frame not found");
+
+        $filename = $fd->frameData['filename'];
+        $absPath = $spw->getProjectPath() . '/public/' . $filename;
+
+        if (!file_exists($absPath)) throw new Exception("Image file not found on server");
+
+        // Initialize CV Service
+        $cv = new PyApiCVService();
+        
+        // 1. Get prompt from user input, or fallback to default if empty
+        $defaultPrompt = "Describe this image in a comma-separated format suitable for Stable Diffusion prompting. Describe every detail. Focus on visual elements, style, lighting, and composition. Do not include introductory text.";
+        $prompt = trim($_POST['prompt'] ?? '');
+        
+        if (empty($prompt)) {
+            $prompt = $defaultPrompt;
+        }
+        
+        // 2. Perform analysis
+        $result = $cv->analyze($absPath, $prompt);
+
+        echo json_encode(['status' => 'success', 'data' => $result]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+    }
+    exit;
+}
+// ----------------------------------------
+
+// Standard View Logic
 $frameId = isset($_GET['frame_id']) ? (int)$_GET['frame_id'] : 0;
 $isModalView = isset($_GET['view']) && $_GET['view'] === 'modal';
 $zoomLevel = isset($_GET['zoom']) ? (float)$_GET['zoom'] : 1.0;
@@ -22,88 +64,38 @@ if (!$frameDetails->load($frameId)) {
     die(htmlspecialchars($frameDetails->error ?: "Could not load frame."));
 }
 
-// Get entity information for module configuration
 $entity = $frameDetails->frameData['entity_type'] ?? 'unknown';
 $entityId = $frameDetails->frameData['entity_id'] ?? 0;
 
-// Get module registry
 $registry = ModuleRegistry::getInstance();
 
-// Configure gear menu module
-$gearMenu = $registry->create('gear_menu', [
+$gearMenu = $registry->create('gear_menu',[
     'position' => 'top-right',
     'icon' => '&#9881;',
     'icon_size' => '2em',
     'show_for_entities' => [$entity],
 ]);
 
-$gearMenu->addAction($entity, [
-    'label' => 'Import to Generative',
-    'icon' => '⚡',
-    'callback' => 'window.importGenerative(entity, entityId, frameId);'
+$gearMenu->addStandardActions($entity,[
+    'exclude' => ['view_frame'],
+    'overrides' =>[
+        'delete' =>[
+            'callback' => 'if (confirm("Delete this frame?")) { window.deleteFrame(entity, entityId, frameId); setTimeout(() => { window.location.href = "gallery_' . $entity . '_nu.php"; }, 1000); }'
+        ]
+    ]
 ]);
 
-$gearMenu->addAction($entity, [
-    'label' => 'Edit Entity',
-    'icon' => '✏️',
-    'callback' => 'window.editEntity(entity, entityId, frameId);'
-]);
-
-$gearMenu->addAction($entity, [
-    'label' => 'Edit Image',
-    'icon' => '🖌️',
-    'callback' => 'const $w = $(wrapper); if (typeof ImageEditorModal !== "undefined") { ImageEditorModal.open({ entity: entity, entityId: entityId, frameId: frameId, src: $w.find("img").attr("src") }); }'
-]);
-
-$gearMenu->addAction($entity, [
-    'label' => 'View Frame Chain',
-    'icon' => '🔗', // A chain link icon
-    'callback' => 'window.showFrameChainInModal(frameId);'
-]);
-
-$gearMenu->addAction($entity, [
-    'label' => 'Add to Storyboard',
-    'icon' => '🎬',
-    'callback' => 'window.selectStoryboard(frameId, $(wrapper));'
-]);
-
-$gearMenu->addAction($entity, [
-    'label' => 'Assign to Composite',
-    'icon' => '🧩',
-    'callback' => 'window.assignToComposite(entity, entityId, frameId);'
-]);
-
-$gearMenu->addAction($entity, [
-    'label' => 'Import to ControlNet Map',
-    'icon' => '☠️',
-    'callback' => 'window.importControlNetMap(entity, entityId, frameId);'
-]);
-
-$gearMenu->addAction($entity, [
-    'label' => 'Use Prompt Matrix',
-    'icon' => '🌌',
-    'callback' => 'window.usePromptMatrix(entity, entityId, frameId);'
-]);
-
-$gearMenu->addAction($entity, [
-    'label' => 'Delete Frame',
-    'icon' => '🗑️',
-    'callback' => 'if (confirm("Delete this frame?")) { window.deleteFrame(entity, entityId, frameId); setTimeout(() => { window.location.href = "gallery_' . $entity . '_nu.php"; }, 1000); }'
-]);
-
-// Configure image editor module (match gallery settings)
 $imageEditor = $registry->create('image_editor', [
-    'modes' => ['mask', 'crop'],
+    'modes' =>['mask', 'crop'],
     'show_transform_tab' => true,
-    'show_filters_tab' => true, // This is a legacy setting now, but we leave it for consistency
+    'show_filters_tab' => true,
     'enable_rotate' => true,
     'enable_resize' => true,
-    'preset_filters' => [
+    'preset_filters' =>[
         'grayscale', 'vintage', 'sepia', 'clarendon',
         'gingham', 'moon', 'lark', 'reyes', 'juno', 'slumber'
-    ], // 'sharpen' has been removed
+    ], 
 ]);
-
 
 ob_start();
 ?>
@@ -130,6 +122,12 @@ ob_start();
     <link rel="stylesheet" href="/css/base.css">
     <link rel="stylesheet" href="/css/toast.css">
     
+    <?php if (SpwBase::CDN_USAGE): ?>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/photoswipe.css" />
+    <?php else: ?>
+    <link rel="stylesheet" href="/vendor/photoswipe/photoswipe.css" />
+    <?php endif; ?>
+    
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="/js/toast.js"></script>
     <script src="/js/gear_menu_globals.js"></script>
@@ -141,32 +139,47 @@ ob_start();
     </style>
 </head>
 <body>
-<?php if(!$isModalView) { require "floatool.php"; } ?>
+<?php if(!$isModalView) { require_once "forge_tool.php"; } ?>
 
 <?php
-// Render modular components first
 echo $gearMenu->render();
 echo $imageEditor->render();
-
-// Render the frame details content
 echo $frameDetails->renderContent(); 
 ?>
+
+<?php if (SpwBase::CDN_USAGE): ?>
+<script src="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/photoswipe.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/photoswipe-lightbox.umd.js"></script>
+<?php else: ?>
+<script src="/vendor/photoswipe/photoswipe.umd.js"></script>
+<script src="/vendor/photoswipe/photoswipe-lightbox.umd.js"></script>
+<?php endif; ?>
     
 <script>
-// Initialize frame details when ready
 $(document).ready(function(){
-    // Initialize gear menu on the frame image
     if (window.GearMenu && typeof window.GearMenu.attach === 'function') {
         window.GearMenu.attach(document);
     }
+    if (typeof initializeFrameDetailsScripts === 'function') {
+        initializeFrameDetailsScripts();
+    }
     
-    initializeFrameDetailsScripts();
+    try {
+        const lightbox = new PhotoSwipeLightbox({
+            gallery: '#pswp-depth-preview',
+            children: 'a',
+            pswpModule: PhotoSwipe
+        });
+        lightbox.init();
+    } catch(e) {}
 });
 </script>
 
-<?php
-require __DIR__ . '/modal_frame_details.php';
-?>
+<?php require __DIR__ . '/modal_frame_details.php'; ?>
+
+
+<?php echo $eruda; ?>
+
 
 </body>
 </html>

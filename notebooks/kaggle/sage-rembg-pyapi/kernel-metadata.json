@@ -1,0 +1,19 @@
+{
+    "title": "sage-rembg-pyapi",
+    "code_file": "sage-rembg-pyapi.ipynb",
+    "language": "python",
+    "kernel_type": "notebook",
+    "is_private": true,
+    "enable_gpu": true,
+    "enable_tpu": false,
+    "enable_internet": true,
+    "keywords": [],
+    "dataset_sources": [
+        "spw800621/sage-pyapi-code",
+        "spw800621/sage-zrok-token"
+    ],
+    "kernel_sources": [],
+    "competition_sources": [],
+    "model_sources": [],
+    "id": "spw800621/sage-rembg-pyapi"
+}

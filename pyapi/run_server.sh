@@ -88,7 +88,7 @@ echo ""
 
 nohup python -m uvicorn main:app --host 0.0.0.0 --port $PORT \
     --timeout-keep-alive 300 \
-    --timeout-graceful-shutdown 30 \
+    --timeout-graceful-shutdown 300 \
     > "$LOG_FILE" 2>&1 &
 SERVER_PID=$!
 echo $SERVER_PID > server.pid

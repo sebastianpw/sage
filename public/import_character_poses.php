@@ -2,861 +2,961 @@
 require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
 
-// view_import_character_poses.php
-// Import tool with dry-run and force-update options
-
-// Recommended PDO flags to avoid emulated prepares and ensure exceptions
+// Ensure PDO settings for safety
 $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-$pageTitle = "Import Character Poses";
-$content = "";
+$pageTitle = "IMPORT CHARACTER POSES";
 
-$messages = [
-    'errors' => [],
-    'success' => []
-];
+// =========================================================================================
+// API HANDLER (AJAX Engine)
+// =========================================================================================
+if (isset($_REQUEST['api_action'])) {
+    while (ob_get_level()) ob_end_clean();
+    header('Content-Type: application/json');
+    $action = $_REQUEST['api_action'];
 
-// simple CSRF token
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-if (empty($_SESSION['import_token'])) {
-    $_SESSION['import_token'] = bin2hex(random_bytes(16));
-}
-$token = $_SESSION['import_token'];
+    try {
+        $req = $_SERVER['REQUEST_METHOD'] === 'POST' ? $_POST : $_GET;
+        
+        // Common parameters
+        $char_from = intval($req['character_from'] ?? 1);
+        $char_to   = intval($req['character_to'] ?? 1);
+        $pose_from = intval($req['pose_from'] ?? 1);
+        $pose_to   = intval($req['pose_to'] ?? 999);
+        
+        $angles = isset($req['angles']) && is_array($req['angles']) ? array_map('intval', $req['angles']) : [];
+        $perspectives = isset($req['perspectives']) && is_array($req['perspectives']) ? array_map('intval', $req['perspectives']) :[];
 
-$previewRows = [];
-$previewCount = 0;
-$totalMatches = 0;
-$insertableMatches = 0;
-$updateMatches = 0;
-
-// Dry-run pagination limits
-$DRY_RUN_PAGE_SIZE = 200; // max rows to show per page for insert/update lists
-
-// read pagination params (GET) for dry-run lists
-$page_insert = isset($_GET['page_insert']) ? max(1, intval($_GET['page_insert'])) : 1;
-$page_update = isset($_GET['page_update']) ? max(1, intval($_GET['page_update'])) : 1;
-$offset_insert = ($page_insert - 1) * $DRY_RUN_PAGE_SIZE;
-$offset_update = ($page_update - 1) * $DRY_RUN_PAGE_SIZE;
-
-$dryRunInsertRows = [];
-$dryRunUpdateRows = [];
-
-// ------------------------------------------------------------------
-// Keep form state between POST and pagination clicks (read from GET/POST)
-// ------------------------------------------------------------------
-$cur_char_from = isset($_REQUEST['character_from']) ? intval($_REQUEST['character_from']) : 1;
-$cur_char_to   = isset($_REQUEST['character_to'])   ? intval($_REQUEST['character_to'])   : 5;
-$cur_pose_from = isset($_REQUEST['pose_from'])      ? intval($_REQUEST['pose_from'])      : 1;
-$cur_pose_to   = isset($_REQUEST['pose_to'])        ? intval($_REQUEST['pose_to'])        : 999;
-$cur_dry_run_flag = isset($_REQUEST['dry_run']) && (string)$_REQUEST['dry_run'] === '1';
-$cur_force_update_flag = isset($_REQUEST['force_update']) && (string)$_REQUEST['force_update'] === '1';
-
-// --------------------------------------------------------------------------------
-// POST handling (import or POST-triggered dry-run). For pagination clicks use GET.
-// --------------------------------------------------------------------------------
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Basic server-side sanitization & validation
-    $postedToken = $_POST['token'] ?? '';
-    if (!hash_equals($_SESSION['import_token'], (string)$postedToken)) {
-        $messages['errors'][] = "Invalid form token. Please reload the page and try again.";
-    } else {
-        // prefer POST values for authoritative operation
-        $char_from = isset($_POST['character_from']) ? intval($_POST['character_from']) : null;
-        $char_to   = isset($_POST['character_to'])   ? intval($_POST['character_to'])   : null;
-        $pose_from = isset($_POST['pose_from'])      ? intval($_POST['pose_from'])      : null;
-        $pose_to   = isset($_POST['pose_to'])        ? intval($_POST['pose_to'])        : null;
-
-        $dry_run = isset($_POST['dry_run']) && $_POST['dry_run'] === '1';
-        $force_update = isset($_POST['force_update']) && $_POST['force_update'] === '1';
-
-        // provide sensible server-side bounds
-        $MAX_ID = 1000000;
-
-        if ($char_from === null || $char_to === null || $pose_from === null || $pose_to === null) {
-            $messages['errors'][] = "All fields are required.";
-        } elseif ($char_from < 0 || $char_to < 0 || $pose_from < 0 || $pose_to < 0) {
-            $messages['errors'][] = "IDs must be non-negative integers.";
-        } elseif ($char_from > $MAX_ID || $char_to > $MAX_ID || $pose_from > $MAX_ID || $pose_to > $MAX_ID) {
-            $messages['errors'][] = "Values too large.";
-        } elseif ($char_from > $char_to) {
-            $messages['errors'][] = "'Character from' must be <= 'Character to'.";
-        } elseif ($pose_from > $pose_to) {
-            $messages['errors'][] = "'Pose from' must be <= 'Pose to'.";
+        // ----------------------------------------------------
+        // GET FRAME URL (For Reference Image Preview)
+        // ----------------------------------------------------
+        if ($action === 'get_frame_url') {
+            $id = intval($req['frame_id']);
+            $stmt = $pdo->prepare("SELECT filename FROM frames WHERE id = ?");
+            $stmt->execute([$id]);
+            $url = $stmt->fetchColumn();
+            echo json_encode(['status'=>'success', 'url'=>$url]);
+            exit;
         }
 
-        if (empty($messages['errors'])) {
-            try {
-                // 1) Total matching rows in the view (before duplicate exclusion)
-                $countTotalSql = "SELECT COUNT(*) AS c
-                    FROM v_character_pose_angle_combinations v
-                    WHERE v.character_id BETWEEN ? AND ?
-                      AND v.pose_id BETWEEN ? AND ?";
-                $countStmt = $pdo->prepare($countTotalSql);
-                $countStmt->execute([$char_from, $char_to, $pose_from, $pose_to]);
-                $totalMatches = (int)$countStmt->fetchColumn();
+        // ----------------------------------------------------
+        // PREVIEW or IMPORT (Tab 1 Logic)
+        // ----------------------------------------------------
+        if ($action === 'preview' || $action === 'import') {
+            if (empty($angles) || empty($perspectives)) {
+                echo json_encode(['status'=>'success', 'total'=>0, 'new_count'=>0, 'ext_count'=>0, 'new_rows'=>[], 'ext_rows'=>[]]);
+                exit;
+            }
+            
+            // Exclusions logic (from clicked pills)
+            $exclusions = json_decode($req['exclusions'] ?? '[]', true);
+            $excludeSql = "";
+            if (!empty($exclusions)) {
+                $exclList = implode(',', array_map([$pdo, 'quote'], $exclusions));
+                $excludeSql = "AND CONCAT(v.character_id, '_', v.pose_id, '_', v.angle_id, '_', v.perspective_id) NOT IN ($exclList)";
+            }
+            
+            $anglePl = implode(',', array_fill(0, count($angles), '?'));
+            $perspPl = implode(',', array_fill(0, count($perspectives), '?'));
+            $params = array_merge([$char_from, $char_to, $pose_from, $pose_to], $angles, $perspectives);
+            
+            $baseWhere = "WHERE v.character_id BETWEEN ? AND ? 
+                          AND v.pose_id BETWEEN ? AND ? 
+                          AND v.angle_id IN ($anglePl)
+                          AND v.perspective_id IN ($perspPl) $excludeSql";
+                          
+            $notExistsClause = "AND NOT EXISTS (SELECT 1 FROM character_poses cp WHERE cp.character_id = v.character_id AND cp.pose_id = v.pose_id AND cp.angle_id = v.angle_id AND cp.perspective_id = v.perspective_id)";
+            $existsClause = "AND EXISTS (SELECT 1 FROM character_poses cp WHERE cp.character_id = v.character_id AND cp.pose_id = v.pose_id AND cp.angle_id = v.angle_id AND cp.perspective_id = v.perspective_id)";
+            
+            $excludeChar = !empty($req['exclude_char_desc']);
+            $neutralBg = !empty($req['neutral_white_bg']);
+            $promptSql = $excludeChar ? "v.base_prompt" : "v.description";
+            if ($neutralBg) {
+                $promptSql = "CONCAT('((neutral greenscreen background - Pantone: 354 C, Hex: #00FB00)), ', $promptSql)";
+            }
 
-                if ($totalMatches === 0) {
-                    $messages['errors'][] = "No rows found for the selected ranges. Nothing to import.";
+            if ($action === 'import') {
+                $force = !empty($req['force_update']);
+                $imgId = intval($req['img2img_frame_id'] ?? 0);
+                
+                $insertCols = "name, `order`, description, character_id, pose_id, angle_id, perspective_id, regenerate_images";
+                $selectCols = "CONCAT(v.character_name, ' - ', v.pose_name, ' - ', v.angle_name, ' - ', v.perspective_name), 0, $promptSql, v.character_id, v.pose_id, v.angle_id, v.perspective_id, 1";
+                
+                if ($imgId > 0) {
+                    $insertCols .= ", img2img_frame_id, img2img";
+                    $selectCols .= ", $imgId, 1";
+                }
+
+                $pdo->beginTransaction();
+                $inserted = 0; $updated = 0;
+                
+                if ($force) {
+                    $updateSql = "name = VALUES(name), description = VALUES(description), regenerate_images = 1";
+                    if ($imgId > 0) $updateSql .= ", img2img_frame_id = VALUES(img2img_frame_id), img2img = VALUES(img2img)";
+                    
+                    $sql = "INSERT INTO character_poses ($insertCols) SELECT $selectCols FROM v_character_pose_angle_combinations v $baseWhere ON DUPLICATE KEY UPDATE $updateSql";
+                    $stmt = $pdo->prepare($sql);
+                    $stmt->execute($params);
+                    $updated = $stmt->rowCount(); 
                 } else {
-                    // 2) Count how many would actually be inserted (exclude existing combos)
-                    $countInsertableSql = "
-                        SELECT COUNT(*) AS c
-                        FROM v_character_pose_angle_combinations v
-                        WHERE v.character_id BETWEEN ? AND ?
-                          AND v.pose_id BETWEEN ? AND ?
-                          AND NOT EXISTS (
-                              SELECT 1 FROM character_poses cp
-                              WHERE cp.character_id = v.character_id
-                                AND cp.pose_id = v.pose_id
-                                AND cp.angle_id = v.angle_id
-                          )
-                    ";
-                    $countInsertableStmt = $pdo->prepare($countInsertableSql);
-                    $countInsertableStmt->execute([$char_from, $char_to, $pose_from, $pose_to]);
-                    $insertableMatches = (int)$countInsertableStmt->fetchColumn();
-
-                    // 3) Count how many would be updates (existing combos)
-                    $countUpdateSql = "
-                        SELECT COUNT(*) AS c
-                        FROM v_character_pose_angle_combinations v
-                        WHERE v.character_id BETWEEN ? AND ?
-                          AND v.pose_id BETWEEN ? AND ?
-                          AND EXISTS (
-                              SELECT 1 FROM character_poses cp
-                              WHERE cp.character_id = v.character_id
-                                AND cp.pose_id = v.pose_id
-                                AND cp.angle_id = v.angle_id
-                          )
-                    ";
-                    $countUpdateStmt = $pdo->prepare($countUpdateSql);
-                    $countUpdateStmt->execute([$char_from, $char_to, $pose_from, $pose_to]);
-                    $updateMatches = (int)$countUpdateStmt->fetchColumn();
-
-                    // If dry-run requested (POST), fetch the row lists (paginated)
-                    if ($dry_run) {
-                        // insertable rows (not exists)
-                        $fetchInsertableSql = "
-                            SELECT
-                                v.character_id, v.character_name,
-                                v.pose_id, v.pose_name,
-                                v.angle_id, v.angle_name,
-                                v.description,
-                                CONCAT(v.character_name, ' - ', v.pose_name, ' - ', v.angle_name) AS name
-                            FROM v_character_pose_angle_combinations v
-                            WHERE v.character_id BETWEEN ? AND ?
-                              AND v.pose_id BETWEEN ? AND ?
-                              AND NOT EXISTS (
-                                  SELECT 1 FROM character_poses cp
-                                  WHERE cp.character_id = v.character_id
-                                    AND cp.pose_id = v.pose_id
-                                    AND cp.angle_id = v.angle_id
-                              )
-                            ORDER BY v.character_id, v.pose_id, v.angle_id
-                            LIMIT ? OFFSET ?
-                        ";
-                        $stmtIns = $pdo->prepare($fetchInsertableSql);
-                        // bind with explicit integer types to avoid quoted numbers in SQL
-                        $stmtIns->bindValue(1, $char_from, PDO::PARAM_INT);
-                        $stmtIns->bindValue(2, $char_to,   PDO::PARAM_INT);
-                        $stmtIns->bindValue(3, $pose_from, PDO::PARAM_INT);
-                        $stmtIns->bindValue(4, $pose_to,   PDO::PARAM_INT);
-                        $stmtIns->bindValue(5, $DRY_RUN_PAGE_SIZE, PDO::PARAM_INT);
-                        $stmtIns->bindValue(6, $offset_insert,     PDO::PARAM_INT);
-                        $stmtIns->execute();
-                        $dryRunInsertRows = $stmtIns->fetchAll(\PDO::FETCH_ASSOC);
-
-                        // updateable rows (exists)
-                        $fetchUpdateSql = "
-                            SELECT
-                                v.character_id, v.character_name,
-                                v.pose_id, v.pose_name,
-                                v.angle_id, v.angle_name,
-                                v.description,
-                                CONCAT(v.character_name, ' - ', v.pose_name, ' - ', v.angle_name) AS name
-                            FROM v_character_pose_angle_combinations v
-                            WHERE v.character_id BETWEEN ? AND ?
-                              AND v.pose_id BETWEEN ? AND ?
-                              AND EXISTS (
-                                  SELECT 1 FROM character_poses cp
-                                  WHERE cp.character_id = v.character_id
-                                    AND cp.pose_id = v.pose_id
-                                    AND cp.angle_id = v.angle_id
-                              )
-                            ORDER BY v.character_id, v.pose_id, v.angle_id
-                            LIMIT ? OFFSET ?
-                        ";
-                        $stmtUpd = $pdo->prepare($fetchUpdateSql);
-                        // bind with explicit integer types to avoid quoted numbers in SQL
-                        $stmtUpd->bindValue(1, $char_from, PDO::PARAM_INT);
-                        $stmtUpd->bindValue(2, $char_to,   PDO::PARAM_INT);
-                        $stmtUpd->bindValue(3, $pose_from, PDO::PARAM_INT);
-                        $stmtUpd->bindValue(4, $pose_to,   PDO::PARAM_INT);
-                        $stmtUpd->bindValue(5, $DRY_RUN_PAGE_SIZE, PDO::PARAM_INT);
-                        $stmtUpd->bindValue(6, $offset_update,     PDO::PARAM_INT);
-                        $stmtUpd->execute();
-                        $dryRunUpdateRows = $stmtUpd->fetchAll(\PDO::FETCH_ASSOC);
-
-                        $messages['success'][] = "Dry-run: matched {$totalMatches} rows (insertable: {$insertableMatches}, updateable: {$updateMatches}). Listing results (page controls shown if results exceed {$DRY_RUN_PAGE_SIZE}).";
-                    } else {
-                        // Not a dry-run => perform DB changes
-                        if ($insertableMatches === 0 && (!$force_update || $updateMatches === 0)) {
-                            $messages['errors'][] = "Nothing to insert or update for the selected ranges.";
-                        } else {
-                            $pdo->beginTransaction();
-
-                            if ($force_update) {
-                                // Use INSERT ... ON DUPLICATE KEY UPDATE
-                                // NOTE: This requires a UNIQUE index on (character_id, pose_id, angle_id)
-                                // If you don't have such an index, ON DUPLICATE KEY won't trigger updates.
-                                $insertSql = "
-                                    INSERT INTO `character_poses` (
-                                        `name`,
-                                        `order`,
-                                        `description`,
-                                        `character_id`,
-                                        `pose_id`,
-                                        `angle_id`
-                                    )
-                                    SELECT
-                                        CONCAT(v.character_name, ' - ', v.pose_name, ' - ', v.angle_name) AS name,
-                                        0 AS `order`,
-                                        v.description,
-                                        v.character_id,
-                                        v.pose_id,
-                                        v.angle_id
-                                    FROM v_character_pose_angle_combinations v
-                                    WHERE v.character_id BETWEEN ? AND ?
-                                      AND v.pose_id BETWEEN ? AND ?
-                                    ON DUPLICATE KEY UPDATE
-                                        `name` = VALUES(`name`),
-                                        `order` = VALUES(`order`),
-                                        `description` = VALUES(`description`)
-                                ";
-                                $insertStmt = $pdo->prepare($insertSql);
-                                $insertStmt->execute([$char_from, $char_to, $pose_from, $pose_to]);
-
-                                // For reporting we rely on the precomputed counts:
-                                $inserted = $insertableMatches;
-                                $updated = $updateMatches;
-                                $pdo->commit();
-
-                                $messages['success'][] = "Force import completed. Inserted: {$inserted}. Updated: {$updated}.";
-                            } else {
-                                // Standard insert only for non-existing rows (keeps duplicate protection)
-                                $insertSql = "
-                                    INSERT INTO `character_poses` (
-                                        `name`,
-                                        `order`,
-                                        `description`,
-                                        `character_id`,
-                                        `pose_id`,
-                                        `angle_id`
-                                    )
-                                    SELECT
-                                        CONCAT(v.character_name, ' - ', v.pose_name, ' - ', v.angle_name) AS name,
-                                        0 AS `order`,
-                                        v.description,
-                                        v.character_id,
-                                        v.pose_id,
-                                        v.angle_id
-                                    FROM v_character_pose_angle_combinations v
-                                    WHERE v.character_id BETWEEN ? AND ?
-                                      AND v.pose_id BETWEEN ? AND ?
-                                      AND NOT EXISTS (
-                                          SELECT 1 FROM character_poses cp
-                                          WHERE cp.character_id = v.character_id
-                                            AND cp.pose_id = v.pose_id
-                                            AND cp.angle_id = v.angle_id
-                                      )
-                                ";
-                                $insertStmt = $pdo->prepare($insertSql);
-                                $insertStmt->execute([$char_from, $char_to, $pose_from, $pose_to]);
-
-                                $inserted = $insertableMatches;
-                                $pdo->commit();
-
-                                $skipped = $totalMatches - $inserted;
-                                if ($skipped < 0) $skipped = 0;
-
-                                $messages['success'][] = "Import completed. {$inserted} rows inserted. {$skipped} rows skipped because they already existed.";
-                            }
-                        }
-                    }
+                    $sql = "INSERT INTO character_poses ($insertCols) SELECT $selectCols FROM v_character_pose_angle_combinations v $baseWhere $notExistsClause";
+                    $stmt = $pdo->prepare($sql);
+                    $stmt->execute($params);
+                    $inserted = $stmt->rowCount();
                 }
-            } catch (\Exception $e) {
-                if ($pdo->inTransaction()) {
-                    $pdo->rollBack();
+                $pdo->commit();
+                
+                echo json_encode(['status'=>'success', 'message'=>"Success! Processed $updated existing items and inserted $inserted new ones. Regeneration triggered."]);
+                exit;
+            } else {
+                // PREVIEW
+                $page_insert = max(1, intval($req['page_insert'] ?? 1));
+                $page_update = max(1, intval($req['page_update'] ?? 1));
+                $limit = 100;
+                $off_ins = ($page_insert - 1) * $limit;
+                $off_upd = ($page_update - 1) * $limit;
+                
+                $stmt = $pdo->prepare("SELECT COUNT(*) FROM v_character_pose_angle_combinations v $baseWhere"); $stmt->execute($params); $totalMatches = (int)$stmt->fetchColumn();
+                $stmt = $pdo->prepare("SELECT COUNT(*) FROM v_character_pose_angle_combinations v $baseWhere $notExistsClause"); $stmt->execute($params); $insertableMatches = (int)$stmt->fetchColumn();
+                $updateMatches = $totalMatches - $insertableMatches;
+                
+                $newRows =[];
+                if ($insertableMatches > 0) {
+                    $sql = "SELECT v.character_id, v.pose_id, v.angle_id, v.perspective_id, v.character_name, v.pose_name, v.angle_name, v.perspective_name, $promptSql as description 
+                            FROM v_character_pose_angle_combinations v $baseWhere $notExistsClause 
+                            ORDER BY v.character_id, v.pose_id LIMIT $limit OFFSET $off_ins";
+                    $stmt = $pdo->prepare($sql);
+                    $stmt->execute($params);
+                    $newRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 }
-                $messages['errors'][] = "Database error: " . $e->getMessage();
+                
+                $extRows =[];
+                if ($updateMatches > 0) {
+                    $sql = "SELECT v.character_id, v.pose_id, v.angle_id, v.perspective_id, v.character_name, v.pose_name, v.angle_name, v.perspective_name,
+                            (SELECT f.filename FROM character_poses cp 
+                             JOIN frames_2_character_poses m ON m.to_id = cp.id 
+                             JOIN frames f ON f.id = m.from_id 
+                             WHERE cp.character_id = v.character_id AND cp.pose_id = v.pose_id AND cp.angle_id = v.angle_id AND cp.perspective_id = v.perspective_id 
+                             ORDER BY m.from_id DESC LIMIT 1) as mapped_thumb
+                            FROM v_character_pose_angle_combinations v $baseWhere $existsClause 
+                            ORDER BY v.character_id, v.pose_id LIMIT $limit OFFSET $off_upd";
+                    $stmt = $pdo->prepare($sql);
+                    $stmt->execute($params);
+                    $extRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                }
+                
+                echo json_encode([
+                    'status'=>'success', 'total'=>$totalMatches, 'new_count'=>$insertableMatches, 'ext_count'=>$updateMatches,
+                    'new_rows'=>$newRows, 'ext_rows'=>$extRows, 'page_insert'=>$page_insert, 'page_update'=>$page_update,
+                    'max_p_ins' => ceil($insertableMatches/$limit), 'max_p_upd' => ceil($updateMatches/$limit)
+                ]);
+                exit;
             }
         }
-    }
-}
 
-// ------------------------------------------------------------------
-// Handle dry-run via GET (pagination clicks) - reuse same logic but allow GET
-// ------------------------------------------------------------------
-if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $cur_dry_run_flag) {
-    // use the request-derived values
-    $char_from = $cur_char_from;
-    $char_to   = $cur_char_to;
-    $pose_from = $cur_pose_from;
-    $pose_to   = $cur_pose_to;
-    $dry_run = true;
-    $force_update = $cur_force_update_flag;
-
-    // basic validation (non-exceptional)
-    if ($char_from < 0 || $char_to < 0 || $pose_from < 0 || $pose_to < 0 || $char_from > $char_to || $pose_from > $pose_to) {
-        // invalid ranges -> show nothing but a friendly message
-        $messages['errors'][] = "Invalid range parameters in query string.";
-    } else {
-        try {
-            $countTotalSql = "SELECT COUNT(*) AS c
-                FROM v_character_pose_angle_combinations v
-                WHERE v.character_id BETWEEN ? AND ?
-                  AND v.pose_id BETWEEN ? AND ?";
-            $countStmt = $pdo->prepare($countTotalSql);
-            $countStmt->execute([$char_from, $char_to, $pose_from, $pose_to]);
-            $totalMatches = (int)$countStmt->fetchColumn();
-
-            $countInsertableSql = "
-                SELECT COUNT(*) AS c
-                FROM v_character_pose_angle_combinations v
-                WHERE v.character_id BETWEEN ? AND ?
-                  AND v.pose_id BETWEEN ? AND ?
-                  AND NOT EXISTS (
-                      SELECT 1 FROM character_poses cp
-                      WHERE cp.character_id = v.character_id
-                        AND cp.pose_id = v.pose_id
-                        AND cp.angle_id = v.angle_id
-                  )
-            ";
-            $countInsertableStmt = $pdo->prepare($countInsertableSql);
-            $countInsertableStmt->execute([$char_from, $char_to, $pose_from, $pose_to]);
-            $insertableMatches = (int)$countInsertableStmt->fetchColumn();
-
-            $countUpdateSql = "
-                SELECT COUNT(*) AS c
-                FROM v_character_pose_angle_combinations v
-                WHERE v.character_id BETWEEN ? AND ?
-                  AND v.pose_id BETWEEN ? AND ?
-                  AND EXISTS (
-                      SELECT 1 FROM character_poses cp
-                      WHERE cp.character_id = v.character_id
-                        AND cp.pose_id = v.pose_id
-                        AND cp.angle_id = v.angle_id
-                  )
-            ";
-            $countUpdateStmt = $pdo->prepare($countUpdateSql);
-            $countUpdateStmt->execute([$char_from, $char_to, $pose_from, $pose_to]);
-            $updateMatches = (int)$countUpdateStmt->fetchColumn();
-
-            // fetch paginated lists
-            $fetchInsertableSql = "
-                SELECT
-                    v.character_id, v.character_name,
-                    v.pose_id, v.pose_name,
-                    v.angle_id, v.angle_name,
-                    v.description,
-                    CONCAT(v.character_name, ' - ', v.pose_name, ' - ', v.angle_name) AS name
-                FROM v_character_pose_angle_combinations v
-                WHERE v.character_id BETWEEN ? AND ?
-                  AND v.pose_id BETWEEN ? AND ?
-                  AND NOT EXISTS (
-                      SELECT 1 FROM character_poses cp
-                      WHERE cp.character_id = v.character_id
-                        AND cp.pose_id = v.pose_id
-                        AND cp.angle_id = v.angle_id
-                  )
-                ORDER BY v.character_id, v.pose_id, v.angle_id
-                LIMIT ? OFFSET ?
-            ";
-            $stmtIns = $pdo->prepare($fetchInsertableSql);
-            $stmtIns->bindValue(1, $char_from, PDO::PARAM_INT);
-            $stmtIns->bindValue(2, $char_to,   PDO::PARAM_INT);
-            $stmtIns->bindValue(3, $pose_from, PDO::PARAM_INT);
-            $stmtIns->bindValue(4, $pose_to,   PDO::PARAM_INT);
-            $stmtIns->bindValue(5, $DRY_RUN_PAGE_SIZE, PDO::PARAM_INT);
-            $stmtIns->bindValue(6, $offset_insert,     PDO::PARAM_INT);
-            $stmtIns->execute();
-            $dryRunInsertRows = $stmtIns->fetchAll(\PDO::FETCH_ASSOC);
-
-            $fetchUpdateSql = "
-                SELECT
-                    v.character_id, v.character_name,
-                    v.pose_id, v.pose_name,
-                    v.angle_id, v.angle_name,
-                    v.description,
-                    CONCAT(v.character_name, ' - ', v.pose_name, ' - ', v.angle_name) AS name
-                FROM v_character_pose_angle_combinations v
-                WHERE v.character_id BETWEEN ? AND ?
-                  AND v.pose_id BETWEEN ? AND ?
-                  AND EXISTS (
-                      SELECT 1 FROM character_poses cp
-                      WHERE cp.character_id = v.character_id
-                        AND cp.pose_id = v.pose_id
-                        AND cp.angle_id = v.angle_id
-                  )
-                ORDER BY v.character_id, v.pose_id, v.angle_id
-                LIMIT ? OFFSET ?
-            ";
-            $stmtUpd = $pdo->prepare($fetchUpdateSql);
-            $stmtUpd->bindValue(1, $char_from, PDO::PARAM_INT);
-            $stmtUpd->bindValue(2, $char_to,   PDO::PARAM_INT);
-            $stmtUpd->bindValue(3, $pose_from, PDO::PARAM_INT);
-            $stmtUpd->bindValue(4, $pose_to,   PDO::PARAM_INT);
-            $stmtUpd->bindValue(5, $DRY_RUN_PAGE_SIZE, PDO::PARAM_INT);
-            $stmtUpd->bindValue(6, $offset_update,     PDO::PARAM_INT);
-            $stmtUpd->execute();
-            $dryRunUpdateRows = $stmtUpd->fetchAll(\PDO::FETCH_ASSOC);
-
-            $messages['success'][] = "Dry-run: matched {$totalMatches} rows (insertable: {$insertableMatches}, updateable: {$updateMatches}).";
-        } catch (\Exception $e) {
-            $messages['errors'][] = "Could not perform dry-run: " . $e->getMessage();
+        // ----------------------------------------------------
+        // MAPPING: GET POSES (Tab 2 Logic)
+        // ----------------------------------------------------
+        if ($action === 'get_poses_for_mapping') {
+            if (empty($angles) || empty($perspectives)) { echo json_encode(['status'=>'success', 'data'=>[]]); exit; }
+            
+            $anglePl = implode(',', array_fill(0, count($angles), '?'));
+            $perspPl = implode(',', array_fill(0, count($perspectives), '?'));
+            $params = array_merge([$char_from, $char_to, $pose_from, $pose_to], $angles, $perspectives);
+            
+            $sql = "SELECT cp.id as pose_id, c.name as character_name, p.name as pose_name, ca.name as angle_name, cpe.name as perspective_name,
+                    (SELECT f.filename FROM frames_2_character_poses m JOIN frames f ON f.id=m.from_id WHERE m.to_id = cp.id ORDER BY m.from_id DESC LIMIT 1) as mapped_thumb
+                    FROM character_poses cp
+                    JOIN characters c ON cp.character_id = c.id
+                    JOIN poses p ON cp.pose_id = p.id
+                    JOIN camera_angles ca ON cp.angle_id = ca.id
+                    JOIN camera_perspectives cpe ON cp.perspective_id = cpe.id
+                    WHERE cp.character_id BETWEEN ? AND ? 
+                      AND cp.pose_id BETWEEN ? AND ? 
+                      AND cp.angle_id IN ($anglePl) 
+                      AND cp.perspective_id IN ($perspPl)
+                    ORDER BY cp.character_id, cp.pose_id, cp.perspective_id, cp.angle_id";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            echo json_encode(['status'=>'success', 'data'=>$stmt->fetchAll(PDO::FETCH_ASSOC)]);
+            exit;
         }
+
+        // ----------------------------------------------------
+        // MAPPING: GET FRAMES
+        // ----------------------------------------------------
+        if ($action === 'get_run_frames') {
+            $runId = intval($req['map_run_id'] ?? 0);
+            $stmt = $pdo->prepare("SELECT id, filename FROM frames WHERE map_run_id = ? ORDER BY id ASC");
+            $stmt->execute([$runId]);
+            echo json_encode(['status'=>'success', 'data'=>$stmt->fetchAll(PDO::FETCH_ASSOC)]);
+            exit;
+        }
+
+        // ----------------------------------------------------
+        // MAPPING: ASSIGN FRAME TO POSE
+        // ----------------------------------------------------
+        if ($action === 'map_frame') {
+            $frameId = intval($req['frame_id']);
+            $poseId = intval($req['pose_id']);
+            
+            // Check if already mapped exactly
+            $stmt = $pdo->prepare("SELECT 1 FROM frames_2_character_poses WHERE from_id = ? AND to_id = ?");
+            $stmt->execute([$frameId, $poseId]);
+            if ($stmt->fetchColumn()) {
+                // Toggle off
+                $pdo->prepare("DELETE FROM frames_2_character_poses WHERE from_id = ? AND to_id = ?")->execute([$frameId, $poseId]);
+                $mapped = false;
+            } else {
+                // Insert mapped
+                $pdo->prepare("INSERT IGNORE INTO frames_2_character_poses (from_id, to_id) VALUES (?, ?)")->execute([$frameId, $poseId]);
+                $mapped = true;
+            }
+            
+            // Re-fetch the best thumbnail for the UI
+            $thumb = $pdo->prepare("SELECT f.filename FROM frames_2_character_poses m JOIN frames f ON f.id=m.from_id WHERE m.to_id = ? ORDER BY m.from_id DESC LIMIT 1");
+            $thumb->execute([$poseId]);
+            $filename = $thumb->fetchColumn();
+            
+            echo json_encode(['status'=>'success', 'mapped'=>$mapped, 'thumb'=>$filename]);
+            exit;
+        }
+
+    } catch (Exception $e) {
+        echo json_encode(['status'=>'error', 'message'=>$e->getMessage()]);
+        exit;
     }
 }
 
-// Provide a small preview (first 25 rows) of the view for user convenience
+// =========================================================================================
+// DATA FETCHING FOR UI LOAD
+// =========================================================================================
 try {
-    $previewSql = "
-        SELECT
-            character_id, character_name,
-            pose_id, pose_name,
-            angle_id, angle_name,
-            description
-        FROM v_character_pose_angle_combinations
-        ORDER BY character_id, pose_id, angle_id
-        LIMIT 25
-    ";
-    $previewStmt = $pdo->query($previewSql);
-    $previewRows = $previewStmt->fetchAll(\PDO::FETCH_ASSOC);
-} catch (\Exception $e) {
-    // ignore preview errors but note them
-    $messages['errors'][] = "Could not fetch preview: " . $e->getMessage();
-}
+    $allAngles = $pdo->query("SELECT id, name, description FROM camera_angles ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+    $allPerspectives = $pdo->query("SELECT id, name, description FROM camera_perspectives ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) { die("Error fetching camera data: " . $e->getMessage()); }
 
-// render HTML using your pattern
 ob_start();
-?><link rel="stylesheet" href="/css/base.css">
+?>
+<!-- Dependencies -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="/css/base.css">
+<!-- PhotoSwipe CSS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/photoswipe/5.4.2/photoswipe.min.css">
+
 <style>
+    /* ── FRAMETAGGER THEME ── */
+    :root {
+        --bg: #0a0a0f;
+        --card: #111118;
+        --border: #1e1e2e;
+        --text: #e2e2f0;
+        --text-muted: #555570;
+        --blue: #3b82f6;
+        --green: #10b981;
+        --amber: #f59e0b;
+        --cyan: #06b6d4;
+        --purple: #8b5cf6;
+        --red: #ef4444;
+    }
 
-.container { 
-  max-width: 1100px;
-  margin: 1.5rem auto;
-  padding-left: .75rem;
-  padding-right: .75rem;
-}
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--text); font-family: 'DM Mono', 'Fira Mono', monospace; height: 100%; overflow: hidden; }
 
-/* Cards */
-.card {
-  background: var(--card-bg);
-  border: 0;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  overflow: hidden;
-}
+    /* ── LAYOUT ── */
+    .eh-layout { display: flex; flex-direction: column; height: 100vh; overflow: hidden; width: 100%; }
+    
+    .eh-header { flex-shrink: 0; padding: 12px 20px; background: var(--card); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .eh-header-left { display: flex; align-items: center; }
+    .eh-title { font-size: 1rem; font-weight: 700; letter-spacing: 1px; color: var(--purple); margin: 0; text-transform: uppercase; }
+    .eh-header-right { display: flex; gap: 10px; align-items: center; }
 
-.card-body {
-  padding: 1rem;
-}
+    .hamburger-btn { display: none; background: transparent; border: 1px solid var(--border); color: var(--text); font-size: 1.5rem; padding: 4px 10px; border-radius: 4px; cursor: pointer; margin-left: 70px; margin-right: 15px; }
 
-.card-header {
-  background: transparent;
-  border-bottom: 1px solid var(--border-weak);
-  font-weight: 600;
-  font-size: 0.98rem;
-  padding: 0.65rem 1rem;
-}
+    /* TABS */
+    .eh-tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--card); flex-shrink: 0; padding: 0 10px; }
+    .eh-tab { padding: 12px 20px; font-size: 0.8rem; font-weight: 700; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; text-transform: uppercase; letter-spacing: 1px; transition: 0.2s; }
+    .eh-tab:hover { color: var(--text); }
+    .eh-tab.active { color: var(--purple); border-bottom-color: var(--purple); }
 
-/* Forms & inputs */
-.form-label { 
-  display: inline-block;
-  width: 150px !important;
-  flex: 0 0 150px; /* don’t let it shrink */
-  font-weight:600;
-  color: var(--text);
-  font-size: .88rem;
-}
-.form-control {
-  border-radius: 6px;
-  border: 1px solid var(--border-weak);
-  padding: 8px 10px;
-  min-height: 36px;
-  margin-bottom: 6px;
-  box-shadow: none;
-  transition: box-shadow .12s ease, border-color .12s ease, transform .06s ease;
-  background: transparent;
-  font-size: 0.95rem;
-}
-.form-control:focus {
-  outline: 0;
-  border-color: rgba(var(--primary-rgb), 0.95);
-  box-shadow: 0 6px 18px rgba(var(--primary-rgb), 0.08);
-  transform: translateY(-1px);
-}
-.form-check {
-    margin-bottom: 5px;
-}
-.form-check-input {
-    width: 1.05em;
-    height: 1.05em;
-}
+    .eh-body { flex: 1; display: flex; overflow: hidden; position: relative; }
+    
+    /* ── SIDEBAR ── */
+    .eh-sidebar { width: 340px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; padding: 20px; flex-shrink: 0; z-index: 10000; transition: left 0.3s ease; }
+    .sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; display: none; backdrop-filter: blur(2px); }
+    .sidebar-header-mobile { display: none; }
+    
+    .sidebar-section { margin-bottom: 25px; }
+    .section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); font-weight: 700; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    .section-title a { color: var(--blue); text-decoration: none; font-size: 0.65rem; padding: 2px 6px; border-radius: 3px; background: rgba(59,130,246,0.1); }
+    
+    .chips-container { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip-label { display: inline-block; cursor: pointer; margin: 0; }
+    .chip-label input { display: none; }
+    .chip-span { padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; border: 1px solid var(--border); background: rgba(255,255,255,0.02); color: var(--text-muted); transition: 0.15s; display: inline-block; }
+    .chip-label input:checked + .chip-span.persp { background: rgba(139,92,246,0.15); border-color: rgba(139,92,246,0.5); color: var(--purple); }
+    .chip-label input:checked + .chip-span.angle { background: rgba(6,182,212,0.15); border-color: rgba(6,182,212,0.5); color: var(--cyan); }
 
-/* Buttons */
-.btn {
-  border-radius: 9px;
-  padding: .45rem .8rem;
-  font-weight: 600;
-  letter-spacing: .2px;
-  border: 0;
-  cursor: pointer;
-}
-.btn-primary {
-  background: linear-gradient(180deg, var(--primary), #0b5ed7);
-  color: #fff;
-  box-shadow: 0 6px 18px rgba(var(--primary-rgb), 0.12);
-}
-.btn-secondary {
-  background: linear-gradient(180deg, var(--surface), #eef1f6);
-  border: 1px solid #e3e7eb;
-  color: #333;
-}
+    .form-row-compact { display: flex; gap: 10px; margin-bottom: 12px; }
+    .form-col { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+    .form-col label { font-size: 0.7rem; color: var(--text-muted); font-weight: 700; }
+    .dark-input { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 8px 12px; font-family: inherit; font-size: 0.8rem; width: 100%; outline: none; }
+    .dark-input:focus { border-color: var(--blue); }
 
-/* Alerts */
-.alert {
-  border-radius: 8px;
-  border: 1px solid rgba(0,0,0,0.03);
-  box-shadow: none;
-  padding: .6rem .9rem;
-}
-.alert-success { border-left: 4px solid var(--success); }
-.alert-danger  { border-left: 4px solid var(--danger); }
-.alert-info    { border-left: 4px solid var(--primary); }
+    .check-wrap { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; cursor: pointer; font-size: 0.75rem; color: var(--text); }
+    .review-check { width: 18px; height: 18px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); appearance: none; cursor: pointer; position: relative; flex-shrink: 0; }
+    .review-check:checked { background: var(--green); border-color: var(--green); }
+    .review-check:checked::after { content: ''; position: absolute; top: 1px; left: 5px; width: 6px; height: 11px; border: 2px solid #000; border-top: none; border-left: none; transform: rotate(45deg); }
 
-/* Tables - compact styling for dry-run */
-.table {
-  margin-bottom: 0;
-  border-spacing: 0;
-  border-collapse: collapse !important;
-  width: 100%;
-}
-.table thead th {
-  border-bottom: 1px solid var(--border-weak);
-  font-weight: 700;
-  font-size: .75rem;
-  color: #444;
-  text-align:left;
-  padding: .4rem .5rem;
-}
-.table tbody tr:hover {
-  background: linear-gradient(90deg, rgba(var(--primary-rgb),0.02), rgba(var(--primary-rgb),0.01));
-  transform: translateZ(0);
-}
+    /* ── BUTTONS ── */
+    .action-btn { padding: 8px 16px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; text-transform: uppercase; display: inline-flex; align-items: center; gap: 6px; transition: 0.2s; }
+    .action-btn:hover { background: rgba(255,255,255,0.05); }
+    .action-btn.primary { border-color: var(--purple); color: #fff; background: rgba(139,92,246,0.2); }
+    .action-btn.primary:hover { background: rgba(139,92,246,0.4); box-shadow: 0 0 15px rgba(139,92,246,0.3); }
 
-/* keep rows compact but reasonable */
-.table tr {
-  height: auto;
-}
-.table td, .table th {
-  font-size: .78rem;
-  line-height: 1.1;
-  padding: .35rem .5rem;
-  vertical-align: top;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+    /* ── MAIN TABS CONTAINERS ── */
+    .eh-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #000; position: relative; }
+    .tab-view { display: none; height: 100%; flex-direction: column; overflow: hidden; }
+    
+    /* ── IMPORT TAB ── */
+    .eh-mid-panel { flex-shrink: 0; background: var(--card); border-bottom: 1px solid var(--border); padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+    .stats-row { display: flex; gap: 10px; font-size: 0.75rem; font-weight: 700; flex-wrap: wrap; }
+    .stat-item { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); background: rgba(0,0,0,0.2); }
+    .s-blue { color: var(--blue); border-color: rgba(59,130,246,0.3); }
+    .s-green { color: var(--green); border-color: rgba(16,185,129,0.3); }
+    .s-amber { color: var(--amber); border-color: rgba(245,158,11,0.3); }
 
-/* Truncate long descriptions in table cells */
-.truncate {
-  max-width: 26rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: inline-block;
-  vertical-align: middle;
-}
+    .mr-pagination { display: flex; align-items: center; gap: 6px; }
+    .pg-btn { width: 30px; height: 30px; background: var(--bg); border: 1px solid var(--border); color: var(--text-muted); border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+    .pg-btn:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+    .pg-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .pg-text { font-size: 0.75rem; color: var(--text-muted); font-weight: 700; }
 
-/* Tiny utilities */
-.small-muted { color: var(--muted); font-size: .86rem; }
-.mono { font-family: var(--mono); font-size: .86rem; }
-.count-bubble {
-  display: inline-block;
-  background: rgba(var(--primary-rgb), 0.12);
-  color: var(--primary);
-  border-radius: 999px;
-  padding: .18rem .5rem;
-  font-weight: 700;
-  font-size: .82rem;
-  margin-left: .5rem;
-}
+    .eh-grid-area { flex: 1; overflow-y: auto; padding: 20px; }
+    
+    .console-msg { padding: 12px 16px; margin-bottom: 15px; border-radius: 4px; font-size: 0.8rem; border-left: 4px solid var(--border); background: var(--card); display: none; }
+    .msg-success { border-left-color: var(--green); color: #6ee7b7; display: block; }
 
-/* Pagination tweaks */
-.pagination { display:flex; gap:.25rem; padding:0; list-style:none; }
-.pagination .page-item .page-link {
-  border-radius: 7px;
-  padding: .35rem .6rem;
-  display:inline-block;
-  text-decoration:none;
-  color:inherit;
-  background:transparent;
-  border:1px solid transparent;
-}
-.pagination .page-item.active .page-link {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: #fff;
-}
+    .table-wrapper { margin-bottom: 30px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); background: var(--card); width: 100%; overflow-x: auto; }
+    .table-header-bar { padding: 10px 15px; background: rgba(0,0,0,0.4); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; font-weight: 700; }
+    .h-success { color: var(--green); }
+    .h-warning { color: var(--amber); }
 
-/* Dry-run tables slightly smaller and denser */
-.dryrun-table .table td, .dryrun-table .table th { padding: .25rem .4rem; font-size: .78rem; }
+    .dark-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.8rem; }
+    .dark-table th { text-align: left; padding: 10px 15px; border-bottom: 1px solid var(--border); color: var(--text-muted); text-transform: uppercase; font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
+    .dark-table td { padding: 12px 15px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; background: var(--bg); white-space: nowrap; }
+    .dark-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .dark-table tr:last-child td { border-bottom: none; }
 
-/* Responsive niceties */
-@media (max-width: 768px) {
-  .truncate { max-width: 12rem; }
-  .container { padding-left: .5rem; padding-right: .5rem; }
-  .card-header { font-size: .95rem; }
-  .form-label { width: 100% !important; flex: 0 0 auto; margin-bottom: .4rem; }
-  .row.gx-3 { gap: .5rem; }
-}
+    .badge-chip { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.5px; margin-right: 4px; transition: 0.2s; border: 1px solid transparent; }
+    .b-pose { background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.3); color: var(--amber); cursor: pointer; }
+    .b-pose:hover { border-color: var(--amber); }
+    .b-pose.excluded { background: rgba(255,255,255,0.05) !important; border-color: var(--border) !important; color: var(--text-muted) !important; text-decoration: line-through; opacity: 0.5; }
+    
+    .b-persp { background: rgba(139,92,246,0.15); border-color: rgba(139,92,246,0.3); color: var(--purple); }
+    .b-angle { background: rgba(6,182,212,0.15); border-color: rgba(6,182,212,0.3); color: var(--cyan); }
+    .b-ref { background: rgba(236,72,153,0.15); border-color: rgba(236,72,153,0.3); color: #f472b6; }
+    .b-status { background: rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.3); color: var(--green); }
 
-/* Accessibility: keep a visible focus ring for keyboard users */
-:focus {
-  outline: 3px solid rgba(var(--primary-rgb), 0.12);
-  outline-offset: 2px;
-}
+    .desc-cell { max-width: 400px; overflow: hidden; text-overflow: ellipsis; cursor: pointer; color: var(--text-muted); transition: 0.2s; font-family: 'DM Mono', monospace; font-size: 0.75rem; }
+    .desc-cell:hover { color: var(--blue); }
+
+    .empty-state { padding: 40px; text-align: center; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 10px; font-size: 0.9rem; }
+    .empty-state span { font-size: 2.5rem; }
+
+    /* ── MAPPING TAB ── */
+    .map-layout { display: flex; height: 100%; gap: 1px; overflow: hidden; }
+    .map-sidebar-list { width: 350px; flex-shrink: 0; background: var(--card); border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+    .map-pose-item { padding: 12px 15px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: 0.2s; }
+    .map-pose-item:hover { background: rgba(255,255,255,0.03); }
+    .map-pose-item.active { background: rgba(139,92,246,0.15); border-left: 4px solid var(--purple); padding-left: 11px; }
+    .map-pose-info { font-size: 0.75rem; line-height: 1.4; color: var(--text-muted); }
+    .map-pose-info strong { color: var(--text); font-size: 0.8rem; display: block; margin-bottom: 2px; }
+    .map-thumb-wrap { width: 44px; height: 44px; flex-shrink: 0; background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden; margin-left: 10px; border: 1px solid var(--border); }
+    
+    .map-grid-area { flex: 1; background: var(--bg); padding: 15px; overflow-y: auto; }
+    .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+    .grid-frame { aspect-ratio: 1/1; cursor: pointer; border: 2px solid transparent; border-radius: 4px; overflow: hidden; transition: 0.2s; background: #000; position: relative; }
+    .grid-frame:hover { border-color: var(--blue); transform: scale(1.02); z-index: 2; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+    .grid-frame img { width: 100%; height: 100%; object-fit: cover; }
+    .grid-frame .id-badge { position: absolute; top: 4px; left: 4px; background: rgba(0,0,0,0.7); color: #fff; font-size: 0.65rem; padding: 2px 4px; border-radius: 3px; font-weight: bold; pointer-events: none; }
+
+    /* ── MODALS ── */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; z-index: 12000; backdrop-filter: blur(5px); }
+    .modal-overlay.active { display: flex; }
+    .modal-content { background: var(--card); border-radius: 8px; border: 1px solid var(--border); display: flex; flex-direction: column; width: 600px; max-width: 90%; max-height: 80vh; }
+    .modal-header { padding: 12px 20px; border-bottom: 1px solid var(--border); font-weight: 700; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; background: #000; }
+    .modal-body { padding: 20px; overflow-y: auto; font-size: 0.85rem; line-height: 1.6; white-space: pre-wrap; }
+    .close-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 4px; }
+    .close-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+        .hamburger-btn { display: block; }
+        .eh-title span { display: none; }
+        .action-btn { padding: 8px; font-size: 0.7rem; }
+        .action-btn .btn-text { display: none; }
+        .eh-sidebar { position: absolute; top: 0; left: -100%; height: 100%; width: 85vw; max-width: 320px; box-shadow: 5px 0 20px rgba(0,0,0,0.5); }
+        .eh-sidebar.open { left: 0; }
+        .sidebar-header-mobile { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+        .close-sidebar-btn { background: transparent; border: none; color: var(--text); font-size: 1.5rem; cursor: pointer; }
+        .map-layout { flex-direction: column; }
+        .map-sidebar-list { width: 100%; height: 35vh; border-right: none; border-bottom: 1px solid var(--border); }
+    }
 </style>
 
-<div class="container my-4">
-    <h1 class="mb-3"><?= htmlspecialchars($pageTitle) ?></h1><!-- messages -->
-<?php foreach ($messages['errors'] as $err): ?>
-    <div class="alert alert-danger" role="alert"><?= htmlspecialchars($err) ?></div>
-<?php endforeach; ?>
-<?php foreach ($messages['success'] as $s): ?>
-    <div class="alert alert-success" role="alert"><?= htmlspecialchars($s) ?></div>
-<?php endforeach; ?>
+<div class="eh-layout">
+    
+    <!-- HEADER -->
+    <div class="eh-header">
+        <div class="eh-header-left">
+            <button type="button" class="hamburger-btn" onclick="toggleSidebar()">☰</button>
+            <h1 class="eh-title">IMPORT CHARACTER POSES</h1>
+        </div>
+        <div class="eh-header-right tab-import-only">
+            <button type="button" class="action-btn" onclick="loadPreview()">
+                <span>🔄</span> <span class="btn-text">Refresh Preview</span>
+            </button>
+            <button type="button" class="action-btn primary" onclick="runImport()">
+                <span>⚡</span> <span class="btn-text">Run Import</span>
+            </button>
+        </div>
+    </div>
 
-<div class="card mb-4">
-    <div class="card-body">
-        <form method="post" novalidate>
-            <input type="hidden" name="token" value="<?= htmlspecialchars($token) ?>">
-            <div class="row gx-3">
-                <div class="col-md-3 mb-3">
-                    <label for="character_from" class="form-label">Character ID — From</label>
-                    <input type="number" class="form-control" id="character_from" name="character_from"
-                           required min="0" value="<?= htmlspecialchars($cur_char_from) ?>">
-                </div>
-                <div class="col-md-3 mb-3">
-                    <label for="character_to" class="form-label">Character ID — To</label>
-                    <input type="number" class="form-control" id="character_to" name="character_to"
-                           required min="0" value="<?= htmlspecialchars($cur_char_to) ?>">
-                </div>
+    <!-- TABS -->
+    <div class="eh-tabs">
+        <div class="eh-tab active" id="tab-btn-import" onclick="switchTab('import')">1. Import Combinations</div>
+        <div class="eh-tab" id="tab-btn-map" onclick="switchTab('map')">2. Map Frames</div>
+    </div>
 
-                <div class="col-md-3 mb-3">
-                    <label for="pose_from" class="form-label">Pose ID — From</label>
-                    <input type="number" class="form-control" id="pose_from" name="pose_from"
-                           required min="0" value="<?= htmlspecialchars($cur_pose_from) ?>">
+    <!-- MAIN BODY -->
+    <form id="appForm" class="eh-body" onsubmit="return false;">
+        
+        <!-- SIDEBAR -->
+        <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+        <div class="eh-sidebar" id="appSidebar">
+            <div class="sidebar-header-mobile">
+                <span style="font-weight: bold; color: var(--purple); font-size: 0.85rem; letter-spacing: 1px;">⚙️ FILTERS</span>
+                <button type="button" class="close-sidebar-btn" onclick="toggleSidebar()">&times;</button>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-title">
+                    1. Camera Perspectives
+                    <span><a href="#" onclick="toggleChecks('perspectives[]', true); triggerLoad(); return false;">All</a> | <a href="#" onclick="toggleChecks('perspectives[]', false); triggerLoad(); return false;">None</a></span>
                 </div>
-                <div class="col-md-3 mb-3">
-                    <label for="pose_to" class="form-label">Pose ID — To</label>
-                    <input type="number" class="form-control" id="pose_to" name="pose_to"
-                           required min="0" value="<?= htmlspecialchars($cur_pose_to) ?>">
+                <div class="chips-container">
+                    <?php foreach ($allPerspectives as $p): ?>
+                        <label class="chip-label" title="<?= htmlspecialchars($p['description'] ?? $p['name']) ?>">
+                            <input type="checkbox" name="perspectives[]" value="<?= $p['id'] ?>" onchange="triggerLoad()">
+                            <span class="chip-span persp"><?= htmlspecialchars($p['name']) ?></span>
+                        </label>
+                    <?php endforeach; ?>
                 </div>
             </div>
 
-            <div class="row gx-3 mt-2">
-                <div class="col-md-3">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" value="1" id="dry_run" name="dry_run"
-                            <?= ($cur_dry_run_flag) ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="dry_run">
-                            Dry-run
+            <div class="sidebar-section">
+                <div class="section-title">
+                    2. Camera Angles
+                    <span><a href="#" onclick="toggleChecks('angles[]', true); triggerLoad(); return false;">All</a> | <a href="#" onclick="toggleChecks('angles[]', false); triggerLoad(); return false;">None</a></span>
+                </div>
+                <div class="chips-container">
+                    <?php foreach ($allAngles as $angle): ?>
+                        <label class="chip-label" title="<?= htmlspecialchars($angle['description'] ?? $angle['name']) ?>">
+                            <input type="checkbox" name="angles[]" value="<?= $angle['id'] ?>" onchange="triggerLoad()">
+                            <span class="chip-span angle"><?= htmlspecialchars($angle['name']) ?></span>
                         </label>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-title">3. Character Range</div>
+                <div class="form-row-compact">
+                    <div class="form-col"><label>Char From</label><input type="number" name="character_from" class="dark-input" value="1" oninput="debounceLoad()"></div>
+                    <div class="form-col"><label>Char To</label><input type="number" name="character_to" class="dark-input" value="1" oninput="debounceLoad()"></div>
+                </div>
+                <div class="form-row-compact">
+                    <div class="form-col"><label>Pose From</label><input type="number" name="pose_from" class="dark-input" value="1" oninput="debounceLoad()"></div>
+                    <div class="form-col"><label>Pose To</label><input type="number" name="pose_to" class="dark-input" value="999" oninput="debounceLoad()"></div>
+                </div>
+            </div>
+
+            <!-- IMPORT OPTIONS -->
+            <div class="sidebar-section tab-import-only">
+                <div class="section-title">4. Import Options</div>
+                
+                <div class="form-col" style="margin-bottom: 15px;">
+                    <label>Reference Frame ID (Optional)</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="number" id="img2img_frame_id" name="img2img_frame_id" class="dark-input" placeholder="e.g. 500" oninput="debounceLoadRef()">
+                    </div>
+                    <div id="refPreviewContainer" style="margin-top: 15px; text-align: center;"></div>
+                </div>
+
+                <label class="check-wrap"><input type="checkbox" name="exclude_char_desc" value="1" class="review-check" onchange="loadPreview()"> Exclude Character Prompt</label>
+                <label class="check-wrap"><input type="checkbox" name="neutral_white_bg" value="1" class="review-check" onchange="loadPreview()"> Use Neutral BG Prefix</label>
+                <label class="check-wrap"><input type="checkbox" name="force_update" value="1" class="review-check"> Force Update Existing</label>
+                
+                <!-- Hidden Pagination State -->
+                <input type="hidden" name="page_insert" id="page_insert" value="1">
+                <input type="hidden" name="page_update" id="page_update" value="1">
+            </div>
+            
+            <!-- MAPPING OPTIONS -->
+            <div class="sidebar-section tab-map-only" style="display:none;">
+                <div class="section-title">4. Map Run Source</div>
+                <div class="form-col">
+                    <label>Map Run ID</label>
+                    <input type="number" id="map_run_id" name="map_run_id" class="dark-input" placeholder="Enter ID to load frames..." oninput="debounceLoadFrames()">
+                </div>
+            </div>
+            
+        </div>
+
+        <!-- MAIN AREA -->
+        <div class="eh-main pswp-gallery">
+            
+            <div id="msgContainer" class="console-msg"></div>
+
+            <!-- TAB 1: IMPORT VIEW -->
+            <div id="view-import" class="tab-view" style="display:flex;">
+                <div class="eh-mid-panel">
+                    <div class="stats-row" id="statsRow">
+                        <div class="stat-item s-blue">🔍 Total: 0</div>
+                        <div class="stat-item s-green">✨ New: 0</div>
+                        <div class="stat-item s-amber">⚠️ Existing: 0</div>
+                    </div>
+                    
+                    <div class="mr-pagination" id="pgInsertUI" style="display:none;">
+                        <span style="font-size:0.7rem; color:var(--text-muted); font-weight:bold; margin-right:5px;">NEW ENTRIES:</span>
+                        <button type="button" class="pg-btn" onclick="changePage('ins', -1)">&#8592;</button>
+                        <span class="pg-text" id="lbl_pg_ins">Page 1 / 1</span>
+                        <button type="button" class="pg-btn" onclick="changePage('ins', 1)">&#8594;</button>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" value="1" id="force_update" name="force_update"
-                            <?= ($cur_force_update_flag) ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="force_update">
-                            Force re-insert / update
-                        </label>
+
+                <div class="eh-grid-area" id="importContainers">
+                    <!-- Dynamic Tables Go Here -->
+                    <div class="empty-state">
+                        <span>🔍</span><div>Select Filters on the left to generate a preview.</div>
                     </div>
-                </div>
-                <div class="col-md-6 text-muted">
-                    <small>
-                        <!-- helper text if you want -->
-                    </small>
                 </div>
             </div>
 
-            <div class="mt-3 d-flex align-items-center">
-                <button type="submit" class="btn btn-primary me-2">Run Import</button>
-                <button type="button" id="resetFormBtn" class="btn btn-secondary">Reset</button>
-                <small class="text-muted ms-3"></small>
+            <!-- TAB 2: MAPPING VIEW -->
+            <div id="view-map" class="tab-view map-layout">
+                <div class="map-sidebar-list" id="mapPosesList">
+                    <div class="empty-state" style="padding:20px;"><span>📋</span><div style="font-size:0.75rem;">Loading poses...</div></div>
+                </div>
+                <div class="map-grid-area">
+                    <div class="grid-container" id="mapFramesGrid">
+                        <div class="empty-state" style="grid-column: 1/-1;"><span>🖼️</span><div>Enter a Map Run ID to load frames for assignment.</div></div>
+                    </div>
+                </div>
             </div>
-        </form>
+
+        </div>
+    </form>
+</div>
+
+<!-- Modal Structure -->
+<div id="descModal" class="modal-overlay" onclick="closeDescModal(event)">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span>Full Description Prompt</span>
+            <button type="button" class="close-btn" onclick="closeDescModal(event)">&times;</button>
+        </div>
+        <div id="descModalText" class="modal-body"></div>
     </div>
 </div>
 
-<?php if ($totalMatches !== 0): ?>
-    <div class="alert alert-info mb-4">
-        Total matching rows in view: <strong><?= intval($totalMatches) ?></strong><br>
-        Rows not present in target (would be inserted): <strong><?= intval($insertableMatches) ?></strong><br>
-        Rows already present in target (would be updated if force checked): <strong><?= intval($updateMatches) ?></strong>
-    </div>
-<?php endif; ?>
+<script>
+// --- STATE ---
+let currentTab = 'import';
+let excludedCombinations = new Set();
+let timerLoad = null;
+let timerRef = null;
+let timerFrames = null;
+let activeMapPoseId = null;
 
-<!-- Dry-run lists -->
-<?php if (!empty($dryRunInsertRows) || !empty($dryRunUpdateRows)): ?>
-    <div class="card mb-4">
-        <div class="card-header">
-            Dry-run details (page sizes: <?= $DRY_RUN_PAGE_SIZE ?>)
-        </div>
-        <div class="card-body">
-            <h5>Rows that would be <strong>inserted</strong> (page <?= $page_insert ?>)</h5>
-            <?php if (!empty($dryRunInsertRows)): ?>
-                <div class="table-responsive mb-3 dryrun-table">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>character_id</th>
-                                <th>character_name</th>
-                                <th>pose_id</th>
-                                <th>pose_name</th>
-                                <th>angle_id</th>
-                                <th>angle_name</th>
-                                <th>name</th>
-                                <th>description</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php $i = $offset_insert + 1; foreach ($dryRunInsertRows as $r): ?>
-                            <tr>
-                                <td><?= $i++ ?></td>
-                                <td><?= htmlspecialchars($r['character_id']) ?></td>
-                                <td><?= htmlspecialchars($r['character_name']) ?></td>
-                                <td><?= htmlspecialchars($r['pose_id']) ?></td>
-                                <td><?= htmlspecialchars($r['pose_name']) ?></td>
-                                <td><?= htmlspecialchars($r['angle_id']) ?></td>
-                                <td><?= htmlspecialchars($r['angle_name']) ?></td>
-                                <td><?= htmlspecialchars($r['name']) ?></td>
-                                <td><?= htmlspecialchars(mb_strimwidth($r['description'], 0, 140, '...')) ?></td>
-                            </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-                <?php if ($insertableMatches > $DRY_RUN_PAGE_SIZE): ?>
-                    <?php $max_pages = ceil($insertableMatches / $DRY_RUN_PAGE_SIZE); ?>
-                    <?php
-                    // build base query-string with current parameters (exclude token for safety)
-                    $baseParams = [
-                        'character_from' => $cur_char_from,
-                        'character_to'   => $cur_char_to,
-                        'pose_from'      => $cur_pose_from,
-                        'pose_to'        => $cur_pose_to,
-                        'dry_run'        => $cur_dry_run_flag ? 1 : 0,
-                        'force_update'   => $cur_force_update_flag ? 1 : 0
-                    ];
-                    $qsBase = http_build_query($baseParams);
-                    ?>
-                    <nav aria-label="Insert pages">
-                        <ul class="pagination">
-                            <?php for ($p = 1; $p <= $max_pages && $p <= 20; $p++): ?>
-                                <?php $href = '?' . $qsBase . '&page_insert=' . $p . '#dryrun'; ?>
-                                <li class="page-item <?= $p === $page_insert ? 'active' : '' ?>">
-                                    <a class="page-link" href="<?= htmlspecialchars($href) ?>"><?= $p ?></a>
-                                </li>
-                            <?php endfor; ?>
-                        </ul>
-                    </nav>
-                    <?php if ($max_pages > 20): ?>
-                        <div class="text-muted">Only first 20 pages shown in pagination. Use narrower ranges to inspect more precisely.</div>
-                    <?php endif; ?>
-                <?php endif; ?>
-            <?php else: ?>
-                <div class="text-muted">No insertable rows on this page.</div>
-            <?php endif; ?>
+let curPageIns = 1;
+let curPageUpd = 1;
+let maxPageIns = 1;
+let maxPageUpd = 1;
 
-            <hr>
+// --- PHOTO SWIPE ---
 
-            <h5>Rows that would be <strong>updated</strong> (page <?= $page_update ?>)</h5>
-            <?php if (!empty($dryRunUpdateRows)): ?>
-                <div class="table-responsive mb-3 dryrun-table">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>character_id</th>
-                                <th>character_name</th>
-                                <th>pose_id</th>
-                                <th>pose_name</th>
-                                <th>angle_id</th>
-                                <th>angle_name</th>
-                                <th>name</th>
-                                <th>description</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php $j = $offset_update + 1; foreach ($dryRunUpdateRows as $r): ?>
-                            <tr>
-                                <td><?= $j++ ?></td>
-                                <td><?= htmlspecialchars($r['character_id']) ?></td>
-                                <td><?= htmlspecialchars($r['character_name']) ?></td>
-                                <td><?= htmlspecialchars($r['pose_id']) ?></td>
-                                <td><?= htmlspecialchars($r['pose_name']) ?></td>
-                                <td><?= htmlspecialchars($r['angle_id']) ?></td>
-                                <td><?= htmlspecialchars($r['angle_name']) ?></td>
-                                <td><?= htmlspecialchars($r['name']) ?></td>
-                                <td><?= htmlspecialchars(mb_strimwidth($r['description'], 0, 140, '...')) ?></td>
-                            </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-                <?php if ($updateMatches > $DRY_RUN_PAGE_SIZE): ?>
-                    <?php $max_pages_u = ceil($updateMatches / $DRY_RUN_PAGE_SIZE); ?>
-                    <nav aria-label="Update pages">
-                        <ul class="pagination">
-                            <?php for ($p = 1; $p <= $max_pages_u && $p <= 20; $p++): // limit pages shown to 20 ?>
-                                <?php $href = '?' . $qsBase . '&page_update=' . $p . '#dryrun'; ?>
-                                <li class="page-item <?= $p === $page_update ? 'active' : '' ?>">
-                                    <a class="page-link" href="<?= htmlspecialchars($href) ?>"><?= $p ?></a>
-                                </li>
-                            <?php endfor; ?>
-                        </ul>
-                    </nav>
-                    <?php if ($max_pages_u > 20): ?>
-                        <div class="text-muted">Only first 20 pages shown in pagination. Use narrower ranges to inspect more precisely.</div>
-                    <?php endif; ?>
-                <?php endif; ?>
-            <?php else: ?>
-                <div class="text-muted">No updateable rows on this page.</div>
-            <?php endif; ?>
-        </div>
-    </div>
-    <script>
-    (function(){
-    const btn = document.getElementById('resetFormBtn');
-    if (!btn) return;
-    btn.addEventListener('click', function (e) {
-        // Redirect to same path (no query string, no hash)
-        const target = window.location.origin + window.location.pathname;
-        window.location.href = target;
+
+// --- PHOTO SWIPE ---
+let lightbox = null;
+async function initPhotoswipe() {
+    if (lightbox) { lightbox.destroy(); }
+    
+    // Dynamically import the Lightbox module
+    const module = await import('https://cdnjs.cloudflare.com/ajax/libs/photoswipe/5.4.2/photoswipe-lightbox.esm.min.js');
+    const PhotoSwipeLightbox = module.default;
+
+    lightbox = new PhotoSwipeLightbox({
+        gallery: '.pswp-gallery',
+        children: 'a.pswp-link',
+        pswpModule: () => import('https://cdnjs.cloudflare.com/ajax/libs/photoswipe/5.4.2/photoswipe.esm.min.js')
     });
-    })();
-    </script>
-<?php endif; ?>
+    lightbox.init();
+}
 
-</div>
+
+
+
+// --- TAB SWITCHING ---
+function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.eh-tab').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-btn-' + tab).classList.add('active');
+    
+    document.querySelectorAll('.tab-view').forEach(el => el.style.display = 'none');
+    document.getElementById('view-' + tab).style.display = 'flex';
+    
+    document.querySelectorAll('.tab-import-only, .tab-map-only').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.tab-' + tab + '-only').forEach(el => el.style.display = 'block');
+    
+    triggerLoad();
+}
+
+// --- SIDEBAR UI ---
+function toggleSidebar() {
+    document.getElementById('appSidebar').classList.toggle('open');
+    const over = document.querySelector('.sidebar-overlay');
+    over.style.display = over.style.display === 'block' ? 'none' : 'block';
+}
+function toggleChecks(name, check) {
+    document.querySelectorAll(`input[name="${name}"]`).forEach(el => el.checked = check);
+}
+
+function triggerLoad() {
+    if (currentTab === 'import') {
+        curPageIns = 1; curPageUpd = 1;
+        document.getElementById('page_insert').value = 1;
+        document.getElementById('page_update').value = 1;
+        loadPreview();
+    } else {
+        loadMappingPoses();
+    }
+}
+
+function debounceLoad() { clearTimeout(timerLoad); timerLoad = setTimeout(triggerLoad, 400); }
+function debounceLoadRef() { clearTimeout(timerRef); timerRef = setTimeout(loadRefPreview, 400); }
+function debounceLoadFrames() { clearTimeout(timerFrames); timerFrames = setTimeout(loadRunFrames, 400); }
+
+function showMessage(msg, type='success') {
+    const box = document.getElementById('msgContainer');
+    box.className = `console-msg msg-${type}`;
+    box.innerText = msg;
+    box.style.display = 'block';
+    setTimeout(() => { box.style.display = 'none'; }, 5000);
+}
+
+// ==========================================================
+// IMPORT TAB LOGIC
+// ==========================================================
+
+async function loadPreview() {
+    const fd = new FormData(document.getElementById('appForm'));
+    fd.append('api_action', 'preview');
+    fd.append('exclusions', JSON.stringify(Array.from(excludedCombinations)));
+    
+    try {
+        const res = await fetch('?', { method: 'POST', body: fd }).then(r=>r.json());
+        if(res.status !== 'success') return;
+        
+        maxPageIns = res.max_p_ins || 1;
+        maxPageUpd = res.max_p_upd || 1;
+
+        // Stats UI
+        document.getElementById('statsRow').innerHTML = `
+            <div class="stat-item s-blue">🔍 Total: ${res.total}</div>
+            <div class="stat-item s-green">✨ New: ${res.new_count}</div>
+            <div class="stat-item s-amber">⚠️ Existing: ${res.ext_count}</div>
+        `;
+        
+        const pgUI = document.getElementById('pgInsertUI');
+        if (res.new_count > 100) {
+            pgUI.style.display = 'flex';
+            document.getElementById('lbl_pg_ins').innerText = `Page ${curPageIns} / ${maxPageIns}`;
+        } else {
+            pgUI.style.display = 'none';
+        }
+
+        const cont = document.getElementById('importContainers');
+        if (res.total === 0) {
+            cont.innerHTML = `<div class="empty-state"><span>🔍</span><div>No combinations found. Adjust filters.</div></div>`;
+            return;
+        }
+
+        let html = '';
+        
+        // New
+        if (res.new_rows && res.new_rows.length > 0) {
+            html += `
+            <div class="table-wrapper"><div class="table-header-bar h-success"><div>NEW ENTRIES</div><div>Page ${curPageIns}</div></div>
+            <table class="dark-table">
+                <thead><tr><th>Character</th><th>Pose</th><th>Shot Info</th><th>Description</th></tr></thead><tbody>`;
+            res.new_rows.forEach(r => {
+                const key = `${r.character_id}_${r.pose_id}_${r.angle_id}_${r.perspective_id}`;
+                const exCls = excludedCombinations.has(key) ? 'excluded' : '';
+                const shortDesc = r.description.length > 150 ? r.description.substring(0,150)+'...' : r.description;
+                
+                html += `<tr>
+                    <td><strong>${escapeHtml(r.character_name)}</strong></td>
+                    <td><span class="badge-chip b-pose ${exCls}" onclick="togglePose(this, '${key}')" title="Click to exclude">${escapeHtml(r.pose_name)}</span></td>
+                    <td><span class="badge-chip b-persp">${escapeHtml(r.perspective_name)}</span> <span class="badge-chip b-angle">${escapeHtml(r.angle_name)}</span></td>
+                    <td class="desc-cell" onclick="openDescModal(this)" data-fulltext="${escapeHtml(r.description)}">${escapeHtml(shortDesc)}</td>
+                </tr>`;
+            });
+            html += `</tbody></table></div>`;
+        }
+
+        // Ext
+        if (res.ext_rows && res.ext_rows.length > 0) {
+            html += `
+            <div class="table-wrapper"><div class="table-header-bar h-warning"><div>EXISTING ENTRIES</div><div>Page ${curPageUpd}</div></div>
+            <table class="dark-table">
+                <thead><tr><th>Thumb</th><th>Character</th><th>Pose</th><th>Shot Info</th><th>Status</th></tr></thead><tbody>`;
+            res.ext_rows.forEach(r => {
+                const key = `${r.character_id}_${r.pose_id}_${r.angle_id}_${r.perspective_id}`;
+                const exCls = excludedCombinations.has(key) ? 'excluded' : '';
+                
+                let thumbHtml = `<div style="width:32px; height:32px; background:#111; border-radius:4px; border:1px solid #333;"></div>`;
+                if(r.mapped_thumb) {
+                    thumbHtml = `
+                    <a href="${escapeHtml(r.mapped_thumb)}" class="pswp-link" style="display:block;">
+                        <img src="${escapeHtml(r.mapped_thumb)}" onload="this.parentElement.setAttribute('data-pswp-width', this.naturalWidth); this.parentElement.setAttribute('data-pswp-height', this.naturalHeight);" style="width:32px; height:32px; object-fit:cover; border-radius:4px; border:1px solid #444; cursor:zoom-in;">
+                    </a>`;
+                }
+
+                html += `<tr>
+                    <td style="padding: 6px 15px;">${thumbHtml}</td>
+                    <td><strong>${escapeHtml(r.character_name)}</strong></td>
+                    <td><span class="badge-chip b-pose ${exCls}" onclick="togglePose(this, '${key}')" title="Click to exclude">${escapeHtml(r.pose_name)}</span></td>
+                    <td><span class="badge-chip b-persp">${escapeHtml(r.perspective_name)}</span> <span class="badge-chip b-angle">${escapeHtml(r.angle_name)}</span></td>
+                    <td><span class="badge-chip b-status">Will Update</span></td>
+                </tr>`;
+            });
+            
+            // Ext Pagination
+            if(res.ext_count > 100) {
+                html += `<div style="padding:10px; background:#000; border-top:1px solid var(--border); display:flex; gap:10px; align-items:center; justify-content:center;">
+                    <button type="button" class="pg-btn" onclick="changePage('upd', -1)">&#8592;</button>
+                    <span class="pg-text">Page ${curPageUpd} / ${maxPageUpd}</span>
+                    <button type="button" class="pg-btn" onclick="changePage('upd', 1)">&#8594;</button>
+                </div>`;
+            }
+            html += `</tbody></table></div>`;
+        }
+
+        cont.innerHTML = html;
+        initPhotoswipe();
+
+    } catch(e) { console.error(e); }
+}
+
+function changePage(type, diff) {
+    if(type==='ins') {
+        let n = curPageIns + diff;
+        if(n>=1 && n<=maxPageIns) { curPageIns = n; document.getElementById('page_insert').value = n; loadPreview(); }
+    } else {
+        let n = curPageUpd + diff;
+        if(n>=1 && n<=maxPageUpd) { curPageUpd = n; document.getElementById('page_update').value = n; loadPreview(); }
+    }
+}
+
+function togglePose(el, key) {
+    if(excludedCombinations.has(key)) {
+        excludedCombinations.delete(key);
+        el.classList.remove('excluded');
+    } else {
+        excludedCombinations.add(key);
+        el.classList.add('excluded');
+    }
+}
+
+async function runImport() {
+    const fd = new FormData(document.getElementById('appForm'));
+    fd.append('api_action', 'import');
+    fd.append('exclusions', JSON.stringify(Array.from(excludedCombinations)));
+    
+    try {
+        const res = await fetch('?', { method: 'POST', body: fd }).then(r=>r.json());
+        if(res.status==='success') {
+            showMessage(res.message, 'success');
+            loadPreview(); // refresh tables
+        } else {
+            showMessage(res.message, 'error');
+        }
+    } catch(e) { showMessage('Network Error', 'error'); }
+}
+
+async function loadRefPreview() {
+    const id = document.getElementById('img2img_frame_id').value;
+    const cont = document.getElementById('refPreviewContainer');
+    if(!id) { cont.innerHTML = ''; return; }
+    try {
+        const res = await fetch(`?api_action=get_frame_url&frame_id=${id}`).then(r=>r.json());
+        if(res.status==='success' && res.url) {
+            cont.innerHTML = `
+                <div style="display:inline-block; width: 60%; max-width: 150px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: #000; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+                    <a href="${escapeHtml(res.url)}" data-pswp-width="1024" data-pswp-height="1024" class="pswp-link" style="display: block;">
+                        <img src="${escapeHtml(res.url)}" onload="this.parentElement.setAttribute('data-pswp-width', this.naturalWidth); this.parentElement.setAttribute('data-pswp-height', this.naturalHeight);" style="width: 100%; display: block; aspect-ratio: 1/1; object-fit: cover; cursor: zoom-in;" alt="Preview Frame">
+                    </a>
+                </div>
+            `;
+            initPhotoswipe();
+        } else {
+            cont.innerHTML = `<div style="color:var(--amber); font-size:0.7rem; font-weight:bold;">⚠️ Not found.</div>`;
+        }
+    } catch(e){}
+}
+
+// ==========================================================
+// MAPPING TAB LOGIC
+// ==========================================================
+
+async function loadMappingPoses() {
+    const fd = new FormData(document.getElementById('appForm'));
+    fd.append('api_action', 'get_poses_for_mapping');
+    const cont = document.getElementById('mapPosesList');
+    cont.innerHTML = `<div class="empty-state" style="padding:20px;"><span>⏳</span><div style="font-size:0.75rem;">Loading...</div></div>`;
+    
+    try {
+        const res = await fetch('?', { method: 'POST', body: fd }).then(r=>r.json());
+        if(res.status!=='success') return;
+        
+        if(!res.data || res.data.length===0) {
+            cont.innerHTML = `<div class="empty-state" style="padding:20px;"><span>📋</span><div style="font-size:0.75rem;">No imported poses found. Adjust filters.</div></div>`;
+            return;
+        }
+
+        let html = '';
+        res.data.forEach(p => {
+            let img = '';
+            if(p.mapped_thumb) {
+                img = `<img src="${escapeHtml(p.mapped_thumb)}" class="map-thumb" />`;
+            }
+            html += `
+            <div class="map-pose-item" id="mp_${p.pose_id}" onclick="selectMapPose(${p.pose_id})">
+                <div class="map-pose-info">
+                    <strong>${escapeHtml(p.character_name)}</strong>
+                    <span style="color:var(--amber); font-weight:bold;">${escapeHtml(p.pose_name)}</span><br>
+                    ${escapeHtml(p.perspective_name)} | ${escapeHtml(p.angle_name)}
+                </div>
+                <div class="map-thumb-wrap" id="mp_img_${p.pose_id}">${img}</div>
+            </div>`;
+        });
+        cont.innerHTML = html;
+        activeMapPoseId = null; // reset
+    } catch(e) {}
+}
+
+async function loadRunFrames() {
+    const runId = document.getElementById('map_run_id').value;
+    const cont = document.getElementById('mapFramesGrid');
+    if(!runId) {
+        cont.innerHTML = `<div class="empty-state" style="grid-column: 1/-1;"><span>🖼️</span><div>Enter a Map Run ID to load frames.</div></div>`;
+        return;
+    }
+    
+    const fd = new FormData();
+    fd.append('api_action', 'get_run_frames');
+    fd.append('map_run_id', runId);
+    
+    try {
+        const res = await fetch('?', { method:'POST', body:fd }).then(r=>r.json());
+        if(res.status!=='success' || !res.data.length) {
+            cont.innerHTML = `<div class="empty-state" style="grid-column: 1/-1;"><span>❌</span><div>No frames found.</div></div>`;
+            return;
+        }
+        
+        let html = '';
+        res.data.forEach(f => {
+            html += `
+            <div class="grid-frame" onclick="assignFrame(${f.id})">
+                <div class="id-badge">#${f.id}</div>
+                <img src="${escapeHtml(f.filename)}" loading="lazy">
+            </div>`;
+        });
+        cont.innerHTML = html;
+    } catch(e){}
+}
+
+function selectMapPose(id) {
+    document.querySelectorAll('.map-pose-item').forEach(el => el.classList.remove('active'));
+    const item = document.getElementById('mp_' + id);
+    if(item) {
+        item.classList.add('active');
+        item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    activeMapPoseId = id;
+}
+
+async function assignFrame(frameId) {
+    if (!activeMapPoseId) {
+        alert("Please click a Pose in the left list first!");
+        return;
+    }
+    
+    const fd = new FormData();
+    fd.append('api_action', 'map_frame');
+    fd.append('frame_id', frameId);
+    fd.append('pose_id', activeMapPoseId);
+    
+    try {
+        const res = await fetch('?', {method:'POST', body:fd}).then(r=>r.json());
+        if (res.status==='success') {
+            const imgWrap = document.getElementById('mp_img_' + activeMapPoseId);
+            if (res.thumb) {
+                imgWrap.innerHTML = `<a href="${escapeHtml(res.thumb)}" class="pswp-link" style="display:block;width:100%;height:100%;"><img src="${escapeHtml(res.thumb)}" class="map-thumb" onload="this.parentElement.setAttribute('data-pswp-width', this.naturalWidth); this.parentElement.setAttribute('data-pswp-height', this.naturalHeight);" style="cursor:zoom-in;" /></a>`;
+            } else {
+                imgWrap.innerHTML = ``;
+            }
+            initPhotoswipe();
+            
+            // Auto-advance if we successfully mapped it (not toggled off)
+            if (res.mapped) {
+                const currentItem = document.getElementById('mp_' + activeMapPoseId);
+                const nextItem = currentItem.nextElementSibling;
+                if (nextItem && nextItem.classList.contains('map-pose-item')) {
+                    const nextId = nextItem.id.replace('mp_', '');
+                    selectMapPose(nextId);
+                }
+            }
+        }
+    } catch(e){}
+}
+
+// --- UTILS ---
+function escapeHtml(unsafe) {
+    if(!unsafe) return '';
+    return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+function openDescModal(element) {
+    document.getElementById('descModalText').textContent = element.getAttribute('data-fulltext');
+    document.getElementById('descModal').classList.add('active');
+}
+function closeDescModal(e) {
+    if (e.target.classList.contains('modal-overlay') || e.target.classList.contains('close-btn')) {
+        document.getElementById('descModal').classList.remove('active');
+    }
+}
+
+// Init
+document.addEventListener("DOMContentLoaded", () => {
+    triggerLoad();
+});
+</script>
+
 <?php
-require "floatool.php";
-$body = ob_get_clean();
-$content = $body . $eruda;
-$spw->renderLayout($content, $pageTitle);
+$content = ob_get_clean();
+$spw->renderLayout($content.$eruda, $pageTitle, $spw->getProjectPath() . '/templates/gallery.php');
+?>

@@ -38,6 +38,13 @@ try {
                 ->orderBy('g.listOrder', 'ASC')
                 ->addOrderBy('g.createdAt', 'DESC');
 
+            // Apply Display Area Filter if provided
+            if (!empty($input['filter_area'])) {
+                $qb->innerJoin('g.displayAreas', 'da_filter')
+                   ->andWhere('da_filter.areaKey = :filterArea')
+                   ->setParameter('filterArea', $input['filter_area']);
+            }
+
             $configs = $qb->getQuery()->getResult();
             
             $items = array_map(function($cfg) use ($userId) {
@@ -225,7 +232,7 @@ try {
             break;
         
         case 'get_dictionaries':
-            $dictManager = new DictionaryManager($pdo); // Use the global $pdo
+            $dictManager = new DictionaryManager($pdo);
             $dictionaries = $dictManager->getAllDictionaries();
             $items = array_map(fn($d) => ['id' => $d['id'], 'title' => $d['title']], $dictionaries);
             echo json_encode(['ok' => true, 'data' => $items]);

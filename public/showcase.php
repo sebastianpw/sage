@@ -279,7 +279,7 @@ document.addEventListener("DOMContentLoaded", () => {
 <link rel="stylesheet" href="showcase.css">  
 </head>
 <body>
-<?php require "floatool.php"; ?>
+<?php require_once "forge_tool.php"; ?>
 <div class="header">
     <img src="theatrical.jpg" alt="Starlight Guardians Theatrical Poster">
 </div>

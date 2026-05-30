@@ -25,7 +25,7 @@
     <div class="video-player-container"><video id="main-video-player" class="video-js vjs-default-skin vjs-big-play-centered" controls preload="auto" playsinline data-setup='{}'><p class="vjs-no-js" style="color:#fff">To view this video please enable JavaScript, and consider upgrading to a web browser that <a href="https://videojs.com/html5-video-support/" target="_blank">supports HTML5 video</a></p></video></div>
     <div style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
       <div class="video-info" id="current-video-info" aria-live="polite" style="display:none"><h4 id="video-title">Video Title</h4><div class="video-meta">Duration: <span id="video-duration">0:00</span> · Added: <span id="video-added">Unknown</span></div></div>
-      <div class="controls" style="margin-left:auto;"><div class="control-group"><button id="prev-video" class="btn" disabled>Previous</button><button id="next-video" class="btn" disabled>Next</button></div><div class="control-group" title="Autoplay next"><label style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px"><input id="autoplay-checkbox" type="checkbox" checked /><span style="font-weight:600;color:#e6eef8">Autoplay</span></label></div><div style="display: none;" class="control-group" title="Volume"><label class="label">Volume</label><input id="volume-slider" type="range" min="0" max="100" value="80" /></div></div>
+      <div class="controls" style="margin-left:auto;"><div class="control-group"><button id="prev-video" class="btn" disabled>&lt;&lt;</button><button id="next-video" class="btn" disabled>&gt;&gt;</button></div><div class="control-group" title="Autoplay next"><label style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px"><input id="autoplay-checkbox" type="checkbox" checked /><span style="font-weight:600;color:#e6eef8">Autoplay</span></label></div><div style="display: none;" class="control-group" title="Volume"><label class="label">Volume</label><input id="volume-slider" type="range" min="0" max="100" value="80" /></div></div>
     </div>
     <div class="loading-indicator" id="loading-indicator">Loading video...</div>
     <div class="playlist-wrapper" id="playlist-wrapper" aria-label="Video playlist"><div class="playlist-container" id="playlist-container" role="list"></div></div>
@@ -61,18 +61,18 @@
         div.className = 'playlist-item' + (idx === currentVideoIndex ? ' active' : '');
         div.setAttribute('role','listitem');
         div.tabIndex = 0;
-        div.innerHTML = `<img class="playlist-thumbnail" src="${video.thumbnail || ''}" alt="${escapeHtml(video.title)}" onerror="this.onerror=null;this.src='${placeholderSVG}';"><div class="playlist-info"><div class="playlist-title" title="${escapeHtml(video.title)}">${escapeHtml(video.title)}</div><div class="playlist-duration">${formatDuration(video.duration)}</div></div>`;
+        div.innerHTML = `<img class="playlist-thumbnail" src="${video.thumb || ''}" alt="${escapeHtml(video.alt)}" onerror="this.onerror=null;this.src='${placeholderSVG}';"><div class="playlist-info"><div class="playlist-title" title="${escapeHtml(video.alt)}">${escapeHtml(video.alt)}</div><div class="playlist-duration">${formatDuration(video.duration)}</div></div>`;
         div.addEventListener('click', () => { loadVideo(idx, true); });
         div.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); loadVideo(idx, true); } });
         playlistContainer.appendChild(div);
       });
     }
     function updateButtonStates() { prevBtn.disabled = currentVideoIndex <= 0; nextBtn.disabled = currentVideoIndex >= videos.length - 1; }
-    function updateVideoInfo(video) { if (!video) { currentVideoInfo.style.display = 'none'; return; } videoTitle.textContent = video.title || 'Untitled'; videoDuration.textContent = formatDuration(video.duration); videoAdded.textContent = formatDate(video.created_at); currentVideoInfo.style.display = 'block'; }
+    function updateVideoInfo(video) { if (!video) { currentVideoInfo.style.display = 'none'; return; } videoTitle.textContent = video.alt || 'Untitled'; videoDuration.textContent = formatDuration(video.duration); videoAdded.textContent = formatDate(video.created_at); currentVideoInfo.style.display = 'block'; }
     function loadVideo(index, shouldAutoplay = false) {
       if (index < 0 || index >= videos.length) return; currentVideoIndex = index; const video = videos[index]; showLoading(true);
       if (!player) { player = videojs('main-video-player', { controls: true, autoplay: false, preload: 'auto', fluid: true, playbackRates: [0.5, 1, 1.5, 2] }); player.on('play', () => { userInteracted = true; }); player.on('click', () => { userInteracted = true; }); player.on('ended', () => { if (autoplayCheckbox.checked) { playNextVideo(); } }); player.on('error', (err) => { console.error('Video.js error', err); showLoading(false); }); }
-      player.src({ src: video.url, type: video.type || 'video/mp4' });
+      player.src({ src: video.src, type: video.type || 'video/mp4' });
       try { player.load(); } catch (e) {}
       document.querySelectorAll('.playlist-item').forEach((el, i) => { el.classList.toggle('active', i === currentVideoIndex); }); updateVideoInfo(video); updateButtonStates();
       player.ready(() => { showLoading(false); if (shouldAutoplay && userInteracted) { player.play().catch(e => { console.log('Autoplay blocked by browser:', e?.message || e); }); } });

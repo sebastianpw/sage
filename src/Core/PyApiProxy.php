@@ -11,13 +11,15 @@ abstract class PyApiProxy
 {
     protected string $apiUrl;
     protected SpwBase $spw;
+    
+    
 
-    public function __construct(string $apiUrl = 'http://127.0.0.1:8009')
+    public function __construct()
     {
-        $this->apiUrl = rtrim($apiUrl, '/');
-        $this->spw = SpwBase::getInstance();
+        
+        $this->apiUrl = 'http://127.0.0.1:8009';
     }
-
+    
 
 
 /**

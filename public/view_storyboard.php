@@ -43,15 +43,14 @@ $framesToCopy = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 foreach ($framesToCopy as $frame) {
     $sourceFile = $docRoot . '/' . ltrim($frame['source_filename'], '/');
-    
+
     if (file_exists($sourceFile)) {
         $ext = pathinfo($sourceFile, PATHINFO_EXTENSION);
         $newFilename = 'frame' . str_pad($frame['id'], 7, '0', STR_PAD_LEFT) . '.' . $ext;
         $destFile = $storyboardDir . '/' . $newFilename;
         $destRelPath = $storyboard['directory'] . '/' . $newFilename;
-        
+
         if (copy($sourceFile, $destFile)) {
-            // Update database
             $updateStmt = $pdo->prepare("
                 UPDATE storyboard_frames 
                 SET filename = ?, is_copied = 1, original_filename = ?
@@ -66,111 +65,28 @@ foreach ($framesToCopy as $frame) {
 
 $registry = ModuleRegistry::getInstance();
 
-// Configure gear menu module
 $gearMenu = $registry->create('gear_menu', [
     'position' => 'top-right',
-    'show_for_entities' => null, // Allow for any entity type
+    'show_for_entities' => null,
 ]);
 
-// --- UPDATED: Define a comprehensive set of actions for all entities ---
-$universalActions = [
-    // --- View/Edit Group ---
-    [
-        'label' => 'View Frame',
-        'icon' => '👁️',
-        'callback' => 'window.showFrameDetailsModal(frameId);',
-        'condition' => 'frameId > 0'
-    ],
-    [
-        'label' => 'Import to Generative',
-        'icon' => '⚡',
-        'callback' => 'window.importGenerative(entity, entityId, frameId);',
-        'condition' => 'frameId > 0'
-    ],
-    [
-        'label' => 'Edit Entity',
-        'icon' => '✏️',
-        'callback' => 'window.showEntityFormInModal(entity, entityId);',
-        'condition' => 'entityId > 0'
-    ],
-    [
-        'label' => 'Edit Image',
-        'icon' => '🖌️',
-        'callback' => 'const $w = $(wrapper); ImageEditorModal.open({ entity: entity, entityId: entityId, frameId: frameId, src: $w.find(\'img\').attr(\'src\') });'
-    ],
-    [
-            'label' => 'View Frame Chain',
-            'icon' => '🔗',
-            'callback' => 'window.showFrameChainInModal(frameId);'
-        ],
-    
-    [
-        'label' => 'Add to another Storyboard',
-        'icon' => '🎬',
-        'callback' => 'window.selectStoryboard(frameId, $(wrapper));',
-        'condition' => 'frameId > 0'
-    ],
-    // --- Import/Create Group ---
-    
-    [
-    'label' => 'Assign to Composite',
-        'icon' => '🧩',
-        'callback' => 'window.showImportEntityModal({ source: entity, target: "composites", source_entity_id: entityId, frame_id: frameId, limit: 1, copy_name_desc: 0, composite: 1 });'
-    ],
-    
-    
-    [
-        'label' => 'Import to ControlNet Map',
-        'icon' => '☠️',
-        'callback' => 'window.importControlNetMap(entity, entityId, frameId);',
-        'condition' => 'frameId > 0'
-    ],
-    
-    [
-        'label' => 'Use Prompt Matrix',
-        'icon' => '🌌',
-        'callback' => 'window.usePromptMatrix(entity, entityId, frameId);',
-        'condition' => 'frameId > 0'
-    ],
-    
-
-    // --- Organization/Destructive Group ---
-
-    [
-        'label' => 'Delete Original Frame',
-        'icon' => '🗑️',
-        'callback' => 'window.deleteFrame(entity, entityId, frameId);',
-        'condition' => 'frameId > 0'
-    ]
-];
-
-
-
-/*
-[
-        'label' => 'Assign to Composite',
-        'icon' => '🧩',
-        'callback' => 'window.assignToComposite(entity, entityId, frameId);',
-        'condition' => 'frameId > 0'
-    ],
-*/
-
-
-
-// --- UPDATED: Apply these actions to ALL specified entity types ---
 $allEntityTypes = [
-    'characters', 'character_poses', 'animas', 'locations', 'backgrounds',
+    'characters', 'character_expressions', 'character_anima_poses', 'character_poses', 'animas', 'locations', 'backgrounds',
     'artifacts', 'vehicles', 'scene_parts', 'controlnet_maps', 'spawns',
     'generatives', 'sketches', 'prompt_matrix_blueprints', 'composites'
 ];
 
 foreach ($allEntityTypes as $entityType) {
-    foreach($universalActions as $action) {
-        $gearMenu->addAction($entityType, $action);
-    }
+    $gearMenu->addStandardActions($entityType, [
+        'overrides' => [
+            'delete' => [
+                'label' => 'Delete Original Frame',
+                'condition' => 'frameId > 0'
+            ]
+        ]
+    ]);
 }
 
-// Configure image editor module
 $imageEditor = $registry->create('image_editor', [
     'modes' => ['mask', 'crop'],
     'show_transform_tab' => true,
@@ -180,18 +96,15 @@ $imageEditor = $registry->create('image_editor', [
     'preset_filters' => ['grayscale', 'vintage', 'sepia', 'blur', 'sharpen'],
 ]);
 
-
 $pageTitle = "Storyboard: " . htmlspecialchars($storyboard['name']);
 ob_start();
 
-// --- RENDER MODULES ---
 echo '<link rel="stylesheet" href="/css/toast.css">';
 echo '<script src="/js/toast.js"></script>';
 echo '<script src="/js/gear_menu_globals.js"></script>';
 echo $gearMenu->render();
 echo $imageEditor->render();
 require __DIR__ . '/modal_frame_details.php';
-// --- END: RENDER MODULES ---
 ?>
 
 <!-- PhotoSwipe CSS -->
@@ -208,102 +121,314 @@ require __DIR__ . '/modal_frame_details.php';
   <link rel="stylesheet" href="/vendor/font-awesome/css/all.min.css" />
 <?php endif; ?>
 
-
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/base.css" />
 
 <style>
-.storyboard-wrap { padding: 12px; }
-.storyboard-grid { 
-  display: grid; 
-  grid-template-columns: repeat(auto-fill, minmax(110px,1fr)); 
-  gap: var(--gap, 8px); 
-  align-items: start; 
+/* ── FORGE DESIGN TOKENS ── */
+:root {
+    --forge-bg:          #080b10;
+    --forge-surface:     #0e1319;
+    --forge-card:        #111820;
+    --forge-card-hover:  #141e28;
+    --forge-border:      #1c2535;
+    --forge-border-glow: #2a3a52;
+    --forge-text:        #c8d4e8;
+    --forge-text-dim:    #5a6a80;
+    --forge-text-bright: #e8f0ff;
+    --forge-amber:       #f5a623;
+    --forge-amber-dim:   rgba(245,166,35,0.08);
+    --forge-amber-mid:   rgba(245,166,35,0.15);
+    --forge-amber-glow:  rgba(245,166,35,0.4);
+    --forge-red:         #f05060;
+    --forge-red-dim:     rgba(240,80,96,0.1);
+    --mono: 'Space Mono', 'Fira Mono', monospace;
+    --sans: 'Syne', system-ui, sans-serif;
+    --forge-radius: 6px;
+}
+[data-theme="light"], html[data-theme="light"] {
+    --forge-bg:          #f6f8fa;
+    --forge-surface:     #e1e4e8;
+    --forge-card:        #ffffff;
+    --forge-card-hover:  #f3f4f6;
+    --forge-border:      #d1d5db;
+    --forge-border-glow: #9ca3af;
+    --forge-text:        #111827;
+    --forge-text-dim:    #4b5563;
+    --forge-text-bright: #000000;
+    --forge-amber:       #d97706;
+    --forge-amber-dim:   rgba(217,119,6,0.1);
+    --forge-amber-mid:   rgba(217,119,6,0.2);
+    --forge-amber-glow:  rgba(217,119,6,0.4);
+    --forge-red:         #dc2626;
+    --forge-red-dim:     rgba(220,38,38,0.1);
 }
 
-/* card */
-.frame-card { 
-  background: var(--card, #fff); 
-  border-radius: var(--radius, 8px); 
-  box-shadow: var(--shadow-sm, 0 1px 4px rgba(0,0,0,0.08)); 
-  padding: var(--spacing-xs, 6px); 
-  display: flex; 
-  flex-direction: column; 
-  gap: var(--gap-xs, 6px); 
-  user-select: none; 
-  touch-action: manipulation; 
-  position: relative; /* Important for gear menu positioning */
+/* ── PAGE ── */
+.storyboard-wrap {
+    padding: 10px;
+    font-family: var(--sans);
+    color: var(--forge-text);
+}
+
+/* ── FORGE HEADER BAR ── */
+.forge-header-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--forge-surface);
+    border: 1px solid var(--forge-border);
+    border-radius: var(--forge-radius);
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+.forge-logo {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--forge-amber);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+.forge-logo-icon {
+    width: 26px; height: 26px;
+    background: var(--forge-amber-mid);
+    border: 1px solid var(--forge-amber-glow);
+    border-radius: var(--forge-radius);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+.forge-logo span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+.forge-back-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    background: transparent;
+    border: 1px solid var(--forge-border);
+    border-radius: var(--forge-radius);
+    color: var(--forge-text-dim);
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.15s;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+.forge-back-btn:hover {
+    border-color: var(--forge-amber);
+    color: var(--forge-amber);
+    background: var(--forge-amber-dim);
+}
+
+/* ── TOOLBAR STRIP ── */
+.forge-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 10px;
+    background: var(--forge-surface);
+    border: 1px solid var(--forge-border);
+    border-radius: var(--forge-radius);
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+.forge-tool-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    background: transparent;
+    border: 1px solid var(--forge-border);
+    border-radius: var(--forge-radius);
+    color: var(--forge-text-dim);
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+.forge-tool-btn:hover { border-color: var(--forge-amber); color: var(--forge-amber); background: var(--forge-amber-dim); }
+.forge-tool-btn.primary {
+    background: var(--forge-amber);
+    color: #000;
+    border-color: var(--forge-amber);
+    font-weight: 700;
+}
+.forge-tool-btn.primary:hover { filter: brightness(1.1); color: #000; background: var(--forge-amber); }
+.forge-save-status {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--forge-text-dim);
+    margin-left: auto;
+}
+
+/* ── DESCRIPTION ── */
+.sb-description {
+    padding: 8px 12px;
+    background: var(--forge-surface);
+    border: 1px solid var(--forge-border);
+    border-radius: var(--forge-radius);
+    margin-bottom: 10px;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--forge-text-dim);
+    line-height: 1.5;
+}
+
+/* ── GRID ── */
+.storyboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 8px;
+    align-items: start;
+}
+
+/* ── FRAME CARD ── */
+.frame-card {
+    background: var(--forge-card);
+    border: 1px solid var(--forge-border);
+    border-radius: var(--forge-radius);
+    padding: 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    user-select: none;
+    touch-action: manipulation;
+    position: relative;
+    transition: border-color 0.2s, background 0.2s;
+}
+.frame-card:hover {
+    border-color: var(--forge-border-glow);
+    background: var(--forge-card-hover);
 }
 
 /* thumbnail */
-.frame-thumb { 
-  width: 100%; 
-  height: 90px; 
-  object-fit: cover; 
-  border-radius: var(--radius-sm, 6px); 
-  cursor: pointer; 
+.frame-thumb {
+    width: 100%;
+    height: 90px;
+    object-fit: cover;
+    border-radius: calc(var(--forge-radius) - 1px);
+    cursor: pointer;
+    display: block;
 }
 
-/* meta */
-.frame-meta { 
-  display: flex; 
-  justify-content: space-between; 
-  align-items: center; 
-  gap: var(--gap-xs, 6px); 
-  font-size: 13px; 
-  color: var(--muted, #666); 
+/* meta row */
+.frame-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    color: var(--forge-text-dim);
 }
+.frame-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.frame-actions { display: flex; gap: 3px; align-items: center; }
 
 /* handle */
-.handle { 
-  cursor: grab; 
-  padding: 6px; 
-  border-radius: var(--radius-sm, 6px); 
-  background: var(--muted-weak, rgba(0,0,0,0.03)); 
+.handle {
+    cursor: grab;
+    padding: 3px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--forge-border);
+    color: var(--forge-text-dim);
+    font-size: 0.85rem;
+    line-height: 1;
+    background: transparent;
+    transition: all 0.15s;
 }
+.handle:hover { border-color: var(--forge-border-glow); color: var(--forge-text); }
+.handle:active { cursor: grabbing; }
 
-/* toolbar / status */
-.toolbar { display: flex; gap: var(--gap, 8px); align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
-.save-status { font-size: 13px; color: var(--muted, #666); }
+/* delete button */
+.delete-single-btn {
+    padding: 3px 6px;
+    background: transparent;
+    border: 1px solid var(--forge-border);
+    border-radius: 3px;
+    color: var(--forge-text-dim);
+    font-size: 0.65rem;
+    cursor: pointer;
+    line-height: 1;
+    transition: all 0.15s;
+}
+.delete-single-btn:hover { border-color: var(--forge-red); color: var(--forge-red); background: var(--forge-red-dim); }
+
+/* sortable states */
+.sortable-ghost { opacity: 0.35; border: 1px dashed var(--forge-amber); }
+.sortable-drag  { opacity: 0.9; box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
 
 /* responsive */
-@media(min-width:800px) { 
-  .storyboard-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); } 
-  .frame-thumb { height: 120px; } 
-}</style>
+@media (min-width: 600px) {
+    .storyboard-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .frame-thumb { height: 115px; }
+}
+
+/* FIX: Force menu to absolute so it tracks with scroll */
+.sb-menu { position: absolute !important; }
+</style>
 
 <div class="view-container storyboard-wrap">
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-    <h3><?php echo htmlspecialchars($storyboard['name']); ?></h3>
-    <a href="view_storyboards.php" class="btn">
-      <i class="fa fa-arrow-left"></i> Back to Overview
-    </a>
-  </div>
 
-  <?php if ($storyboard['description']): ?>
-  <div style="margin-bottom:12px; padding:5px;" class="">
-    <?php echo nl2br(htmlspecialchars($storyboard['description'])); ?>
-  </div>
-  <?php endif; ?>
+    <!-- FORGE HEADER -->
+    <div class="forge-header-bar">
+        <div class="forge-logo">
+            <div class="forge-logo-icon">⬛</div>
+            <span><?php echo htmlspecialchars($storyboard['name']); ?></span>
+        </div>
+        <a href="view_storyboards.php" class="forge-back-btn">
+            <i class="fa fa-arrow-left"></i> Storyboards
+        </a>
+    </div>
 
-  <div class="toolbar">
-    <button id="btn-save" class="btn btn-sm btn-primary">Save Order</button>
-    <button id="btn-auto-prefix" class="btn btn-sm" title="Rename files with numeric prefixes">Auto-prefix filenames</button>
-    <button id="btn-export" class="btn btn-sm" title="Export as ZIP">
-      <i class="fa fa-download"></i> Export ZIP
-    </button>
-    <div class="save-status" id="save-status">Ready</div>
-  </div>
+    <?php if ($storyboard['description']): ?>
+    <div class="sb-description">
+        <?php echo nl2br(htmlspecialchars($storyboard['description'])); ?>
+    </div>
+    <?php endif; ?>
 
-  <div id="storyboard" class="storyboard-grid pswp-gallery">
-    <!-- Populated by JavaScript -->
-  </div>
+    <!-- TOOLBAR -->
+    <div class="forge-toolbar">
+        <button id="btn-save" class="forge-tool-btn primary">
+            <i class="fa fa-save"></i> Save Order
+        </button>
+        <button id="btn-auto-prefix" class="forge-tool-btn" title="Rename files with numeric prefixes">
+            <i class="fa fa-sort-numeric-asc"></i> Auto-prefix
+        </button>
+        <button id="btn-export" class="forge-tool-btn" title="Export as ZIP">
+            <i class="fa fa-download"></i> Export ZIP
+        </button>
+        <div class="forge-save-status" id="save-status">Ready</div>
+    </div>
+
+    <div id="storyboard" class="storyboard-grid pswp-gallery">
+        <!-- Populated by JavaScript -->
+    </div>
+
 </div>
-
-<?php
-$content = ob_get_clean();
-$content .= $eruda ?? '';
-$spw->renderLayout($content, $pageTitle);
-?>
 
 <?= $spw->getJquery() ?>
 
@@ -329,17 +454,17 @@ $(function(){
   let frames = [];
 
   function loadFrames() {
-    $.get('storyboards_v2_api.php', { action: 'get_frames', storyboard_id: storyboardId })
+    $.get('storyboards_api.php', { action: 'get_frames', storyboard_id: storyboardId })
       .done(function(res) {
         if (res.success) {
           frames = res.data;
           renderFrames();
         } else {
-          $('#save-status').text('Failed to load frames').css('color', '#f44336');
+          $('#save-status').text('Failed to load frames').css('color', 'var(--forge-red)');
         }
       })
       .fail(function() {
-        $('#save-status').text('Server error').css('color', '#f44336');
+        $('#save-status').text('Server error').css('color', 'var(--forge-red)');
       });
   }
 
@@ -349,38 +474,36 @@ $(function(){
 
     frames.forEach(frame => {
       const safeName = escapeHtml(frame.name);
-      const safeFilename = escapeHtml(frame.filename);
-      
+
       const $card = $(`
-        <div class="frame-card" 
+        <div class="frame-card"
              data-id="${frame.id}"
              data-entity="${frame.entity_type || ''}"
              data-entity-id="${frame.entity_id || 0}"
              data-frame-id="${frame.frame_id || 0}"
-             >
-          <a href="${frame.filename}" 
-             data-pswp-width="768" 
-             data-pswp-height="768"
+             data-rating="${frame.rating || 0}">
+          <a href="${frame.filename}"
+             data-pswp-width="1024"
+             data-pswp-height="1024"
              target="_blank"
              rel="noreferrer">
-            <img src="${frame.filename}" alt="${safeName}" class="frame-thumb" loading="lazy" />
+            <img src="${frame.filename}" alt="${safeName}" class="frame-thumb" loading="lazy" onload="this.parentElement.dataset.pswpWidth = this.naturalWidth; this.parentElement.dataset.pswpHeight = this.naturalHeight;" />
           </a>
           <div class="frame-meta">
-            <div style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${safeName}">${safeName}</div>
-            <div style="display:flex; gap:6px; align-items:center;">
-              <div class="handle" title="drag to reorder">☰</div>
-              <button class="btn btn-sm btn-delete btn-danger delete-single-btn" data-id="${frame.id}" title="Delete from storyboard">✕</button>
+            <div class="frame-name" title="${safeName}">${safeName}</div>
+            <div class="frame-actions">
+              <div class="handle" title="Drag to reorder">☰</div>
+              <button class="delete-single-btn btn-delete" data-id="${frame.id}" title="Delete from storyboard">✕</button>
             </div>
           </div>
         </div>
       `);
-      
+
       $grid.append($card);
     });
 
     initPhotoSwipe();
 
-    // Initialize the Gear Menu on the new content
     if (window.GearMenu && typeof window.GearMenu.attach === 'function') {
         window.GearMenu.attach($grid[0]);
     }
@@ -390,19 +513,13 @@ $(function(){
     if (window.lightbox) {
       window.lightbox.destroy();
     }
-    
     window.lightbox = new PhotoSwipeLightbox({
       gallery: '.pswp-gallery',
       children: 'a',
       pswpModule: PhotoSwipe,
       initialZoomLevel: 'fit',
-      secondaryZoomLevel: 1,
-      paddingFn: (viewportSize) => { 
-          return {}
-      }
-
+      secondaryZoomLevel: 1
     });
-    
     window.lightbox.init();
   }
 
@@ -420,8 +537,8 @@ $(function(){
     handle: '.handle',
     ghostClass: 'sortable-ghost',
     dragClass: 'sortable-drag',
-    onEnd: function () { 
-      $('#save-status').text('Order changed — click Save Order'); 
+    onEnd: function () {
+      $('#save-status').text('Order changed — click Save Order');
     }
   });
 
@@ -430,13 +547,10 @@ $(function(){
     const $card = $(this).closest('.frame-card');
     const frameId = $card.data('id');
     const frame = frames.find(f => f.id == frameId);
-    
+
     if (!frame || !confirm('Delete "' + frame.name + '" from this storyboard?')) return;
-    
-    $.post('storyboards_v2_api.php', { 
-      action: 'delete_frame', 
-      frame_id: frameId 
-    })
+
+    $.post('storyboards_api.php', { action: 'delete_frame', frame_id: frameId })
       .done(function(res){
         if (res.success) {
           $card.remove();
@@ -446,24 +560,18 @@ $(function(){
           alert('Delete failed: ' + (res.message || 'unknown'));
         }
       })
-      .fail(function(){ 
-        alert('Server request failed'); 
-      });
+      .fail(function(){ alert('Server request failed'); });
   });
 
   // Save order
   $('#btn-save').on('click', function(){
     const order = [];
-    $('#storyboard .frame-card').each(function(){ 
-      order.push($(this).data('id')); 
-    });
-    
+    $('#storyboard .frame-card').each(function(){ order.push($(this).data('id')); });
     $('#save-status').text('Saving...');
-    
-    $.post('storyboards_v2_api.php', { 
-      action: 'save_order', 
+    $.post('storyboards_api.php', {
+      action: 'save_order',
       storyboard_id: storyboardId,
-      order: JSON.stringify(order) 
+      order: JSON.stringify(order)
     })
       .done(function(res){
         if (res.success) {
@@ -472,28 +580,19 @@ $(function(){
           $('#save-status').text('Save failed: ' + (res.message||'unknown'));
         }
       })
-      .fail(function(){ 
-        $('#save-status').text('Save failed: server error'); 
-      });
+      .fail(function(){ $('#save-status').text('Save failed: server error'); });
   });
 
   // Auto-prefix functionality
   $('#btn-auto-prefix').on('click', function(){
-    if (!confirm('Auto-prefix will rename files on disk with numeric prefixes (001_filename). Proceed?')) {
-      return;
-    }
-    
+    if (!confirm('Auto-prefix will rename files on disk with numeric prefixes (001_filename). Proceed?')) return;
     const order = [];
-    $('#storyboard .frame-card').each(function(){ 
-      order.push($(this).data('id')); 
-    });
-    
+    $('#storyboard .frame-card').each(function(){ order.push($(this).data('id')); });
     $('#save-status').text('Renaming files...');
-    
-    $.post('storyboards_v2_api.php', { 
-      action: 'rename_in_order', 
+    $.post('storyboards_api.php', {
+      action: 'rename_in_order',
       storyboard_id: storyboardId,
-      order: JSON.stringify(order) 
+      order: JSON.stringify(order)
     })
       .done(function(res){
         if (res.success) {
@@ -503,39 +602,32 @@ $(function(){
           $('#save-status').text('Rename failed: ' + (res.message||'unknown'));
         }
       })
-      .fail(function(){ 
-        $('#save-status').text('Rename failed: server error'); 
-      });
+      .fail(function(){ $('#save-status').text('Rename failed: server error'); });
   });
 
   // Export ZIP
   $('#btn-export').on('click', function(){
-    if (!confirm('Export this storyboard as a ZIP file with all frames in order?')) {
-      return;
-    }
-    
+    if (!confirm('Export this storyboard as a ZIP file with all frames in order?')) return;
     $('#save-status').text('Creating ZIP...');
-    
-    $.post('storyboards_v2_api.php', { 
-      action: 'export_zip', 
-      storyboard_id: storyboardId 
-    })
+    $.post('storyboards_api.php', { action: 'export_zip', storyboard_id: storyboardId })
       .done(function(res){
         if (res.success && res.download_url) {
           $('#save-status').text('Downloading...');
           window.location.href = res.download_url;
-          setTimeout(function(){ 
-            $('#save-status').text('Export complete'); 
-          }, 1000);
+          setTimeout(function(){ $('#save-status').text('Export complete'); }, 1000);
         } else {
           $('#save-status').text('Export failed: ' + (res.message||'unknown'));
         }
       })
-      .fail(function(){ 
-        $('#save-status').text('Export failed: server error'); 
-      });
+      .fail(function(){ $('#save-status').text('Export failed: server error'); });
   });
 
   loadFrames();
 });
 </script>
+
+<?php
+$content = ob_get_clean();
+$content .= $eruda ?? '';
+$spw->renderLayout($content, $pageTitle);
+?>

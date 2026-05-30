@@ -11,4 +11,6 @@ if (\App\Core\SpwBase::CDN_USAGE) {
     $eruda = '<script src="/vendor/eruda/eruda.min.js"></script><script>eruda.init();</script>';
 }
 
-$eruda = '';
+//$eruda = '';
+
+

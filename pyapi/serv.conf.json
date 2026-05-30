@@ -1,0 +1,231 @@
+{
+  "defaults": {
+    "default_ip": "127.0.0.1"
+  },
+  "services": {
+    "backup": {
+      "active": true,
+      "module": "services.backup_service",
+      "router_var": "router",
+      "prefix": "/backup",
+      "tags": ["backup"]
+    },
+    "backup_download": {
+      "active": true,
+      "module": "services.backup_download_service",
+      "router_var": "router",
+      "prefix": "/backup-dl",
+      "tags": ["backup_download"]
+    },
+    "kaggle": {
+      "active": true,
+      "module": "services.kaggle_service",
+      "router_var": "router",
+      "prefix": "/kaggle",
+      "tags": ["kaggle"]
+    },
+    "bloom": {
+      "active": true,
+      "module": "services.bloom_service",
+      "router_var": "router",
+      "prefix": "/bloom",
+      "tags": ["bloom"]
+    },
+    "wordnet": {
+      "active": true,
+      "module": "services.wordnet_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["wordnet"]
+    },
+    "pillow": {
+      "active": true,
+      "module": "services.pillow_service",
+      "router_var": "router",
+      "prefix": "/image",
+      "tags": ["image"]
+    },
+    "pytoon": {
+      "active": true,
+      "module": "services.pytoon_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["pytoon"]
+    },
+    "magazine_pdf": {
+      "active": true,
+      "module": "services.magazine_pdf_service",
+      "router_var": "router",
+      "prefix": "/magazine-pdf",
+      "tags": ["magazine-pdf"]
+    },
+    "graph": {
+      "active": true,
+      "module": "services.graph_service",
+      "router_var": "router",
+      "prefix": "/graph",
+      "tags": ["graph"]
+    },
+    "daw": {
+      "active": true,
+      "module": "services.daw_service",
+      "router_var": "router",
+      "prefix": "/daw",
+      "tags": ["daw"]
+    },
+    "cv": {
+      "active": true,
+      "module": "services.cv_service",
+      "router_var": "router",
+      "prefix": "/cv",
+      "tags": ["computer-vision"]
+    },
+    "style": {
+      "active": true,
+      "module": "services.style_service",
+      "router_var": "router",
+      "prefix": "/style",
+      "tags": ["style"]
+    },
+    "rembg": {
+      "active": true,
+      "module": "services.rembg_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["background-removal"]
+    },
+    "vidrembg": {
+      "active": true,
+      "module": "services.vidrembg_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["video-rembg"]
+    },
+    "cnetaux": {
+      "active": true,
+      "module": "services.cnetaux_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["cnetaux"]
+    },
+    "svc": {
+      "active": true,
+      "module": "services.svc_service",
+      "router_var": "router",
+      "prefix": "/svc",
+      "tags": ["svc"]
+    },
+    "blender": {
+      "active": true,
+      "module": "services.blender_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["blender"]
+    },
+    "multiplane": {
+      "active": true,
+      "module": "services.multiplane_service",
+      "router_var": "router",
+      "prefix": "/multiplane",
+      "tags": ["multiplane"]
+    },
+    "multivid": {
+      "active": true,
+      "module": "services.multivid_service",
+      "router_var": "router",
+      "prefix": "/multivid",
+      "tags": ["multivid"]
+    },
+    "ved": {
+      "active": true,
+      "module": "services.ved_service",
+      "router_var": "router",
+      "prefix": "/ved",
+      "tags": ["ved"]
+    },
+    "muvitriccs": {
+      "active": true,
+      "module": "services.muvitriccs_service",
+      "router_var": "router",
+      "prefix": "/muvitriccs",
+      "tags": ["muvitriccs"]
+    },
+    "fuzz": {
+      "active": true,
+      "module": "services.fuzz_service",
+      "router_var": "router",
+      "prefix": "/fuzz",
+      "tags": ["fuzz"]
+    },
+    "fuzz_ingest": {
+      "active": true,
+      "module": "services.fuzz_ingest_service",
+      "router_var": "router",
+      "prefix": "/fuzz_ingest",
+      "tags": ["fuzz_ingest"]
+    },
+    "liplab": {
+      "active": true,
+      "module": "services.liplab_service",
+      "router_var": "router",
+      "prefix": "/liplab",
+      "tags": ["liplab"]
+    },
+    "voicepool": {
+      "active": true,
+      "module": "services.voicepool_service",
+      "router_var": "router",
+      "prefix": "/voicepool",
+      "tags": ["voicepool"]
+    },
+    "qwen3tts": {
+      "active": true,
+      "module": "services.qwen3tts_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["qwen3tts"]
+    },
+    "local_lm": {
+      "active": true,
+      "module": "services.local_ollama_service",
+      "router_var": "router",
+      "prefix": "/local_ollama",
+      "tags": ["local_ollama"]
+    },
+    "sfx": {
+      "active": true,
+      "module": "services.sfx_service",
+      "router_var": "router",
+      "prefix": "/sfx",
+      "tags": ["sfx"]
+    },
+    "chroma": {
+      "active": true,
+      "module": "services.chroma_service",
+      "router_var": "router",
+      "prefix": "/chroma",
+      "tags": ["chroma"]
+    },
+    "embed": {
+      "active": true,
+      "module": "services.embed_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["embed"]
+    },
+    "aiprovider": {
+      "active": true,
+      "module": "services.aiprovider_service",
+      "router_var": "router",
+      "prefix": "/aiprovider",
+      "tags": ["aiprovider"]
+    },
+    "openai_compatible": {
+      "active": true,
+      "module": "services.openai_compatible_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["openai_compatible"]
+    }
+  }
+}

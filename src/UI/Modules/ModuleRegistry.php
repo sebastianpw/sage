@@ -38,6 +38,15 @@ class ModuleRegistry
         $this->register('image_editor', function(array $config = []) {
             return new ImageEditorModule($config);
         });
+        
+        // --- NEW AUDIO MODULES ---
+        $this->register('audio_gear_menu', function(array $config = []) {
+            return new AudioGearMenuModule($config);
+        });
+
+        $this->register('audio_editor', function(array $config = []) {
+            return new AudioEditorModule($config);
+        });
     }
 
     /**

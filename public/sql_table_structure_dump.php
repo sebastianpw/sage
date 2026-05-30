@@ -106,7 +106,7 @@ button {
 
 </head>
 <body>
-<?php require "floatool.php"; ?>
+<?php require_once "forge_tool.php"; ?>
 <!-- Header -->
 <div style="display: flex; align-items: center; margin-bottom: 20px; gap: 10px;">
     <a href="dashboard.php" title="Dashboard" style="text-decoration: none; font-size: 24px; display: inline-block;">

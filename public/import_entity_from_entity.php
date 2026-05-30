@@ -235,7 +235,7 @@ if ($isAjax) {
 </head>
 <body>
 <?php 
-//require "floatool.php"; 
+//require_once "forge_tool.php"; 
 ?>
 <div style="position: absolute; top: 50px; margin: 0 20px 80px 20px;">
     <div style="position: absolute;">

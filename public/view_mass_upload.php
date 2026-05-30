@@ -1,4 +1,6 @@
 <?php
+// filepath: public/view_mass_upload.php
+
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/env_locals.php';
 
@@ -137,375 +139,229 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['images'])) {
         } catch (e) {}
     })();
     </script>
+    <?php echo \App\Core\SpwBase::getInstance()->getJquery(); ?>
     <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/toast.css">
+    <script src="/js/toast.js"></script>
     <style>
-        .upload-area { border: 2px dashed rgba(var(--muted-border-rgb), 0.5); border-radius: 8px; padding: 40px; text-align: center; background-color: var(--card); transition: all 0.3s ease; cursor: pointer; margin-bottom: 24px; }
-        .upload-area:hover, .upload-area.drag-over { border-color: var(--accent); background-color: rgba(59, 130, 246, 0.05); }
-        .upload-area-icon { font-size: 48px; color: var(--text-muted); margin-bottom: 16px; }
-        .upload-area-text { color: var(--text); font-size: 16px; margin-bottom: 8px; }
-        .upload-area-hint { color: var(--text-muted); font-size: 14px; }
-        .file-list { display: flex; flex-direction: column; gap: 12px; }
-        .file-card { background-color: var(--card); border: 1px solid rgba(var(--muted-border-rgb), 0.3); border-radius: 6px; padding: 16px; display: flex; align-items: center; gap: 16px; transition: all 0.2s ease; }
-        .file-card:hover { box-shadow: var(--card-elevation); }
-        .file-preview { width: 60px; height: 60px; border-radius: 4px; object-fit: cover; background-color: var(--bg); flex-shrink: 0; }
-        .file-info { flex: 1; min-width: 0; }
-        .file-name { font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
-        .file-size { font-size: 12px; color: var(--text-muted); }
-        .file-progress { flex: 1; min-width: 150px; }
-        .progress-bar-container { width: 100%; height: 8px; background-color: var(--bg); border-radius: 4px; overflow: hidden; margin-bottom: 4px; }
-        .progress-bar { height: 100%; background-color: var(--accent); transition: width 0.3s ease; border-radius: 4px; }
-        .progress-text { font-size: 12px; color: var(--text-muted); }
-        .file-status { flex-shrink: 0; }
-        .status-icon { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; }
-        .status-uploading { background-color: var(--blue-light-bg); color: var(--blue-light-text); }
-        .status-success { background-color: rgba(35, 134, 54, 0.2); color: var(--green); }
-        .status-error { background-color: rgba(218, 54, 51, 0.2); color: var(--red); }
-        .upload-summary { display: flex; justify-content: space-between; align-items: center; padding: 16px; background-color: var(--card); border: 1px solid rgba(var(--muted-border-rgb), 0.3); border-radius: 6px; margin-top: 24px; }
-        .summary-item { text-align: center; }
-        .summary-value { font-size: 24px; font-weight: 600; color: var(--text); }
-        .summary-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-        .hidden { display: none; }
-        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(var(--muted-border-rgb), 0.3); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        /* Styles for new import section */
-        #importSection .file-list li { margin-bottom: 0.3em; list-style: none; }
-        #importSection .spawn-type-selector { margin: 15px 0; padding: 10px; background: var(--card-weak); border-radius: 6px; }
-        #importSection .spawn-type-selector label { font-weight: 600; margin-right: 10px; color: var(--muted); }
-        .import-disabled { padding: 15px; border-radius: 6px; background: var(--card-weak); border: 1px solid rgba(var(--muted-border-rgb), 0.1); }
-        /* NEW: Styles for import results list */
-        .result { margin: 5px 0; padding: 8px 10px; border-radius: 6px; font-family: monospace; font-size: 14px; }
-        .result.success { background: rgba(16,185,129,0.06); color: var(--success); border: 1px solid rgba(16,185,129,0.08); }
-        .result.error { background: rgba(239,68,68,0.04); color: var(--danger); border: 1px solid rgba(239,68,68,0.06); }
+        .upload-area { border: 2px dashed rgba(var(--muted-border-rgb), 0.5); border-radius: 8px; padding: 40px; text-align: center; background-color: var(--card); transition: all 0.3s ease; cursor: pointer; margin-bottom: 24px; position: relative; }
+        .upload-area:hover, .upload-area.drag-over { border-color: var(--accent); background-color: rgba(var(--muted-border-rgb), 0.05); }
+        .upload-icon { font-size: 48px; color: var(--text-muted); margin-bottom: 16px; }
+        .upload-text { font-size: 1.1rem; color: var(--text); margin-bottom: 8px; }
+        
+        /* Progress Overlay */
+        .upload-progress-overlay {
+            position: absolute; inset: 0; background: rgba(0,0,0,0.8); border-radius: 8px;
+            display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 10;
+        }
+        .progress-text { color: white; margin-bottom: 10px; font-weight: bold; }
+        .progress-bar-wrap { width: 60%; height: 8px; background: #444; border-radius: 4px; overflow: hidden; }
+        .progress-bar-fill { width: 0%; height: 100%; background: var(--accent); transition: width 0.2s; }
+        
+        .import-card { background: var(--card); border: 1px solid rgba(var(--muted-border-rgb), 0.3); border-radius: 8px; padding: 20px; margin-top: 20px; }
+        .form-select { width: 100%; padding: 8px; border-radius: 4px; border: 1px solid rgba(var(--muted-border-rgb), 0.3); background: var(--bg); color: var(--text); }
+        
+        .result-log { font-family: monospace; font-size: 0.85rem; padding: 10px; border-radius: 4px; margin-top: 5px; }
+        .res-success { background: rgba(16,185,129,0.06); color: var(--success, #10b981); border: 1px solid rgba(16,185,129,0.08); }
+        .res-error { background: rgba(239,68,68,0.04); color: var(--danger, #ef4444); border: 1px solid rgba(239,68,68,0.06); }
+        
+        .badge { display: inline-block; padding: 0.25em 0.4em; font-size: 75%; font-weight: 700; line-height: 1; text-align: center; white-space: nowrap; vertical-align: baseline; border-radius: 0.25rem; }
+        .badge-blue { background-color: var(--blue, #3b82f6); color: #fff; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h3 style="margin: 0 0 0 45px;">Mass Image Uploader & Importer</h3>
-            <div class="flex-gap">
-                <span class="badge badge-blue">frames_2_spawns</span>
-            </div>
+<div class="container" style="max-width:1100px; margin:0 auto; padding:20px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h2 style="margin:0;">🖼️ Mass Image Importer</h2>
+        <div>
+            <span class="badge badge-blue" style="margin-right:10px;">frames_2_spawns</span>
+            <a href="dashboard.php" class="btn btn-sm btn-outline-secondary">Dashboard</a>
         </div>
-
-        <div id="uploadSection" class="section">
-            <div class="upload-area" id="uploadArea">
-                <div class="upload-area-icon">📤</div>
-                <div class="upload-area-text">Click to select images or drag and drop</div>
-                <div class="upload-area-hint">Support for JPEG, PNG, GIF, WebP</div>
-                <input type="file" id="fileInput" accept="image/*" multiple style="display: none;">
-            </div>
-
-            <div id="fileListSection" class="hidden">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                    <h2 class="section-header" style="margin: 0;">Step 1: Select Files</h2>
-                    <div class="flex-gap">
-                        <button id="clearBtn" class="btn btn-secondary btn-sm">Clear All</button>
-                        <button id="uploadBtn" class="btn btn-primary">
-                            <span id="uploadBtnText">Upload All</span>
-                            <span style="display:none;" id="uploadBtnSpinner" class="spinner"></span>
-                        </button>
-                    </div>
-                </div>
-                <div class="file-list" id="fileList"></div>
-            </div>
-        </div>
-
-        <div id="summarySection" class="section hidden">
-            <h2 class="section-header">Upload Summary</h2>
-            <div class="upload-summary">
-                <div class="summary-item"><div class="summary-value" id="totalFiles">0</div><div class="summary-label">Total Files</div></div>
-                <div class="summary-item"><div class="summary-value" id="successFiles">0</div><div class="summary-label">Successful</div></div>
-                <div class="summary-item"><div class="summary-value" id="failedFiles">0</div><div class="summary-label">Failed</div></div>
-                <div class="summary-item"><div class="summary-value" id="totalSize">0 MB</div><div class="summary-label">Total Size</div></div>
-            </div>
-        </div>
-        
-        <div id="importSection" class="section hidden"></div>
-        
-        <!-- NEW: Placeholder for the import results list -->
-        <div id="importResultsSection" class="section hidden"></div>
-
     </div>
 
-    <div id="toastContainer" class="toast-container"></div>
+    <div id="uploadSection">
+        <div class="upload-area" id="dropZone">
+            <div class="upload-progress-overlay" id="progOverlay">
+                <div class="progress-text" id="progText">Uploading 1/5...</div>
+                <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progFill"></div></div>
+            </div>
+            <div class="upload-icon">📤</div>
+            <div class="upload-text">Click or Drag & Drop Images (JPEG, PNG, GIF, WebP) here</div>
+        </div>
+        <input type="file" id="fileInput" multiple accept="image/*" style="display:none;">
+    </div>
 
-    <script>
-    (function() {
-        const uploadArea = document.getElementById('uploadArea');
-        const fileInput = document.getElementById('fileInput');
-        const fileListSection = document.getElementById('fileListSection');
-        const fileList = document.getElementById('fileList');
-        const uploadBtn = document.getElementById('uploadBtn');
-        const clearBtn = document.getElementById('clearBtn');
-        const summarySection = document.getElementById('summarySection');
-        const uploadBtnText = document.getElementById('uploadBtnText');
-        const uploadBtnSpinner = document.getElementById('uploadBtnSpinner');
-        const importSection = document.getElementById('importSection');
-        const importResultsSection = document.getElementById('importResultsSection'); // Get results container
+    <div id="importSection" class="import-card" style="display:none;">
+        <h3 style="margin-top:0;">Import Configuration</h3>
+        <p class="small-muted">Found <span id="fileCountBadge" class="badge" style="background:#555;">0</span> files.</p>
         
-        let selectedFiles = [];
-        let uploadInProgress = false;
+        <form id="importForm">
+            <div style="margin-bottom:15px;">
+                <label>Import as (Spawn Type)</label>
+                <select name="spawn_type_id" id="spawnTypeSelect" class="form-select"></select>
+            </div>
+            <div style="margin-bottom:10px;">
+                <label><input type="checkbox" id="selectAllBox" checked> Select All</label>
+            </div>
+            <div id="importFileList" style="max-height: 250px; overflow-y: auto; border: 1px solid rgba(var(--muted-border-rgb), 0.3); padding: 10px; border-radius: 4px; background: var(--bg); margin-bottom: 20px;"></div>
+            <button type="submit" class="btn btn-primary" id="startImportBtn">Start Import</button>
+        </form>
+    </div>
 
-        uploadArea.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
-        uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('drag-over'); });
-        uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag-over'));
-        uploadArea.addEventListener('drop', (e) => { e.preventDefault(); uploadArea.classList.remove('drag-over'); handleFiles(e.dataTransfer.files); });
-        
-        function handleFiles(files) {
-            const newFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
-            if (newFiles.length < files.length) {
-                showToast(`Some files were not images and were ignored.`, 'error');
-            }
-            selectedFiles = [...selectedFiles, ...newFiles];
-            renderFileList();
-            updateSummary();
-            fileListSection.classList.remove('hidden');
+    <div id="resultsSection" style="margin-top:20px;"></div>
+</div>
+
+<script>
+$(document).ready(function() {
+    const dropZone = $('#dropZone');
+    const fileInput = $('#fileInput');
+    const progOverlay = $('#progOverlay');
+    const progText = $('#progText');
+    const progFill = $('#progFill');
+    
+    dropZone.on('click', () => fileInput.trigger('click'));
+    dropZone.on('dragover', (e) => { e.preventDefault(); dropZone.addClass('drag-over'); });
+    dropZone.on('dragleave drop', (e) => { e.preventDefault(); dropZone.removeClass('drag-over'); });
+    dropZone.on('drop', (e) => handleFiles(e.originalEvent.dataTransfer.files));
+    fileInput.on('change', (e) => handleFiles(e.target.files));
+
+    async function handleFiles(files) {
+        // filter images
+        const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+        if (imageFiles.length < files.length) {
+            Toast.show(`Some files were not images and were ignored.`, 'error');
         }
+        if(imageFiles.length === 0) return;
         
-        function renderFileList() {
-            fileList.innerHTML = selectedFiles.map((file, index) => `
-                <div class="file-card" data-index="${index}">
-                    <img class="file-preview" alt="${file.name}" src="${URL.createObjectURL(file)}">
-                    <div class="file-info">
-                        <div class="file-name">${file.name}</div>
-                        <div class="file-size">${formatFileSize(file.size)}</div>
-                    </div>
-                    <div class="file-progress">
-                        <div class="progress-bar-container"><div class="progress-bar" style="width: 0%"></div></div>
-                        <div class="progress-text">Waiting...</div>
-                    </div>
-                    <div class="file-status"><div class="status-icon">🕒</div></div>
-                    <button class="btn btn-danger btn-sm" style="min-width: 32px;" onclick="removeFile(${index})">&times;</button>
-                </div>
-            `).join('');
-        }
-        
-        window.removeFile = function(index) {
-            if (uploadInProgress) return showToast('Cannot remove files during upload', 'error');
-            selectedFiles.splice(index, 1);
-            renderFileList();
-            updateSummary();
-            if (selectedFiles.length === 0) {
-                fileListSection.classList.add('hidden');
-                summarySection.classList.add('hidden');
-            }
-        }
-        
-        function updateSummary() {
-            const totalSize = selectedFiles.reduce((sum, file) => sum + file.size, 0);
-            document.getElementById('totalFiles').textContent = selectedFiles.length;
-            document.getElementById('totalSize').textContent = formatFileSize(totalSize);
-        }
-        
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-        }
-        
-        // --- UPDATED "Clear All" LOGIC ---
-        clearBtn.addEventListener('click', () => {
-            if (uploadInProgress) return showToast('Cannot clear files during upload', 'error');
-            
-            // Reset file selection
-            selectedFiles = [];
-            fileList.innerHTML = '';
-            fileInput.value = '';
+        // Show progress UI
+        progOverlay.css('display', 'flex');
+        const total = imageFiles.length;
+        let successes = 0;
+        let errors = 0;
 
-            // Hide all sections
-            fileListSection.classList.add('hidden');
-            summarySection.classList.add('hidden');
-            importSection.classList.add('hidden');
-            importResultsSection.classList.add('hidden');
-            importSection.innerHTML = ''; // Clear content
-            importResultsSection.innerHTML = ''; // Clear content
-
-            // Reset the upload button
-            uploadBtn.disabled = false;
-            uploadBtnText.textContent = "Upload All";
-            uploadBtnText.style.display = 'inline-block';
-            uploadBtnSpinner.style.display = 'none';
-        });
-        
-        uploadBtn.addEventListener('click', async () => {
-            if (selectedFiles.length === 0 || uploadInProgress) return;
+        // SEQUENTIAL UPLOAD LOOP (prevents max_post_size limitations)
+        for (let i = 0; i < total; i++) {
+            const file = imageFiles[i];
+            const currentNum = i + 1;
             
-            uploadInProgress = true;
-            uploadBtn.disabled = true;
-            clearBtn.disabled = true;
-            document.querySelectorAll('.file-card .btn-danger').forEach(b => b.disabled = true);
-            uploadBtnText.style.display = 'none';
-            uploadBtnSpinner.style.display = 'inline-block';
+            // Update UI
+            progText.text(`Uploading ${currentNum}/${total}: ${file.name}`);
+            const pct = ((i) / total) * 100;
+            progFill.css('width', pct + '%');
             
-            let successCount = 0;
-            let failCount = 0;
-            
-            for (let i = 0; i < selectedFiles.length; i++) {
-                const file = selectedFiles[i];
-                const card = fileList.children[i];
-                const progressBar = card.querySelector('.progress-bar');
-                const progressText = card.querySelector('.progress-text');
-                const statusIcon = card.querySelector('.status-icon');
-                
-                statusIcon.className = 'status-icon status-uploading';
-                statusIcon.innerHTML = '<div class="spinner"></div>';
-                progressText.textContent = 'Uploading...';
-                
-                try {
-                    const formData = new FormData();
-                    formData.append('images', file);
-                    const response = await fetch(window.location.pathname, { method: 'POST', body: formData });
-                    const result = await response.json();
-                    if (result.status === 'success' && result.results[0].success) {
-                        progressBar.style.width = '100%';
-                        progressText.textContent = `Complete! Saved as ${result.results[0].saved_as}`;
-                        statusIcon.className = 'status-icon status-success';
-                        statusIcon.textContent = '✓';
-                        successCount++;
-                    } else {
-                        throw new Error(result.results[0].error || 'Upload failed');
-                    }
-                } catch (error) {
-                    progressBar.style.width = '100%';
-                    progressBar.style.backgroundColor = 'var(--red)';
-                    progressText.textContent = error.message;
-                    statusIcon.className = 'status-icon status-error';
-                    statusIcon.textContent = '✗';
-                    failCount++;
-                }
-            }
-            
-            document.getElementById('successFiles').textContent = successCount;
-            document.getElementById('failedFiles').textContent = failCount;
-            summarySection.classList.remove('hidden');
-            
-            uploadInProgress = false;
-            // uploadBtn is kept disabled, but clearBtn is now available
-            clearBtn.disabled = false; 
-            uploadBtnText.textContent = "Uploaded";
-            uploadBtnText.style.display = 'inline-block';
-            uploadBtnSpinner.style.display = 'none';
-            
-            if (successCount > 0) {
-                showToast(`Successfully uploaded ${successCount} file(s)`, 'success');
-                loadImportUI();
-            }
-            if (failCount > 0) {
-                showToast(`${failCount} file(s) failed to upload`, 'error');
-            }
-        });
-
-        async function loadImportUI() {
-            try {
-                const response = await fetch('?action=get_import_data');
-                const data = await response.json();
-                if (!data.success) throw new Error('Could not fetch import data.');
-
-                let content = `<h2 class="section-header">Step 2: Import Spawns</h2>`;
-                if (data.files.length === 0) {
-                    content += `<p>No files found in the import directory.</p>`;
-                } else if (data.spawnTypes.length === 0) {
-                    content += `<div class="import-disabled"><strong>⚠️ Batch import is not enabled for any spawn type.</strong><p style="margin:8px 0 0 0">Please enable batch import in the database for at least one spawn type.</p></div>`;
-                } else {
-                    const spawnOptions = data.spawnTypes.map(type => `<option value="${type.id}">${type.label}</option>`).join('');
-                    const fileCheckboxes = data.files.map(file => `<li><label style="display:inline-flex;align-items:center;gap:8px;"><input type="checkbox" name="import_files[]" value="${file}" checked><span>${file}</span></label></li>`).join('');
-                    content += `
-                    <div class="card">
-                        <form id="importForm">
-                            <div class="spawn-type-selector"><label for="spawn_type_id">Import as:</label><select name="spawn_type_id" id="spawn_type_id" class="form-control">${spawnOptions}</select></div>
-                            <label style="margin-bottom: 10px; display:block;"><input type="checkbox" onchange="toggleSelectAll(this, 'import_files[]')" checked> <strong>Select / Deselect All</strong></label>
-                            <ul class="file-list" style="max-height: 300px; overflow-y: auto; padding: 10px; border: 1px solid rgba(var(--muted-border-rgb),0.2); border-radius: 6px;">${fileCheckboxes}</ul>
-                            <div style="margin-top:20px;"><button type="submit" class="btn btn-primary"><span class="btn-text">Start Import</span><span class="spinner" style="display:none;"></span></button></div>
-                        </form>
-                    </div>`;
-                }
-                importSection.innerHTML = content;
-                importSection.classList.remove('hidden');
-
-                const importForm = document.getElementById('importForm');
-                if (importForm) {
-                    importForm.addEventListener('submit', handleImportSubmit);
-                }
-            } catch (error) { showToast(error.message, 'error'); }
-        }
-
-        // --- UPDATED Import Submit LOGIC ---
-        async function handleImportSubmit(e) {
-            e.preventDefault();
-            const form = e.target;
-            const button = form.querySelector('button[type="submit"]');
-            const btnText = button.querySelector('.btn-text');
-            const btnSpinner = button.querySelector('.spinner');
-            const formData = new FormData(form);
-            const selectedFiles = formData.getAll('import_files[]');
-            
-            if (selectedFiles.length === 0) return showToast('Please select at least one file to import.', 'error');
-            
-            button.disabled = true;
-            btnText.style.display = 'none';
-            btnSpinner.style.display = 'inline-block';
+            // Prepare Data for current file iteration
+            const fd = new FormData();
+            fd.append('images', file); // Mapped directly to the backend expectating $_FILES['images']
 
             try {
-                const postData = new FormData();
-                postData.append('action', 'import_spawns');
-                postData.append('spawn_type_id', formData.get('spawn_type_id'));
-                selectedFiles.forEach(file => postData.append('files[]', file));
-
-                const response = await fetch(window.location.pathname, { method: 'POST', body: postData });
-                const result = await response.json();
-
-                if (result.success && result.results) {
-                    // Show toasts
-                    result.results.forEach(line => {
-                        const isError = /(\[SKIP\]|failed|error)/i.test(line);
-                        showToast(line, isError ? 'error' : 'success');
+                await new Promise((resolve) => {
+                    $.ajax({
+                        url: window.location.pathname,
+                        type: 'POST',
+                        data: fd,
+                        contentType: false,
+                        processData: false,
+                        success: function(res) {
+                            if(res.status === 'success' && res.results[0].success) {
+                                successes++;
+                            } else {
+                                errors++;
+                                const msg = res.results ? res.results[0].error : 'Unknown error';
+                                Toast.show(`Failed ${file.name}: ${msg}`, 'error');
+                            }
+                            resolve();
+                        },
+                        error: function() {
+                            errors++;
+                            Toast.show(`Network error: ${file.name}`, 'error');
+                            resolve();
+                        }
                     });
-                    
-                    // --- NEW: Display persistent results list ---
-                    const resultsHtml = result.results.map(line => {
-                        const isError = /(\[SKIP\]|failed|error)/i.test(line);
-                        const cls = isError ? 'error' : 'success';
-                        return `<div class="result ${cls}">${line}</div>`;
-                    }).join('');
-
-                    importResultsSection.innerHTML = `<h3 class="section-header" style="margin-bottom:12px;">Last Import Results</h3><div class="card">${resultsHtml}</div>`;
-                    importResultsSection.classList.remove('hidden');
-                    
-                    // Refresh the import UI to show remaining files
-                    loadImportUI();
-                } else {
-                    throw new Error(result.error || 'Import failed. Check server logs.');
-                }
-            } catch (error) {
-                showToast(error.message, 'error');
-            } finally {
-                button.disabled = false;
-                btnText.style.display = 'inline-block';
-                btnSpinner.style.display = 'none';
+                });
+            } catch (e) {
+                console.error(e);
             }
         }
+
+        // Finish Cycle
+        progFill.css('width', '100%');
+        setTimeout(() => {
+            progOverlay.hide();
+            Toast.show(`Upload complete: ${successes} saved, ${errors} failed.`, errors > 0 ? 'warning' : 'success');
+            fileInput.val(''); // reset context
+            reloadImportData();
+        }, 500);
+    }
+
+    function reloadImportData() {
+        $.post(window.location.pathname, {action: 'get_import_data'}, function(res){
+            if(res.success) {
+                if (res.spawnTypes && res.spawnTypes.length === 0) {
+                    $('#importSection').html(`<div class="import-disabled" style="padding:15px; border-radius:6px; background:var(--card-weak); border:1px solid rgba(var(--muted-border-rgb),0.1);"><strong>⚠️ Batch import is not enabled for any spawn type.</strong><p style="margin:8px 0 0 0">Please enable batch import in the database for at least one spawn type.</p></div>`).slideDown();
+                    return;
+                }
+
+                if(res.files.length > 0) {
+                    $('#importSection').slideDown();
+                    $('#fileCountBadge').text(res.files.length);
+                    const typeSelect = $('#spawnTypeSelect');
+                    
+                    if(typeSelect.children().length === 0 && res.spawnTypes) {
+                        res.spawnTypes.forEach(function(type) { 
+                            typeSelect.append(new Option(type.label, type.id)); 
+                        });
+                    }
+                    const list = $('#importFileList');
+                    list.empty();
+                    res.files.forEach(f => list.append(`<div><label style="cursor:pointer;"><input type="checkbox" name="files[]" value="${f}" checked> <span style="margin-left:4px;">${f}</span></label></div>`));
+                } else {
+                    $('#importSection').slideUp();
+                }
+            }
+        }, 'json');
+    }
+    
+    // Initializer routine logic
+    reloadImportData();
+
+    $('#selectAllBox').change(function() { 
+        $('input[name="files[]"]').prop('checked', $(this).is(':checked')); 
+    });
+
+    $('#importForm').submit(function(e) {
+        e.preventDefault();
+        const btn = $('#startImportBtn');
+        const txt = btn.text();
         
-        window.toggleSelectAll = function(source, name) {
-            document.getElementsByName(name).forEach(cb => cb.checked = source.checked);
+        const formData = $(this).serializeArray();
+        let fileCount = formData.filter(item => item.name === 'files[]').length;
+        if (fileCount === 0) {
+            Toast.show('Please select at least one file to import.', 'error');
+            return;
         }
 
-        function showToast(message, type = 'success') {
-            const container = document.getElementById('toastContainer');
-            const toast = document.createElement('div');
-            toast.className = `toast toast-${type}`;
-            toast.textContent = message;
-            container.appendChild(toast);
-            setTimeout(() => toast.classList.add('show'), 10);
-            setTimeout(() => {
-                toast.classList.remove('show');
-                toast.addEventListener('transitionend', () => toast.remove());
-            }, 5000);
-        }
-    })();
-    </script>
+        btn.prop('disabled', true).text('Importing...');
+        
+        $.post(window.location.pathname, $(this).serialize() + '&action=import_spawns', function(res) {
+            btn.prop('disabled', false).text(txt);
+            if(res.success) {
+                reloadImportData();
+                let html = '<div class="card" style="margin-bottom:20px;"><h3 style="margin-top:0;">Last Import Results</h3>';
+                res.results.forEach(msg => {
+                    const isError = /([\[]SKIP[\]]|failed|error)/i.test(msg);
+                    const cls = isError ? 'res-error' : 'res-success';
+                    html += `<div class="result-log ${cls}">${msg}</div>`;
+                });
+                html += '</div>';
+                $('#resultsSection').prepend(html);
+                Toast.show('Finished', 'info');
+            } else {
+                Toast.show(res.results ? res.results[0] : (res.error || 'Error'), 'error');
+            }
+        }, 'json');
+    });
+});
+</script>
 
 <script src="/js/sage-home-button.js" data-home="/dashboard.php"></script>
 

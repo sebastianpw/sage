@@ -10,9 +10,11 @@
     "keywords": [],
     "dataset_sources": [
         "spw800621/sdxl-turbo",
-        "spw800621/controlnet-openpose-sdxl"
+        "spw800621/controlnet-openpose-sdxl",
+        "spw800621/sage-zrok-token"
     ],
     "kernel_sources": [],
     "competition_sources": [],
-    "model_sources": []
+    "model_sources": [],
+    "id": "spw800621/sage-sdxl-turbo-t2i-cn"
 }

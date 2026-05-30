@@ -247,7 +247,7 @@ ob_start();
 </script>
 
 <?php
-//require "floatool.php";
+//require_once "forge_tool.php";
 $content = ob_get_clean();
 //$content .= $eruda;
 $spw->renderLayout($content, $pageTitle);

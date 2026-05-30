@@ -6,65 +6,6 @@
 require_once __DIR__ . '/bootstrap.php';
 
 /**
- * Generates the PHP code for gear menu actions for a specific entity.
- */
-function generateGearActionsCode(string $entity): string
-{
-    // 'controlnet_maps' has a completely different set of actions.
-    if ($entity === 'controlnet_maps') {
-        // Hardcoded block for simplicity and clarity.
-        // Note: \$entity is escaped to ensure it's treated as a literal PHP variable in the final output file.
-        $code = <<<EOT
-\$gearMenu->addAction('{$entity}', [
-    'label' => 'Assign to Character',
-    'icon' => '👤',
-    'callback' => 'window.showImportEntityModal({
-        source: "' . \$entity . '",
-        target: "characters",
-        source_entity_id: entityId,
-        frame_id: frameId,
-        limit: 1,
-        copy_name_desc: 0,
-        controlnet: 1
-    });'
-]);
-
-\$gearMenu->addAction('{$entity}', [
-    'label' => 'Assign to Generative',
-    'icon' => '⚡',
-    'callback' => 'window.showImportEntityModal({
-        source: "' . \$entity . '",
-        target: "generatives",
-        source_entity_id: entityId,
-        frame_id: frameId,
-        limit: 1,
-        copy_name_desc: 0,
-        controlnet: 1
-    });'
-]);
-
-\$gearMenu->addAction('{$entity}', [
-    'label' => 'Assign to Sketch',
-    'icon' => '✏️',
-    'callback' => 'window.showImportEntityModal({
-        source: "' . \$entity . '",
-        target: "sketches",
-        source_entity_id: entityId,
-        frame_id: frameId,
-        limit: 1,
-        copy_name_desc: 0,
-        controlnet: 1
-    });'
-]);
-EOT;
-        return $code;
-    }
-
-    return '';
-}
-
-
-/**
  * Generate gallery view file for a specific entity using gallery_characters_nu.php as a template.
  */
 function generateGalleryView(string $entity): string
@@ -78,7 +19,7 @@ function generateGalleryView(string $entity): string
     // Convert entity name to PascalCase for class names and titles
     $pascalCaseName = str_replace(' ', '', ucwords(str_replace('_', ' ', $entity)));
     
-    // --- Perform universal replacements first ---
+    // --- Perform universal replacements ---
     
     // 1. Replace the file header comment
     $content = str_replace('// public/gallery_characters_nu.php', "// public/gallery_{$entity}_nu.php", $content);
@@ -97,52 +38,40 @@ function generateGalleryView(string $entity): string
     $content = str_replace("'show_for_entities' => ['characters']", "'show_for_entities' => ['{$entity}']", $content);
     $content = str_replace('// Configure gear menu module for characters', "// Configure gear menu module for {$entity}", $content);
 
-
-    // --- Now, handle entity-specific sections ---
-
-    // Define the boundaries for our code blocks
-    $gearActionsStartSentinel = '$gearMenu->addAction';
-    $gearActionsEndSentinel = '// Configure image editor module';
-    $imageEditorConfigStartSentinel = '// Configure image editor module';
-    $imageEditorConfigEndSentinel = '// Create the gallery instance';
-
-    // Find the Gear Actions block
-    $gearStartPos = strpos($content, $gearActionsStartSentinel);
-    $gearEndPos = strpos($content, $gearActionsEndSentinel, $gearStartPos);
+    // --- Handle Gear Menu Actions ---
+    // The template uses $gearMenu->addStandardActions($entity);
+    // This is valid for almost all entities.
+    // However, 'controlnet_maps' has a completely different logic.
     
-    if ($gearStartPos === false || $gearEndPos === false) {
-        throw new \RuntimeException("Could not find the Gear Action block in the template.");
-    }
-    
-    $gearActionsBlock = substr($content, $gearStartPos, $gearEndPos - $gearStartPos);
-
-    // First, perform the standard replacement of 'characters' inside the action block for ALL entities.
-    $newGearActionsBlock = str_replace("\$gearMenu->addAction('characters',", "\$gearMenu->addAction('{$entity}',", $gearActionsBlock);
-    $content = str_replace($gearActionsBlock, $newGearActionsBlock, $content);
-    
-    // Now, handle special cases like 'controlnet_maps'.
     if ($entity === 'controlnet_maps') {
-        // A. Generate the specific actions for controlnet_maps.
-        $customActionsCode = generateGearActionsCode($entity);
+        // Define custom actions and append standard actions at the end
+        $customActionsCode = <<<PHP
+\$gearMenu->addAction('{$entity}', [
+    'label' => 'Assign to Character',
+    'icon' => '👤',
+    'callback' => 'window.showImportEntityModal({ source: "{$entity}", target: "characters", source_entity_id: entityId, frame_id: frameId, limit: 1, copy_name_desc: 0, controlnet: 1 });'
+]);
 
-        // B. Prepend the custom actions to the start of the gear actions section.
-        // We find the first `$gearMenu->addAction` (which we know exists) and insert before it.
-        $firstActionPos = strpos($content, $gearActionsStartSentinel);
-        if ($firstActionPos !== false) {
-            $content = substr_replace($content, $customActionsCode . "\n\n", $firstActionPos, 0);
-        }
+\$gearMenu->addAction('{$entity}', [
+    'label' => 'Assign to Generative',
+    'icon' => '⚡',
+    'callback' => 'window.showImportEntityModal({ source: "{$entity}", target: "generatives", source_entity_id: entityId, frame_id: frameId, limit: 1, copy_name_desc: 0, controlnet: 1 });'
+]);
 
-        // C. Also, completely remove the Image Editor configuration and render call.
-        $editorStartPos = strpos($content, $imageEditorConfigStartSentinel);
-        $editorEndPos = strpos($content, $imageEditorConfigEndSentinel, $editorStartPos);
+\$gearMenu->addAction('{$entity}', [
+    'label' => 'Assign to Sketch',
+    'icon' => '✏️',
+    'callback' => 'window.showImportEntityModal({ source: "{$entity}", target: "sketches", source_entity_id: entityId, frame_id: frameId, limit: 1, copy_name_desc: 0, controlnet: 1 });'
+]);
 
-        if ($editorStartPos !== false && $editorEndPos !== false) {
-            $imageEditorBlock = substr($content, $editorStartPos, $editorEndPos - $editorStartPos);
-            $content = str_replace($imageEditorBlock, '', $content);
-        }
-        
-        // Remove the render call.
-        $content = preg_replace('/^\s*\. \$imageEditor->render\(\)\R/m', '', $content);
+\$gearMenu->addStandardActions(\$entity);
+PHP;
+        // Replace the standard call with the custom block
+        $content = str_replace('$gearMenu->addStandardActions($entity);', $customActionsCode, $content);
+
+        // Also remove Image Editor for controlnet maps
+        $content = preg_replace('/\/\/ Configure image editor module.*\$imageEditor->render\(\);/s', '', $content);
+        $content = str_replace('. $imageEditor->render()', '', $content);
     }
     
     return $content;

@@ -122,6 +122,7 @@ $frameDetailsModal = ob_get_clean();
 
 // Combine all content - inject gear menu globals and module renders
 $content = $eruda 
+         . '<style>.sb-menu { position: absolute !important; }</style>'
          . '<script src="/js/gear_menu_globals.js"></script>'
          . $gearMenu->render()
          . $imageEditor->render()

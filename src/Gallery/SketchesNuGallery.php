@@ -1,57 +1,87 @@
 <?php
-// src/Gallery/SketchesNuGallery.php
 namespace App\Gallery;
+
 class SketchesNuGallery extends AbstractNuGallery {
+
     protected function getGalleryEntity(): string {
         return "sketches";
     }
+
     protected function getGalleryTitle(): string {
-        return "Sketches Gallery";
+        return "Sketches";
     }
+
     protected function getToggleButtonLeft(): int {
-        return 150;
+        // Adjust button position for the wide dropdown
+        return 220;
     }
+
     protected function getFiltersFromRequest(): array {
         return [
-            'name'  => $_GET['name'] ?? 'all',
-            'style' => $_GET['style'] ?? 'all'
+            'map_run' => $_GET['map_run'] ?? 'all'
         ];
     }
+
     protected function getFilterOptions(): array {
+        $options = [];
+        
+        // Filter by entity_type = 'sketches' so we don't see runs for other entities
+        $sql = "SELECT id, note, created_at 
+                FROM map_runs 
+                WHERE entity_type = 'sketches' 
+                ORDER BY id DESC LIMIT 50";
+                
+        $result = $this->mysqli->query($sql);
+        
+        while($row = $result->fetch_assoc()) {
+            // Format: "123: Note text (Date)"
+            $note = $row['note'] ? substr($row['note'], 0, 20) . '...' : 'No Note';
+            $date = date('m-d H:i', strtotime($row['created_at']));
+            $options[] = "{$row['id']}: {$note} ($date)";
+        }
+
         return [
-            'name' => [
-                'label'  => 'Sketches',
-                'values' => $this->fetchDistinct('name'),
+            'map_run' => [
+                'label'  => 'Batch Run',
+                'values' => $options,
                 'left'   => 0
-            ],
-            'style' => [
-                'label'  => 'Styles',
-                'values' => $this->fetchDistinct('style'),
-                'left'   => 75
             ]
         ];
     }
+
     protected function getWhereClause(): string {
-        $clauses = [];
-        if (($this->filters['name'] ?? 'all') !== 'all') {
-            $clauses[] = "name='" . $this->mysqli->real_escape_string($this->filters['name']) . "'";
+        $selected = $this->filters['map_run'] ?? 'all';
+        
+        if ($selected !== 'all') {
+            // Extract the ID from the string "123: Note..."
+            $parts = explode(':', $selected);
+            $mapRunId = intval($parts[0]);
+            
+            if ($mapRunId > 0) {
+                // Relies on the view having map_run_id
+                return "WHERE map_run_id = " . $mapRunId;
+            }
         }
-        if (($this->filters['style'] ?? 'all') !== 'all') {
-            $clauses[] = "style='" . $this->mysqli->real_escape_string($this->filters['style']) . "'";
-        }
-        return $clauses ? "WHERE " . implode(" AND ", $clauses) : "";
+        
+        return "";
     }
+
     protected function getCaptionFields(): array {
         return [
             'Entity ID'   => 'entity_id',
+            'Map Run'     => 'map_run_id',
             'Frame ID'    => 'frame_id',
             'Name'        => 'name',
             'Description' => 'description',
-            'Mood'        => 'mood',
             'Style'       => 'style'
         ];
     }
+
     protected function getBaseQuery(): string {
         return "v_gallery_sketches";
+    }
+
+    protected function getOrderBy(): string {
+        return 'frame_id DESC';
     }
 }

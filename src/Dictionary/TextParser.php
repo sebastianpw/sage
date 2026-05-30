@@ -4,9 +4,7 @@ namespace App\Dictionary;
 /**
  * TextParser - Extracts and lemmatizes words from text and PDF files
  * 
- * This class processes text files and PDFs to extract unique lemmas (base word forms).
- * For English, it uses a simple stemming approach. For better results, consider
- * integrating with external NLP services or libraries.
+ * Version 3.0: Aggressive whitespace/hyphen repair for PDF artifacts.
  */
 class TextParser {
     private $pdo;
@@ -19,16 +17,10 @@ class TextParser {
 
     /**
      * Parse a file and extract lemmas
-     * 
-     * @param string $filePath Full path to the file
-     * @param string $fileType 'txt' or 'pdf'
-     * @param int $dictionaryId Dictionary to associate lemmas with
-     * @param string $languageCode Language code for lemmatization
-     * @return array ['success' => bool, 'lemmas_added' => int, 'error' => string|null]
      */
     public function parseFile($filePath, $fileType, $dictionaryId, $languageCode = 'en') {
         try {
-            // Extract text based on file type
+            // 1. Extract raw text
             if ($fileType === 'pdf') {
                 $text = $this->extractTextFromPdf($filePath);
             } else {
@@ -39,10 +31,13 @@ class TextParser {
                 return ['success' => false, 'lemmas_added' => 0, 'error' => 'No text extracted from file'];
             }
 
-            // Tokenize and lemmatize
+            // 2. Pre-process text (Global cleanups and de-hyphenation)
+            $text = $this->preprocessText($text);
+
+            // 3. Tokenize and lemmatize
             $lemmas = $this->extractLemmas($text, $languageCode);
             
-            // Store lemmas in database
+            // 4. Store in DB
             $lemmasAdded = $this->storeLemmas($lemmas, $dictionaryId, $languageCode);
 
             return [
@@ -65,7 +60,6 @@ class TextParser {
      * Extract text from PDF using Smalot PDF Parser
      */
     private function extractTextFromPdf($filePath) {
-        // Check if PDF parser is available
         if (!class_exists('\\Smalot\\PdfParser\\Parser')) {
             throw new \Exception('PDF Parser not available. Install: composer require smalot/pdfparser');
         }
@@ -76,31 +70,94 @@ class TextParser {
     }
 
     /**
+     * Clean raw text before tokenization
+     * Critical step for fixing broken words.
+     */
+    private function preprocessText($text) {
+        // 1. Unicode Normalization (Fix ligatures like ﬁ -> fi)
+        if (class_exists('Normalizer')) {
+            $text = \Normalizer::normalize($text, \Normalizer::FORM_KC);
+        }
+
+        // 2. Remove invisible control characters (except newlines/tabs)
+        // This removes weird PDF artifacts that might sit inside words.
+        $text = preg_replace('/[^\P{C}\n\r\t]/u', '', $text);
+
+        // 3. Delete Soft Hyphens (\u00AD) entirely.
+        // If we convert these to dashes, we risk creating "anti-gravity".
+        // In PDFs, they are usually just break hints. Deleting them joins "anti" + "gravity" -> "antigravity".
+        $text = str_replace("\xC2\xAD", '', $text); // UTF-8 byte sequence for soft hyphen
+        $text = preg_replace('/\x{00AD}/u', '', $text);
+
+        // 4. Handle Clause Separators (Em-dash/En-dash)
+        // These should SPLIT words (e.g., "word—word" -> "word word").
+        // We do this BEFORE stitching hyphens to avoid merging unrelated words.
+        $text = preg_replace('/[\x{2013}\x{2014}]/u', ' ', $text); // En-dash, Em-dash -> Space
+
+        // 5. Aggressive Hyphen Stitching
+        // This fixes:
+        // "antig-ravity"
+        // "antig - ravity" (Space before hyphen)
+        // "antig-\nravity" (Newline after hyphen)
+        // "antig - \n ravity" (Messy whitespace)
+        //
+        // Logic: Capture Letter ($1), optional space, hyphen-like char, optional whitespace, Letter ($2).
+        // Replace with $1$2 (Direct Join).
+        $text = preg_replace_callback(
+            '/(\p{L})\s*[-\x{2010}-\x{2012}\x{2212}]\s*(\p{L})/u', 
+            function($matches) {
+                return $matches[1] . $matches[2];
+            }, 
+            $text
+        );
+
+        // 6. Convert remaining punctuation/symbols to Spaces
+        // Since we already stitched the hyphens we wanted to keep, all remaining dashes
+        // are likely separators or bullet points.
+        $text = str_replace(
+            ['_', '/', '\\', '|', '[', ']', '(', ')', '{', '}', '<', '>', '“', '”', '’', '‘', '"', '.', ',', ':', ';', '!', '?', '*', '-', '+', '=', '&', '%', '$', '#', '@'], 
+            ' ', 
+            $text
+        );
+
+        return $text;
+    }
+
+    /**
      * Extract and lemmatize words from text
-     * 
-     * @return array Associative array ['lemma' => frequency]
      */
     private function extractLemmas($text, $languageCode) {
-        // Normalize text
         $text = mb_strtolower($text, 'UTF-8');
         
-        // Remove punctuation but keep letters with accents
-        $text = preg_replace('/[^\p{L}\p{N}\s]/u', ' ', $text);
+        // Final cleanup: Remove anything not a letter or space
+        $text = preg_replace('/[^\p{L}\s]/u', '', $text);
         
-        // Split into words
+        // Split by whitespace
         $words = preg_split('/\s+/', $text, -1, PREG_SPLIT_NO_EMPTY);
         
         $lemmaFrequency = [];
         
         foreach ($words as $word) {
-            // Skip very short words and stop words
-            if (mb_strlen($word) < 3 || $this->isStopWord($word)) {
+            $word = trim($word);
+
+            // Skip short words
+            if (mb_strlen($word) < 3) {
+                continue;
+            }
+
+            // Skip stop words
+            if ($this->isStopWord($word)) {
                 continue;
             }
             
-            // Lemmatize (simplified version)
+            // Lemmatize
             $lemma = $this->lemmatize($word, $languageCode);
             
+            // Validate length again
+            if (mb_strlen($lemma) < 3) { 
+                continue; 
+            }
+
             if (!isset($lemmaFrequency[$lemma])) {
                 $lemmaFrequency[$lemma] = 0;
             }
@@ -112,32 +169,48 @@ class TextParser {
 
     /**
      * Simple lemmatization (stemming) for English
-     * For production use, consider external NLP services
      */
     private function lemmatize($word, $languageCode) {
         if ($languageCode !== 'en') {
-            return $word; // For non-English, return as-is (extend as needed)
+            return $word;
         }
 
-        // Simple English suffix removal rules
+        // Conservative stemming rules to prevent over-truncation
         $patterns = [
             '/ies$/' => 'y',
             '/ves$/' => 'f',
-            '/ses$/' => 's',
             '/sses$/' => 'ss',
-            '/([^s])s$/' => '$1',
+            '/([^s])s$/' => '$1', 
             '/ing$/' => '',
             '/ed$/' => '',
-            '/tion$/' => 't',
+            '/tion$/' => 'te',
             '/ment$/' => '',
             '/ness$/' => '',
+            '/ly$/' => '',
             '/ful$/' => '',
             '/less$/' => '',
+            '/ity$/' => 'y', // e.g. gravity -> gravy? No, purity -> pure. Careful here.
         ];
 
-        foreach ($patterns as $pattern => $replacement) {
+        // Specific fix for "gravity" / "antigravity" vs "purity"
+        // The rule /ity$/ -> y works for "gravity" (gravy) which is wrong.
+        // Let's stick to the safe list.
+        $safePatterns = [
+            '/ies$/' => 'y',
+            '/ves$/' => 'f',
+            '/sses$/' => 'ss',
+            '/([^s])s$/' => '$1', 
+            '/ing$/' => '',
+            '/ed$/' => '',
+            '/ment$/' => '',
+            '/ness$/' => '',
+            '/ly$/' => '',
+        ];
+
+        foreach ($safePatterns as $pattern => $replacement) {
             $lemma = preg_replace($pattern, $replacement, $word);
             if ($lemma !== $word) {
+                if (mb_strlen($lemma) < 3) return $word;
                 return $lemma;
             }
         }
@@ -145,9 +218,6 @@ class TextParser {
         return $word;
     }
 
-    /**
-     * Store lemmas in database with proper deduplication
-     */
     private function storeLemmas($lemmas, $dictionaryId, $languageCode) {
         $this->pdo->beginTransaction();
         
@@ -155,54 +225,31 @@ class TextParser {
             $lemmasAdded = 0;
             
             // Prepare statements
-            $checkLemmaStmt = $this->pdo->prepare(
-                "SELECT id FROM dict_lemmas WHERE lemma = ? AND language_code = ?"
-            );
-            
-            $insertLemmaStmt = $this->pdo->prepare(
-                "INSERT INTO dict_lemmas (lemma, language_code, frequency) 
-                 VALUES (?, ?, ?)
-                 ON DUPLICATE KEY UPDATE frequency = frequency + ?"
-            );
-            
-            $insertMappingStmt = $this->pdo->prepare(
-                "INSERT INTO dict_lemma_2_dictionary (dictionary_id, lemma_id, frequency_in_dict) 
-                 VALUES (?, ?, ?)
-                 ON DUPLICATE KEY UPDATE frequency_in_dict = frequency_in_dict + ?"
-            );
+            $checkLemmaStmt = $this->pdo->prepare("SELECT id FROM dict_lemmas WHERE lemma = ? AND language_code = ?");
+            $insertLemmaStmt = $this->pdo->prepare("INSERT INTO dict_lemmas (lemma, language_code, frequency) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE frequency = frequency + ?");
+            $updateGlobalFreqStmt = $this->pdo->prepare("UPDATE dict_lemmas SET frequency = frequency + ? WHERE id = ?");
+            $insertMappingStmt = $this->pdo->prepare("INSERT INTO dict_lemma_2_dictionary (dictionary_id, lemma_id, frequency_in_dict) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE frequency_in_dict = frequency_in_dict + ?");
             
             foreach ($lemmas as $lemma => $frequency) {
-                // Check if lemma exists
+                // Check/Insert Lemma
                 $checkLemmaStmt->execute([$lemma, $languageCode]);
                 $existingLemma = $checkLemmaStmt->fetch(\PDO::FETCH_ASSOC);
                 
                 if ($existingLemma) {
                     $lemmaId = $existingLemma['id'];
-                    // Update global frequency
-                    $updateStmt = $this->pdo->prepare(
-                        "UPDATE dict_lemmas SET frequency = frequency + ? WHERE id = ?"
-                    );
-                    $updateStmt->execute([$frequency, $lemmaId]);
+                    $updateGlobalFreqStmt->execute([$frequency, $lemmaId]);
                 } else {
-                    // Insert new lemma
                     $insertLemmaStmt->execute([$lemma, $languageCode, $frequency, $frequency]);
                     $lemmaId = $this->pdo->lastInsertId();
                 }
                 
-                // Create or update mapping to dictionary
+                // Link to Dictionary
                 $insertMappingStmt->execute([$dictionaryId, $lemmaId, $frequency, $frequency]);
                 $lemmasAdded++;
             }
             
-            // Update dictionary lemma count
-            $updateCountStmt = $this->pdo->prepare(
-                "UPDATE dict_dictionaries 
-                 SET total_lemmas = (
-                     SELECT COUNT(*) FROM dict_lemma_2_dictionary WHERE dictionary_id = ?
-                 )
-                 WHERE id = ?"
-            );
-            $updateCountStmt->execute([$dictionaryId, $dictionaryId]);
+            // Update Stats
+            $this->pdo->prepare("UPDATE dict_dictionaries SET total_lemmas = (SELECT COUNT(*) FROM dict_lemma_2_dictionary WHERE dictionary_id = ?) WHERE id = ?")->execute([$dictionaryId, $dictionaryId]);
             
             $this->pdo->commit();
             return $lemmasAdded;
@@ -213,20 +260,19 @@ class TextParser {
         }
     }
 
-    /**
-     * Load common stop words to exclude
-     */
     private function loadStopWords() {
-        // Common English stop words
         $this->stopWords = [
             'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'her',
             'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how',
             'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did',
-            'its', 'let', 'put', 'say', 'she', 'too', 'use', 'dad', 'mom', 'the',
+            'its', 'let', 'put', 'say', 'she', 'too', 'use', 'dad', 'mom', 
             'this', 'that', 'with', 'have', 'from', 'they', 'been', 'were', 'said',
             'each', 'which', 'their', 'there', 'would', 'could', 'about', 'into',
             'than', 'them', 'these', 'some', 'what', 'when', 'your', 'more', 'will',
-            'just', 'very', 'such', 'because', 'through', 'should', 'before', 'after'
+            'just', 'very', 'such', 'because', 'through', 'should', 'before', 'after',
+            'where', 'why', 'does', 'doing', 'off', 'over', 'own', 'down', 'up',
+            'abc', 'iii', 'page', 'vol', 'chapter', 'ii', 'iv', 'vi', 'vii', 'viii',
+            'http', 'https', 'www', 'com', 'org'
         ];
     }
 

@@ -41,6 +41,15 @@ $projectPath = $spw->getProjectPath();
 
 $publicPathAbs = $spw->getProjectPath() . PUBLIC_PATH_REL;
 
-AccessManager::authenticate();
+$accessOptions['allowedWithoutLogin'] = [
+    '/login.php',
+    '/google_login.php',
+    '/google_callback.php',
+    '/logout.php',
+    '/register.php',
+    '/import_entity_from_entity.php'
+];
+
+AccessManager::authenticate($accessOptions);
 
 

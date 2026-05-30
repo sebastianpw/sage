@@ -13,57 +13,34 @@ $repo = $em->getRepository(App\Entity\GeneratorConfig::class);
 $generators = [];
 
 if ($userId) {
-    // 1. Start building the query
-    $qb = $repo->createQueryBuilder('g'); // 'g' is an alias for GeneratorConfig
-
-    // 2. Join the displayAreas relationship and give it an alias 'da'
+    $qb = $repo->createQueryBuilder('g'); 
     $qb->join('g.displayAreas', 'da')
-
-       // 3. Add WHERE clauses for the conditions
        ->where('g.userId = :userId')
        ->andWhere('g.active = :isActive')
-       ->andWhere('da.areaKey = :areaKey') // Filter on the JOINED table's column
-
-       // 4. Set the parameters to prevent SQL injection
+       ->andWhere('da.areaKey = :areaKey') 
        ->setParameter('userId', $userId)
        ->setParameter('isActive', true)
-       ->setParameter('areaKey', 'floatool') // The area you're looking for
-
-       // 5. Set the ordering
+       ->setParameter('areaKey', 'floatool') 
        ->orderBy('g.title', 'ASC');
 
-    // 6. Execute the query and get the results
     $generators = $qb->getQuery()->getResult();
 }
 
-
 // --- DYNAMIC LAB MENU ---
-
-// Master list of entity icons
 $entityIcons = [
     'characters'      => '🦸',
-//    'character_poses' => '🤸',
     'animas'          => '🐾',
     'locations'       => '🗺️',
     'backgrounds'     => '🏞️',
     'artifacts'       => '🏺',
     'vehicles'        => '🛸',
-//    'scene_parts'     => '🎬',
-//    'controlnet_maps' => '☠️',
-//    'spawns'          => '🌱',
     'generatives'     => '⚡',
     'sketches'        => '🪄',
-//    'prompt_matrix_blueprints' => '🌌',
     'composites'      => '🧩',
-//    'pastebin'        => '📋',
-//    'sage_todos'      => '🎫',
-//    'meta_entities'   => '📦'
 ];
 
-// Dynamically build the lab menu entities from the master list
 $labEntities = [];
 foreach ($entityIcons as $type => $icon) {
-    // Create a user-friendly name from the entity type string
     $name = ucwords(str_replace('_', ' ', $type));
     $labEntities[] = [
         'type' => $type,
@@ -77,34 +54,17 @@ foreach ($entityIcons as $type => $icon) {
 <div id="floatool" class="floatool collapsed" aria-hidden="false">
     <div class="floatool-handle">☰</div>
     <div class="floatool-buttons">
-        <button data-action="open-dashboard">🧭</button>
-        <button data-action="open-database">🛢️</button>
-        <button data-action="open-styles">🎨</button>
-        <button data-action="open-regen">♻️</button>
-        <button data-action="open-chat">💬</button>
-        <button data-action="open-generators">⚗️</button>
-        <button data-action="open-lab">💫</button>
-        <button data-action="open-other">🌀</button>
-        <button data-action="open-logs">📓️</button>
+        <button data-action="open-dashboard" title="Dashboard">🧭</button>
+        <button data-action="open-boards" title="Boards">🛹</button>
+        <button data-action="open-database" title="DB Tool">🛢️</button>
+        <button data-action="open-styles" title="Styles">🎨</button>
+        <button data-action="open-regen" title="Regenerate">♻️</button>
+        <button data-action="open-chat" title="Chat">💬</button>
+        <button data-action="open-generators" title="Generator Forge">⚗️</button>
+        <button style="display:none;" data-action="open-lab" title="Rapid Create">💫</button>
+        <!-- Gear 🌀 Removed -->
+        <button data-action="open-runner" title="Control Deck">🌀</button>
     </div>
-</div>
-
-<!-- Gear flyout menu -->
-<div id="floatoolGearMenu" class="floatool-gear-menu" style="display:none;">
-    <a class="floatool-menu-header" href="scheduler_view.php">🌀 Scheduler</a>
-    <a href="#" class="scheduler" data-id="10" onclick="runScheduler(this)">🌀 run ⚡ now</a>
-    <a href="#" class="scheduler" data-id="15" onclick="runScheduler(this)">🌀 run 🪄 now</a>
-    <a href="#" class="scheduler" data-id="23" onclick="runScheduler(this)">🌀 run 🌌 now</a>
-    <a href="#" class="scheduler" data-id="24" onclick="runScheduler(this)">🌀 run 🧩 now</a>
-    <a href="#" class="scheduler" data-id="20" onclick="runScheduler(this)">🌀 run ☠️ now</a>
-    <a href="#" class="scheduler" data-id="11" onclick="runScheduler(this)">🌀 run 🦸 now</a>
-    <a href="#" class="scheduler" data-id="19" onclick="runScheduler(this)">🌀 run 🤸 now</a>
-    <a href="#" class="scheduler" data-id="12" onclick="runScheduler(this)">🌀 run 🐾 now</a>
-    <a href="#" class="scheduler" data-id="13" onclick="runScheduler(this)">🌀 run 🗺️ now</a>
-    <a href="#" class="scheduler" data-id="16" onclick="runScheduler(this)">🌀 run 🏞️ now</a>
-    <a href="#" class="scheduler" data-id="18" onclick="runScheduler(this)">🌀 run 🏺 now</a>
-    <a href="#" class="scheduler" data-id="17" onclick="runScheduler(this)">🌀 run 🛸 now</a>
-    <a href="#" class="scheduler" data-id="" onclick="runScheduler(this)">🌀 run 🎬 now</a>
 </div>
 
 <!-- Generator flyout menu -->
@@ -171,22 +131,11 @@ foreach ($entityIcons as $type => $icon) {
     </div>
 </div>
 
-
 <style>
-    /*
-      Theme-aware floatool styles (Final Version)
-      This CSS now "follows" the data-theme set by the main application.
-    */
-
+    /* Theme-aware floatool styles */
     :root {
-        /* Define shared font stacks */
         --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         --emoji-fonts: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-
-        /*
-           RULE 1: Light theme is the default fallback.
-           These variables are used if no other rule matches.
-        */
         --float-bg: #ffffff;
         --float-border: #d1d5db;
         --float-text: #111827;
@@ -197,13 +146,6 @@ foreach ($entityIcons as $type => $icon) {
         --accent: #2563eb;
         --float-overlay-bg: rgba(20, 20, 20, 0.7);
     }
-
-    /*
-       RULE 2: Explicit Dark Mode.
-       This is the most important rule. If the <html> tag has data-theme="dark"
-       (set by your dashboard's head script), these variables will be used.
-       This has higher specificity than :root, so it wins.
-    */
     html[data-theme="dark"] {
         --float-bg: #0f1724;
         --float-border: #1f2937;
@@ -215,13 +157,6 @@ foreach ($entityIcons as $type => $icon) {
         --accent: #3b82f6;
         --float-overlay-bg: rgba(0, 0, 0, 0.8);
     }
-
-    /*
-       RULE 3: System Preference Dark Mode.
-       This rule applies ONLY if the user's OS is dark AND no explicit
-       data-theme has been set. This covers the initial visit before
-       a user has toggled the theme.
-    */
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme]) {
         --float-bg: #0f1724;
@@ -256,198 +191,36 @@ foreach ($entityIcons as $type => $icon) {
     .floatool-menu-item-disabled { color: var(--float-muted) !important; font-style: italic; pointer-events: none; }
     .floatool-menu-separator-top { border-top: 1px solid var(--float-border); margin-top: 4px; }
     
-    /* Generator Dialog Modal - Improved Styling */
-    .generator-dialog-overlay { 
-        position: fixed; 
-        inset: 0; 
-        background: var(--float-overlay-bg); 
-        z-index: 10001; 
-        display: flex; 
-        align-items: center; 
-        justify-content: center; 
-        padding: 12px; 
-    }
-    
-    .generator-dialog { 
-        background: var(--float-bg); 
-        border-radius: 10px; 
-        max-width: 600px; 
-        width: 100%; 
-        max-height: 90vh; 
-        overflow-y: auto; 
-        box-shadow: 0 8px 30px rgba(2,6,23,0.35); 
-        color: var(--float-text); 
-        font-family: var(--font-stack); 
-        border: 1px solid rgba(var(--muted-border-rgb), 0.06);
-    }
-    
-    .generator-dialog-header { 
-        display: flex; 
-        justify-content: space-between; 
-        align-items: center; 
-        padding: 16px 20px; 
-        border-bottom: 1px solid var(--float-border); 
-        position: sticky; 
-        top: 0; 
-        background: var(--float-bg); 
-        z-index: 1; 
-    }
-    
-    .generator-dialog-header h3 { 
-        margin: 0; 
-        font-size: 1.1rem; 
-        font-weight: 600;
-        overflow: hidden; 
-        text-overflow: ellipsis; 
-        white-space: nowrap; 
-        flex: 1; 
-        padding-right: 10px; 
-        font-family: var(--font-stack); 
-    }
-    
-    .generator-dialog-close { 
-        background: none; 
-        border: none; 
-        font-size: 22px; 
-        cursor: pointer; 
-        color: var(--float-muted); 
-        padding: 0 8px; 
-        flex-shrink: 0; 
-        transition: color 0.15s;
-    }
+    /* Dialog Styles */
+    .generator-dialog-overlay { position: fixed; inset: 0; background: var(--float-overlay-bg); z-index: 10001; display: flex; align-items: center; justify-content: center; padding: 12px; }
+    .generator-dialog { background: var(--float-bg); border-radius: 10px; max-width: 600px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 30px rgba(2,6,23,0.35); color: var(--float-text); font-family: var(--font-stack); border: 1px solid rgba(var(--muted-border-rgb), 0.06); }
+    .generator-dialog-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--float-border); position: sticky; top: 0; background: var(--float-bg); z-index: 1; }
+    .generator-dialog-header h3 { margin: 0; font-size: 1.1rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; padding-right: 10px; font-family: var(--font-stack); }
+    .generator-dialog-close { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--float-muted); padding: 0 8px; flex-shrink: 0; transition: color 0.15s; }
     .generator-dialog-close:hover { color: var(--float-text); }
-    
     .generator-dialog-body { padding: 20px; }
-    
-    /* Improved form styling matching generator admin */
     .generator-form-params { display: grid; gap: 16px; margin-bottom: 20px; }
-    
     .form-group { margin-bottom: 0; }
-    
-    .generator-form-params label { 
-        display: block; 
-        margin-bottom: 6px; 
-        font-weight: 600; 
-        font-size: 0.85rem; 
-        color: var(--float-muted); 
-    }
-    
-    .generator-form-params input, 
-    .generator-form-params select, 
-    .generator-form-params textarea { 
-        width: 100%; 
-        padding: 10px 12px; 
-        border: 1px solid rgba(var(--muted-border-rgb), 0.12); 
-        border-radius: 6px; 
-        font-size: 0.9rem; 
-        font-family: var(--font-stack); 
-        background: var(--float-btn-bg); 
-        color: var(--float-text); 
-        transition: border-color 0.15s ease;
-    }
-    
-    .generator-form-params input:focus,
-    .generator-form-params select:focus,
-    .generator-form-params textarea:focus {
-        outline: none;
-        border-color: var(--accent);
-    }
-    
-    .generator-form-params textarea { 
-        min-height: 100px; 
-        resize: vertical; 
-        font-family: ui-monospace, monospace; 
-        font-size: 0.85rem; 
-    }
-    
-    .generator-dialog-actions { 
-        display: flex; 
-        gap: 10px; 
-        justify-content: flex-end; 
-        flex-wrap: wrap; 
-    }
-    
-    .btn-primary, .btn-secondary, .btn-copy, .btn-fill { 
-        padding: 10px 16px; 
-        border-radius: 6px; 
-        border: none; 
-        cursor: pointer; 
-        font-weight: 600; 
-        font-size: 0.9rem; 
-        touch-action: manipulation; 
-        font-family: var(--font-stack); 
-        transition: all 0.15s ease;
-    }
-    
-    .btn-primary { 
-        background: var(--accent); 
-        color: white; 
-        flex: 1; 
-        min-width: 120px; 
-    }
+    .generator-form-params label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 0.85rem; color: var(--float-muted); }
+    .generator-form-params input, .generator-form-params select, .generator-form-params textarea { width: 100%; padding: 10px 12px; border: 1px solid rgba(var(--muted-border-rgb), 0.12); border-radius: 6px; font-size: 0.9rem; font-family: var(--font-stack); background: var(--float-btn-bg); color: var(--float-text); transition: border-color 0.15s ease; }
+    .generator-form-params input:focus, .generator-form-params select:focus, .generator-form-params textarea:focus { outline: none; border-color: var(--accent); }
+    .generator-form-params textarea { min-height: 100px; resize: vertical; font-family: ui-monospace, monospace; font-size: 0.85rem; }
+    .generator-dialog-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+    .btn-primary, .btn-secondary, .btn-copy, .btn-fill { padding: 10px 16px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: 0.9rem; touch-action: manipulation; font-family: var(--font-stack); transition: all 0.15s ease; }
+    .btn-primary { background: var(--accent); color: white; flex: 1; min-width: 120px; }
     .btn-primary:hover { filter: brightness(1.1); }
-    
-    .btn-secondary { 
-        background: var(--float-btn-bg); 
-        color: var(--float-text); 
-        flex: 1; 
-        min-width: 100px; 
-        border: 1px solid rgba(var(--muted-border-rgb), 0.12);
-    }
+    .btn-secondary { background: var(--float-btn-bg); color: var(--float-text); flex: 1; min-width: 100px; border: 1px solid rgba(var(--muted-border-rgb), 0.12); }
     .btn-secondary:hover { filter: brightness(0.98); }
-    
-    .btn-copy, .btn-fill { 
-        background: #10b981; 
-        color: white; 
-        padding: 8px 12px; 
-        font-size: 0.85rem; 
-    }
+    .btn-copy, .btn-fill { background: #10b981; color: white; padding: 8px 12px; font-size: 0.85rem; }
     .btn-copy:hover, .btn-fill:hover { background: #059669; }
     .btn-fill { background: #f59e0b; }
     .btn-fill:hover { background: #d97706; }
-    
-    .generator-dialog-result { 
-        padding: 20px; 
-        border-top: 1px solid var(--float-border); 
-        background: var(--float-bg); 
-    }
-    
-    .result-header { 
-        display: flex; 
-        justify-content: space-between; 
-        align-items: center; 
-        margin-bottom: 12px; 
-        gap: 10px; 
-        flex-wrap: wrap; 
-    }
-    
+    .generator-dialog-result { padding: 20px; border-top: 1px solid var(--float-border); background: var(--float-bg); }
+    .result-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 10px; flex-wrap: wrap; }
     .result-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-    
-    .generator-dialog-result pre { 
-        background: var(--float-btn-bg); 
-        padding: 12px; 
-        border-radius: 6px; 
-        border: 1px solid rgba(var(--muted-border-rgb), 0.12); 
-        max-height: 300px; 
-        overflow: auto; 
-        font-size: 0.8rem; 
-        margin: 0; 
-        word-break: break-word; 
-        white-space: pre-wrap; 
-        color: var(--float-text); 
-        font-family: ui-monospace, monospace; 
-    }
-    
+    .generator-dialog-result pre { background: var(--float-btn-bg); padding: 12px; border-radius: 6px; border: 1px solid rgba(var(--muted-border-rgb), 0.12); max-height: 300px; overflow: auto; font-size: 0.8rem; margin: 0; word-break: break-word; white-space: pre-wrap; color: var(--float-text); font-family: ui-monospace, monospace; }
     .generator-loading { padding: 40px; text-align: center; color: var(--float-muted); }
-    .spinner { 
-        width: 40px; 
-        height: 40px; 
-        margin: 0 auto 16px; 
-        border: 4px solid rgba(var(--muted-border-rgb), 0.2); 
-        border-top-color: var(--accent); 
-        border-radius: 50%; 
-        animation: spin 0.8s linear infinite; 
-    }
+    .spinner { width: 40px; height: 40px; margin: 0 auto 16px; border: 4px solid rgba(var(--muted-border-rgb), 0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     
     @media (max-width: 768px) { 
@@ -460,7 +233,6 @@ foreach ($entityIcons as $type => $icon) {
         .generator-dialog-actions { flex-direction: column-reverse; } 
         .btn-primary, .btn-secondary { width: 100%; min-width: 0; } 
     }
-    
     @media (max-width: 480px) { 
         .generator-dialog-overlay { padding: 0; } 
         .generator-dialog { border-radius: 10px 10px 0 0; max-height: 100vh; } 
@@ -468,21 +240,17 @@ foreach ($entityIcons as $type => $icon) {
     }
 </style>
 
-
-<!-- The rest of your scripts remain unchanged -->
-
 <script>
 (function() {
     const floatool = document.getElementById('floatool');
     const handle = floatool.querySelector('.floatool-handle');
-    const gearMenu = document.getElementById('floatoolGearMenu');
     const generatorMenu = document.getElementById('floatoolGeneratorMenu');
     const labMenu = document.getElementById('floatoolLabMenu');
-    const mobileGenButton = document.getElementById('mobileGeneratorButton');
     let isDragging = false, offsetX, offsetY;
     let currentTargetField = null;
     let focusTimeout = null;
 
+    // Restore Position
     const savedPos = localStorage.getItem('spw-floatool-pos');
     if(savedPos){
         try {
@@ -494,6 +262,7 @@ foreach ($entityIcons as $type => $icon) {
         } catch(e){}
     }
 
+    // Restore State
     const savedCollapsed = localStorage.getItem('spw-floatool-collapsed');
     if(savedCollapsed !== null){
         if(savedCollapsed === '1'){
@@ -540,7 +309,6 @@ foreach ($entityIcons as $type => $icon) {
         floatool.style.top = y + "px";
         floatool.style.right = "auto";
         floatool.style.bottom = "auto";
-        if(gearMenu.style.display === 'flex') updateGearMenuPosition();
         if(generatorMenu.style.display === 'flex') updateGeneratorMenuPosition();
         if(labMenu.style.display === 'flex') updateLabMenuPosition();
     }
@@ -577,31 +345,25 @@ foreach ($entityIcons as $type => $icon) {
     floatool.querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const action = btn.getAttribute('data-action');
-            if(action==='open-dashboard')
-                window.location.href='dashboard.php';
-            else if(action==='open-database')
-                window.location.href="/dbtool.php"
-            else if(action==='open-regen')
-                /*window.location.href="regenerate_frames_set.php"*/
-                window.showRegenerateFramesModal();
+            if(action==='open-dashboard') window.location.href='dashboard.php';
+            else if(action==='open-boards') window.location.href='boards_view.php';
+            else if(action==='open-database') window.location.href="/dbtool.php";
+            else if(action==='open-regen') window.showRegenerateFramesModal();
             else if(action==='open-styles') window.toggleStylesModal?.();
-            else if(action==='open-logs') window.toggleLogsModal?.();
-            else if(action==='open-chat')
-                window.location.href='chat.php';
+            else if(action==='open-runner') window.showSchedulerRunnerModal();
+            else if(action==='open-chat') window.location.href='chat.php';
+            
             else if(action==='open-generators') {
                 e.stopPropagation();
-                gearMenu.style.display = 'none';
+                // Close any open flyout menus, then launch the Forge fullscreen modal
+                generatorMenu.style.display = 'none';
                 labMenu.style.display = 'none';
-                if(generatorMenu.style.display === 'flex'){
-                    generatorMenu.style.display = 'none';
-                } else {
-                    updateGeneratorMenuPosition();
-                    generatorMenu.style.display = 'flex';
+                if (typeof window.openForgeModal === 'function') {
+                    window.openForgeModal();
                 }
             }
             else if(action==='open-lab') {
                 e.stopPropagation();
-                gearMenu.style.display = 'none';
                 generatorMenu.style.display = 'none';
                 if(labMenu.style.display === 'flex'){
                     labMenu.style.display = 'none';
@@ -610,52 +372,23 @@ foreach ($entityIcons as $type => $icon) {
                     labMenu.style.display = 'flex';
                 }
             }
-            else if(action==='open-other') {
-                e.stopPropagation();
-                generatorMenu.style.display = 'none';
-                labMenu.style.display = 'none';
-                if(gearMenu.style.display === 'flex'){
-                    gearMenu.style.display = 'none';
-                } else {
-                    updateGearMenuPosition();
-                    gearMenu.style.display = 'flex';
-                }
-            }
         });
     });
 
     document.addEventListener('click', () => {
-        gearMenu.style.display='none';
         generatorMenu.style.display='none';
         labMenu.style.display='none';
     });
     document.addEventListener('touchstart', (e) => {
         if (!e.target.closest('.floatool-gear-menu') && !e.target.closest('#floatool')) {
-            gearMenu.style.display='none';
             generatorMenu.style.display='none';
             labMenu.style.display='none';
         }
     });
-    gearMenu.addEventListener('click', e=>e.stopPropagation());
     generatorMenu.addEventListener('click', e=>e.stopPropagation());
     labMenu.addEventListener('click', e=>e.stopPropagation());
-    gearMenu.addEventListener('touchstart', e=>e.stopPropagation());
     generatorMenu.addEventListener('touchstart', e=>e.stopPropagation());
     labMenu.addEventListener('touchstart', e=>e.stopPropagation());
-
-    function updateGearMenuPosition(){
-        const rect = floatool.getBoundingClientRect();
-        if (window.innerWidth <= 768) {
-            gearMenu.style.left = '50%';
-            gearMenu.style.transform = 'translateX(-50%)';
-            gearMenu.style.bottom = '70px';
-            gearMenu.style.top = 'auto';
-        } else {
-            gearMenu.style.left = (rect.left + 100) + "px";
-            gearMenu.style.top  = (rect.top - gearMenu.offsetHeight - 390) + "px";
-            gearMenu.style.transform = 'none';
-        }
-    }
 
     function updateGeneratorMenuPosition(){
         const rect = floatool.getBoundingClientRect();
@@ -687,10 +420,7 @@ foreach ($entityIcons as $type => $icon) {
 
     window.openEntityForm = function(element) {
         const entityType = element.getAttribute('data-entity-type');
-        if (!entityType) {
-            console.error('No data-entity-type attribute found on the element.');
-            return;
-        }
+        if (!entityType) return;
         const url = `/entity_gen.php?entity_type=${encodeURIComponent(entityType)}`;
         labMenu.style.display = 'none';
         window.location.href = url;
@@ -702,7 +432,7 @@ foreach ($entityIcons as $type => $icon) {
             currentTargetField = target;
             clearTimeout(focusTimeout);
             focusTimeout = setTimeout(() => {
-                if (mobileGenButton) mobileGenButton.style.display = 'block';
+                // If you had a mobileGenButton, logic goes here
             }, 300);
         }
     });
@@ -710,9 +440,7 @@ foreach ($entityIcons as $type => $icon) {
     document.addEventListener('focusout', (e) => {
         clearTimeout(focusTimeout);
         focusTimeout = setTimeout(() => {
-            if (document.activeElement !== currentTargetField) {
-                if (mobileGenButton) mobileGenButton.style.display = 'none';
-            }
+            // hide button logic
         }, 200);
     });
 
@@ -745,7 +473,6 @@ foreach ($entityIcons as $type => $icon) {
 
         titleEl.textContent = title;
         paramsEl.innerHTML = '<p style="color: var(--float-muted); text-align: center; padding: 20px;">Loading parameters...</p>';
-
         overlay.style.display = 'flex';
 
         if (!targetField && currentTargetField) {
@@ -758,11 +485,8 @@ foreach ($entityIcons as $type => $icon) {
                 if (data.config && data.config.parameters) {
                     window.currentGeneratorConfig = { configId, targetField };
                     renderParameters(data.config.parameters);
-
                     const fillBtn = document.querySelector('.btn-fill');
-                    if (targetField && fillBtn) {
-                        fillBtn.style.display = 'inline-block';
-                    }
+                    if (targetField && fillBtn) fillBtn.style.display = 'inline-block';
                 } else {
                     paramsEl.innerHTML = '<p style="color:var(--float-muted); text-align: center; padding: 20px;">No parameters defined</p>';
                     window.currentGeneratorConfig = { configId, targetField };
@@ -776,15 +500,12 @@ foreach ($entityIcons as $type => $icon) {
     function renderParameters(params) {
         const paramsEl = document.getElementById('generatorDialogParams');
         paramsEl.innerHTML = '';
-
         for (const [key, def] of Object.entries(params)) {
             const formGroup = document.createElement('div');
             formGroup.className = 'form-group';
-
             const label = document.createElement('label');
             label.textContent = def.label || key;
             formGroup.appendChild(label);
-
             let input;
             if (def.type === 'string' && def.enum) {
                 input = document.createElement('select');
@@ -811,7 +532,6 @@ foreach ($entityIcons as $type => $icon) {
                 input.name = key;
                 input.value = def.default || '';
             }
-
             formGroup.appendChild(input);
             paramsEl.appendChild(formGroup);
         }
@@ -819,16 +539,11 @@ foreach ($entityIcons as $type => $icon) {
 
     window.runGenerator = function() {
         if (!window.currentGeneratorConfig) return;
-
         const { configId } = window.currentGeneratorConfig;
         const paramsEl = document.getElementById('generatorDialogParams');
         const inputs = paramsEl.querySelectorAll('input, select, textarea');
-
         const params = { config_id: configId };
-        inputs.forEach(input => {
-            params[input.name] = input.value;
-        });
-
+        inputs.forEach(input => { params[input.name] = input.value; });
         document.getElementById('generatorDialogResult').style.display = 'none';
         document.getElementById('generatorDialogLoading').style.display = 'block';
 
@@ -841,7 +556,6 @@ foreach ($entityIcons as $type => $icon) {
         .then(result => {
             document.getElementById('generatorDialogLoading').style.display = 'none';
             document.getElementById('generatorDialogResult').style.display = 'block';
-
             const resultContent = document.getElementById('generatorResultContent');
             if (result.ok && result.data) {
                 resultContent.textContent = JSON.stringify(result.data, null, 2);
@@ -862,10 +576,8 @@ foreach ($entityIcons as $type => $icon) {
             alert('No target field or result available');
             return;
         }
-
         const field = window.currentGeneratorConfig.targetField;
         const firstValue = Object.values(window.currentGeneratorResult)[0];
-
         if (typeof firstValue === 'string') {
             field.value = firstValue;
             field.dispatchEvent(new Event('input', { bubbles: true }));
@@ -878,13 +590,10 @@ foreach ($entityIcons as $type => $icon) {
 
     window.copyGeneratorResult = function() {
         const content = document.getElementById('generatorResultContent').textContent;
-
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(content).then(() => {
                 alert('Copied to clipboard!');
-            }).catch(() => {
-                fallbackCopy(content);
-            });
+            }).catch(() => { fallbackCopy(content); });
         } else {
             fallbackCopy(content);
         }
@@ -900,9 +609,7 @@ foreach ($entityIcons as $type => $icon) {
         try {
             document.execCommand('copy');
             alert('Copied to clipboard!');
-        } catch (err) {
-            alert('Failed to copy');
-        }
+        } catch (err) { alert('Failed to copy'); }
         document.body.removeChild(textarea);
     }
 })();
@@ -913,7 +620,6 @@ foreach ($entityIcons as $type => $icon) {
     function createModal(id, iframeSrc){
         let modal = $('#' + id);
         if(modal.length) return modal;
-
         modal = $(`
             <div id="${id}" style="position:fixed;top:0;left:0;width:100%;height:100%;
                 background:rgba(0,0,0,0.85);z-index:9999;display:flex;justify-content:center;align-items:center;">
@@ -924,7 +630,6 @@ foreach ($entityIcons as $type => $icon) {
                 </div>
             </div>
         `).hide();
-
         modal.find('.close-btn').click(()=>modal.fadeOut());
         $('body').append(modal);
         return modal;
@@ -934,32 +639,12 @@ foreach ($entityIcons as $type => $icon) {
         const modal = createModal('floatool-styles-modal', 'styles_toggle.php');
         modal.fadeToggle();
     };
-
-    window.toggleLogsModal = function(){
-        const modal = createModal('floatool-logs-modal', 'view_scheduler_log.php');
-        modal.fadeToggle();
-    };
 })();
-
-$(document).ready(function() {
-    window.runScheduler = function(el) {
-        const $btn = $(el);
-        const id = $btn.data('id');
-
-        console.log("Run scheduler clicked, id=", id);
-        $('#floatoolGearMenu').hide();
-
-        $.post('scheduler_view.php', { action: 'run_now', id: id }, function(res) {
-            if (res === 'success') {
-                Toast.show('Task scheduled to run now!', 'success');
-            } else {
-                Toast.show('Failed to trigger task', 'error');
-            }
-        });
-    };
-});
 </script>
 
 <?php
+// Include the central modal logic
 require __DIR__ . '/modal_frame_details.php';
+// Generator Forge fullscreen modal (replaces old generator dialog)
+require __DIR__ . '/floatool_forge_modal.php';
 ?>

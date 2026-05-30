@@ -1,41 +1,39 @@
+# bash/switch.sh
+
 #!/bin/bash
-# switch.sh — Select which genframe_db.sh variant to activate
+# ==============================================================================
+# switch.sh — Select which model the manual queue worker uses
+# 
+# Replaces the legacy symlink system. Now updates the database configuration
+# for the 'manual' worker scope so the UI and queue sync seamlessly.
+# ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR" || exit 1
+MYSQL_ARGS=$("$SCRIPT_DIR"/db_name.sh main-conn)
 
-TARGET_LINK="genframe_db.sh"
-DEFAULT="pollinations"  # Default option if no argument is given
+MODEL_NAME="$1"
 
-# Define available variants
-declare -A OPTIONS=(
-    ["pollinations"]="genframe_db.sh.pollinations.ai"
-    ["pollinana"]="genframe_db.sh.pollinana"
-    ["jupyter"]="genframe_db.sh.JUPYTER"
-    ["jupyter_lcm"]="genframe_db.sh.JUPYTER_LCM"
-    ["jupyter_turbo"]="genframe_db.sh.JUPYTER_TURBO"
-    ["jupyter_async"]="genframe_db.sh.JUPYTER_ASYNC"
-    ["freepik"]="genframe_db.sh.freepik"
-)
-
-# Function to print usage
-print_usage() {
-    echo "Usage: $0 [pollinations|jupyter|jupyter_lcm]"
-    echo "No argument = default (${DEFAULT})"
-    echo "Current link: $(readlink -f "$TARGET_LINK" 2>/dev/null || echo 'none')"
-}
-
-# Use argument or fallback to default
-CHOICE="${1:-$DEFAULT}"
-
-# Validate choice
-if [[ -z "${OPTIONS[$CHOICE]}" ]]; then
-    echo "❌ Invalid option: $CHOICE"
-    echo
-    print_usage
+if [ -z "$MODEL_NAME" ]; then
+    echo "Usage: $0 [model_name]"
+    echo "Example: $0 flux"
+    echo "Example: $0 nanobanana"
+    echo "Example: $0 gptimage"
+    echo ""
+    
+    # Fetch and display current manual model
+    CURRENT=$(mysql $MYSQL_ARGS -N -e "SELECT COALESCE(model_override, 'endpoint default (blank)') FROM worker_img_provider_default WHERE scope='manual' LIMIT 1;")
+    echo "Current manual model: ${CURRENT:-not set}"
     exit 1
 fi
 
-# Switch symlink
-ln -sf "${OPTIONS[$CHOICE]}" "$TARGET_LINK"
-echo "✅ Switched to ${CHOICE} (${OPTIONS[$CHOICE]})"
+SAFE_MODEL=$(echo "$MODEL_NAME" | sed "s/'/''/g")
+
+# Update the manual scope in the DB. If the row doesn't exist yet, we insert it 
+# and point it to endpoint_id=1 (Pollinations GET) by default.
+mysql $MYSQL_ARGS -e "
+  INSERT INTO worker_img_provider_default (scope, endpoint_id, model_override)
+  VALUES ('manual', 1, '$SAFE_MODEL')
+  ON DUPLICATE KEY UPDATE model_override = '$SAFE_MODEL';
+"
+
+echo "✅ Switched manual worker model to: $MODEL_NAME"

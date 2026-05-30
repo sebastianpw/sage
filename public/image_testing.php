@@ -929,6 +929,6 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <?php
-require "floatool.php";
+require_once "forge_tool.php";
 $content = ob_get_clean();
 $spw->renderLayout($content.$eruda, $pageTitle);

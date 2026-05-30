@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Starlight Guardians & SAGE Open Source AI Creation Engine</title>
+<link rel="canonical" href="https://petersebring.com/posts/">
+<style>
+  :root{--bg:#070707;--card:#0f0f0f;--accent:#3b82f6;--muted:#bdbdbd;}html,body{height:100%;margin:0;background:var(--bg);color:#fff;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;}.wrap{max-width:1100px;margin:18px auto;padding:12px;}header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}header h1{font-size:18px;margin:0}.header-right{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);}.feed-icon{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;opacity:0.7;transition:opacity 0.2s ease;}.feed-icon:hover{opacity:1;}.feed-icon svg{width:100%;height:100%;fill:#ffffff;}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}.post-card{background:var(--card);border-radius:6px;overflow:visible;position:relative;cursor:pointer;display:block;text-decoration:none;color:inherit;min-width:0;}.thumb-wrapper{width:100%;aspect-ratio:1/1;display:block;background:#111;border-radius:6px 6px 0 0;overflow:hidden;display:flex;align-items:center;justify-content:center;position:relative;}.post-thumb{width:100%;height:100%;object-fit:contain;object-position:center center;display:block;transition:transform .28s ease;background:transparent;}.post-card:hover .post-thumb{transform:scale(1.04);}.post-meta{padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;color:var(--muted);min-width:0;}.post-title{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;min-width:0;}.load-more{display:block;margin:18px auto 60px;padding:10px 14px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);cursor:pointer;}.empty{opacity:.6;text-align:center;padding:40px 0;color:var(--muted)}#sentinel{height:1px}@media (max-width:420px){.wrap{padding:8px;}.post-meta{padding:6px 8px;font-size:12px}}
+  /* New style for link icon overlay */
+  .link-icon-overlay { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.6); padding: 4px; border-radius: 4px; pointer-events: none; z-index: 2; }
+  .link-icon-overlay svg { width: 14px; height: 14px; display: block; fill: #fff; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Starlight Guardians & SAGE</h1>
+      <div class="header-right">
+        <span>Open Source AI Creation Engine</span>
+        <a href="sage_gallery_feed.html" target="_self" class="feed-icon" aria-label="View SAGE gallery feed">
+          <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2zm1.5 2.5c5.523 0 10 4.477 10 10a1 1 0 1 1-2 0 8 8 0 0 0-8-8 1 1 0 1 1 0-2zm0 5a5 5 0 0 1 5 5 1 1 0 1 1-2 0 3 3 0 0 0-3-3 1 1 0 1 1 0-2zm.5 7a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/>
+          </svg>
+        </a>
+      </div>
+    </header>
+
+    <main>
+      <div id="grid" class="grid" aria-live="polite" role="list"></div>
+      <div style="text-align:center;">
+        <button id="loadMore" class="load-more" aria-label="Load more posts">Load more</button>
+      </div>
+      <div id="empty" class="empty" hidden>No posts found.</div>
+      <div id="sentinel" aria-hidden="true"></div>
+    </main>
+  </div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* explicit posts */
+  const posts = [
+    {
+        "title": "Test01 new content hub vid03",
+        "preview": "posts/post5/frame0017137.jpg",
+        "type": "video_playlist",
+        "file": "posts/test01-new-content-hub-vid03.html"
+    }
+];
+
+  /* loading configs */
+  const firstEagerCount = 18;
+  const imageRootMargin = '1000px';
+  const initialCount = 12;
+  const batchSize = 6;
+  let rendered = 0;
+
+  const grid = document.getElementById('grid');
+  const loadMoreBtn = document.getElementById('loadMore');
+  const emptyNotice = document.getElementById('empty');
+  const sentinel = document.getElementById('sentinel');
+
+  const imageObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      const img = entry.target;
+      const dataSrc = img.getAttribute('data-src');
+      if (dataSrc) {
+        img.src = dataSrc;
+        img.removeAttribute('data-src');
+        try { img.setAttribute('fetchpriority','auto'); } catch(e){}
+      }
+      imageObserver.unobserve(img);
+    });
+  }, {
+    root: null,
+    rootMargin: imageRootMargin,
+    threshold: 0.01
+  });
+
+  function makeCard(post, index){
+    const a = document.createElement('a');
+    a.className = 'post-card';
+    a.href = post.file;
+    a.setAttribute('role', 'listitem');
+    a.setAttribute('aria-label', post.title + ' — open post');
+    
+    // UPDATED: Handle Target and Rel
+    if (post.target) {
+        a.target = post.target;
+        if (post.target === '_blank') {
+            a.rel = 'noopener noreferrer';
+        }
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'thumb-wrapper';
+
+    const img = document.createElement('img');
+    img.className = 'post-thumb';
+    img.decoding = 'async';
+    img.alt = post.title;
+    img.width = 1024;
+    img.height = 1024;
+
+    if (index < firstEagerCount) {
+      img.loading = 'eager';
+      img.setAttribute('fetchpriority','high');
+      img.src = post.preview;
+    } else {
+      img.loading = 'lazy';
+      img.setAttribute('data-src', post.preview);
+    }
+
+    wrapper.appendChild(img);
+
+    // UPDATED: Add external link icon overlay if type is url_reference
+    if (post.type === 'url_reference') {
+        const icon = document.createElement('div');
+        icon.className = 'link-icon-overlay';
+        // Simple external link icon
+        icon.innerHTML = '<svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>';
+        wrapper.appendChild(icon);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'post-meta';
+    const title = document.createElement('div');
+    title.className = 'post-title';
+    title.textContent = post.title;
+    const idx = document.createElement('div');
+    idx.style.opacity = '0.7';
+    idx.style.fontSize = '12px';
+    idx.textContent = `#${index + 1}`;
+
+    meta.appendChild(title);
+    meta.appendChild(idx);
+
+    a.appendChild(wrapper);
+    a.appendChild(meta);
+    return a;
+  }
+
+  function renderNext(count){
+    if (rendered >= posts.length) return;
+    const until = Math.min(posts.length, rendered + count);
+    const frag = document.createDocumentFragment();
+
+    for (let i = rendered; i < until; i++){
+      const card = makeCard(posts[i], i);
+      frag.appendChild(card);
+    }
+    grid.appendChild(frag);
+
+    const lazyImgs = grid.querySelectorAll('img[data-src]');
+    lazyImgs.forEach(img => {
+      if (!img._observing) {
+        imageObserver.observe(img);
+        img._observing = true;
+      }
+    });
+
+    rendered = until;
+    loadMoreBtn.style.display = (rendered < posts.length) ? 'inline-block' : 'none';
+    emptyNotice.hidden = rendered !== 0;
+  }
+
+  renderNext(initialCount);
+
+  loadMoreBtn.addEventListener('click', () => {
+    renderNext(batchSize);
+  });
+
+  const sentinelObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        sentinelObserver.unobserve(sentinel);
+        setTimeout(() => {
+          renderNext(batchSize);
+          if (rendered < posts.length) sentinelObserver.observe(sentinel);
+        }, 200);
+      }
+    });
+  }, {
+    root: null,
+    rootMargin: '400px',
+    threshold: 0.01
+  });
+
+  if (posts.length > rendered) {
+    sentinelObserver.observe(sentinel);
+  } else {
+    loadMoreBtn.style.display = 'none';
+  }
+
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft') {
+      const focusable = Array.from(grid.querySelectorAll('.post-card'));
+      if (!focusable.length) return;
+      const idx = focusable.indexOf(document.activeElement);
+      let next = 0;
+      if (idx === -1) {
+        next = (ev.key === 'ArrowRight') ? 0 : focusable.length - 1;
+      } else {
+        next = (ev.key === 'ArrowRight') ? Math.min(focusable.length - 1, idx + 1) : Math.max(0, idx - 1);
+      }
+      focusable[next].focus();
+      ev.preventDefault();
+    }
+  });
+
+  window.__gridReload = function(){
+    grid.innerHTML = '';
+    rendered = 0;
+    renderNext(initialCount);
+    if (posts.length > rendered) sentinelObserver.observe(sentinel);
+  };
+
+  window.__posts = posts;
+})();
+</script>
+</body>
+</html>

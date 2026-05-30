@@ -1,31 +1,72 @@
+# ==========================================
+# SAGE 2.0 PyAPI - Complete Requirements
+# Optimized for GitHub Codespaces / Powerful CPU
+# ==========================================
+
+# --- Core API, Network & Base Config (From V1) ---
 fastapi
 uvicorn
+gunicorn
 requests
-tqdm
-kaggle
+httpx
+python-multipart
+python-dotenv
 python-dateutil
-certifi
-urllib3
-idna
-chardet
 python-slugify
 pyyaml
+tqdm
 tabulate
 bleach
 webencodings
 html5lib
 unidecode
+certifi
+urllib3
+idna
+chardet
+
+# --- Database ---
+pymysql
+mysql-connector-python
+bloom-filter2
+
+# --- Google Auth & Kaggle (From V1) ---
+kaggle
 google
 google-auth
 google-auth-oauthlib
 google-api-python-client
 protobuf
 six
+
+# --- Media: Image, Video & PDF Publishing (V2 Upgrades) ---
 pillow
-python-multipart
-httpx
-pymysql
-gunicorn
-bloom-filter2
-mysql-connector-python
-python-dotenv
+opencv-python-headless
+imageio[ffmpeg]
+imageio-ffmpeg
+pdf2image
+reportlab
+
+# --- Media: Audio & Speech (V2 Upgrades) ---
+librosa
+soundfile
+pydub
+piper-tts
+qwen-tts
+so-vits-svc-fork
+
+# --- Machine Learning, Math & Clustering (V2 Upgrades) ---
+# Numpy is strictly pinned to prevent rembg/controlnet_aux compatibility clashes
+numpy==2.2.6
+scipy
+scikit-learn
+networkx
+
+# --- AI Engines & Local Models (V2 Upgrades) ---
+torch
+torchaudio
+onnxruntime
+rembg==2.0.67
+controlnet_aux
+fastembed
+ollama

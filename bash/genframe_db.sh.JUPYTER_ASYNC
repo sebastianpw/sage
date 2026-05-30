@@ -44,30 +44,33 @@ FRAMES_DIR_REL="${FRAMES_ROOT#$PROJECT_ROOT/public/}"      # relative to public
 GEN_SOURCE="colab"
 USE_TURBO=false             # Only affects text-to-image (Pollinations)
 
-ZROK_URL=$("$SCRIPT_DIR/zrok_echo.sh")
+ZROK_URL=$("$SCRIPT_DIR"/zrok_echo.sh)
 
 DB_USER="root"
 DB_NAME=$("$SCRIPT_DIR/db_name.sh")
-MAX_RETRIES=2
+MAX_RETRIES=1
 RETRY_DELAY=2
 
 # --- ASYNC CONFIG ---
 POLL_INTERVAL=20          # seconds between polls
-MAX_POLL_ATTEMPTS=15     # max number of polls
+MAX_POLL_ATTEMPTS=30     # max number of polls
 
 export FREEIMAGE_KEY=$(cat "$SCRIPT_DIR/../token/.freeimage_key")
 
 # -----------------------------
 # Usage / Arguments
+# UPDATED: Added Negative Prompt ($2) and Seed ($3)
 # -----------------------------
 BASE_PROMPT="$1"
-MAP_RUN_ID="$2"
-ENTITY_TYPE="$3"
-ENTITY_ID="$4"
-LIMIT="$5"
-OFFSET="$6"
-NO_STYLES="$7"
-ADD_TO_PROMPT="$8"
+NEGATIVE_PROMPT="$2"    # <--- NEW
+SEED_ARG="$3"           # <--- NEW
+MAP_RUN_ID="$4"         # Shifted
+ENTITY_TYPE="$5"        # Shifted
+ENTITY_ID="$6"          # Shifted
+LIMIT="$7"              # Shifted
+OFFSET="$8"             # Shifted
+NO_STYLES="$9"          # Shifted
+ADD_TO_PROMPT="${10}"   # Shifted
 
 # -----------------------------
 # Default values
@@ -78,7 +81,7 @@ NO_STYLES=${NO_STYLES:-0}
 # Validation
 # -----------------------------
 if [ -z "$BASE_PROMPT" ] || [ -z "$MAP_RUN_ID" ] || [ -z "$ENTITY_TYPE" ] || [ -z "$ENTITY_ID" ]; then
-  echo "Usage: $0 \"base prompt\" MAP_RUN_ID \"entity_type\" \"entity_id\" [limit] [offset] [no_styles] [add_to_prompt]"
+  echo "Usage: $0 \"base prompt\" \"neg prompt\" \"seed\" MAP_RUN_ID \"entity_type\" \"entity_id\" [limit] [offset] [no_styles] [add_to_prompt]"
   exit 1
 fi
 
@@ -134,13 +137,6 @@ fi
 # -----------------------------
 # Resolve absolute path for img2img and cnmap source images using PROJECT_ROOT/public
 # -----------------------------
-
-
-
-
-
-
-
 
 # ensure a safe temp directory inside the project (works on Kaggle, Termux, containers)
 TMP_DIR="${PROJECT_ROOT%/}/temp"
@@ -246,16 +242,6 @@ if [ -n "$CNMAP_FILENAME" ]; then
   fi
 fi
 
-
-
-
-
-
-
-
-
-
-
 # -----------------------------
 # Prepare ControlNet parameter for curl
 # -----------------------------
@@ -264,6 +250,12 @@ if [ "$CNMAP_FLAG" -eq 1 ] && [ -n "$CNMAP_FILENAME" ]; then
   echo "Using local ControlNet image path: $CNMAP_FILENAME"
   CONTROLNET_PARAM=(-F "control_image=@$CNMAP_FILENAME" -F "controlnet_scale=1.0")
 fi
+
+# -----------------------------
+# Prefix hack (txt2img only)
+# -----------------------------
+# HACK: force this prefix for txt2img requests and ensure DB stores the same prefixed prompt.
+PROMPT_PREFIX='Anime drawing. '
 
 # -----------------------------
 # Generate frames
@@ -278,6 +270,9 @@ for ((i=START; i<=END; i++)); do
   [ "$NO_STYLES" -eq 0 ] && prompt="$prompt, $style"
   [ -n "$ADD_TO_PROMPT" ] && prompt="$prompt $ADD_TO_PROMPT"
   [ -n "$IMG2IMG_PROMPT" ] && [ -n "$IMG2IMG_FILENAME" ] && prompt="$prompt $IMG2IMG_PROMPT"
+
+  # By default, save the unmodified prompt unless overridden per-branch
+  PROMPT_FOR_DB="$prompt"
 
   # -----------------------------
   # Thread-safe next frame basename (DB-driven)
@@ -296,101 +291,72 @@ for ((i=START; i<=END; i++)); do
   attempt=1
   while [ $attempt -le $MAX_RETRIES ]; do
     
+    # -----------------------------
+    # Determine Seed (DB or Random)
+    # -----------------------------
+    if [ -n "$SEED_ARG" ] && [ "$SEED_ARG" -ne 0 ]; then
+      SEED="$SEED_ARG"
+    else
+      SEED=$(( (RANDOM << 15) | RANDOM ))
+    fi
+    echo "Seed: $SEED"
+
     # --- START: ASYNC LOGIC FOR COLAB/ZROK ---
 
     echo "Posting async generation request..."
     # A single variable to hold the response
     create_resp=""
    
+    # Build the curl command dynamically
+    if [ -n "$ABS_IMG2IMG_PATH" ]; then
+      # Img2Img request with direct file upload
+      CURL_CMD=(curl -s -X POST "$ZROK_URL/generate-async"
+        -F "prompt=$prompt"
+        -F "negative_prompt=$NEGATIVE_PROMPT"
+        -F "num_inference_steps=50"
+        -F "guidance_scale=7.5"
+        -F "seed=$SEED"
+        -F "strength=0.7"
+        -F "height=1024"
+        -F "width=1024"
+        -F "init_image=@${ABS_IMG2IMG_PATH}"
+      )
+      
+      # Only add control_image and controlnet_scale if control image exists
+      if [ "${CNMAP_FLAG:-0}" -eq 1 ] && [ -n "$ABS_CNMAP_PATH" ]; then
+        CURL_CMD+=(-F "control_image=@${ABS_CNMAP_PATH}")
+        CURL_CMD+=(-F "controlnet_scale=0.5")
+      fi
 
+      # ensure DB prompt is the original prompt for img2img (no prefix)
+      PROMPT_FOR_DB="$prompt"
 
+      create_resp=$("${CURL_CMD[@]}")
+      
+    else
+      # Txt2Img request - apply prefix hack here
+      PROMPT_TO_SEND="${PROMPT_PREFIX}${prompt}"
+      # Ensure the prefixed prompt is what we store in DB as well
+      PROMPT_FOR_DB="$PROMPT_TO_SEND"
 
-
-
-
-
-
-
-# Build the curl command dynamically
-if [ -n "$ABS_IMG2IMG_PATH" ]; then
-  # Img2Img request with direct file upload
-  CURL_CMD=(curl -s -X POST "$ZROK_URL/generate-async"
-    -F "prompt=$prompt"
-    -F "negative_prompt=nudity, nude, naked, bare, topless, underwear, panties, erotic, sexual, explicit, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name"
-    -F "num_inference_steps=50"
-    -F "guidance_scale=7.5"
-    -F "seed=36"
-    -F "strength=0.7"
-    -F "height=1024"
-    -F "width=1024"
-    -F "init_image=@${ABS_IMG2IMG_PATH}"
-  )
-  
-  # Only add control_image and controlnet_scale if control image exists
-  if [ "${CNMAP_FLAG:-0}" -eq 1 ] && [ -n "$ABS_CNMAP_PATH" ]; then
-    CURL_CMD+=(-F "control_image=@${ABS_CNMAP_PATH}")
-    CURL_CMD+=(-F "controlnet_scale=0.5")
-  fi
-
-
-
-
-  
-  create_resp=$("${CURL_CMD[@]}")
-  
-else
-  # Txt2Img request
-  CURL_CMD=(curl -s -X POST "$ZROK_URL/generate-async"
-    -F "prompt=$prompt"
-    -F "negative_prompt=nudity, nude, naked, bare, topless, underwear, panties, erotic, sexual, explicit, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name"
-    -F "num_inference_steps=50"
-    -F "guidance_scale=7.5"
-    -F "seed=36"
-    -F "height=1024"
-    -F "width=1024"
-  )
-  
-  # Only add control_image and controlnet_scale if control image exists
-  if [ "${CNMAP_FLAG:-0}" -eq 1 ] && [ -n "$ABS_CNMAP_PATH" ]; then
-    CURL_CMD+=(-F "control_image=@${ABS_CNMAP_PATH}")
-    CURL_CMD+=(-F "controlnet_scale=0.5")
-  fi
- 
-
-
-
-  create_resp=$("${CURL_CMD[@]}")
-fi
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+      CURL_CMD=(curl -s -X POST "$ZROK_URL/generate-async"
+        -F "prompt=$PROMPT_TO_SEND"
+        -F "negative_prompt=$NEGATIVE_PROMPT"
+        -F "num_inference_steps=8"
+        -F "guidance_scale=1"
+        -F "seed=$SEED"
+        -F "height=1024"
+        -F "width=1024"
+      )
+      
+      # Only add control_image and controlnet_scale if control image exists
+      if [ "${CNMAP_FLAG:-0}" -eq 1 ] && [ -n "$ABS_CNMAP_PATH" ]; then
+        CURL_CMD+=(-F "control_image=@${ABS_CNMAP_PATH}")
+        CURL_CMD+=(-F "controlnet_scale=0.5")
+      fi
+     
+      create_resp=$("${CURL_CMD[@]}")
+    fi
 
     TASK_ID=$(echo "$create_resp" | jq -r '.task_id // empty')
     
@@ -446,20 +412,26 @@ fi
         echo "Saved valid image: $outfile"
 
         # Insert frame into DB
-        SAFE_PROMPT=$(echo "$prompt" | sed "s/'/''/g")
+        SAFE_NEG_PROMPT=$(echo "$NEGATIVE_PROMPT" | sed "s/'/''/g")
+        # Use PROMPT_FOR_DB (set per-branch). fallback to original prompt if unset
+        PROMPT_FOR_DB=${PROMPT_FOR_DB:-$prompt}
+        SAFE_PROMPT=$(echo "$PROMPT_FOR_DB" | sed "s/'/''/g")
         SAFE_STYLE=$(echo "$style" | sed "s/'/''/g")
         DB_IMG2IMG_FRAME_ID="NULL"
         [ "$IMG2IMG_FRAME_ID" -gt 0 ] && DB_IMG2IMG_FRAME_ID="$IMG2IMG_FRAME_ID"
         DB_IMG2IMG_PROMPT="NULL"
         [ -n "$IMG2IMG_PROMPT" ] && DB_IMG2IMG_PROMPT="'$(echo "$IMG2IMG_PROMPT" | sed "s/'/''/g")'"
 
+        # Added: seed and prompt_negative
         FRAME_ID=$(mysql $MYSQL_ARGS -N -e "
 INSERT INTO frames
-  (filename, name, prompt, entity_type, entity_id, style, style_id, map_run_id, img2img_frame_id, img2img_prompt)
+  (filename, name, prompt, prompt_negative, seed, entity_type, entity_id, style, style_id, map_run_id, img2img_frame_id, img2img_prompt)
 VALUES
   ('$FRAMES_DIR_REL/$filename_only.png',
    '$filename_only',
    '$SAFE_PROMPT',
+   '$SAFE_NEG_PROMPT',
+   $SEED,
    '$ENTITY_TYPE',
    $ENTITY_ID,
    '$SAFE_STYLE',
@@ -498,4 +470,3 @@ done
 # Clear regenerate flag
 # -----------------------------
 mysql $MYSQL_ARGS -e "UPDATE $ENTITY_TYPE SET regenerate_images=0 WHERE id=$ENTITY_ID;"
-

@@ -1,0 +1,138 @@
+{
+  "defaults": {
+    "default_ip": "127.0.0.1"
+  },
+  "services": {
+    "kaggle": {
+      "active": true,
+      "module": "services.kaggle_service",
+      "router_var": "router",
+      "prefix": "/kaggle",
+      "tags": ["kaggle"],
+      "address": null,
+      "route_script": null
+    },
+    "bloom": {
+      "active": true,
+      "module": "services.bloom_service",
+      "router_var": "router",
+      "prefix": "/bloom",
+      "tags": ["bloom"]
+    },
+    "wordnet": {
+      "active": true,
+      "module": "services.wordnet_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["wordnet"]
+    },
+    "pillow": {
+      "active": true,
+      "module": "services.pillow_service",
+      "router_var": "router",
+      "prefix": "/image",
+      "tags": ["image"]
+    },
+    "cv": {
+      "active": true,
+      "module": "services.cv_service",
+      "router_var": "router",
+      "prefix": "/cv",
+      "tags": ["computer-vision"]
+    },
+    "style": {
+      "active": true,
+      "module": "services.style_service",
+      "router_var": "router",
+      "prefix": "/style",
+      "tags": ["style"]
+    },
+    "rembg": {
+      "active": false,
+      "module": "services.rembg_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["background-removal"],
+      "route_script": "echo_route.py"
+    },
+    "vidrembg": {
+      "active": false,
+      "module": "services.vidrembg_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["video-rembg"],
+      "route_script": "echo_route.py"
+    },
+    "cnetaux": {
+      "active": false,
+      "module": "services.cnetaux_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["cnetaux"],
+      "route_script": "echo_route.py"
+    },
+    "svc": {
+      "active": false,
+      "module": "services.svc_service",
+      "router_var": "router",
+      "prefix": "/svc",
+      "tags": ["svc"],
+      "route_script": "zrok_route.py"
+    },
+    "blender": {
+      "active": false,
+      "module": "services.blender_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["blender"],
+      "route_script": "echo_route.py"
+    },
+    "multiplane": {
+      "active": false,
+      "module": "services.multiplane_service",
+      "router_var": "router",
+      "prefix": "/multiplane",
+      "tags": ["multiplane"],
+      "route_script": "echo_route.py"
+    },
+    "liplab": {
+      "active": false,
+      "module": "services.liplab_service",
+      "router_var": "router",
+      "prefix": "/liplab",
+      "tags": ["liplab"],
+      "route_script": "echo_route.py"
+    },
+    "voicepool": {
+      "active": false,
+      "module": "services.voicepool_service",
+      "router_var": "router",
+      "prefix": "/voicepool",
+      "tags": ["voicepool"],
+      "route_script": "echo_route.py"
+    },
+    "qwen3tts": {
+      "active": false,
+      "module": "services.qwen3tts_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["qwen3tts"],
+      "route_script": "zrok_route.py"
+    },
+    "aiprovider": {
+      "active": true,
+      "module": "services.aiprovider_service",
+      "router_var": "router",
+      "prefix": "/aiprovider",
+      "tags": ["aiprovider"],
+      "comment": "Example: Dynamic IP retrieval via script"
+    },
+    "openai_compatible": {
+      "active": true,
+      "module": "services.openai_compatible_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["openai_compatible"]
+    }
+  }
+}

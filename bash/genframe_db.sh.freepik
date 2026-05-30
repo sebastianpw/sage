@@ -4,49 +4,40 @@
 # Resolve script directory
 # -----------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 MYSQL_ARGS=$("$SCRIPT_DIR"/db_name.sh main-conn)
 
 # -----------------------------
-# Load project roots (must set FRAMES_ROOT and PROJECT_ROOT)
+# Load project roots
 # -----------------------------
 if [ -f "$SCRIPT_DIR/load_root.sh" ]; then
   source "$SCRIPT_DIR/load_root.sh"
 fi
 
-# Fail if required variables not set
-if [ -z "$FRAMES_ROOT" ]; then
-  echo "ERROR: FRAMES_ROOT is not set. Please ensure load_root.sh exports FRAMES_ROOT. Aborting."
-  exit 1
-fi
-
-if [ -z "$PROJECT_ROOT" ]; then
-  echo "ERROR: PROJECT_ROOT is not set. Please ensure load_root.sh exports PROJECT_ROOT. Aborting."
+if [ -z "$FRAMES_ROOT" ] || [ -z "$PROJECT_ROOT" ]; then
+  echo "ERROR: Roots not set. Check load_root.sh."
   exit 1
 fi
 
 # -----------------------------
 # Directories
 # -----------------------------
-FRAMES_DIR="$FRAMES_ROOT" # absolute, safe
+FRAMES_DIR="$FRAMES_ROOT"
 mkdir -p "$FRAMES_DIR"
-
-FRAMES_DIR_REL="${FRAMES_ROOT#$PROJECT_ROOT/public/}" # relative to public
+FRAMES_DIR_REL="${FRAMES_ROOT#$PROJECT_ROOT/public/}"
 
 # -----------------------------
 # Configuration
 # -----------------------------
 DB_USER="root"
 DB_NAME=$("$SCRIPT_DIR/db_name.sh")
-MAX_RETRIES=3
+MAX_RETRIES=2
 RETRY_DELAY=2
-POLL_INTERVAL=5  # seconds between polls
-MAX_POLL_ATTEMPTS=12  # NEW: max number of polls (12 * 5s = 60s)
+POLL_INTERVAL=5
+MAX_POLL_ATTEMPTS=12
 
 # -----------------------------
 # Freepik API key
 # -----------------------------
-# Priority: environment variable FREEPIK_KEY, otherwise token file ../token/.freepik_api_key
 if [ -z "$FREEPIK_KEY" ]; then
   if [ -f "$SCRIPT_DIR/../token/.freepik_api_key" ]; then
     FREEPIK_KEY=$(cat "$SCRIPT_DIR/../token/.freepik_api_key")
@@ -54,12 +45,12 @@ if [ -z "$FREEPIK_KEY" ]; then
 fi
 
 if [ -z "$FREEPIK_KEY" ]; then
-  echo "ERROR: FREEPIK_KEY not set. Export FREEPIK_KEY or put key in $SCRIPT_DIR/../token/.freepik_api_key"
+  echo "ERROR: FREEPIK_KEY not set."
   exit 1
 fi
 
 # -----------------------------
-# Freeimage.host key (for uploads)
+# Freeimage.host key
 # -----------------------------
 if [ -z "$FREEIMAGE_KEY" ]; then
   if [ -f "$SCRIPT_DIR/../token/.freeimage_key" ]; then
@@ -68,20 +59,23 @@ if [ -z "$FREEIMAGE_KEY" ]; then
 fi
 
 if [ -z "$FREEIMAGE_KEY" ]; then
-  echo "WARNING: FREEIMAGE_KEY not set. Img2img or composites that need uploads will fail unless you set ../token/.freeimage_key"
+  echo "WARNING: FREEIMAGE_KEY not set."
 fi
 
 # -----------------------------
 # Usage / Arguments
+# UPDATED: Added Negative Prompt ($2) and Seed ($3)
 # -----------------------------
 BASE_PROMPT="$1"
-MAP_RUN_ID="$2"
-ENTITY_TYPE="$3"
-ENTITY_ID="$4"
-LIMIT="$5"
-OFFSET="$6"
-NO_STYLES="$7"
-ADD_TO_PROMPT="$8"
+NEGATIVE_PROMPT="$2"    # <--- NEW
+SEED_ARG="$3"           # <--- NEW
+MAP_RUN_ID="$4"         # Shifted
+ENTITY_TYPE="$5"        # Shifted
+ENTITY_ID="$6"          # Shifted
+LIMIT="$7"              # Shifted
+OFFSET="$8"             # Shifted
+NO_STYLES="$9"          # Shifted
+ADD_TO_PROMPT="${10}"   # Shifted
 
 # -----------------------------
 # Default values
@@ -92,12 +86,12 @@ NO_STYLES=${NO_STYLES:-0}
 # Validation
 # -----------------------------
 if [ -z "$BASE_PROMPT" ] || [ -z "$MAP_RUN_ID" ] || [ -z "$ENTITY_TYPE" ] || [ -z "$ENTITY_ID" ]; then
-  echo "Usage: $0 \"base prompt\" MAP_RUN_ID \"entity_type\" \"entity_id\" [limit] [offset] [no_styles] [add_to_prompt]"
+  echo "Usage: $0 \"base prompt\" \"neg prompt\" \"seed\" MAP_RUN_ID \"entity_type\" \"entity_id\" [limit] [offset] [no_styles] [add_to_prompt]"
   exit 1
 fi
 
 # -----------------------------
-# Load styles (id + prompt) from DB
+# Load styles
 # -----------------------------
 mapfile -t styles < <(mysql $MYSQL_ARGS -N -e "SELECT id, prompt FROM v_styles_helper;")
 TOTAL_STYLES=${#styles[@]}
@@ -107,14 +101,14 @@ END=$((LIMIT > 0 ? START + LIMIT - 1 : TOTAL_STYLES - 1))
 [ "$END" -ge "$TOTAL_STYLES" ] && END=$((TOTAL_STYLES - 1))
 
 # -----------------------------
-# Determine mapping table & check existence
+# Determine mapping table
 # -----------------------------
 MAPPING_TABLE="frames_2_${ENTITY_TYPE}"
 TABLE_EXISTS=$(mysql $MYSQL_ARGS -N -e "SHOW TABLES LIKE '$MAPPING_TABLE';")
 [ -z "$TABLE_EXISTS" ] && { echo "Mapping table '$MAPPING_TABLE' does not exist!"; exit 1; }
 
 # -----------------------------
-# Fetch img2img info from entity row
+# Fetch img2img info
 # -----------------------------
 read IMG2IMG_FLAG IMG2IMG_FRAME_ID IMG2IMG_PROMPT < <(
   mysql $MYSQL_ARGS -N -e \
@@ -130,8 +124,7 @@ if [ "$IMG2IMG_FRAME_ID" -gt 0 ]; then
 fi
 
 # -----------------------------
-# Resolve absolute path for img2img source image using PROJECT_ROOT/public
-# DB filename remains untouched
+# Resolve absolute path for img2img
 # -----------------------------
 if [ -n "$IMG2IMG_FILENAME" ]; then
     ABS_PATH="$PROJECT_ROOT/public/$IMG2IMG_FILENAME"
@@ -145,18 +138,16 @@ if [ -n "$IMG2IMG_FILENAME" ]; then
 fi
 
 # -----------------------------
-# NEW: Composite frames handling (same as your main script)
+# Composite frames handling
 # -----------------------------
 COMPOSITE_IMAGE_URLS=""
 if [ "$ENTITY_TYPE" = "composites" ]; then
   echo "Entity is composites. Checking for assigned frames..."
-
   mapfile -t composite_frame_ids < <(mysql $MYSQL_ARGS -N -e \
     "SELECT frame_id FROM composite_frames WHERE composite_id = $ENTITY_ID ORDER BY frame_id ASC;")
 
   if [ ${#composite_frame_ids[@]} -gt 0 ]; then
     echo "Found ${#composite_frame_ids[@]} assigned frame(s) for composite ID $ENTITY_ID"
-
     declare -a uploaded_urls
 
     for frame_id in "${composite_frame_ids[@]}"; do
@@ -165,7 +156,6 @@ if [ "$ENTITY_TYPE" = "composites" ]; then
 
       if [ -n "$frame_filename" ]; then
         frame_abs_path="$PROJECT_ROOT/public/$frame_filename"
-
         if [ -f "$frame_abs_path" ]; then
           echo "Uploading composite frame $frame_id ($frame_filename) to Freeimage.host..."
           response=$(curl -s -X POST "https://freeimage.host/api/1/upload" \
@@ -173,17 +163,12 @@ if [ "$ENTITY_TYPE" = "composites" ]; then
             -F "action=upload" \
             -F "source=@$frame_abs_path" \
             -F "format=json")
-
           frame_url=$(echo "$response" | jq -r '.image.url')
 
           if [ -n "$frame_url" ] && [ "$frame_url" != "null" ]; then
             echo "Uploaded frame $frame_id: $frame_url"
             uploaded_urls+=("$frame_url")
-          else
-            echo "WARNING: Failed to upload frame $frame_id. Response: $response"
           fi
-        else
-          echo "WARNING: Frame file not found: $frame_abs_path"
         fi
       fi
     done
@@ -199,7 +184,6 @@ fi
 
 # -----------------------------
 # Set up IMAGE_URL for img2img
-# Priority: composite frames > standard img2img
 # -----------------------------
 if [ -n "$COMPOSITE_IMAGE_URLS" ]; then
   IMAGE_URL="$COMPOSITE_IMAGE_URLS"
@@ -223,16 +207,14 @@ else
 fi
 
 # -----------------------------
-# Helper: build JSON array for reference_images using jq
+# Helper: build JSON array for reference_images
 # -----------------------------
 build_refs_json() {
-  # Takes a comma-separated list in $1 and returns a JSON array string using jq
   local in="$1"
   if [ -z "$in" ]; then
     echo '[]'
     return
   fi
-  # split on comma, trim whitespace
   printf '%s' "$in" | jq -R -s -c 'split(",") | map(gsub("^\\s+|\\s+$";""))'
 }
 
@@ -251,7 +233,18 @@ for ((i=START; i<=END; i++)); do
   [ -n "$IMG2IMG_PROMPT" ] && [ -n "$IMAGE_URL" ] && prompt="$prompt $IMG2IMG_PROMPT"
 
   # -----------------------------
+  # Determine Seed (Passed or Random)
+  # -----------------------------
+  if [ -n "$SEED_ARG" ] && [ "$SEED_ARG" -ne 0 ]; then
+    SEED=$((SEED_ARG)) # Ensure it's treated as number
+  else
+    SEED=$(( (RANDOM << 15) | RANDOM ))
+  fi
+  echo "Seed: $SEED"
+
+  # -----------------------------
   # Thread-safe next frame basename (DB-driven)
+  # -----------------------------
   frame_basename=$(mysql $MYSQL_ARGS -N --batch --skip-column-names -e "
     UPDATE frame_counter
     SET next_frame = LAST_INSERT_ID(next_frame + 1);
@@ -260,7 +253,6 @@ for ((i=START; i<=END; i++)); do
   frame_basename="frame$frame_basename"
   outfile="$FRAMES_DIR/$frame_basename.jpg"
   filename_only="$frame_basename"
-  url_prompt=$(echo "$prompt" | sed -e 's/ /%20/g' -e 's/,/%2C/g')
 
   echo "Generating image $filename_only for prompt: $prompt [style_id=$style_id]"
 
@@ -268,16 +260,23 @@ for ((i=START; i<=END; i++)); do
   while [ $attempt -le $MAX_RETRIES ]; do
 
     # -----------------------------
-    # Freepik async request -> poll -> download
+    # Freepik async request
     # -----------------------------
-    # Build reference_images JSON array (if IMAGE_URL is set it may be comma-separated)
     refs_json=$(build_refs_json "$IMAGE_URL")
 
-    # Build request body (use reference_images only if non-empty array)
+    # Build JSON Body: Include seed and negative_prompt
+    # Using jq to safely build the JSON object
     if [ "$refs_json" = "[]" ]; then
-      body=$(jq -n --arg p "$prompt" '{prompt:$p}')
+      body=$(jq -n \
+        --arg p "$prompt" \
+        --arg np "$NEGATIVE_PROMPT" \
+        '{prompt: $p, negative_prompt: $np}')
     else
-      body=$(jq -n --arg p "$prompt" --argjson refs "$refs_json" '{prompt:$p, reference_images:$refs}')
+      body=$(jq -n \
+        --arg p "$prompt" \
+        --arg np "$NEGATIVE_PROMPT" \
+        --argjson refs "$refs_json" \
+        '{prompt: $p, negative_prompt: $np, reference_images: $refs}')
     fi
 
     # POST to create a task
@@ -288,8 +287,7 @@ for ((i=START; i<=END; i++)); do
       -d "$body")
 
     TASK_ID=$(printf '%s' "$create_resp" | jq -r '.data.task_id // empty')
-    TASK_STATUS=$(printf '%s' "$create_resp" | jq -r '.data.status // empty')
-
+    
     if [ -z "$TASK_ID" ]; then
       echo "Failed to create Freepik task. Response: $create_resp"
       attempt=$((attempt+1))
@@ -297,11 +295,11 @@ for ((i=START; i<=END; i++)); do
       continue
     fi
 
-    echo "Task created: $TASK_ID (initial status: ${TASK_STATUS:-UNKNOWN})"
+    echo "Task created: $TASK_ID"
     POLL_OK=false
     poll_count=0
 
-    # Poll loop (stops after MAX_POLL_ATTEMPTS)
+    # Poll loop
     while [ $poll_count -lt $MAX_POLL_ATTEMPTS ]; do
       sleep $POLL_INTERVAL
       poll_count=$((poll_count+1))
@@ -310,56 +308,39 @@ for ((i=START; i<=END; i++)); do
         "https://api.freepik.com/v1/ai/gemini-2-5-flash-image-preview/$TASK_ID")
 
       status=$(printf '%s' "$poll_resp" | jq -r '.data.status // empty')
-
-      # Show status every few polls (or every poll)
       echo "Poll #$poll_count: status=$status"
 
-      if [ -z "$status" ]; then
-        echo "Unexpected poll response: $poll_resp"
-        # continue polling but prevent infinite tight-loop: wait and try again
-        sleep $POLL_INTERVAL
-        continue
-      fi
-
       if [ "$status" = "COMPLETED" ]; then
-        # Grab first generated URL
         image_url=$(printf '%s' "$poll_resp" | jq -r '.data.generated[0] // empty')
         if [ -z "$image_url" ]; then
-          echo "No image URL in COMPLETED response: $poll_resp"
-          # treat as failure for retry purposes
+          echo "No image URL in COMPLETED response"
           break
         fi
 
         echo "Downloading image from: $image_url"
-        # Use -L so redirects are followed
         curl -s -L "$image_url" -o "$outfile"
-
         POLL_OK=true
         break
-      fi
-
-      if [ "$status" = "FAILED" ]; then
+      elif [ "$status" = "FAILED" ]; then
         echo "Freepik task failed. Response: $poll_resp"
         POLL_OK=false
         break
       fi
-
-      # else still processing -> loop again
     done
 
-    # If we left the poll loop because we reached the poll limit and didn't succeed:
     if [ "$POLL_OK" != "true" ] && [ $poll_count -ge $MAX_POLL_ATTEMPTS ]; then
-      echo "Max polls reached ($MAX_POLL_ATTEMPTS). Giving up on this attempt."
+      echo "Max polls reached. Giving up on this attempt."
       POLL_OK=false
     fi
 
-    # Validate image if downloaded
+    # Validate image
     if [ "$POLL_OK" = true ]; then
       ffmpeg -v error -i "$outfile" -f null - 2>/dev/null
       if [ $? -eq 0 ]; then
         echo "Saved valid image: $outfile"
 
-        # Insert frame into DB (same logic as your original script)
+        # Insert frame into DB
+        SAFE_NEG_PROMPT=$(echo "$NEGATIVE_PROMPT" | sed "s/'/''/g")
         SAFE_PROMPT=$(echo "$prompt" | sed "s/'/''/g")
         SAFE_STYLE=$(echo "$style" | sed "s/'/''/g")
         DB_IMG2IMG_FRAME_ID="NULL"
@@ -367,13 +348,16 @@ for ((i=START; i<=END; i++)); do
         DB_IMG2IMG_PROMPT="NULL"
         [ -n "$IMG2IMG_PROMPT" ] && DB_IMG2IMG_PROMPT="'$(echo "$IMG2IMG_PROMPT" | sed "s/'/''/g")'"
 
+        # Added: seed and prompt_negative
         FRAME_ID=$(mysql $MYSQL_ARGS -N -e "
 INSERT INTO frames
-  (filename, name, prompt, entity_type, entity_id, style, style_id, map_run_id, img2img_frame_id, img2img_prompt)
+  (filename, name, prompt, prompt_negative, seed, entity_type, entity_id, style, style_id, map_run_id, img2img_frame_id, img2img_prompt)
 VALUES
   ('$FRAMES_DIR_REL/$filename_only.jpg',
    '$filename_only',
    '$SAFE_PROMPT',
+   '$SAFE_NEG_PROMPT',
+   $SEED,
    '$ENTITY_TYPE',
    $ENTITY_ID,
    '$SAFE_STYLE',
@@ -387,33 +371,26 @@ SELECT LAST_INSERT_ID();")
         [ -n "$FRAME_ID" ] && mysql $MYSQL_ARGS -e \
           "INSERT INTO $MAPPING_TABLE (from_id, to_id) VALUES ($FRAME_ID, $ENTITY_ID);"
 
-        # success -> break attempts loop
         break
       else
         echo "Broken/invalid image. Retry $attempt/$MAX_RETRIES..."
         rm -f "$outfile"
         attempt=$((attempt+1))
         sleep $RETRY_DELAY
-        continue
       fi
     else
-      echo "Polling or generation failed for attempt $attempt/$MAX_RETRIES."
+      echo "Polling or generation failed. Retry $attempt/$MAX_RETRIES..."
       attempt=$((attempt+1))
       sleep $RETRY_DELAY
-      continue
     fi
-
-  done # attempts loop
+  done
 
   if [ $attempt -gt $MAX_RETRIES ]; then
-    echo "Failed to generate valid image after $MAX_RETRIES attempts for prompt: $prompt"
+    echo "Failed to generate valid image after $MAX_RETRIES attempts."
   fi
+done
 
-done # styles loop
-
-# -----------------------------
 # Clear regenerate flag
-# -----------------------------
 mysql $MYSQL_ARGS -e "UPDATE $ENTITY_TYPE SET regenerate_images=0 WHERE id=$ENTITY_ID;"
 
 echo "Freepik generation script finished."

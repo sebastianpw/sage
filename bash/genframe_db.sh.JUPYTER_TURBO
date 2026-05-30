@@ -37,19 +37,23 @@ RETRY_DELAY=2
 
 # -----------------------------
 # Arguments
+# UPDATED: Added Negative Prompt ($2) and Seed ($3)
 # -----------------------------
 BASE_PROMPT="$1"
-MAP_RUN_ID="$2"
-ENTITY_TYPE="$3"
-ENTITY_ID="$4"
-LIMIT="$5"
-OFFSET="$6"
-NO_STYLES="$7"
-ADD_TO_PROMPT="$8"
+NEGATIVE_PROMPT="$2"    # <--- NEW
+SEED_ARG="$3"           # <--- NEW
+MAP_RUN_ID="$4"         # Shifted
+ENTITY_TYPE="$5"        # Shifted
+ENTITY_ID="$6"          # Shifted
+LIMIT="$7"              # Shifted
+OFFSET="$8"             # Shifted
+NO_STYLES="$9"          # Shifted
+ADD_TO_PROMPT="${10}"   # Shifted
+
 NO_STYLES=${NO_STYLES:-0}
 
 if [ -z "$BASE_PROMPT" ] || [ -z "$MAP_RUN_ID" ] || [ -z "$ENTITY_TYPE" ] || [ -z "$ENTITY_ID" ]; then
-  echo "Usage: $0 \"base prompt\" MAP_RUN_ID \"entity_type\" \"entity_id\" [limit] [offset] [no_styles] [add_to_prompt]"
+  echo "Usage: $0 \"base prompt\" \"neg prompt\" \"seed\" MAP_RUN_ID \"entity_type\" \"entity_id\" [limit] [offset] [no_styles] [add_to_prompt]"
   exit 1
 fi
 
@@ -174,9 +178,13 @@ for ((i=START; i<=END; i++)); do
 
   echo "Generating $filename_only | Style: $style_id"
 
-  # Defaults for Turbo
-  SEED=36
-  NEG_PROMPT="nudity, nude, naked, bare, topless, underwear, panties, erotic, sexual, explicit, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name"
+  # Determine Seed (Passed > Random)
+  if [ -n "$SEED_ARG" ] && [ "$SEED_ARG" -ne 0 ]; then
+    SEED="$SEED_ARG"
+  else
+    SEED=$(( (RANDOM << 15) | RANDOM ))
+  fi
+  echo "Seed: $SEED"
   
   # --- SMART PARAMETERS ---
   # Turbo default
@@ -197,7 +205,7 @@ for ((i=START; i<=END; i++)); do
     CURL_ARGS=(
       curl -s -X POST "$ZROK_URL/generate"
       -F "prompt=$prompt"
-      -F "negative_prompt=$NEG_PROMPT"
+      -F "negative_prompt=$NEGATIVE_PROMPT"
       -F "seed=$SEED"
       -F "num_inference_steps=$STEPS"
       -F "guidance_scale=0.0"
@@ -226,6 +234,7 @@ for ((i=START; i<=END; i++)); do
       echo "  -> Saved: $outfile"
 
       # DB Insert
+      SAFE_NEG_PROMPT=$(echo "$NEGATIVE_PROMPT" | sed "s/'/''/g")
       SAFE_PROMPT=$(echo "$prompt" | sed "s/'/''/g")
       SAFE_STYLE=$(echo "$style" | sed "s/'/''/g")
       DB_IMG2IMG_FRAME_ID="NULL"
@@ -233,11 +242,12 @@ for ((i=START; i<=END; i++)); do
       DB_IMG2IMG_PROMPT="NULL"
       [ -n "$IMG2IMG_PROMPT" ] && DB_IMG2IMG_PROMPT="'$(echo "$IMG2IMG_PROMPT" | sed "s/'/''/g")'"
 
+      # Added: seed and prompt_negative
       FRAME_ID=$(mysql $MYSQL_ARGS -N -e "
         INSERT INTO frames
-        (filename, name, prompt, entity_type, entity_id, style, style_id, map_run_id, img2img_frame_id, img2img_prompt)
+        (filename, name, prompt, prompt_negative, seed, entity_type, entity_id, style, style_id, map_run_id, img2img_frame_id, img2img_prompt)
         VALUES
-        ('$FRAMES_DIR_REL/$filename_only.png', '$filename_only', '$SAFE_PROMPT', '$ENTITY_TYPE', $ENTITY_ID, '$SAFE_STYLE', $style_id, $MAP_RUN_ID, $DB_IMG2IMG_FRAME_ID, $DB_IMG2IMG_PROMPT);
+        ('$FRAMES_DIR_REL/$filename_only.png', '$filename_only', '$SAFE_PROMPT', '$SAFE_NEG_PROMPT', $SEED, '$ENTITY_TYPE', $ENTITY_ID, '$SAFE_STYLE', $style_id, $MAP_RUN_ID, $DB_IMG2IMG_FRAME_ID, $DB_IMG2IMG_PROMPT);
         SELECT LAST_INSERT_ID();")
 
       [ -n "$FRAME_ID" ] && mysql $MYSQL_ARGS -e "INSERT INTO $MAPPING_TABLE (from_id, to_id) VALUES ($FRAME_ID, $ENTITY_ID);"

@@ -15,6 +15,59 @@ ob_start();
 .admin-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
 .admin-head h2 { margin: 0; font-weight: 600; font-size: 1.3rem; color: var(--text); }
 
+/* Search field styling */
+.search-container {
+    margin-bottom: 16px;
+    position: relative;
+    max-width: 100%;
+}
+.search-field {
+    width: 100%;
+    max-width: 100%;
+    padding: 10px 40px 10px 16px;
+    font-size: 0.95rem;
+    border: 1px solid rgba(var(--muted-border-rgb), 0.12);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    transition: all 0.15s ease;
+    box-sizing: border-box;
+}
+.search-field:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 99, 102, 241), 0.1);
+}
+.search-field::placeholder {
+    color: var(--text-muted);
+}
+.search-clear {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: 4px;
+    display: none;
+    transition: color 0.15s ease;
+}
+.search-clear:hover {
+    color: var(--text);
+}
+.search-clear.visible {
+    display: block;
+}
+.search-info {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 8px;
+    text-align: right;
+}
+
 .recipe-list-container {
     background: var(--card);
     border: 1px solid rgba(var(--muted-border-rgb), 0.08);
@@ -36,6 +89,7 @@ ob_start();
 }
 .recipe-item:last-child { margin-bottom: 0; }
 .recipe-item:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.recipe-item.hidden { display: none; }
 
 .recipe-info { flex: 1; min-width: 0; }
 .recipe-name { font-weight: 600; font-size: 1rem; color: var(--text); margin-bottom: 6px; }
@@ -202,6 +256,18 @@ ob_start();
         <a style="display:none;" href="view_video_admin.php" class="btn btn-sm btn-outline-secondary">Back to Video Admin</a>
     </div>
 
+    <div class="search-container">
+        <input 
+            type="text" 
+            id="recipeSearch" 
+            class="search-field" 
+            placeholder="Search recipes by name, filename, or ingredients..."
+            autocomplete="off"
+        >
+        <button id="searchClear" class="search-clear" title="Clear search">×</button>
+        <div id="searchInfo" class="search-info"></div>
+    </div>
+
     <div class="recipe-list-container" id="recipeListContainer">
         <div class="loading-state">
             <div class="loading-spinner"></div>
@@ -246,6 +312,9 @@ ob_start();
 (function() {
     let recipes = [];
     const recipeListContainer = document.getElementById('recipeListContainer');
+    const searchField = document.getElementById('recipeSearch');
+    const searchClear = document.getElementById('searchClear');
+    const searchInfo = document.getElementById('searchInfo');
     
     // Modals
     const ingredientsModal = document.getElementById('ingredientsModal');
@@ -276,6 +345,65 @@ ob_start();
         return div.innerHTML;
     }
     
+    // --- Search Functionality ---
+    function filterRecipes(searchTerm) {
+        const term = searchTerm.toLowerCase().trim();
+        const recipeItems = document.querySelectorAll('.recipe-item');
+        let visibleCount = 0;
+        
+        recipeItems.forEach(item => {
+            const groupName = item.querySelector('.recipe-name').textContent.toLowerCase();
+            const filename = item.dataset.filename ? item.dataset.filename.toLowerCase() : '';
+            const ingredients = item.dataset.ingredients ? item.dataset.ingredients.toLowerCase() : '';
+            
+            if (term === '' || groupName.includes(term) || filename.includes(term) || ingredients.includes(term)) {
+                item.classList.remove('hidden');
+                visibleCount++;
+            } else {
+                item.classList.add('hidden');
+            }
+        });
+        
+        // Update search info
+        if (term === '') {
+            searchInfo.textContent = '';
+            searchClear.classList.remove('visible');
+        } else {
+            searchInfo.textContent = `Showing ${visibleCount} of ${recipeItems.length} recipes`;
+            searchClear.classList.add('visible');
+        }
+        
+        // Show empty state if no results
+        if (visibleCount === 0 && recipeItems.length > 0) {
+            const existingEmpty = recipeListContainer.querySelector('.empty-state');
+            if (!existingEmpty) {
+                const emptyDiv = document.createElement('div');
+                emptyDiv.className = 'empty-state search-empty';
+                emptyDiv.innerHTML = `No recipes match "${escapeHtml(term)}"`;
+                recipeListContainer.appendChild(emptyDiv);
+            }
+        } else {
+            const emptyDiv = recipeListContainer.querySelector('.search-empty');
+            if (emptyDiv) emptyDiv.remove();
+        }
+    }
+    
+    // Search input handler with debouncing
+    let searchTimeout;
+    searchField.addEventListener('input', function(e) {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            filterRecipes(e.target.value);
+        }, 150);
+    });
+    
+    // Clear search button
+    searchClear.addEventListener('click', function() {
+        searchField.value = '';
+        filterRecipes('');
+        searchField.focus();
+    });
+    
     // --- Data Loading & Rendering ---
     function loadRecipes() {
         fetch('recipe_api.php?action=list_recipes')
@@ -283,7 +411,8 @@ ob_start();
             .then(data => {
                 if (data.status === 'ok') {
                     recipes = data.recipes;
-                    renderRecipes();
+                    // Fetch ingredients for each recipe to enable searching
+                    loadRecipeIngredients();
                 } else {
                     showToast(data.message || 'Failed to load recipes', 'error');
                     recipeListContainer.innerHTML = '<div class="empty-state">Failed to load recipes</div>';
@@ -295,6 +424,30 @@ ob_start();
             });
     }
     
+    function loadRecipeIngredients() {
+        // Load ingredients for all recipes in parallel
+        const ingredientPromises = recipes.map(recipe => 
+            fetch(`recipe_api.php?action=get_recipe_details&id=${recipe.id}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        recipe.ingredients = data.ingredients.map(ing => 
+                            ing.source_filename.replace('db:', '')
+                        ).join(' ');
+                    } else {
+                        recipe.ingredients = '';
+                    }
+                })
+                .catch(() => {
+                    recipe.ingredients = '';
+                })
+        );
+        
+        Promise.all(ingredientPromises).then(() => {
+            renderRecipes();
+        });
+    }
+    
     function renderRecipes() {
         if (!recipes.length) {
             recipeListContainer.innerHTML = '<div class="empty-state">No recipes found.<br>Run <code>dumpcode.sh</code> to create one!</div>';
@@ -302,7 +455,11 @@ ob_start();
         }
 
         recipeListContainer.innerHTML = recipes.map(recipe => `
-            <div class="recipe-item" data-recipe-id="${recipe.id}" data-rerun-command="${escapeHtml(recipe.rerun_command)}">
+            <div class="recipe-item" 
+                 data-recipe-id="${recipe.id}" 
+                 data-filename="${escapeHtml(recipe.output_filename)}"
+                 data-ingredients="${escapeHtml(recipe.ingredients || '')}"
+                 data-rerun-command="${escapeHtml(recipe.rerun_command)}">
                 <div class="recipe-info">
                     <div class="recipe-name">${escapeHtml(recipe.group_name)}</div>
                     <div class="recipe-meta">
@@ -318,6 +475,11 @@ ob_start();
                 </div>
             </div>
         `).join('');
+        
+        // Apply any existing search filter
+        if (searchField.value.trim()) {
+            filterRecipes(searchField.value);
+        }
     }
 
     // --- Event Delegation ---
@@ -396,6 +558,9 @@ ob_start();
                             recipeItem.remove();
                             if (document.querySelectorAll('.recipe-item').length === 0) {
                                 renderRecipes();
+                            } else {
+                                // Update search info after deletion
+                                filterRecipes(searchField.value);
                             }
                         }, 300);
                     } else {

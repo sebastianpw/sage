@@ -3,9 +3,9 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Erstellungszeit: 29. Nov 2025 um 02:32
--- Server-Version: 12.0.2-MariaDB
--- PHP-Version: 8.4.2
+-- Generation Time: May 19, 2026 at 03:52 PM
+-- Server version: 12.2.2-MariaDB
+-- PHP Version: 8.5.1
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -18,13 +18,13 @@ SET time_zone = "+00:00";
 /*!40101 SET NAMES utf8mb4 */;
 
 --
--- Datenbank: `sg_sys`
+-- Database: `sg_sys`
 --
 
 -- --------------------------------------------------------
 
 --
--- Tabellenstruktur für Tabelle `code_analysis_log`
+-- Table structure for table `code_analysis_log`
 --
 
 CREATE TABLE `code_analysis_log` (
@@ -41,7 +41,7 @@ CREATE TABLE `code_analysis_log` (
 -- --------------------------------------------------------
 
 --
--- Tabellenstruktur für Tabelle `code_classes`
+-- Table structure for table `code_classes`
 --
 
 CREATE TABLE `code_classes` (
@@ -58,7 +58,7 @@ CREATE TABLE `code_classes` (
 -- --------------------------------------------------------
 
 --
--- Tabellenstruktur für Tabelle `code_files`
+-- Table structure for table `code_files`
 --
 
 CREATE TABLE `code_files` (
@@ -73,7 +73,7 @@ CREATE TABLE `code_files` (
 -- --------------------------------------------------------
 
 --
--- Tabellenstruktur für Tabelle `gpt_conversations`
+-- Table structure for table `gpt_conversations`
 --
 
 CREATE TABLE `gpt_conversations` (
@@ -93,7 +93,7 @@ CREATE TABLE `gpt_conversations` (
 -- --------------------------------------------------------
 
 --
--- Tabellenstruktur für Tabelle `gpt_messages`
+-- Table structure for table `gpt_messages`
 --
 
 CREATE TABLE `gpt_messages` (
@@ -112,7 +112,7 @@ CREATE TABLE `gpt_messages` (
 -- --------------------------------------------------------
 
 --
--- Tabellenstruktur für Tabelle `pages_dashboard`
+-- Table structure for table `pages_dashboard`
 --
 
 CREATE TABLE `pages_dashboard` (
@@ -127,7 +127,7 @@ CREATE TABLE `pages_dashboard` (
 -- --------------------------------------------------------
 
 --
--- Tabellenstruktur für Tabelle `recipes`
+-- Table structure for table `recipes`
 --
 
 CREATE TABLE `recipes` (
@@ -141,7 +141,7 @@ CREATE TABLE `recipes` (
 -- --------------------------------------------------------
 
 --
--- Tabellenstruktur für Tabelle `recipe_groups`
+-- Table structure for table `recipe_groups`
 --
 
 CREATE TABLE `recipe_groups` (
@@ -155,7 +155,7 @@ CREATE TABLE `recipe_groups` (
 -- --------------------------------------------------------
 
 --
--- Tabellenstruktur für Tabelle `recipe_ingredients`
+-- Table structure for table `recipe_ingredients`
 --
 
 CREATE TABLE `recipe_ingredients` (
@@ -169,7 +169,7 @@ CREATE TABLE `recipe_ingredients` (
 -- --------------------------------------------------------
 
 --
--- Tabellenstruktur für Tabelle `recipe_ingredient_snapshots`
+-- Table structure for table `recipe_ingredient_snapshots`
 --
 
 CREATE TABLE `recipe_ingredient_snapshots` (
@@ -182,7 +182,7 @@ CREATE TABLE `recipe_ingredient_snapshots` (
 -- --------------------------------------------------------
 
 --
--- Tabellenstruktur für Tabelle `sage_todos`
+-- Table structure for table `sage_todos`
 --
 
 CREATE TABLE `sage_todos` (
@@ -203,32 +203,32 @@ CREATE TABLE `sage_todos` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Indizes der exportierten Tabellen
+-- Indexes for dumped tables
 --
 
 --
--- Indizes für die Tabelle `code_analysis_log`
+-- Indexes for table `code_analysis_log`
 --
 ALTER TABLE `code_analysis_log`
   ADD PRIMARY KEY (`id`),
   ADD KEY `file_id` (`file_id`);
 
 --
--- Indizes für die Tabelle `code_classes`
+-- Indexes for table `code_classes`
 --
 ALTER TABLE `code_classes`
   ADD PRIMARY KEY (`id`),
   ADD KEY `file_id` (`file_id`);
 
 --
--- Indizes für die Tabelle `code_files`
+-- Indexes for table `code_files`
 --
 ALTER TABLE `code_files`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `path` (`path`) USING HASH;
 
 --
--- Indizes für die Tabelle `gpt_conversations`
+-- Indexes for table `gpt_conversations`
 --
 ALTER TABLE `gpt_conversations`
   ADD PRIMARY KEY (`id`),
@@ -238,7 +238,7 @@ ALTER TABLE `gpt_conversations`
   ADD KEY `model` (`model`);
 
 --
--- Indizes für die Tabelle `gpt_messages`
+-- Indexes for table `gpt_messages`
 --
 ALTER TABLE `gpt_messages`
   ADD PRIMARY KEY (`id`),
@@ -248,28 +248,28 @@ ALTER TABLE `gpt_messages`
 ALTER TABLE `gpt_messages` ADD FULLTEXT KEY `ft_content` (`content_text`);
 
 --
--- Indizes für die Tabelle `pages_dashboard`
+-- Indexes for table `pages_dashboard`
 --
 ALTER TABLE `pages_dashboard`
   ADD PRIMARY KEY (`id`),
   ADD KEY `parent_id` (`parent_id`);
 
 --
--- Indizes für die Tabelle `recipes`
+-- Indexes for table `recipes`
 --
 ALTER TABLE `recipes`
   ADD PRIMARY KEY (`id`),
   ADD KEY `fk_recipes_recipe_groups_idx` (`recipe_group_id`);
 
 --
--- Indizes für die Tabelle `recipe_groups`
+-- Indexes for table `recipe_groups`
 --
 ALTER TABLE `recipe_groups`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `name_UNIQUE` (`name`);
 
 --
--- Indizes für die Tabelle `recipe_ingredients`
+-- Indexes for table `recipe_ingredients`
 --
 ALTER TABLE `recipe_ingredients`
   ADD PRIMARY KEY (`id`),
@@ -277,112 +277,112 @@ ALTER TABLE `recipe_ingredients`
   ADD KEY `fk_recipe_ingredients_snapshots_idx` (`snapshot_id`);
 
 --
--- Indizes für die Tabelle `recipe_ingredient_snapshots`
+-- Indexes for table `recipe_ingredient_snapshots`
 --
 ALTER TABLE `recipe_ingredient_snapshots`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `content_hash_UNIQUE` (`content_hash`);
 
 --
--- Indizes für die Tabelle `sage_todos`
+-- Indexes for table `sage_todos`
 --
 ALTER TABLE `sage_todos`
   ADD PRIMARY KEY (`id`);
 
 --
--- AUTO_INCREMENT für exportierte Tabellen
+-- AUTO_INCREMENT for dumped tables
 --
 
 --
--- AUTO_INCREMENT für Tabelle `code_analysis_log`
+-- AUTO_INCREMENT for table `code_analysis_log`
 --
 ALTER TABLE `code_analysis_log`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
--- AUTO_INCREMENT für Tabelle `code_classes`
+-- AUTO_INCREMENT for table `code_classes`
 --
 ALTER TABLE `code_classes`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
--- AUTO_INCREMENT für Tabelle `code_files`
+-- AUTO_INCREMENT for table `code_files`
 --
 ALTER TABLE `code_files`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
--- AUTO_INCREMENT für Tabelle `gpt_conversations`
+-- AUTO_INCREMENT for table `gpt_conversations`
 --
 ALTER TABLE `gpt_conversations`
   MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
--- AUTO_INCREMENT für Tabelle `gpt_messages`
+-- AUTO_INCREMENT for table `gpt_messages`
 --
 ALTER TABLE `gpt_messages`
   MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
--- AUTO_INCREMENT für Tabelle `pages_dashboard`
+-- AUTO_INCREMENT for table `pages_dashboard`
 --
 ALTER TABLE `pages_dashboard`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
--- AUTO_INCREMENT für Tabelle `recipes`
+-- AUTO_INCREMENT for table `recipes`
 --
 ALTER TABLE `recipes`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
--- AUTO_INCREMENT für Tabelle `recipe_groups`
+-- AUTO_INCREMENT for table `recipe_groups`
 --
 ALTER TABLE `recipe_groups`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
--- AUTO_INCREMENT für Tabelle `recipe_ingredients`
+-- AUTO_INCREMENT for table `recipe_ingredients`
 --
 ALTER TABLE `recipe_ingredients`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
--- AUTO_INCREMENT für Tabelle `recipe_ingredient_snapshots`
+-- AUTO_INCREMENT for table `recipe_ingredient_snapshots`
 --
 ALTER TABLE `recipe_ingredient_snapshots`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
--- AUTO_INCREMENT für Tabelle `sage_todos`
+-- AUTO_INCREMENT for table `sage_todos`
 --
 ALTER TABLE `sage_todos`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
--- Constraints der exportierten Tabellen
+-- Constraints for dumped tables
 --
 
 --
--- Constraints der Tabelle `code_analysis_log`
+-- Constraints for table `code_analysis_log`
 --
 ALTER TABLE `code_analysis_log`
   ADD CONSTRAINT `code_analysis_log_ibfk_1` FOREIGN KEY (`file_id`) REFERENCES `code_files` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints der Tabelle `code_classes`
+-- Constraints for table `code_classes`
 --
 ALTER TABLE `code_classes`
   ADD CONSTRAINT `code_classes_ibfk_1` FOREIGN KEY (`file_id`) REFERENCES `code_files` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints der Tabelle `recipes`
+-- Constraints for table `recipes`
 --
 ALTER TABLE `recipes`
   ADD CONSTRAINT `fk_recipes_recipe_groups` FOREIGN KEY (`recipe_group_id`) REFERENCES `recipe_groups` (`id`) ON DELETE CASCADE ON UPDATE NO ACTION;
 
 --
--- Constraints der Tabelle `recipe_ingredients`
+-- Constraints for table `recipe_ingredients`
 --
 ALTER TABLE `recipe_ingredients`
   ADD CONSTRAINT `fk_recipe_ingredients_recipes` FOREIGN KEY (`recipe_id`) REFERENCES `recipes` (`id`) ON DELETE CASCADE ON UPDATE NO ACTION,

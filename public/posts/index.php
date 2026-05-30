@@ -9,12 +9,26 @@ $all_posts_from_db = $postManager->getAllPosts();
 
 $grid_posts_data = [];
 foreach ($all_posts_from_db as $post) {
-    $grid_posts_data[] = [
+    $item = [
         'title' => $post['title'],
-        // This is the crucial part: we now link to our dynamic view.php
-        'file' => 'view.php?slug=' . urlencode($post['slug']), 
-        'preview' => $post['preview_image_url']
+        'preview' => $post['preview_image_url'],
+        'type' => $post['post_type'] // Pass type to JS for styling (e.g. icons)
     ];
+
+    // Handle URL References to link directly from the grid
+    if ($post['post_type'] === 'url_reference') {
+        $media = json_decode($post['media_items'], true);
+        // Normalize: supports [{"url":"..."}] or {"url":"..."}
+        $data = (is_array($media) && isset($media[0])) ? $media[0] : $media;
+        
+        $item['file'] = $data['url'] ?? '#';
+        $item['target'] = $data['target'] ?? '_self';
+    } else {
+        // Standard posts link to the view page
+        $item['file'] = 'view.php?slug=' . urlencode($post['slug']);
+    }
+
+    $grid_posts_data[] = $item;
 }
 
 // Load the grid template
@@ -34,4 +48,3 @@ $final_html = str_replace('/posts/index.html', '/posts/', $final_html);
 
 // Output the final, rendered page
 echo $final_html;
-

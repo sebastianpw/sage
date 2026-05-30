@@ -15,7 +15,7 @@ $entityId = isset($_GET['entity_id']) ? (int)$_GET['entity_id'] : 0;
 
 if ($entityId <= 0 || !$entityType) {
     echo "<div class='notice'>Missing entity_type/entity_id in URL</div>";
-    require "floatool.php";
+    require_once "forge_tool.php";
     $content = ob_get_clean();
     $content .= $eruda;
     $spw->renderLayout($content, $pageTitle);
@@ -29,7 +29,7 @@ $entity = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$entity) {
     echo "<div class='notice'>Entity not found</div>";
     $content = ob_get_clean();
-    require "floatool.php";
+    require_once "forge_tool.php";
     $content .= $eruda;
     $spw->renderLayout($content, $pageTitle);
     exit;
@@ -151,7 +151,7 @@ $(function(){
 </script>
 
 <?php
-require "floatool.php";
+require_once "forge_tool.php";
 $content = ob_get_clean();
 $content .= $eruda;
 $spw->renderLayout($content, $pageTitle);

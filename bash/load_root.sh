@@ -1,8 +1,6 @@
 #!/bin/bash
-# load_root.sh
-# Load PROJECT_ROOT and FRAMES_ROOT from load_root.share
+# load_root.sh - load PROJECT_ROOT, FRAMES_ROOT, AUDIOS_ROOT, VIDEOS_ROOT from .env.local
 
-# Path to the share file
 SHARE_FILE="$(dirname "$BASH_SOURCE")/../.env.local"
 
 if [[ ! -f "$SHARE_FILE" ]]; then
@@ -10,40 +8,58 @@ if [[ ! -f "$SHARE_FILE" ]]; then
     exit 1
 fi
 
-# Read the variables from the share file
-# Only allow PROJECT_ROOT and FRAMES_ROOT lines, ignore others
+PROJECT_ROOT=""
+FRAMES_ROOT=""
+AUDIOS_ROOT=""
+VIDEOS_ROOT=""
+
 while IFS= read -r line; do
     case "$line" in
         PROJECT_ROOT=*) PROJECT_ROOT="${line#*=}" ;;
         FRAMES_ROOT=*) FRAMES_ROOT="${line#*=}" ;;
+        AUDIOS_ROOT=*) AUDIOS_ROOT="${line#*=}" ;;
+        VIDEOS_ROOT=*) VIDEOS_ROOT="${line#*=}" ;;
     esac
 done < "$SHARE_FILE"
 
-# Trim whitespace
 PROJECT_ROOT="$(echo -n "$PROJECT_ROOT" | xargs)"
 FRAMES_ROOT="$(echo -n "$FRAMES_ROOT" | xargs)"
+AUDIOS_ROOT="$(echo -n "$AUDIOS_ROOT" | xargs)"
+VIDEOS_ROOT="$(echo -n "$VIDEOS_ROOT" | xargs)"
 
-# Check that both are set
 if [[ -z "$PROJECT_ROOT" ]]; then
     echo "ERROR: PROJECT_ROOT not found in $SHARE_FILE" >&2
     exit 1
 fi
-
 if [[ -z "$FRAMES_ROOT" ]]; then
     echo "ERROR: FRAMES_ROOT not found in $SHARE_FILE" >&2
     exit 1
 fi
-
-# Optionally, verify that the directories actually exist
-if [[ ! -d "$PROJECT_ROOT" ]]; then
-    echo "ERROR: PROJECT_ROOT directory does not exist: $PROJECT_ROOT" >&2
+if [[ -z "$AUDIOS_ROOT" ]]; then
+    echo "ERROR: AUDIOS_ROOT not found in $SHARE_FILE" >&2
+    exit 1
+fi
+if [[ -z "$VIDEOS_ROOT" ]]; then
+    echo "ERROR: VIDEOS_ROOT not found in $SHARE_FILE" >&2
     exit 1
 fi
 
-if [[ ! -d "$FRAMES_ROOT" ]]; then
-    echo "ERROR: FRAMES_ROOT directory does not exist: $FRAMES_ROOT" >&2
+# Optionally verify directories - they may be symlinks, which is fine
+if [[ ! -e "$PROJECT_ROOT" ]]; then
+    echo "ERROR: PROJECT_ROOT path does not exist: $PROJECT_ROOT" >&2
+    exit 1
+fi
+if [[ ! -e "$FRAMES_ROOT" ]]; then
+    echo "ERROR: FRAMES_ROOT path does not exist: $FRAMES_ROOT" >&2
+    exit 1
+fi
+if [[ ! -e "$AUDIOS_ROOT" ]]; then
+    echo "ERROR: AUDIOS_ROOT path does not exist: $AUDIOS_ROOT" >&2
+    exit 1
+fi
+if [[ ! -e "$VIDEOS_ROOT" ]]; then
+    echo "ERROR: VIDEOS_ROOT path does not exist: $VIDEOS_ROOT" >&2
     exit 1
 fi
 
-# Now PROJECT_ROOT and FRAMES_ROOT are available to any script that sources this file
-# Usage: source load_root.sh
+export PROJECT_ROOT FRAMES_ROOT AUDIOS_ROOT VIDEOS_ROOT

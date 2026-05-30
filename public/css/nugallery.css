@@ -41,7 +41,7 @@ html[data-theme="dark"] {
 /* --- End of Theme Variables --- */
 
 
-/* --- NEW: Styles moved from inline attributes --- */
+/* --- Styles moved from inline attributes --- */
 .gallery-main-header {
     display: flex;
     align-items: center;
@@ -138,7 +138,7 @@ body { width: 600px; max-width: 600px; }
     gap: 15px;
 }
 .album-container.grid-view .album .img-wrapper img { width: 100%; display:block; }
-.album.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; margin-bottom: 200px; }
+.album.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; /* Reduced from 200px as pagination handles spacing now */ }
 .album.grid .img-wrapper img { width: 100%; }
 
 /* Caption and loading text */
@@ -176,10 +176,40 @@ body { width: 600px; max-width: 600px; }
 .img-wrapper { position: relative; }
 .img-wrapper img { display:block; max-width:100%; }
 
-/* Swiper navigation buttons (These styles are theme-agnostic and look good on both) */
+/* Swiper navigation buttons */
 .swiper-button-prev { background-image: url(/img/arrow-circle-left.svg) !important; background-repeat: no-repeat; background-size: 100% auto; background-position: center; }
 .swiper-button-next { background-image: url(/img/arrow-circle-right.svg) !important; background-repeat: no-repeat; background-size: 100% auto; background-position: center; }
 .swiper-button-next::after, .swiper-button-prev::after { display: none; }
 .swiper-button-prev, .swiper-button-next { filter: opacity(0.9); width: 40px; height: 40px; border-radius: 50%; background-color: rgba(0, 0, 0, 0.2); border: 2px solid rgba(0, 255, 255, 0.4); box-shadow: 0 0 8px rgba(0, 255, 255, 0.3), 0 0 16px rgba(0, 255, 255, 0.2), 0 0 24px rgba(0, 255, 255, 0.1); transition: transform 0.2s ease, box-shadow 0.2s ease; }
 .swiper-button-prev:hover, .swiper-button-next:hover { transform: scale(1.1); box-shadow: 0 0 12px rgba(0, 255, 255, 0.4), 0 0 24px rgba(0, 255, 255, 0.3), 0 0 36px rgba(0, 255, 255, 0.2); }
 
+/* 
+   ----------------------------------------------------------------------
+   SWIPER PAGINATION FIX 
+   ----------------------------------------------------------------------
+   Moves dots from overlaying the image (absolute) to below the image (relative).
+   Allows dots to wrap to multiple lines for large galleries.
+*/
+.swiper {
+    padding-bottom: 20px; /* Space for the scrollbar/dots container */
+}
+
+.swiper-pagination {
+    position: relative !important; /* Force into document flow */
+    bottom: auto !important;       /* Reset absolute position */
+    top: auto !important;
+    
+    margin-top: 25px;              /* Space between images and dots */
+    width: 100% !important;
+    text-align: center;
+    
+    /* Handle large number of dots */
+    white-space: normal !important; /* Allow wrapping */
+    line-height: 1.5;               /* Vertical breathing room */
+    display: block;
+}
+
+.swiper-pagination-bullet {
+    margin: 3px !important;         /* Space between individual dots */
+    display: inline-block;
+}

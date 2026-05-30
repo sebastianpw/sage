@@ -3,10 +3,11 @@
 # Dumps code files and main DB table structures into a single output file.
 # Records the recipe metadata into the system DB.
 #
-# Usage: ./dumpcode.sh [--name "Recipe Name"] <output_file> <file1> [db:table1] [<file2> ...]
+# Usage: ./dumpcode.sh [--name "Recipe Name"] <output_file> <file1> [db:table1[:id]] [<file2> ...]
 #
 #   - Recipe data is stored in the 'sys-conn' database.
-#   - `db:tablename` ingredients are dumped from the 'main-conn' database.
+#   - `db:tablename` ingredients are dumped from the 'main-conn' database as table structure.
+#   - `db:tablename:id` ingredients are dumped from the 'main-conn' database as a single-row SQL INSERT with column names.
 
 # --- Boilerplate and Configuration ---
 
@@ -79,7 +80,7 @@ if [ "$1" == "--name" ]; then
   shift 2
 fi
 if [ $# -lt 2 ]; then
-  echo "Usage: $0 [--name \"Recipe Name\"] output_file file1|db:table1 [file2|db:table2 ...]"
+  echo "Usage: $0 [--name \"Recipe Name\"] output_file file1|db:table[:id] [file2|db:table[:id] ...]"
   exit 1
 fi
 OUTPUT_FILE_ARG="$1"
@@ -108,7 +109,6 @@ if [ -f "$OUTPUT_FILE_ARG" ]; then
 fi
 
 echo "--- Starting Recipe Creation ---"
-# ... (rest of the script is identical until the main loop)
 
 # --- Database Operations (using System DB connection) ---
 echo "Step 1: Checking for recipe group '$RECIPE_NAME' in System DB..."
@@ -131,15 +131,37 @@ for arg in "${INGREDIENT_ARGS[@]}"; do
   CONTENT_HASH=""
   SOURCE_ID="$arg"
   if [[ "$arg" == db:* ]]; then
-    TABLE_NAME=${arg#db:}
-    echo " > Processing DB table '$TABLE_NAME' from Main DB..."
-    CONTENT=$(mysqldump $MYSQL_MAIN_ADMIN_ARGS --no-data --compact "$MAIN_DB_NAME" "$TABLE_NAME" 2>/dev/null)
-    if [ -z "$CONTENT" ]; then
-        echo "ERROR: Failed to dump table '$TABLE_NAME' from Main DB." >&2
+    DB_SPEC=${arg#db:}
+
+    if [[ "$DB_SPEC" == *:* ]]; then
+      TABLE_NAME=${DB_SPEC%%:*}
+      ROW_ID=${DB_SPEC#*:}
+
+      if ! [[ "$ROW_ID" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: Invalid row id in ingredient '$arg'. Expected a numeric id." >&2
         mysql $MYSQL_SYS_CONN_ARGS -e "DELETE FROM recipes WHERE id = $RECIPE_ID;" # Rollback
         echo "Recipe creation aborted and rolled back."; exit 1
+      fi
+
+      echo " > Processing DB row '$TABLE_NAME' id=$ROW_ID from Main DB..."
+      CONTENT=$(mysqldump $MYSQL_MAIN_ADMIN_ARGS --no-create-info --complete-insert --compact --skip-triggers --where="id = $ROW_ID" "$MAIN_DB_NAME" "$TABLE_NAME" 2>/dev/null)
+      if [ -z "$CONTENT" ] || ! printf '%s\n' "$CONTENT" | grep -q '^INSERT INTO '; then
+          echo "ERROR: Failed to dump row id=$ROW_ID from table '$TABLE_NAME' in Main DB." >&2
+          mysql $MYSQL_SYS_CONN_ARGS -e "DELETE FROM recipes WHERE id = $RECIPE_ID;" # Rollback
+          echo "Recipe creation aborted and rolled back."; exit 1
+      fi
+      CONTENT_HASH=$(echo -n "$CONTENT" | sha256sum | awk '{print $1}')
+    else
+      TABLE_NAME=$DB_SPEC
+      echo " > Processing DB table '$TABLE_NAME' from Main DB..."
+      CONTENT=$(mysqldump $MYSQL_MAIN_ADMIN_ARGS --no-data --compact "$MAIN_DB_NAME" "$TABLE_NAME" 2>/dev/null)
+      if [ -z "$CONTENT" ]; then
+          echo "ERROR: Failed to dump table '$TABLE_NAME' from Main DB." >&2
+          mysql $MYSQL_SYS_CONN_ARGS -e "DELETE FROM recipes WHERE id = $RECIPE_ID;" # Rollback
+          echo "Recipe creation aborted and rolled back."; exit 1
+      fi
+      CONTENT_HASH=$(echo -n "$CONTENT" | sha256sum | awk '{print $1}')
     fi
-    CONTENT_HASH=$(echo -n "$CONTENT" | sha256sum | awk '{print $1}')
   else
     abs_path=$(realpath "$arg")
     rel_path=$(realpath --relative-to="$PROJECT_ROOT" "$abs_path")
@@ -174,7 +196,6 @@ done
 
 # --- File Generation ---
 echo "Step 4: Generating output file '$OUTPUT_FILE_ARG'..."
-# ... (rest of the script is identical)
 > "$OUTPUT_FILE_ARG"
 {
   echo "# To regenerate this exact file, run the following command from the project root:"
@@ -189,9 +210,18 @@ echo "Step 4: Generating output file '$OUTPUT_FILE_ARG'..."
 for ((i=0; i<${#INGREDIENT_ARGS[@]}; i++)); do
   ARG="${INGREDIENT_ARGS[$i]}"
   if [[ "$ARG" == db:* ]]; then
-    TABLE_NAME=${ARG#db:}
-    echo "db:$TABLE_NAME" >> "$OUTPUT_FILE_ARG"; echo "" >> "$OUTPUT_FILE_ARG"
-    mysqldump $MYSQL_MAIN_ADMIN_ARGS --no-data --compact "$MAIN_DB_NAME" "$TABLE_NAME" >> "$OUTPUT_FILE_ARG"
+    DB_SPEC=${ARG#db:}
+
+    if [[ "$DB_SPEC" == *:* ]]; then
+      TABLE_NAME=${DB_SPEC%%:*}
+      ROW_ID=${DB_SPEC#*:}
+      echo "db:$TABLE_NAME:$ROW_ID" >> "$OUTPUT_FILE_ARG"; echo "" >> "$OUTPUT_FILE_ARG"
+      mysqldump $MYSQL_MAIN_ADMIN_ARGS --no-create-info --complete-insert --compact --skip-triggers --where="id = $ROW_ID" "$MAIN_DB_NAME" "$TABLE_NAME" >> "$OUTPUT_FILE_ARG"
+    else
+      TABLE_NAME=$DB_SPEC
+      echo "db:$TABLE_NAME" >> "$OUTPUT_FILE_ARG"; echo "" >> "$OUTPUT_FILE_ARG"
+      mysqldump $MYSQL_MAIN_ADMIN_ARGS --no-data --compact "$MAIN_DB_NAME" "$TABLE_NAME" >> "$OUTPUT_FILE_ARG"
+    fi
   else
     echo "$ARG" >> "$OUTPUT_FILE_ARG"; echo "" >> "$OUTPUT_FILE_ARG"
     cat "$ARG" >> "$OUTPUT_FILE_ARG"
@@ -209,4 +239,3 @@ else
 fi
 
 echo "--- Recipe saved successfully! ---"
-

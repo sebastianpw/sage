@@ -10,9 +10,11 @@
     "keywords": [],
     "dataset_sources": [
         "spw800621/controlnet-openpose-sdxl",
-        "spw800621/aam-xl-animemix"
+        "spw800621/aam-xl-animemix",
+        "spw800621/sage-zrok-token"
     ],
     "kernel_sources": [],
     "competition_sources": [],
-    "model_sources": []
+    "model_sources": [],
+    "id": "spw800621/sage-sdxl-t2i-i2i-cn-aam-xl-animemix"
 }

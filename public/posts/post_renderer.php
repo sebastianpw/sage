@@ -23,7 +23,7 @@ function renderPostHtml(array $post, bool $forStaticExport = false): string {
     // Prepare the placeholders and their corresponding values
     $replacements = [
         '{{POST_TITLE}}' => htmlspecialchars($post['title']),
-        '{{POST_CONTENT}}' => $post['content'], // Assumes content is safe HTML from your editor
+        '{{POST_CONTENT}}' => $post['content'], 
         '{{BACK_TO_GRID_URL}}' => $backLink
     ];
 
@@ -39,12 +39,25 @@ function renderPostHtml(array $post, bool $forStaticExport = false): string {
         case 'youtube_playlist':
             // This template needs a single URL extracted from the JSON
             $media = json_decode($post['media_items'], true);
-            $embedUrl = $media[0]['url'] ?? ''; // Safely get the first URL
+            $embedUrl = $media[0]['url'] ?? ''; 
             $replacements['{{YOUTUBE_EMBED_URL}}'] = htmlspecialchars($embedUrl);
+            break;
+
+        case 'url_reference':
+            // Extract the target URL for the redirect template
+            $media = json_decode($post['media_items'], true);
+            // Support both array structure [{"url":...}] or object structure {"url":...}
+            if (isset($media[0]['url'])) {
+                $url = $media[0]['url'];
+            } elseif (isset($media['url'])) {
+                $url = $media['url'];
+            } else {
+                $url = '#';
+            }
+            $replacements['{{TARGET_URL}}'] = htmlspecialchars($url);
             break;
     }
     
     // Find all placeholders in the template and replace them with the actual data
     return str_replace(array_keys($replacements), array_values($replacements), $template);
 }
-

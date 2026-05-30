@@ -145,10 +145,11 @@ tar -xzf zrok_1.1.10_linux_amd64.tar.gz
 mv zrok /usr/local/bin/
 chmod +x /usr/local/bin/zrok
 
+# install chroma vector db
+("$SCRIPT_DIR/init_chroma.sh")
 
 # install cloudflared for exposing codespace nginx
 ("$SCRIPT_DIR/init_cloudflared.sh")
-
 
 # wait a while
 sleep 10

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Swac Recorder JS</title>
+		<meta charset="utf-8"/>
+		<link rel="stylesheet" type="text/css" href="./css/demo.css">
+
+        <script
+			src="https://code.jquery.com/jquery-3.2.1.js"
+			integrity="sha256-DZAnKJ/6XZ9si04Hgrsxu/8s717jcIzLy3oi35EouyE="
+			crossorigin="anonymous"></script>
+
+        <script type="text/javascript" src="../src/RecordingProcessor.js"></script>
+		<script type="text/javascript" src="../src/AudioRecord.js"></script>
+		<script type="text/javascript" src="../src/LinguaRecorder.js"></script>
+		<script type="text/javascript" src="./js/Studio.js"></script>
+		<script type="text/javascript" src="./js/WordListStudio.js"></script>
+
+		<script type="text/javascript">
+		    'use strict';
+		    $( function() {
+		        window.wordListStudio = new WordListStudio( { $element: $( '#word-list-studio' ) } );
+
+		        $( '.studio-wordlist input' ).keypress( function( e ) {
+                    if ( ( e.which === 13 || e.which === 32 ) && $( '.studio-wordlist input' ).val().trim() !== '' ) {
+                        $( '.studio-wordlist input' ).before( $( '<li>' ).text( $( '.studio-wordlist input' ).val().trim() ) );
+                        $( '.studio-wordlist input' ).val( '' );
+                        wordListStudio.setWordsEvents();
+
+                        $( '.studio-wordlist' ).animate( { scrollTop: $( '.studio-wordlist' ).prop( 'scrollHeight' ) - $( '.studio-wordlist' ).height() }, 100 );
+                    }
+                } );
+		    } );
+		</script>
+	</head>
+	<body>
+	    <div id="word-list-studio" class="studio mini">
+	        <div class="studio-head">
+	            <canvas class="studio-canvas hidden" width="0" height="0"></canvas>
+	            <div class="studio-rButton">
+	                <button class="studio-rButton-inner">
+	                    <img class="studio-logo" src="./img/ll-logo-white.svg"/>
+	                </button>
+	            </div>
+	        </div>
+	        <ul class="studio-wordlist">
+                <li>Picon bière</li>
+                <li>Melfor</li>
+                <li>Carola</li>
+                <li>Flammekueche</li>
+                <li>Wurscht</li>
+                <li>Christkindelsmärik</li>
+                <li>Dahlias</li>
+                <li>Racing</li>
+                <li>bibalaekaess</li>
+                <li>baeckeoffe</li>
+                <li>mänele</li>
+                <input placeholder="Ajouter un mot">
+	        </ul>
+            <canvas class="studio-wordCanvas hidden"></canvas>
+	    </div>
+	</body>
+</html>
+

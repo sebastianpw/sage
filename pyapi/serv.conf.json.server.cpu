@@ -1,0 +1,166 @@
+{
+  "defaults": {
+    "default_ip": "127.0.0.1"
+  },
+  "services": {
+    "kaggle": {
+      "active": false,
+      "module": "services.kaggle_service",
+      "router_var": "router",
+      "prefix": "/kaggle",
+      "tags": ["kaggle"],
+      "address": null,
+      "route_script": null
+    },
+    "bloom": {
+      "active": false,
+      "module": "services.bloom_service",
+      "router_var": "router",
+      "prefix": "/bloom",
+      "tags": ["bloom"]
+    },
+    "wordnet": {
+      "active": false,
+      "module": "services.wordnet_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["wordnet"]
+    },
+    "pillow": {
+      "active": true,
+      "module": "services.pillow_service",
+      "router_var": "router",
+      "prefix": "/image",
+      "tags": ["image"]
+    },
+    "style": {
+      "active": false,
+      "module": "services.style_service",
+      "router_var": "router",
+      "prefix": "/style",
+      "tags": ["style"]
+    },
+    "rembg": {
+      "active": true,
+      "module": "services.rembg_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["background-removal"],
+      "comment": "Example of a service that might live elsewhere later"
+    },
+    "vidrembg": {
+      "active": true,
+      "module": "services.vidrembg_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["video-rembg"]
+    },
+    "cnetaux": {
+      "active": true,
+      "module": "services.cnetaux_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["cnetaux"]
+    },
+    "svc": {
+      "active": false,
+      "module": "services.svc_service",
+      "router_var": "router",
+      "prefix": "/svc",
+      "tags": ["svc"]
+    },
+    "blender": {
+      "active": false,
+      "module": "services.blender_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["blender"]
+    },
+    "multiplane": {
+      "active": true,
+      "module": "services.multiplane_service",
+      "router_var": "router",
+      "prefix": "/multiplane",
+      "tags": ["multiplane"]
+    },
+    "liplab": {
+      "active": true,
+      "module": "services.liplab_service",
+      "router_var": "router",
+      "prefix": "/liplab",
+      "tags": ["liplab"]
+    },
+    "voicepool": {
+      "active": true,
+      "module": "services.voicepool_service",
+      "router_var": "router",
+      "prefix": "/voicepool",
+      "tags": ["voicepool"]
+    },
+    "qwen3tts": {
+      "active": false,
+      "module": "services.qwen3tts_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["qwen3tts"]
+    },
+    "local_lm": {
+      "active": true,
+      "module": "services.local_ollama_service",
+      "router_var": "router",
+      "prefix": "/local_ollama",
+      "tags": ["local_ollama"]
+    },
+"sfx": {
+  "active": true,
+  "module": "services.sfx_service",
+  "router_var": "router",
+  "prefix": "/sfx",
+  "tags": ["sfx"]
+},
+"chroma": {
+  "active": true,
+  "module": "services.chroma_service",
+  "router_var": "router",
+  "prefix": "/chroma",
+  "tags": ["chroma"]
+},
+"embed": {
+  "active": true,
+  "module": "services.embed_service",
+  "router_var": "router",
+  "prefix": "",
+  "tags": ["embed"]
+},
+"multivid": {
+      "active": true,
+      "module": "services.multivid_service",
+      "router_var": "router",
+      "prefix": "/multivid",
+      "tags": ["multivid"]
+    },
+"fuzz": {
+      "active": true,
+      "module": "services.fuzz_service",
+      "router_var": "router",
+      "prefix": "/fuzz",
+      "tags": ["fuzz"]
+    },
+    "aiprovider": {
+      "active": false,
+      "module": "services.aiprovider_service",
+      "router_var": "router",
+      "prefix": "/aiprovider",
+      "tags": ["aiprovider"],
+      "comment": "Example: Dynamic IP retrieval via script"
+    },
+    "openai_compatible": {
+      "active": false,
+      "module": "services.openai_compatible_service",
+      "router_var": "router",
+      "prefix": "",
+      "tags": ["openai_compatible"]
+    }
+  }
+}
+

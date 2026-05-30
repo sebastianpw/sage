@@ -1,0 +1,18 @@
+{
+  "title": "sage-lcm-t2i-sdxl",
+  "code_file": "sage-lcm-t2i-sdxl.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "keywords": [],
+  "dataset_sources": [
+    "spw800621/lcm-lora-sdxl",
+    "spw800621/sdxl-base-1-0"
+  ],
+  "kernel_sources": [],
+  "competition_sources": [],
+  "model_sources": []
+}

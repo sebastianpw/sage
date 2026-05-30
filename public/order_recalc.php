@@ -8,9 +8,10 @@ $pdo = $spw->getPDO();
 
 // --- Entities ---
 $allEntities = [
-    'scene_parts','characters','character_poses','animas',
+    'scene_parts','characters','factions','character_poses','animas',
     'locations','backgrounds','artifacts','vehicles',
-    'generatives','sage_ideas','sage_todos','spawns','sketches','prompt_matrix_blueprints','composites','controlnet_maps','pastebin'
+    'generatives','sage_ideas','sage_todos','spawns','sketches','prompt_matrix_blueprints','composites','controlnet_maps','pastebin',
+    'audio_ambiences','audio_counter','audio_cues','audio_dialogue_lines','audio_foleys','audio_fxsounds','audio_themes','audio_voice_identity'
 ];
 
 // --- POST Handling ---

@@ -1,0 +1,18 @@
+{
+    "title": "sage-sdxl-t2i-i2i-cn-aam-xl-animemix",
+    "code_file": "sage-sdxl-t2i-i2i-cn-aam-xl-animemix.ipynb",
+    "language": "python",
+    "kernel_type": "notebook",
+    "is_private": true,
+    "enable_gpu": true,
+    "enable_tpu": false,
+    "enable_internet": true,
+    "keywords": [],
+    "dataset_sources": [
+        "spw800621/controlnet-openpose-sdxl",
+        "spw800621/aam-xl-animemix"
+    ],
+    "kernel_sources": [],
+    "competition_sources": [],
+    "model_sources": []
+}

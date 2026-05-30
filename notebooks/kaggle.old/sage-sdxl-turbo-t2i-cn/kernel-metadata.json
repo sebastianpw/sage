@@ -1,0 +1,18 @@
+{
+    "title": "sage-sdxl-turbo-t2i-cn",
+    "code_file": "sage-sdxl-turbo-t2i-cn.ipynb",
+    "language": "python",
+    "kernel_type": "notebook",
+    "is_private": true,
+    "enable_gpu": true,
+    "enable_tpu": false,
+    "enable_internet": true,
+    "keywords": [],
+    "dataset_sources": [
+        "spw800621/sdxl-turbo",
+        "spw800621/controlnet-openpose-sdxl"
+    ],
+    "kernel_sources": [],
+    "competition_sources": [],
+    "model_sources": []
+}

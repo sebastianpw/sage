@@ -6,12 +6,7 @@ require __DIR__ . '/env_locals.php';
 use App\Entity\GeneratorConfig;
 
 define('ID_NAME_GEN', '9bf6de291765e2ced28589de857a9f0b');
-//define('ID_DESC_GEN', 'e76db8f464c7e35851685a0dbc8f3da8');
-
 define('ID_DESC_GEN', '446437576e785bbf3d188624dd9794eb');
-
-
-
 
 $em = $spw->getEntityManager();
 $userId = $_SESSION['user_id'] ?? null;
@@ -39,7 +34,7 @@ $success = null;
 $entity = null;
 $previewImage = null;
 $sketchTemplates = [];
-$structuredInteractions = []; // NEW: For interactions UI
+$structuredInteractions = []; 
 
 if ($entityType === 'sketches') {
     $conn = $em->getConnection();
@@ -47,14 +42,13 @@ if ($entityType === 'sketches') {
     $templatesResult = $templatesStmt->executeQuery();
     $sketchTemplates = $templatesResult->fetchAllAssociative();
 
-    // NEW: Fetch and structure interactions data for the UI
+    // Fetch and structure interactions data for the UI
     $interactionsStmt = $conn->prepare("SELECT id, name, description, interaction_group, category, example_prompt FROM interactions WHERE active = 1 ORDER BY interaction_group, category, name");
     $interactionsResult = $interactionsStmt->executeQuery();
     $interactionsData = $interactionsResult->fetchAllAssociative();
 
     foreach ($interactionsData as $interaction) {
         $group = $interaction['interaction_group'];
-        // Use 'General' for null or empty categories
         $category = !empty($interaction['category']) ? $interaction['category'] : 'General'; 
         if (!isset($structuredInteractions[$group])) {
             $structuredInteractions[$group] = [];
@@ -102,6 +96,53 @@ function is_json_request(): bool {
         || (strtolower($xhr) === 'xmlhttprequest');
 }
 
+/**
+ * Helper to handle Generator Revisions
+ */
+function ensure_generator_revision($conn, $configId) {
+    if (!$configId) return null;
+    
+    // 1. Fetch current config
+    $stmt = $conn->prepare("SELECT * FROM generator_config WHERE config_id = ?");
+    $stmt->bindValue(1, $configId);
+    $res = $stmt->executeQuery();
+    $row = $res->fetchAssociative();
+    
+    if (!$row) return null; // Config might have been deleted
+
+    // 2. Prepare Snapshot Data
+    $snapshot = [
+        'system_role' => $row['system_role'],
+        'instructions' => $row['instructions'],
+        'parameters' => $row['parameters'],
+        'output_schema' => $row['output_schema'],
+        'oracle_config' => $row['oracle_config'],
+        'model' => $row['model']
+    ];
+    $jsonSnapshot = json_encode($snapshot);
+    $hash = md5($jsonSnapshot);
+
+    // 3. Check History
+    $hStmt = $conn->prepare("SELECT id FROM generator_config_history WHERE generator_config_id = ? AND config_hash = ?");
+    $hStmt->bindValue(1, $row['id']);
+    $hStmt->bindValue(2, $hash);
+    $hResult = $hStmt->executeQuery();
+    $existing = $hResult->fetchOne();
+
+    if ($existing) {
+        return ['db_id' => $row['id'], 'history_id' => $existing];
+    }
+
+    // 4. Insert New Revision
+    $iStmt = $conn->prepare("INSERT INTO generator_config_history (generator_config_id, config_hash, snapshot_data, created_at) VALUES (?, ?, ?, NOW())");
+    $iStmt->bindValue(1, $row['id']);
+    $iStmt->bindValue(2, $hash);
+    $iStmt->bindValue(3, $jsonSnapshot);
+    $iStmt->executeStatement();
+
+    return ['db_id' => $row['id'], 'history_id' => $conn->lastInsertId()];
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $payload = null;
     if (is_json_request()) {
@@ -124,6 +165,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $img2img = isset($payload['img2img']) && ($payload['img2img'] == 1 || $payload['img2img'] === true) ? 1 : 0;
         $cnmap = isset($payload['cnmap']) && ($payload['cnmap'] == 1 || $payload['cnmap'] === true) ? 1 : 0;
 
+        // Meta Capture
+        $metaNameGenId = $payload['meta_gen_name_id'] ?? null;
+        $metaDescGenId = $payload['meta_gen_desc_id'] ?? null;
+        $metaTplId     = !empty($payload['meta_template_id']) ? (int)$payload['meta_template_id'] : null;
+        $metaIntId     = !empty($payload['meta_interaction_id']) ? (int)$payload['meta_interaction_id'] : null;
+
         if (empty($name)) {
             $errors[] = 'Name is required';
         }
@@ -132,6 +179,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $conn = $em->getConnection();
 
             if ($isPostEdit) {
+                // Update Logic
                 $sql = "UPDATE {$entityType} SET 
                         name = ?, 
                         description = ?, 
@@ -150,6 +198,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->bindValue(6, $cnmap);
                 $stmt->bindValue(7, $postEntityId);
                 $stmt->executeStatement();
+                
+                // Note: We generally don't create meta entries on edits of existing rows
+                // unless we want to track every save. 
+                // The prompt says "create a new table... which shall have a single row for every new sketches row from now on".
+                // So we skip meta logic for updates.
 
                 if (is_json_request()) {
                     header('Content-Type: application/json');
@@ -168,6 +221,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $entity = $result->fetchAssociative();
                 }
             } else {
+                // Create Logic
                 $sql = "INSERT INTO {$entityType} 
                         (name, description, `order`, regenerate_images, img2img, cnmap, created_at, updated_at) 
                         VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())";
@@ -181,6 +235,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->executeStatement();
 
                 $newId = (int)$conn->lastInsertId();
+
+                // --- META SKETCHES LOGIC ---
+                if ($entityType === 'sketches') {
+                    try {
+                        $nameRev = ensure_generator_revision($conn, $metaNameGenId);
+                        $descRev = ensure_generator_revision($conn, $metaDescGenId);
+
+                        $metaSql = "INSERT INTO meta_sketches 
+                            (sketch_id, desc_gen_config_id, desc_gen_history_id, name_gen_config_id, name_gen_history_id, sketch_template_id, interaction_id, created_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, NOW())";
+                        
+                        $mStmt = $conn->prepare($metaSql);
+                        $mStmt->bindValue(1, $newId);
+                        $mStmt->bindValue(2, $descRev ? $descRev['db_id'] : null);
+                        $mStmt->bindValue(3, $descRev ? $descRev['history_id'] : null);
+                        $mStmt->bindValue(4, $nameRev ? $nameRev['db_id'] : null);
+                        $mStmt->bindValue(5, $nameRev ? $nameRev['history_id'] : null);
+                        $mStmt->bindValue(6, $metaTplId);
+                        $mStmt->bindValue(7, $metaIntId);
+                        $mStmt->executeStatement();
+
+                    } catch (\Exception $e) {
+                        // Silently fail on meta insert to not block the main flow, 
+                        // or log error if logger available. 
+                        // error_log("Meta Insert Error: " . $e->getMessage());
+                    }
+                }
+                // ---------------------------
 
                 if (is_json_request()) {
                     header('Content-Type: application/json');
@@ -214,42 +296,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-
-
-
-
-
-
-
-
 $repo = $em->getRepository(App\Entity\GeneratorConfig::class);
 $generators = [];
 
 if ($userId) {
-    // 1. Start building the query
-    $qb = $repo->createQueryBuilder('g'); // 'g' is an alias for GeneratorConfig
-
-    // 2. Join the displayAreas relationship and give it an alias 'da'
+    $qb = $repo->createQueryBuilder('g');
     $qb->join('g.displayAreas', 'da')
-
-       // 3. Add WHERE clauses for the conditions
        ->where('g.userId = :userId')
        ->andWhere('g.active = :isActive')
-       ->andWhere('da.areaKey = :areaKey') // Filter on the JOINED table's column
-
-       // 4. Set the parameters to prevent SQL injection
+       ->andWhere('da.areaKey = :areaKey')
        ->setParameter('userId', $userId)
        ->setParameter('isActive', true)
-       ->setParameter('areaKey', 'rapidcreate') // The area you're looking for
-
-       // 5. Set the ordering
+       ->setParameter('areaKey', 'rapidcreate')
        ->orderBy('g.title', 'ASC');
-
-    // 6. Execute the query and get the results
     $generators = $qb->getQuery()->getResult();
 }
-
-
 
 require __DIR__ . '/entity_icons.php';
 
@@ -292,11 +353,14 @@ $entityDisplayName = $entityTypes[$entityType] ?? ucfirst(rtrim($entityType, 's'
         } catch (e) {}
       })();
     </script>
-    <?php echo \App\Core\SpwBase::getInstance()->getJquery(); ?> 
+
+    <?php echo \App\Core\SpwBase::getInstance()->getJquery(); ?>
+    
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/photoswipe@5.3.7/dist/photoswipe.css">
     
     <style>
+        /* [Existing styles unchanged] */
         * { box-sizing: border-box; margin: 0; padding: 0; }
         
         body {
@@ -307,7 +371,7 @@ $entityDisplayName = $entityTypes[$entityType] ?? ucfirst(rtrim($entityType, 's'
             color: var(--text);
         }
         
-        /* Entity Type Selector - Pill-shaped select */
+        /* Entity Type Selector */
         .entity-type-selector {
             background: rgba(var(--accent-rgb, 59, 130, 246), 0.1);
             border: 2px solid rgba(var(--accent-rgb, 59, 130, 246), 0.3);
@@ -358,25 +422,118 @@ $entityDisplayName = $entityTypes[$entityType] ?? ucfirst(rtrim($entityType, 's'
             justify-content: space-between;
             align-items: center;
             margin-bottom: 24px;
-            flex-wrap: wrap;
+            flex-wrap: wrap; 
             gap: 12px;
         }
         
+        /* Automation Dashboard Styles */
+        .auto-controls-container {
+            flex-basis: 100%; 
+            margin-top: 15px;
+            padding: 12px;
+            background: rgba(99, 102, 241, 0.08); 
+            border: 1px dashed rgba(99, 102, 241, 0.4);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+            transition: background 0.3s;
+        }
+
+        .btn-auto-toggle {
+            background: #6366f1; 
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-auto-toggle:hover { background: #4f46e5; }
+        
+        .btn-auto-toggle.active { 
+            background: #ef4444; 
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+        }
+        
+        .btn-auto-toggle.active::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border: 2px solid white;
+            border-radius: 6px;
+            animation: pulse-border 1.5s infinite;
+        }
+
+        .auto-opt {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .auto-opt input[type="checkbox"] {
+            width: 16px; 
+            height: 16px;
+            accent-color: #6366f1;
+            cursor: pointer;
+        }
+
+        .auto-counter-badge {
+            background: rgba(99, 102, 241, 0.1);
+            color: #6366f1;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            white-space: nowrap;
+        }
+        
+        [data-theme='dark'] .auto-counter-badge {
+            background: rgba(99, 102, 241, 0.2);
+            color: #818cf8;
+        }
+
+        .auto-controls-container.running {
+            background: rgba(239, 68, 68, 0.05); 
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+        
+        .auto-controls-container.running .auto-opt {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        @keyframes pulse-border {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.05); opacity: 0; }
+        }
+
+        .status-step {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-left: auto;
+            font-weight: 600;
+            animation: fadeIn 0.3s;
+        }
+
         h1 {
             font-size: 24px;
             color: var(--text);
             font-weight: 600;
-        }
-        
-        .entity-badge {
-            background: var(--accent);
-            color: white;
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: 600;
-            /* Removed - replaced by selector */
-            display: none;
         }
         
         .notice {
@@ -612,6 +769,14 @@ $entityDisplayName = $entityTypes[$entityType] ?? ucfirst(rtrim($entityType, 's'
                 flex-direction: column;
                 align-items: flex-start;
             }
+            .auto-controls-container {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .status-step {
+                margin-left: 0;
+                margin-top: 5px;
+            }
             .actions {
                 flex-direction: column;
             }
@@ -625,20 +790,43 @@ $entityDisplayName = $entityTypes[$entityType] ?? ucfirst(rtrim($entityType, 's'
     <div class="container">
         <div class="card">
             <div class="header">
-                <!--
-                <h1><?= $isEdit ? 'Edit' : 'Create' ?> <?= htmlspecialchars($entityDisplayName) ?></h1>
-                -->
-                
-                <select class="entity-type-selector" id="entityTypeSwitch" onchange="handleEntityTypeChange(this.value)">
-                    <?php foreach ($allowedTables as $type): 
-                        $icon = $entityIcons[$type] ?? '📦';
-                        $label = $entityTypes[$type] ?? ucfirst(rtrim($type, 's'));
-                    ?>
-                        <option value="<?= htmlspecialchars($type) ?>" <?= $type === $entityType ? 'selected' : '' ?>>
-                            <?= $icon ?> <?= htmlspecialchars($label) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+                <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                    <!-- Entity Type Selector -->
+                    <select class="entity-type-selector" id="entityTypeSwitch" onchange="handleEntityTypeChange(this.value)">
+                        <?php foreach ($allowedTables as $type): 
+                            $icon = $entityIcons[$type] ?? '📦';
+                            $label = $entityTypes[$type] ?? ucfirst(rtrim($type, 's'));
+                        ?>
+                            <option value="<?= htmlspecialchars($type) ?>" <?= $type === $entityType ? 'selected' : '' ?>>
+                                <?= $icon ?> <?= htmlspecialchars($label) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <!-- Automation Dashboard -->
+                <div class="auto-controls-container" id="autoControlsArea">
+                    <button type="button" id="autoPilotBtn" class="btn-auto-toggle" onclick="toggleAutomation()">
+                        <span id="autoPilotIcon">▶️</span> 
+                        <span id="autoPilotText">Start Auto Pilot</span>
+                    </button>
+
+                    <label class="auto-opt">
+                        <input type="checkbox" id="autoUseTemplates" checked>
+                        Allow Sketch Templates
+                    </label>
+
+                    <label class="auto-opt">
+                        <input type="checkbox" id="autoUseInteractions" checked>
+                        Allow Interactions
+                    </label>
+
+                    <span class="auto-counter-badge">
+                        Created: <b id="autoCounterVal">0</b>
+                    </span>
+
+                    <span id="autoStatus" class="status-step"></span>
+                </div>
             </div>
 
             <?php if ($success): ?>
@@ -655,6 +843,12 @@ $entityDisplayName = $entityTypes[$entityType] ?? ucfirst(rtrim($entityType, 's'
                 <?php if ($isEdit): ?>
                     <input type="hidden" name="entity_id" id="entity_id" value="<?= htmlspecialchars($entityId) ?>">
                 <?php endif; ?>
+
+                <!-- META HIDDEN FIELDS -->
+                <input type="hidden" name="meta_gen_name_id" id="meta_gen_name_id" value="">
+                <input type="hidden" name="meta_gen_desc_id" id="meta_gen_desc_id" value="">
+                <input type="hidden" name="meta_template_id" id="meta_template_id" value="">
+                <input type="hidden" name="meta_interaction_id" id="meta_interaction_id" value="">
 
                 <div class="form-group">
                     <label for="name">Name *</label>
@@ -686,16 +880,6 @@ $entityDisplayName = $entityTypes[$entityType] ?? ucfirst(rtrim($entityType, 's'
                            required>
                 </div>
 
-                <!--
-                <div class="form-group">
-                    <label for="order">Display Order</label>
-                    <input type="number" 
-                           id="order" 
-                           name="order" 
-                           value="<?= htmlspecialchars($entity['order'] ?? 0) ?>">
-                </div>
-                -->
-
                 <div class="form-group">
                     <label for="description">Description / Prompt</label>
                     
@@ -719,7 +903,7 @@ $entityDisplayName = $entityTypes[$entityType] ?? ucfirst(rtrim($entityType, 's'
                     </div>
                     <?php endif; ?>
 
-                    <?php // NEW: Interaction Context UI ?>
+                    <?php // Interaction Context UI ?>
                     <?php if ($entityType === 'sketches' && !empty($structuredInteractions)): ?>
                     <div class="generator-panel">
                         <h3>🤝 Interaction Context</h3>
@@ -797,26 +981,6 @@ $entityDisplayName = $entityTypes[$entityType] ?? ucfirst(rtrim($entityType, 's'
                                <?= !empty($entity['regenerate_images']) ? 'checked' : '' ?>>
                         <label for="regenerate_images">Regenerate Images</label>
                     </div>
-
-                    <!--
-                    <div class="checkbox-group">
-                        <input type="checkbox" 
-                               id="img2img" 
-                               name="img2img" 
-                               value="1"
-                               <?= !empty($entity['img2img']) ? 'checked' : '' ?>>
-                        <label for="img2img">Enable img2img</label>
-                    </div>
-
-                    <div class="checkbox-group">
-                        <input type="checkbox" 
-                               id="cnmap" 
-                               name="cnmap" 
-                               value="1"
-                               <?= !empty($entity['cnmap']) ? 'checked' : '' ?>>
-                        <label for="cnmap">Enable ControlNet Map</label>
-                    </div>
-                    -->
                 </div>
 
                 <div class="actions">
@@ -842,11 +1006,9 @@ $entityDisplayName = $entityTypes[$entityType] ?? ucfirst(rtrim($entityType, 's'
 
         function handleEntityTypeChange(newType) {
             if (newType === PAGE_ENTITY_TYPE) return;
-            
-            // Navigate to the same page but with different entity_type
             const url = new URL(window.location.href);
             url.searchParams.set('entity_type', newType);
-            url.searchParams.delete('entity_id'); // Remove entity_id when switching types
+            url.searchParams.delete('entity_id');
             window.location.href = url.toString();
         }
 
@@ -859,10 +1021,9 @@ $entityDisplayName = $entityTypes[$entityType] ?? ucfirst(rtrim($entityType, 's'
             lightbox.init();
         }
 
-        // --- NEW: Interaction UI Logic ---
         function initializeInteractionUI() {
             const groupSelect = document.getElementById('interactionGroupSelect');
-            if (!groupSelect) return; // Don't run if the UI isn't present
+            if (!groupSelect) return;
 
             const categorySelect = document.getElementById('interactionCategorySelect');
             const interactionSelect = document.getElementById('interactionSelect');
@@ -949,12 +1110,9 @@ $entityDisplayName = $entityTypes[$entityType] ?? ucfirst(rtrim($entityType, 's'
             populateGroups();
         }
         
-        // Initialize the interaction UI if we are on the sketches page
         if (PAGE_ENTITY_TYPE === 'sketches') {
             initializeInteractionUI();
         }
-        // --- End of new logic ---
-
 
         function previewTemplate() {
             const select = document.getElementById('sketchTemplateSelect');
@@ -976,45 +1134,82 @@ $entityDisplayName = $entityTypes[$entityType] ?? ucfirst(rtrim($entityType, 's'
             const select = document.getElementById(selectId);
             const configId = select.value;
             
+            const isAuto = typeof isAutomating !== 'undefined' && isAutomating;
+
             if (!configId) {
-                alert('Please select a generator first');
+                const msg = 'Please select a generator first';
+                isAuto ? console.warn(msg) : alert(msg);
                 return;
             }
 
+            // --- Robust Button Finder ---
+            let btn = null;
+            if (typeof event !== 'undefined' && event && event.target) {
+                btn = event.target;
+            }
+            if (!btn) {
+                const selector = fieldName === 'name' 
+                    ? 'button[onclick*="generateField(\'name\')"]' 
+                    : 'button[onclick*="generateField(\'description\')"]';
+                btn = document.querySelector(selector);
+            }
+
             const targetField = document.getElementById(fieldName);
-            const btn = event.target;
             
-            btn.disabled = true;
-            btn.textContent = '⚡️ Generating...';
+            let originalText = '';
+            if (btn) {
+                originalText = btn.textContent;
+                btn.disabled = true;
+                btn.textContent = '⚡️ Generating...';
+            }
 
             try {
                 const infoResponse = await fetch(`/api/generate.php?config_id=${encodeURIComponent(configId)}&_info=1`);
                 const infoData = await infoResponse.json();
                 
-                if (!infoData.ok) {
-                    throw new Error('Failed to load generator info');
-                }
+                if (!infoData.ok) throw new Error('Failed to load generator info');
 
                 let finalEntityName = '';
-
                 if (fieldName === 'name') {
                     finalEntityName = document.getElementById('description').value || '';
                 } else {
                     finalEntityName = document.getElementById('name').value || '';
                 }
                 
+                // --- META CAPTURE LOGIC START ---
+                // Store the Generator ID
+                if (fieldName === 'name') {
+                    document.getElementById('meta_gen_name_id').value = configId;
+                } else {
+                    document.getElementById('meta_gen_desc_id').value = configId;
+                    
+                    // Capture Template ID
+                    const sketchTemplateSelect = document.getElementById('sketchTemplateSelect');
+                    if (sketchTemplateSelect && sketchTemplateSelect.value) {
+                        document.getElementById('meta_template_id').value = sketchTemplateSelect.value;
+                    } else {
+                         document.getElementById('meta_template_id').value = '';
+                    }
+
+                    // Capture Interaction ID
+                    const interactionSelect = document.getElementById('interactionSelect');
+                    if (interactionSelect && interactionSelect.value) {
+                        document.getElementById('meta_interaction_id').value = interactionSelect.value;
+                    } else {
+                         document.getElementById('meta_interaction_id').value = '';
+                    }
+                }
+                // --- META CAPTURE LOGIC END ---
+
                 const sketchTemplateSelect = document.getElementById('sketchTemplateSelect');
-                
                 if (sketchTemplateSelect && sketchTemplateSelect.value) {
                     const selectedOption = sketchTemplateSelect.options[sketchTemplateSelect.selectedIndex];
                     const templatePrompt = selectedOption.getAttribute('data-prompt');
-                    
                     if (templatePrompt) {
                         finalEntityName += ` (${templatePrompt.trim()})`;
                     }
                 }
 
-                // NEW: Append selected interaction context
                 const interactionSelect = document.getElementById('interactionSelect');
                 if (interactionSelect && interactionSelect.value) {
                     const selectedOption = interactionSelect.options[interactionSelect.selectedIndex];
@@ -1072,13 +1267,17 @@ $entityDisplayName = $entityTypes[$entityType] ?? ucfirst(rtrim($entityType, 's'
                     targetField.value = generatedText;
                     targetField.dispatchEvent(new Event('input', { bubbles: true }));
                 } else {
-                    alert('Generation failed: ' + (result.error || 'Unknown error'));
+                    throw new Error(result.error || 'Unknown error');
                 }
             } catch (err) {
-                alert('Request failed: ' + err.message);
+                const errMsg = 'Request failed: ' + err.message;
+                isAuto ? console.error(errMsg) : alert(errMsg);
+                throw err;
             } finally {
-                btn.disabled = false;
-                btn.textContent = fieldName === 'name' ? '⚡️ Generate Name' : '⚡️ Generate Description';
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
             }
         }
 
@@ -1095,7 +1294,7 @@ $entityDisplayName = $entityTypes[$entityType] ?? ucfirst(rtrim($entityType, 's'
             }, timeout);
         }
 
-        // AJAX submit handling for rapid-create
+        // AJAX submit handling
         (function() {
             const form = document.getElementById('entityForm');
             const submitBtn = document.getElementById('submitBtn');
@@ -1140,6 +1339,12 @@ $entityDisplayName = $entityTypes[$entityType] ?? ucfirst(rtrim($entityType, 's'
                             form.reset();
                             const hid = document.getElementById('entity_id');
                             if (hid) hid.remove();
+                            // Reset Meta Fields on successful create
+                            document.getElementById('meta_gen_name_id').value = '';
+                            document.getElementById('meta_gen_desc_id').value = '';
+                            document.getElementById('meta_template_id').value = '';
+                            document.getElementById('meta_interaction_id').value = '';
+                            
                             showToast('Created ✓ ID ' + data.id, 'success', 2000);
                             document.getElementById('name').focus();
                         } else {
@@ -1158,10 +1363,205 @@ $entityDisplayName = $entityTypes[$entityType] ?? ucfirst(rtrim($entityType, 's'
             });
         })();
     </script>
+    
+    <!-- AUTOMATION SUITE -->
+    <script>
+    // [Existing Automation Script unchanged]
+    let isAutomating = false;
+    let automationLoopId = null;
+    let sessionAutoCount = 0; 
+
+    const AUTO_CONFIG = {
+        chanceForSketchTemplate: 0.85, 
+        chanceForInteraction: 0.60,    
+        delayBetweenSteps: 800,        
+        delayAfterSave: 2500           
+    };
+
+    (function() {
+        const nameSelect = document.getElementById('nameGeneratorSelect');
+        const descSelect = document.getElementById('descGeneratorSelect');
+
+        function saveGenState() {
+            if(nameSelect) localStorage.setItem('spw_gen_name_pref', nameSelect.value);
+            if(descSelect) localStorage.setItem('spw_gen_desc_pref', descSelect.value);
+        }
+
+        function restoreGenState() {
+            const savedName = localStorage.getItem('spw_gen_name_pref');
+            const savedDesc = localStorage.getItem('spw_gen_desc_pref');
+            if(nameSelect && savedName) nameSelect.value = savedName;
+            if(descSelect && savedDesc) descSelect.value = savedDesc;
+        }
+
+        if(nameSelect) nameSelect.addEventListener('change', saveGenState);
+        if(descSelect) descSelect.addEventListener('change', saveGenState);
+        restoreGenState();
+
+        const originalReset = HTMLFormElement.prototype.reset;
+        HTMLFormElement.prototype.reset = function() {
+            saveGenState();
+            originalReset.call(this);
+            restoreGenState();
+        };
+    })();
+
+    function setStatus(msg) {
+        if (!isAutomating) return;
+        const status = document.getElementById('autoStatus');
+        status.textContent = msg ? `⚙️ ${msg}...` : '';
+    }
+
+    function toggleAutomation() {
+        isAutomating = !isAutomating;
+        
+        const btn = document.getElementById('autoPilotBtn');
+        const icon = document.getElementById('autoPilotIcon');
+        const text = document.getElementById('autoPilotText');
+        const status = document.getElementById('autoStatus');
+        const container = document.getElementById('autoControlsArea');
+        
+        const chkTemplates = document.getElementById('autoUseTemplates');
+        const chkInteractions = document.getElementById('autoUseInteractions');
+
+        if (isAutomating) {
+            btn.classList.add('active');
+            container.classList.add('running');
+            icon.textContent = '⏸';
+            text.textContent = 'Stop Auto';
+            
+            chkTemplates.disabled = true;
+            chkInteractions.disabled = true;
+
+            sessionAutoCount = 0;
+            document.getElementById('autoCounterVal').textContent = sessionAutoCount;
+
+            runAutomationCycle();
+        } else {
+            btn.classList.remove('active');
+            container.classList.remove('running');
+            icon.textContent = '▶️';
+            text.textContent = 'Start Auto Pilot';
+            status.textContent = '';
+            
+            chkTemplates.disabled = false;
+            chkInteractions.disabled = false;
+
+            clearTimeout(automationLoopId);
+        }
+    }
+
+    function pickRandom(selectId) {
+        const select = document.getElementById(selectId);
+        if (!select || select.disabled) return null;
+
+        const options = Array.from(select.options).filter(o => o.value !== "");
+        if (options.length === 0) return null;
+
+        const randomOpt = options[Math.floor(Math.random() * options.length)];
+        select.value = randomOpt.value;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        return randomOpt.value;
+    }
+
+    const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    async function runAutomationCycle() {
+        if (!isAutomating) return;
+
+        setStatus('Randomizing Context');
+        
+        const allowTemplates = document.getElementById('autoUseTemplates').checked;
+        const allowInteractions = document.getElementById('autoUseInteractions').checked;
+
+        if (allowTemplates && Math.random() < AUTO_CONFIG.chanceForSketchTemplate) {
+            pickRandom('sketchTemplateSelect');
+        } else {
+            const sel = document.getElementById('sketchTemplateSelect');
+            if(sel) { sel.value = ""; sel.dispatchEvent(new Event('change')); }
+        }
+
+        if (PAGE_ENTITY_TYPE === 'sketches') {
+            const groupSel = document.getElementById('interactionGroupSelect');
+            if(groupSel) { groupSel.value = ""; groupSel.dispatchEvent(new Event('change')); }
+            
+            await wait(200);
+
+            if (allowInteractions && Math.random() < AUTO_CONFIG.chanceForInteraction) {
+                pickRandom('interactionGroupSelect');
+                await wait(300); 
+                pickRandom('interactionCategorySelect');
+                await wait(300); 
+                pickRandom('interactionSelect');
+            }
+        }
+
+        await wait(AUTO_CONFIG.delayBetweenSteps);
+        if (!isAutomating) return;
+
+        setStatus('Generating Description');
+        const descGen = document.getElementById('descGeneratorSelect');
+        if (descGen && descGen.value === "" && descGen.options.length > 1) {
+             descGen.selectedIndex = 1;
+        }
+
+        try {
+            await generateField('description');
+        } catch(e) {
+            console.error("Auto Gen Error:", e);
+            toggleAutomation(); 
+            return;
+        }
+
+        await wait(AUTO_CONFIG.delayBetweenSteps);
+        if (!isAutomating) return;
+
+        setStatus('Generating Name');
+        const nameGen = document.getElementById('nameGeneratorSelect');
+        if (nameGen && nameGen.value === "" && nameGen.options.length > 1) {
+             nameGen.selectedIndex = 1;
+        }
+
+        try {
+            await generateField('name');
+        } catch(e) {
+            console.error("Auto Gen Error:", e);
+        }
+
+        await wait(AUTO_CONFIG.delayBetweenSteps);
+        if (!isAutomating) return;
+
+        setStatus('Saving Entity');
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.click();
+
+        await new Promise(resolve => {
+            const checker = setInterval(() => {
+                if (!submitBtn.disabled) {
+                    clearInterval(checker);
+                    resolve();
+                }
+            }, 100);
+        });
+
+        if (isAutomating) {
+            sessionAutoCount++;
+            document.getElementById('autoCounterVal').textContent = sessionAutoCount;
+        }
+
+        if (!isAutomating) return;
+
+        setStatus('Cooling down');
+        automationLoopId = setTimeout(() => {
+            if(isAutomating) runAutomationCycle();
+        }, AUTO_CONFIG.delayAfterSave);
+    }
+    </script>
+
 <script src="/js/sage-home-button.js" data-home="/dashboard.php"></script>
 
 <?php 
-    require "floatool.php";
+    require_once "forge_tool.php";
     echo $eruda; 
 ?>
 

@@ -1,0 +1,27 @@
+-r requirements_base.txt
+
+# server-only packages
+torch
+onnxruntime-gpu
+
+# --- background removal (compatible with numpy 2.2.x) ---
+rembg==2.0.67
+
+# numpy pinned due to rembg / controlnet_aux compatibility
+numpy>=2.2,<2.3
+
+matplotlib
+controlnet_aux
+
+# --- Audio Processing ---
+pydub
+piper-tts
+librosa
+soundfile
+
+qwen-tts
+
+# The Modern Voice Conversion Library
+so-vits-svc-fork
+
+

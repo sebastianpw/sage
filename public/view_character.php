@@ -47,7 +47,7 @@ ob_start();
     </style>
 </head>
 <body>
-<?php if(!$isModalView) { require "floatool.php"; } ?>
+<?php if(!$isModalView) { require_once "forge_tool.php"; } ?>
 
 <?php
 // Render the character details content

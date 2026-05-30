@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAGE v0.2.3 Release</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/photoswipe/5.4.4/photoswipe.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #0a0a0a;
+            color: #e4e4e4;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #000;
+            min-height: 100vh;
+        }
+
+        .header {
+            padding: 12px 16px;
+            border-bottom: 1px solid #262626;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header h1 {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 2px;
+            background-color: #000;
+            aspect-ratio: 1;
+        }
+
+        .image-item {
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            background-color: #1a1a1a;
+        }
+
+        .image-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: transform 0.3s ease;
+        }
+
+        .image-item:hover img {
+            transform: scale(1.05);
+        }
+
+        .actions {
+            padding: 12px 16px;
+            display: flex;
+            gap: 16px;
+            border-bottom: 1px solid #262626;
+        }
+
+        .action-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #e4e4e4;
+            font-size: 14px;
+            transition: opacity 0.2s;
+        }
+
+        .action-btn:hover {
+            opacity: 0.7;
+        }
+
+        .action-btn svg {
+            width: 24px;
+            height: 24px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+        }
+
+        .content {
+            padding: 16px;
+        }
+
+        .content p {
+            margin-bottom: 12px;
+            white-space: pre-line;
+        }
+
+        .content strong {
+            color: #fff;
+            display: block;
+            margin-bottom: 8px;
+            font-size: 15px;
+        }
+
+        .content ul {
+            list-style: none;
+            margin: 12px 0;
+        }
+
+        .content ul li {
+            margin-bottom: 8px;
+            padding-left: 0;
+        }
+
+        .links {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #262626;
+        }
+
+        .links a {
+            color: #3b82f6;
+            text-decoration: none;
+        }
+
+        .links a:hover {
+            text-decoration: underline;
+        }
+
+        .hashtags {
+            margin-top: 16px;
+            color: #3b82f6;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                max-width: 100%;
+            }
+        }
+
+        .pswp__img {
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        
+        
+        
+        
+        
+    
+        
+        
+        
+       
+
+<!-- Put this where your header/title is (top-left next to the title) -->
+<style>
+  /* Back-to-grid link styles — dark theme friendly */
+  .back-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;             /* comfortable icon size */
+    height: 40px;            /* touch target */
+    min-width: 40px;
+    border-radius: 8px;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.04);
+    color: #e6eef8;
+    text-decoration: none;
+    transition: background .15s ease, transform .12s ease, box-shadow .12s ease;
+  }
+
+  .back-link:hover {
+    background: rgba(255,255,255,0.03);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.55);
+  }
+
+  .back-link:focus {
+    outline: 3px solid rgba(59,130,246,0.25);
+    outline-offset: 2px;
+  }
+
+  .back-icon {
+    width: 18px;
+    height: 18px;
+    display: block;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.5;
+  }
+
+  /* Title next to it */
+  .post-title {
+    font-size: 16px;
+    color: #fff;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* On very small screens make icon slightly larger for tap comfort */
+  @media (max-width:420px){
+    .back-link { width:44px; height:44px; }
+    .back-icon { width:20px; height:20px; }
+  }
+</style>
+
+<div class="back-row">
+  <!-- Replace href with your gallery/grid file path -->
+  <a class="back-link" href="/posts/index.html" id="backToGrid" title="Back to gallery" aria-label="Back to gallery">
+    <!-- grid icon (3x3) — visually indicates "overview" -->
+    <svg class="back-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="3" width="7" height="7" rx="1.2"/>
+      <rect x="14" y="3" width="7" height="7" rx="1.2"/>
+      <rect x="3" y="14" width="7" height="7" rx="1.2"/>
+      <rect x="14" y="14" width="7" height="7" rx="1.2"/>
+    </svg>
+  </a>
+
+  <!-- your existing title -->
+  <div class="header">
+    <h1 class="post-title">SAGE v0.2.3 Release</h1>
+  </div>
+</div>
+
+<script>
+  // Optional: prefetch the gallery file on hover to speed up navigation.
+  // Replace '/posts/index.html' with the same href you used above if needed.
+  (function(){
+    const linkEl = document.getElementById('backToGrid');
+    const href = linkEl && linkEl.getAttribute('href');
+    let prefetchEl = null;
+
+    if (!href) return;
+
+    function addPrefetch() {
+      if (prefetchEl) return;
+      prefetchEl = document.createElement('link');
+      prefetchEl.rel = 'prefetch';
+      prefetchEl.href = href;
+      prefetchEl.as = 'document';
+      document.head.appendChild(prefetchEl);
+    }
+
+    // mouseenter covers desktop hover, touchstart helps mobile users who tap then decide
+    linkEl.addEventListener('mouseenter', addPrefetch, {passive:true});
+    linkEl.addEventListener('touchstart', addPrefetch, {passive:true});
+  })();
+</script>
+
+
+
+        
+        
+        
+        
+        
+        
+
+        <div class="image-grid" id="gallery">
+            <div class="image-item" data-index="0">
+                <img src="https://i.postimg.cc/jq6ymXrw/frame0008501-1.png" alt="SAGE Screenshot 1">
+            </div>
+            <div class="image-item" data-index="1">
+                <img src="https://i.postimg.cc/15Jw53t7/frame0008502-1.png" alt="SAGE Screenshot 2">
+            </div>
+            <div class="image-item" data-index="2">
+                <img src="https://i.postimg.cc/sDw7DgX6/frame0008504.png" alt="SAGE Screenshot 3">
+            </div>
+            <div class="image-item" data-index="3">
+                <img src="https://i.postimg.cc/gkY3WZYQ/frame0008505.png" alt="SAGE Screenshot 4">
+            </div>
+        </div>
+
+        <div class="actions">
+            <button class="action-btn" id="shareBtn">
+                <svg viewBox="0 0 24 24">
+                    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                </svg>
+                <span>Share</span>
+            </button>
+        </div>
+
+        <div class="content">
+            <p><strong>🚀 SAGE v0.2.3 is live!</strong>
+The next step of free Open Source AI creation engine.</p>
+
+            <p><strong>What's new in v0.2.3:</strong></p>
+            
+            <ul>
+                <li>• WALL OF IMAGES →showcase: petersebring.com/wall.html</li>
+                <li>• improved Chat</li>
+                <li>• smarter Installer</li>
+                <li>• new floatool inline creative generators → instant, cinfigurable idea prompts anywhere (characters / scenes / storyboards / ...)</li>
+                <li>• easier Kaggle integration → portable quick launch to free GPU</li>
+            </ul>
+
+            <p><strong>Build. Generate. Compose.</strong>
+Your creativity — no permission required.</p>
+
+            <div class="links">
+                <p>👉 <a href="https://github.com/sebastianpw/sage" target="_blank" rel="noopener">github.com/sebastianpw/sage</a><br>
+                (Link in Bio)</p>
+            </div>
+
+            <div class="hashtags">
+                #SAGE #AIcreation #StableDiffusion #AIart #AItools #OpenSource #AIGenerative #SAGErelease #BuildInPublic
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import PhotoSwipeLightbox from 'https://cdnjs.cloudflare.com/ajax/libs/photoswipe/5.4.4/photoswipe-lightbox.esm.min.js';
+        import PhotoSwipe from 'https://cdnjs.cloudflare.com/ajax/libs/photoswipe/5.4.4/photoswipe.esm.min.js';
+
+        const images = [
+            {
+                src: '/posts/img/01.jpg',
+                width: 1024,
+                height: 1024,
+                alt: 'SAGE visual 1'
+            },
+            {
+                src: '/posts/img/02.jpg',
+                width: 1024,
+                height: 1024,
+                alt: 'SAGE visual 2'
+            },
+            {
+                src: '/posts/img/03.jpg',
+                width: 1024,
+                height: 1024,
+                alt: 'SAGE visual 3'
+            },
+            {
+                src: '/posts/img/04.jpg',
+                width: 1024,
+                height: 1024,
+                alt: 'SAGE visual 4'
+            }
+        ];
+
+        const lightbox = new PhotoSwipeLightbox({
+            dataSource: images,
+            pswpModule: PhotoSwipe,
+            bgOpacity: 0.95,
+            spacing: 0.1
+        });
+
+        lightbox.init();
+
+        document.querySelectorAll('.image-item').forEach((item, index) => {
+            item.addEventListener('click', () => {
+                lightbox.loadAndOpen(index);
+            });
+        });
+
+        document.getElementById('shareBtn').addEventListener('click', async () => {
+            const shareData = {
+                title: 'SAGE v0.2.3 Release',
+                text: '🚀 SAGE v0.2.3 is live! The next step of free Open Source AI creation engine.',
+                url: 'https://petersebring.com/sage_v0_2_3.html'
+            };
+
+            try {
+                if (navigator.share) {
+                    await navigator.share(shareData);
+                } else {
+                    await navigator.clipboard.writeText(shareData.url);
+                    alert('Link copied to clipboard!');
+                }
+            } catch (err) {
+                console.log('Share failed:', err);
+            }
+        });
+    </script>
+</body>
+</html>

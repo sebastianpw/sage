@@ -1,29 +1,37 @@
 <?php
+// Template Placeholder: characters
+// Generated via rollout_image_cruds.sh
+
 require "e.php";
 require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
+require "entity_icons.php";
 
 $entity = "vehicles";
 
-require "entity_icons.php";
-
-if (isset($entityIcons[$entity])) {
-    $entityIcon = '<a href="gallery_' . $entity . '_nu.php">' . $entityIcons[$entity] . '</a>';
-} else {
-    $entityIcon = '📦 ' . ucfirst(str_replace('_', ' ', $entity));
-}
-
+$spw = \App\Core\SpwBase::getInstance();
 $pdo = $spw->getPDO();
-$dbname = $spw->getDbName();
 
-// --- HANDLE SORT PARAMETERS ---
-$sort = $_GET['sort'] ?? 'id';
-$order = $_GET['order'] ?? 'DESC';
-$initialSearch = $_GET['search'] ?? '';
+// --- DISCOVERY & CONFIGURATION ---
+$stmt = $pdo->query("SHOW COLUMNS FROM `$entity`");
+$columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
-$allowedSorts = $pdo->query("SHOW COLUMNS FROM `$entity`")->fetchAll(PDO::FETCH_COLUMN);
-if (!in_array($sort, $allowedSorts)) $sort = 'id';
-if (!in_array(strtoupper($order), ['ASC','DESC'])) $order = 'DESC';
+$hasOrder = in_array('order', $columns);
+$hasDescription = in_array('description', $columns);
+$regenCol = in_array('regenerate_images', $columns) ? 'regenerate_images' : (in_array('regenerate', $columns) ? 'regenerate' : null);
+$hasRegenerate = !empty($regenCol);
+$hasMapRun = in_array('active_map_run_id', $columns);
+
+// Check for Image Frame References
+$hasImg2Img = in_array('img2img_frame_id', $columns);
+$hasCnMap   = in_array('cnmap_frame_id', $columns);
+$hasImages  = ($hasImg2Img || $hasCnMap);
+
+// Icon Selection
+$iconChar = $entityIcons[$entity] ?? '📦';
+
+// Scheduler ID Lookup
+$schedulerId = $entitySchedulerIds[$entity] ?? null;
 
 // --- HANDLE AJAX REQUESTS ---
 if (isset($_POST['action'])) {
@@ -37,43 +45,62 @@ if (isset($_POST['action'])) {
         if ($page <= 0) $page = 1;
         $offset = ($page - 1) * $limit;
 
-        $countSql = "SELECT COUNT(*) FROM `$entity`";
+        // Base SELECT
+        $selects = ["e.*"];
+        $joins = [];
+
+        if ($hasImg2Img) {
+            $selects[] = "f_i2i.filename AS img2img_filename";
+            $joins[] = "LEFT JOIN frames f_i2i ON f_i2i.id = e.img2img_frame_id";
+        }
+        if ($hasCnMap) {
+            $selects[] = "f_cnmap.filename AS cnmap_filename";
+            $joins[] = "LEFT JOIN frames f_cnmap ON f_cnmap.id = e.cnmap_frame_id";
+        }
+
+        $sqlSelect = "SELECT " . implode(', ', $selects) . " FROM `$entity` e " . implode(' ', $joins);
+        $countSql  = "SELECT COUNT(*) FROM `$entity` e"; 
+
+        // Filtering
+        $where = [];
         $params = [];
         if ($search !== '') {
-            $countSql .= " WHERE id = :id OR name LIKE :search";
+            $where[] = "(e.id = :id OR e.name LIKE :search)";
             $params['id'] = (int)$search;
             $params['search'] = "%$search%";
         }
+
+        if (!empty($where)) {
+            $clause = " WHERE " . implode(' AND ', $where);
+            $sqlSelect .= $clause;
+            $countSql  .= $clause;
+        }
+
+        // Sorting
+        if ($hasOrder) {
+            $sqlSelect .= " ORDER BY e.`order` ASC, e.id DESC";
+        } else {
+            $sqlSelect .= " ORDER BY e.id DESC";
+        }
+
+        // Pagination Limits
+        $sqlSelect .= " LIMIT :limit OFFSET :offset";
+
+        // Execute Count
         $countStmt = $pdo->prepare($countSql);
         $countStmt->execute($params);
         $totalRows = $countStmt->fetchColumn();
         $totalPages = ceil($totalRows / $limit);
 
-
-        // MODIFIED SQL: Added LEFT JOIN for controlnet map image
-        $sql = "SELECT e.*,
-                       f_i2i.filename AS img2img_filename,
-                       f_cnmap.filename AS cnmap_filename
-                FROM `$entity` e
-                LEFT JOIN frames f_i2i ON f_i2i.id = e.img2img_frame_id
-                LEFT JOIN frames f_cnmap ON f_cnmap.id = e.cnmap_frame_id";
-        if ($search !== '') $sql .= " WHERE e.id = :id OR e.name LIKE :search";
-        $sql .= " ORDER BY `order` ASC, e.id ASC LIMIT :limit OFFSET :offset";
-
-
-        $stmt = $pdo->prepare($sql);
-        if ($search !== '') {
-            $stmt->bindValue(':id', (int)$search, PDO::PARAM_INT);
-            $stmt->bindValue(':search', "%$search%", PDO::PARAM_STR);
-        }
+        // Execute Data Fetch
+        $stmt = $pdo->prepare($sqlSelect);
+        foreach ($params as $k => $v) $stmt->bindValue(":$k", $v);
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
         $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();
 
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
         echo json_encode([
-            'rows' => $rows,
+            'rows' => $stmt->fetchAll(PDO::FETCH_ASSOC),
             'totalPages' => $totalPages,
             'currentPage' => $page
         ]);
@@ -84,11 +111,7 @@ if (isset($_POST['action'])) {
         $id = (int)$_POST['id'];
         $field = $_POST['field'];
         $value = $_POST['value'];
-
-        $stmt = $pdo->query("SHOW COLUMNS FROM `$entity`");
-        $allowed = $stmt->fetchAll(PDO::FETCH_COLUMN);
-        if (!in_array($field, $allowed)) exit('Invalid field');
-
+        if (!in_array($field, $columns)) exit('Invalid field');
         $stmt = $pdo->prepare("UPDATE `$entity` SET `$field` = :value WHERE id = :id");
         $stmt->execute(['value'=>$value, 'id'=>$id]);
         exit('success');
@@ -102,105 +125,82 @@ if (isset($_POST['action'])) {
     }
 
     if ($action == 'add') {
-        $uniqueName = "New $entity " . time(); // guarantees uniqueness
-        $stmt = $pdo->prepare("INSERT INTO `$entity` (name, `order`) VALUES (:name, 0)");
-        $stmt->execute(['name'=>$uniqueName]);
+        $uniqueName = "New " . ucfirst($entity) . " " . time();
+        $cols = ['name'];
+        $vals = [':name'];
+        $params = ['name' => $uniqueName];
+
+        if ($hasOrder) {
+            $cols[] = '`order`';
+            $vals[] = '0';
+        }
+
+        $stmt = $pdo->prepare("INSERT INTO `$entity` (" . implode(',', $cols) . ") VALUES (" . implode(',', $vals) . ")");
+        $stmt->execute($params);
         echo $pdo->lastInsertId();
         exit;
     }
 
     if ($action == 'copy') {
-
         $id = (int)$_POST['id'];
-        $columns = $pdo->query("SHOW COLUMNS FROM `$entity`")->fetchAll(PDO::FETCH_COLUMN);
-        $columns = array_filter($columns, fn($c)=> $c !== 'id');
-        $colsList = implode(", ", array_map(fn($c) => "`$c`", $columns));
-        $placeholders = implode(", ", array_map(fn($c)=> ":$c", $columns));
-
+        $colsList = implode(", ", array_map(fn($c) => "`$c`", array_filter($columns, fn($c)=> $c !== 'id')));
         $stmt = $pdo->prepare("SELECT $colsList FROM `$entity` WHERE id = :id");
         $stmt->execute(['id'=>$id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        if(!$row) exit('Row not found');
-
-        if(isset($row['name'])) $row['name'] = 'Copy of ' . $row['name'] . ' ' . time();
-
-        $insertStmt = $pdo->prepare("INSERT INTO `$entity` ($colsList) VALUES ($placeholders)");
-        $insertStmt->execute($row);
-
-        echo $pdo->lastInsertId();
+        
+        if ($row) {
+            if(isset($row['name'])) $row['name'] .= ' (Copy)';
+            $placeholders = implode(", ", array_fill(0, count($row), '?'));
+            $stmt = $pdo->prepare("INSERT INTO `$entity` ($colsList) VALUES ($placeholders)");
+            $stmt->execute(array_values($row));
+            echo $pdo->lastInsertId();
+        }
         exit;
     }
 
-    if ($action == 'regenerate') {
+    if ($action == 'regenerate' && $hasRegenerate) {
         $id = (int)$_POST['id'];
-        $stmt = $pdo->prepare("UPDATE `$entity` SET regenerate_images = 1 WHERE id = :id");
+        $stmt = $pdo->prepare("UPDATE `$entity` SET `$regenCol` = 1 WHERE id = :id");
         $stmt->execute(['id'=>$id]);
         exit('success');
     }
 
-    if ($action == 'reorder') {
+    if ($action == 'reorder' && $hasOrder) {
         $orderData = $_POST['order'] ?? [];
-        if (!is_array($orderData)) exit('Invalid data');
-
         $stmt = $pdo->prepare("UPDATE `$entity` SET `order` = :order WHERE id = :id");
         foreach ($orderData as $item) {
-            $id = (int)$item['id'];
-            $ord = (int)$item['order'];
-            $stmt->execute(['order'=>$ord, 'id'=>$id]);
+            $stmt->execute(['order'=>(int)$item['order'], 'id'=>(int)$item['id']]);
         }
         exit('success');
     }
-
+    
     if ($action == 'remove_image') {
         $id = (int)$_POST['id'];
-        $image_type = $_POST['image_type']; // 'img2img' or 'cnmap'
-
-        $allowed_types = ['img2img', 'cnmap'];
-        if (!in_array($image_type, $allowed_types)) {
-            exit('Invalid image type');
+        $type = $_POST['image_type']; // 'img2img' or 'cnmap'
+        $colName = ($type === 'img2img') ? 'img2img_frame_id' : 'cnmap_frame_id';
+        if (in_array($colName, $columns)) {
+            $stmt = $pdo->prepare("UPDATE `$entity` SET `$colName` = NULL WHERE id = :id");
+            $stmt->execute(['id' => $id]);
+            exit('success');
         }
-
-        $column_map = [
-            'img2img' => ['img2img', 'img2img_frame_id', 'img2img_frame_filename', 'img2img_prompt'],
-            'cnmap' => ['cnmap', 'cnmap_frame_id', 'cnmap_frame_filename', 'cnmap_prompt']
-        ];
-        $columns_to_clear = $column_map[$image_type];
-        $table_columns = $pdo->query("SHOW COLUMNS FROM `$entity`")->fetchAll(PDO::FETCH_COLUMN);
-        $valid_columns_to_update = array_intersect($columns_to_clear, $table_columns);
-
-        if (empty($valid_columns_to_update)) {
-            exit('No relevant columns found to update.');
-        }
-
-        $set_clauses = [];
-        foreach ($valid_columns_to_update as $col) {
-            if ($col === 'img2img' || $col === 'cnmap') {
-                $set_clauses[] = "`$col` = 0";
-            } else {
-                $set_clauses[] = "`$col` = NULL";
-            }
-        }
-
-        $sql = "UPDATE `$entity` SET " . implode(', ', $set_clauses) . " WHERE id = :id";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute(['id' => $id]);
-        exit('success');
+        exit('error');
     }
 
-    if($action === 'fetchMapRuns') {
-        $entity_id = (int)$_POST['entity_id'];
-        $stmt = $pdo->prepare("SELECT id, created_at, note, is_active FROM v_map_runs_".$entity." WHERE entity_id = :entity_id ORDER BY id DESC");
-        $stmt->execute(['entity_id'=>$entity_id]);
-        $runs = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        echo json_encode($runs);
+    if($action === 'fetchMapRuns' && $hasMapRun) {
+        try {
+            $stmt = $pdo->prepare("SELECT id, created_at, note, is_active FROM v_map_runs_$entity WHERE entity_id = :eid ORDER BY id DESC LIMIT 20");
+            $stmt->execute(['eid' => $_POST['entity_id']]);
+        } catch (Exception $e) {
+             $stmt = $pdo->prepare("SELECT id, created_at, 'No View' as note, 0 as is_active FROM map_runs WHERE entity = :ent ORDER BY id DESC LIMIT 20");
+             $stmt->execute(['ent' => $entity]);
+        }
+        echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
         exit;
     }
 
-    if($action === 'setActiveMapRun') {
-        $entity_id = (int)$_POST['entity_id'];
-        $map_run_id = (int)$_POST['map_run_id'];
-        $stmt = $pdo->prepare("UPDATE `$entity` SET active_map_run_id = :map_run_id WHERE id = :entity_id");
-        $stmt->execute(['map_run_id'=>$map_run_id, 'entity_id'=>$entity_id]);
+    if($action === 'setActiveMapRun' && $hasMapRun) {
+        $stmt = $pdo->prepare("UPDATE `$entity` SET active_map_run_id = :rid WHERE id = :eid");
+        $stmt->execute(['rid'=>(int)$_POST['map_run_id'], 'eid'=>(int)$_POST['entity_id']]);
         exit('success');
     }
 }
@@ -211,172 +211,318 @@ if (isset($_POST['action'])) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?php echo $entity; ?> CRUD</title>
+<title><?php echo ucfirst($entity); ?> Manager</title>
 
-<!-- NEW: Added no-flash script and theme manager -->
 <script>
   (function() {
     try {
       var theme = localStorage.getItem('spw_theme');
-      if (theme === 'dark') {
-        document.documentElement.setAttribute('data-theme', 'dark');
-      } else if (theme === 'light') {
-        document.documentElement.setAttribute('data-theme', 'light');
-      }
+      if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+      else if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
     } catch (e) {}
   })();
 </script>
-<script src="/js/theme-manager.js" defer></script>
 
 <?php echo \App\Core\SpwBase::getInstance()->getJquery(); ?>
-
+<link rel="stylesheet" href="/css/base.css">
 <link rel="stylesheet" href="/css/toast.css">
 <script src="/js/toast.js"></script>
 
+<!-- Swiper & PhotoSwipe -->
 <?php if (\App\Core\SpwBase::CDN_USAGE): ?>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@10/swiper-bundle.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/swiper@10/swiper-bundle.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/photoswipe.css" />
+    <script src="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/photoswipe.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/photoswipe-lightbox.umd.js"></script>
 <?php else: ?>
     <link rel="stylesheet" href="/vendor/swiper/swiper-bundle.min.css" />
     <script src="/vendor/swiper/swiper-bundle.min.js"></script>
+    <link rel="stylesheet" href="/vendor/photoswipe/photoswipe.css" />
+    <script src="/vendor/photoswipe/photoswipe.umd.js"></script>
+    <script src="/vendor/photoswipe/photoswipe-lightbox.umd.js"></script>
 <?php endif; ?>
 
-<?php echo $eruda; ?>
-
-<!-- UPDATED: This entire style block is now theme-aware -->
 <style>
+/* Modern styling using base.css vars */
 :root {
-    --float-bg: #ffffff;
-    --float-border: #d1d5db;
-    --float-text: #111827;
-    --float-muted: #6b7280;
-    --float-hover: #f3f4f6;
-    --float-btn-bg: #f8f9fa;
-    --float-shadow-inset: 1px 2px #c3c3c3;
+    --table-header-bg: rgba(var(--muted-border-rgb), 0.1);
+    --table-stripe: rgba(var(--muted-border-rgb), 0.03);
 }
-html[data-theme="dark"] {
-    --float-bg: #0f1724;
-    --float-border: #374151; /* A bit lighter for dark mode borders */
-    --float-text: #cbd5e1;
-    --float-muted: #94a3b8;
-    --float-hover: #1f2937;
-    --float-btn-bg: #111827;
-    --float-shadow-inset: 1px 2px rgba(0,0,0,0.5);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
-    --float-bg: #0f1724;
-    --float-border: #374151;
-    --float-text: #cbd5e1;
-    --float-muted: #94a3b8;
-    --float-hover: #1f2937;
-    --float-btn-bg: #111827;
-    --float-shadow-inset: 1px 2px rgba(0,0,0,0.5);
-  }
+
+/* 
+   FIX: Constrain document width to prevent layout explosion when modals open.
+   This ensures you can still zoom normally, but the page won't involuntarily
+   expand to huge dimensions.
+*/
+html, body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
 }
 
 body {
-    font-family: Arial, sans-serif;
-    margin: 20px;
-    background-color: var(--float-bg);
-    color: var(--float-text);
+    padding: 20px;
+    background-color: var(--bg);
+    color: var(--text);
+    padding-bottom: 100px;
+    position: relative;
+    /* FIX: Ensure padding is included in width calculation */
+    box-sizing: border-box; 
 }
-table { border-collapse: collapse; width:100%; margin-top:15px; }
-th, td { border:1px solid var(--float-border); padding:8px; text-align:left; font-size:14px; }
-th { background: var(--float-btn-bg); cursor:pointer; }
-td[contenteditable="true"] { background: var(--float-hover); }
-button, input, select {
-    background-color: var(--float-btn-bg);
-    color: var(--float-text);
-    border: 1px solid var(--float-border);
+
+/* COMPACT HEADER */
+.header-compact {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 10px;
+    margin-left: 60px; /* Space for absolute dashboard button */
+    height: 40px;
+}
+
+.search-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 20px;
+    margin-left: 60px;
+}
+
+.entity-icon-link {
+    font-size: 1.5rem;
+    text-decoration: none;
+    line-height: 1;
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: block;
+}
+.entity-icon-link:hover { transform: scale(1.15); }
+
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.search-input {
+    padding: 4px 8px;
+    font-size: 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--card);
+    color: var(--text);
+    width: 200px;
+    transition: width 0.2s;
+}
+.search-input:focus { outline: none; border-color: var(--accent); }
+
+/* Table */
+table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 8px; overflow: hidden; box-shadow: var(--card-elevation); }
+th { background: var(--table-header-bg); color: var(--text-muted); font-weight: 600; text-align: left; padding: 12px; font-size: 0.85rem; text-transform: uppercase; }
+td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text); }
+tr:last-child td { border-bottom: none; }
+tr:nth-child(even) { background-color: var(--table-stripe); }
+
+td[contenteditable="true"] { background: rgba(var(--muted-border-rgb), 0.05); border-radius: 3px; min-width: 50px; }
+td[contenteditable="true"]:focus { outline: 2px solid var(--accent); background: var(--bg); }
+
+/* Placeholder for empty negative prompt */
+td[data-field="prompt_negative"]:empty::before {
+    content: "Negative prompt...";
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 0.8em;
+    opacity: 0.7;
+}
+
+/* Buttons */
+.action-btn { 
+    width: 28px; height: 28px; padding: 0; 
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text-muted);
+    border-radius: 4px; cursor: pointer; transition: all 0.2s;
+}
+.action-btn:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+.action-btn.delete:hover { border-color: var(--red); color: var(--red); }
+
+/* Checkbox Style in Action Bar */
+.action-checkbox-wrapper {
+    width: 28px; height: 28px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--border); background: var(--bg);
     border-radius: 4px;
 }
-button { padding:4px 8px; margin:2px; cursor: pointer; }
-input[type="text"] { padding: 5px; }
-h2, h2 a { color: var(--float-text); text-decoration: none; }
-td[data-field="description"] { min-height: 50px; border-bottom: 1px solid var(--float-border); }
-.pagination button { margin-right:5px; padding:5px 10px; }
-.pagination .active { font-weight:bold; }
-.dragHandle { font-size:18px; color: var(--float-muted); user-select:none; cursor:grab; }
-.dragHandle:hover { color: var(--float-text); }
-.dragHandle span { width:30px; height:30px; line-height:30px; font-size:16px; }
+.regen-checkbox { transform: scale(1.2); cursor: pointer; margin: 0; }
 
-.swiper { width:100%; }
-.swiper-slide { padding:0; box-sizing:border-box; }
-.swiper-slide > .slide-inner { padding:15px; }
+/* Images */
+.thumb-container { display: flex; gap: 8px; flex-wrap: wrap; }
+.thumb-link img { width: 60px; height: 60px; object-fit: cover; border-radius: 4px; border: 1px solid var(--border); transition: transform 0.2s; }
+.thumb-link img:hover { transform: scale(1.1); z-index: 10; border-color: var(--accent); }
+.thumb-i2i img { border-color: #a55; }
+.thumb-cn img { border-color: #55a; }
 
-@media (max-width:600px) {
-    table, thead, tbody, th, td, tr { display:block; }
-    tr { margin-bottom:15px; border:1px solid var(--float-border); padding:10px; background: var(--float-hover); }
-    td { border:none; padding:5px 0; position:relative; }
-    td::before { content: attr(data-label) ": "; font-weight:bold; display:inline-block; width:120px; }
-    th { display:none; }
-    tr.collapsed td:not(:first-child):not([data-label="Actions"]) { display: none; }
-    tr td:first-child { display: flex; justify-content: space-between; align-items: center; }
-    tr td:first-child .toggleRowBtn { margin-left: auto; font-size: 18px; cursor: pointer; background: none; border: none; color: var(--float-text); }
+
+
+
+
+/* Swiper Fixes */
+.swiper { 
+    width: 100%; 
+    overflow: visible; 
+    padding-bottom: 0 !important; 
 }
+.swiper-slide { height: auto; opacity: 0; transition: opacity 0.3s; }
+.swiper-slide-active { opacity: 1; }
 
-.copyBtn, .deleteBtn, .regenBtn, .matrixBtn, .editBtn {
-    font-size: 1.2em;
-    height: 26px;
-    width: 26px;
-    padding: 0px;
-    margin: 3px;
-    background-color: var(--float-btn-bg);
-    border: 1px solid var(--float-border);
+.swiper-pagination {
+    position: static !important;
+    margin-top: 20px;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    gap: 4px;
+    padding: 10px;
+    background: var(--card);
     border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: var(--float-shadow-inset);
+    width: 100%;
+    box-sizing: border-box;
 }
-.copyBtn:active, .deleteBtn:active, .regenBtn:active, .matrixBtn:activey .editBtn:active {
-    box-shadow: 0 1px var(--float-shadow-inset);
-    padding-top: 4px;
-    padding-left: 4px;
+.swiper-pagination-bullet {
+    margin: 0 5px !important;
+    width: 10px; 
+    height: 10px;
+    background: var(--text-muted);
+    opacity: 0.3;
+    display: inline-block;
 }
-td[contenteditable="true"][data-field="description"][data-label="description"] {
-  display: table-cell !important;
+.swiper-pagination-bullet-active {
+    background: var(--accent);
+    opacity: 1;
 }
 
+
+/* 
+   PhotoSwipe Viewport Fix
+   FIX: Use 100% instead of 100vw/vh to prevent calculation errors on tablets 
+   where the scrollbar can cause width checks to fail and expand the page.
+*/
+.pswp {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 2147483647 !important; /* Max Integer */
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+    display: none;
+    opacity: 0;
+}
+.pswp.pswp--open { 
+    display: block; 
+    opacity: 1; 
+}
+
+/* Draggable */
+.dragHandle { cursor: grab; color: var(--text-muted); font-size: 1.2rem; margin-right: 8px; }
+
+/* Responsive / Mobile Card View */
+@media (max-width: 768px) {
+    .header-compact { flex-wrap: wrap; height: auto; margin-left: 50px; }
+    .search-line { margin-left: 0; padding: 0 10px; }
+    .search-input { width: 100%; }
+
+    table, thead, tbody, th, td, tr { display: block; }
+    thead { display: none; }
+    
+    tr { margin-bottom: 15px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding: 10px; box-shadow: var(--card-elevation); }
+    
+    td { display: flex; justify-content: space-between; align-items: center; border: none; padding: 8px 0; border-bottom: 1px solid rgba(var(--muted-border-rgb), 0.1); }
+    td:last-child { border-bottom: none; }
+    
+    td::before { content: attr(data-label); font-weight: 600; color: var(--text-muted); font-size: 0.8rem; margin-right: 15px; flex-shrink: 0; }
+    
+    /* First cell (Header of card) */
+    tr td:first-child { display: flex; width: 100%; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 8px; }
+    
+    /* Mobile Toggle Logic - HIDE UNLESS FORCE VISIBLE */
+    tr.collapsed td:not(:first-child):not(.force-visible):not(.action-cell) { display: none; }
+    
+    /* Ensure force-visible fields are block displayed for better reading */
+    td.force-visible { display: block !important; }
+    td.force-visible::before { display: block; margin-bottom: 5px; }
+    
+    .toggleRowBtn { background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--accent); font-weight: bold; width: 30px; height: 30px; cursor: pointer; }
+    
+    /* Force blocks for complex content in always-open view */
+    td[data-label="Description"], td[data-label="Prompt negative"], td[data-label="Images"] { display: block !important; }
+    td[data-label="Description"]::before, td[data-label="Prompt negative"]::before, td[data-label="Images"]::before { display: block; margin-bottom: 5px; }
+    
+    /* Action cell specific */
+    td[data-label="Actions"] { justify-content: flex-end; padding-top: 5px; }
+    td[data-label="Actions"]::before { display: none; }
+}
+
+.mapRunSelect { max-width: 150px; padding: 2px; font-size: 0.8rem; border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 4px; }
 </style>
 </head>
 <body>
 
-<?php 
-// --- ADDED: Include the modal HTML and JavaScript ---
-require __DIR__ . '/modal_frame_details.php'; 
-?>
+<?php require __DIR__ . '/modal_frame_details.php'; ?>
 
-<div style="display:flex; align-items:center; margin-bottom:15px; gap:10px;">
-    <a href="dashboard.php" title="Dashboard" style="text-decoration:none; font-size:24px; display:none;">&#x1F5C3;</a>
-    <h2 style="margin:0;margin-left:35px;"><?php echo $entityIcon; ?></h2>
-    <button id="addBtn">Add New</button>
-    <button id="toggleSortBtn">+ Drag</button>
-    <button id="reorderAscBtn">Reo ASC</button>
-    <button id="reorderDescBtn">Reo DESC</button>
+<div class="header-compact">
+    <!-- Icon linking to Gallery -->
+    <?php if ($entity == "sketches"): ?>
+    <a href="view_map_runs_<?php echo $entity; ?>.php" class="entity-icon-link" title="Gallery"><?php echo $iconChar; ?></a>
+    <?php else: ?>
+    <a href="gallery_<?php echo $entity; ?>_nu.php" class="entity-icon-link" title="Gallery"><?php echo $iconChar; ?></a>
+    <?php endif; ?>
+    
+    <div class="header-controls">
+        <button id="addBtn" class="btn btn-sm btn-outline-primary">Add</button>
+        
+        <!-- Scheduler Button (Dynamically Rendered) -->
+        <?php if ($schedulerId): ?>
+            <a class="runBtn scheduler" data-id="<?php echo $schedulerId; ?>" title="Trigger <?php echo ucfirst($entity); ?> Scheduler" style="cursor:pointer; font-size:1.2rem; text-decoration:none; margin-left:5px;">🌀</a>
+        <?php endif; ?>
+
+        <?php if($hasOrder): ?>
+        <button id="toggleSortBtn" class="btn btn-sm btn-outline-secondary">Drag</button>
+        <div class="btn-group" role="group" style="display:inline-flex;">
+            <button id="reorderAscBtn" class="btn btn-sm btn-outline-secondary" title="Sort A-Z (ID)">▲</button>
+            <button style="margin-left:6px;" id="reorderDescBtn" class="btn btn-sm btn-outline-secondary" title="Sort Z-A (ID)">▼</button>
+        </div>
+        <?php endif; ?>
+    </div>
 </div>
 
-<div style="margin-bottom:15px;">
-    <input type="text" id="searchInput" placeholder="Search by id or name..."
-           value="<?php echo htmlspecialchars($initialSearch, ENT_QUOTES); ?>"
-           style="width:200px;">
-    <button id="searchBtn">Search</button>
-    <button id="resetBtn">Reset</button>
+<div class="search-line">
+    <input type="text" id="searchInput" class="search-input" placeholder="Search...">
+    <button id="sendSearchBtn" class="btn btn-sm btn-outline-secondary" title="Search">Send</button>
+    <button id="resetSearchBtn" class="btn btn-sm btn-outline-secondary" title="Reset">Reset</button>
 </div>
 
-<div class="swiper" style="padding-bottom: 200px !important;" id="<?php echo $entity; ?>Swiper">
+<div class="swiper" id="mainSwiper">
   <div class="swiper-wrapper">
     <div class="swiper-slide" data-page="1">
       <div class="slide-inner pswp-gallery">
-        <table id="<?php echo $entity; ?>Table">
+        <table id="dataTable">
             <thead>
                 <tr>
-                    <th>Drag</th>
-                    <th>Actions</th>
+                    <th width="30%">Name</th>
+                    <th width="140">Actions</th>
                     <?php
-                    $stmt = $pdo->query("SHOW COLUMNS FROM `$entity`");
-                    $fields = $stmt->fetchAll(PDO::FETCH_COLUMN);
-                    foreach ($fields as $field) echo "<th>$field</th>";
+                    // Only show Name (Col 1), Description, Prompt Negative. Regenerate is moved to actions.
+                    $allowed = ['description', 'prompt_negative'];
+                    $displayCols = array_intersect($columns, $allowed);
+                    
+                    foreach ($displayCols as $col) echo "<th>" . ucfirst(str_replace('_', ' ', $col)) . "</th>";
+                    
+                    
+
+                    // Merged Images Header
+                    if ($hasImages) echo "<th>Images</th>";
                     ?>
                 </tr>
             </thead>
@@ -385,351 +531,262 @@ require __DIR__ . '/modal_frame_details.php';
       </div>
     </div>
   </div>
-  <div class="swiper-button-prev"></div>
-  <div class="swiper-button-next"></div>
-  <div class="swiper-pagination"></div>
 </div>
+<div class="swiper-pagination"></div>
 
-<div id="toast-container"></div>
 
 <script>
 const ENTITY = '<?php echo $entity; ?>';
+const HAS_ORDER = <?php echo $hasOrder ? 'true' : 'false'; ?>;
+const REGEN_COL = '<?php echo $regenCol ?: ""; ?>';
+const HAS_REGEN = <?php echo $hasRegenerate ? 'true' : 'false'; ?>;
+const HAS_MAP = <?php echo $hasMapRun ? 'true' : 'false'; ?>;
+const IS_COMPOSITE = ENTITY === 'composites';
+
 let currentPage = 1;
 let rowsPerPage = 10;
 let sortableEnabled = false;
-let sortableInstance = null;
 let swiper = null;
-let totalPages = 1;
-let photoswipeLightbox = null;
+let lightbox = null;
 
 function initPhotoSwipe() {
-    if (photoswipeLightbox) {
-        try { photoswipeLightbox.destroy(); } catch(e){}
-    }
-    photoswipeLightbox = new PhotoSwipeLightbox({
-        gallery: '.pswp-gallery',
-        children: 'a.pswp-gallery-item',
+    if (lightbox) { try { lightbox.destroy(); } catch(e){} }
+    lightbox = new PhotoSwipeLightbox({
+        gallery: '.pswp-gallery', 
+        children: 'a.pswp-gallery-item', 
         pswpModule: PhotoSwipe,
-        initialZoomLevel: 'fit',
-        secondaryZoomLevel: 1
+        appendToEl: document.body
     });
-    photoswipeLightbox.init();
+    lightbox.init();
 }
 
 function buildRowsHTML(rows) {
-    let rowsHtml = '';
+    let html = '';
     rows.forEach(row => {
-        rowsHtml += `<tr data-id="${row.id}" class="${localStorage.getItem(ENTITY + 'row-'+row.id)==='expanded'?'':'collapsed'}">`;
-        rowsHtml += `<td class="dragHandle" data-label="Drag">
-                        ${row['id']} &nbsp; <button class="toggleRowBtn">${localStorage.getItem(ENTITY + 'row-'+row.id)==='expanded'?'−':'+'}</button> &nbsp;
-                        ☰
-                     </td>`;
-                        rowsHtml += `<td data-label='Actions'>`;
-        rowsHtml += `<button class="editBtn">🕸️</button>`;
-        rowsHtml += `<button class="copyBtn">⎘</button>`;
-        rowsHtml += `<button class="deleteBtn">🗑️</button>`;
-        rowsHtml += `<button class="regenBtn">♾️</button>`;
-        rowsHtml += `<button class="matrixBtn">✺</button>`;
-        rowsHtml += `<select class="mapRunSelect" data-entity-id="${row.id}" style="margin-left:5px;"><option>Loading...</option></select>`;
+        html += `<tr data-id="${row.id}">`;
 
-        let hasImg2Img = row['img2img_filename'];
-        let hasCnMap = row['cnmap_filename'];
-        if (hasImg2Img || hasCnMap) {
-            rowsHtml += `<div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:10px; justify-content:center;">`;
-            if (hasImg2Img) {
-                rowsHtml += `<a class="pswp-gallery-item" data-entity-id="${row.id}" data-image-type="img2img" data-pswp-src="${row['img2img_filename']}" data-pswp-width="768" data-pswp-height="768" title="Img2Img Preview (Dbl-click to remove)" href="${row['img2img_filename']}"><img src="${row['img2img_filename']}" style="width:70px;height:70px;object-fit:cover;border:2px solid #a55;border-radius:4px;" /></a>`;
-            }
-            if (hasCnMap) {
-                rowsHtml += `<a class="pswp-gallery-item" data-entity-id="${row.id}" data-image-type="cnmap" data-pswp-src="${row['cnmap_filename']}" data-pswp-width="768" data-pswp-height="768" title="ControlNet Map Preview (Dbl-click to remove)" href="${row['cnmap_filename']}"><img src="${row['cnmap_filename']}" style="width:70px;height:70px;object-fit:cover;border:2px solid #55a;border-radius:4px;" /></a>`;
-            }
-            rowsHtml += `</div>`;
+        // 1. Name Cell
+        html += `<td data-label="Name">
+                    <div style="display:flex; align-items:center; width:100%;">
+                        ${HAS_ORDER ? '<span class="dragHandle">☰</span>' : ''}
+                        <span style="font-family:monospace; font-size:0.75em; color:var(--text-muted); margin-right:8px; min-width:30px;">#${row.id}</span>
+                        <div contenteditable="true" data-field="name" style="flex:1; font-weight:600; padding:4px 0;">${row.name || ''}</div>
+                    </div>
+                 </td>`;
+
+        // 2. Actions
+        html += `<td data-label="Actions" class="action-cell"><div style="display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end;">`;
+        
+        // Regenerate Checkbox inside Actions
+        if (HAS_REGEN) {
+            let checked = (row[REGEN_COL] == 1) ? 'checked' : '';
+            html += `<label class="action-checkbox-wrapper" title="Regenerate?">
+                        <input type="checkbox" class="regen-checkbox" data-field="${REGEN_COL}" ${checked}>
+                     </label>`;
         }
-        rowsHtml += `</td>`;
-        <?php foreach ($fields as $field) {
-            if($field!=='id')
-                echo "rowsHtml += `<td contenteditable='true' data-field='$field' data-label='$field'>\${row['$field'] ?? ''}</td>`;\n";
-            else
-                echo "rowsHtml += `<td data-label='$field'>\${row['$field']}</td>`;\n";
-        } ?>
-        rowsHtml += `</tr>`;
+
+        html += `<button class="action-btn editBtn" title="Details">🕸️</button>`;
+        if (IS_COMPOSITE) html += `<button class="action-btn puzzleBtn" title="Multiplane">🧩</button>`;
+        html += `<button class="action-btn copyBtn" title="Copy">⎘</button>`;
+        html += `<button class="action-btn delete" title="Delete">🗑</button>`;
+        html += `<button class="action-btn matrixBtn" title="Matrix">✺</button>`;
+        if (HAS_MAP) html += `<select class="mapRunSelect" data-entity-id="${row.id}"><option value="">Run...</option></select>`;
+        html += `</div></td>`;
+
+        // 3. Dynamic Columns (Description, Prompt Negative)
+        <?php foreach ($displayCols as $col): ?>
+            var val = row['<?php echo $col; ?>'] || '';
+            var label = '<?php echo ucfirst(str_replace('_', ' ', $col)); ?>';
+            html += `<td data-label="${label}" class="force-visible" contenteditable="true" data-field="<?php echo $col; ?>">${val}</td>`;
+        <?php endforeach; ?>
+
+        // 4. Merged Images
+        <?php if ($hasImages): ?>
+        html += `<td data-label="Images" class="force-visible"><div class="thumb-container">`;
+        if (row.img2img_filename) {
+            html += `<a class="pswp-gallery-item thumb-link thumb-i2i" href="${row.img2img_filename}" data-pswp-width="800" data-pswp-height="800" target="_blank" data-image-type="img2img" data-entity-id="${row.id}" title="Img2Img">
+                        <img src="${row.img2img_filename}" loading="lazy" />
+                     </a>`;
+        }
+        if (row.cnmap_filename) {
+            html += `<a class="pswp-gallery-item thumb-link thumb-cn" href="${row.cnmap_filename}" data-pswp-width="800" data-pswp-height="800" target="_blank" data-image-type="cnmap" data-entity-id="${row.id}" title="ControlNet">
+                        <img src="${row.cnmap_filename}" loading="lazy" />
+                     </a>`;
+        }
+        html += `</div></td>`;
+        <?php endif; ?>
+
+        html += `</tr>`;
     });
-    return rowsHtml;
+    return html;
 }
 
 function initSlides() {
     const search = $('#searchInput').val();
     $.post('sql_crud_<?php echo $entity; ?>.php', { action: 'fetch', search: search, page: 1, limit: rowsPerPage }, function(data) {
         data = JSON.parse(data);
-        totalPages = data.totalPages || 1;
-        currentPage = data.currentPage || 1;
-
-        const firstSlide = $('#<?php echo $entity; ?>Swiper .swiper-slide').first();
-        const tbody = firstSlide.find('tbody');
-        tbody.html(buildRowsHTML(data.rows));
-        firstSlide.attr('data-loaded','1');
-        initPhotoSwipe();
-
-        firstSlide.find('.mapRunSelect').each(function() {
-            const select = $(this);
-            const entityId = select.data('entity-id');
-            $.post('sql_crud_<?php echo $entity; ?>.php', { action: 'fetchMapRuns', entity_id: entityId }, function(runData){
-                runData = JSON.parse(runData);
-                select.empty();
-                runData.forEach(run => {
-                    select.append(`<option value="${run.id}" ${run.is_active ? 'selected' : ''}>${run.id} - ${run.note ? run.note : run.created_at}</option>`);
-                });
-            });
+        const firstSlide = $('#mainSwiper .swiper-slide').first();
+        firstSlide.find('tbody').html(buildRowsHTML(data.rows));
+        if(HAS_MAP) loadMapRunsForSlide(firstSlide);
+        
+        $('#mainSwiper .swiper-wrapper .swiper-slide').not(':first').remove();
+        const header = $('#dataTable thead').prop('outerHTML');
+        for (let p = 2; p <= data.totalPages; p++) {
+             $('#mainSwiper .swiper-wrapper').append(`<div class="swiper-slide" data-page="${p}" data-loaded="0"><div class="slide-inner pswp-gallery"><table>${header}<tbody></tbody></table></div></div>`);
+        }
+        
+        if (swiper) swiper.destroy();
+        swiper = new Swiper('#mainSwiper', {
+            autoHeight: true,
+            pagination: { 
+                el: '.swiper-pagination', 
+                clickable: true
+            },
+            on: { slideChange: function() { loadPageData(this.activeIndex + 1); } }
         });
-
-        const wrapper = $('#<?php echo $entity; ?>Swiper .swiper-wrapper');
-        wrapper.find('.swiper-slide').not(':first').remove();
-
-        for (let p = 2; p <= totalPages; p++) {
-            const theadHtml = $('#<?php echo $entity; ?>Table thead').prop('outerHTML');
-            const slideHtml = `<div class="swiper-slide" data-page="${p}" data-loaded="0"><div class="slide-inner pswp-gallery"><table>${theadHtml}<tbody></tbody></table></div></div>`;
-            wrapper.append(slideHtml);
-        }
-
-        if (swiper) {
-            swiper.update();
-        } else {
-            swiper = new Swiper('#<?php echo $entity; ?>Swiper', {
-                direction: 'horizontal',
-                slidesPerView: 1,
-                spaceBetween: 0,
-                pagination: { el: '.swiper-pagination', clickable: true },
-                navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' },
-                grabCursor: true,
-                on: {
-                    slideChange: function() {
-                        const pageNum = this.activeIndex + 1;
-                        currentPage = pageNum;
-                        loadPageIntoSlide(pageNum);
-                    }
-                }
-            });
-        }
-        if (swiper) swiper.slideTo(currentPage - 1, 0, false);
+        
+        initPhotoSwipe();
         if (sortableEnabled) enableSortable(firstSlide.find('tbody'));
     });
 }
 
-function loadPageIntoSlide(page) {
-    const slide = $('#<?php echo $entity; ?>Swiper .swiper-slide').filter(function(){ return parseInt($(this).attr('data-page')) === page; }).first();
-    if (!slide.length || slide.attr('data-loaded') === '1') return;
-
+function loadPageData(page) {
+    const slide = $(`.swiper-slide[data-page="${page}"]`);
+    if (slide.attr('data-loaded') === '1') return;
     const search = $('#searchInput').val();
     $.post('sql_crud_<?php echo $entity; ?>.php', { action: 'fetch', search: search, page: page, limit: rowsPerPage }, function(data) {
         data = JSON.parse(data);
-        totalPages = data.totalPages || totalPages;
-        currentPage = data.currentPage || page;
-        const tbody = slide.find('tbody');
-        tbody.html(buildRowsHTML(data.rows));
-        slide.attr('data-loaded','1');
+        slide.find('tbody').html(buildRowsHTML(data.rows));
+        slide.attr('data-loaded', '1');
+        if(HAS_MAP) loadMapRunsForSlide(slide);
+        swiper.updateAutoHeight();
         initPhotoSwipe();
-
-        slide.find('.mapRunSelect').each(function() {
-            const select = $(this);
-            const entityId = select.data('entity-id');
-            $.post('sql_crud_<?php echo $entity; ?>.php', { action: 'fetchMapRuns', entity_id: entityId }, function(runData){
-                runData = JSON.parse(runData);
-                select.empty();
-                runData.forEach(run => {
-                    select.append(`<option value="${run.id}" ${run.is_active ? 'selected' : ''}>${run.id} - ${run.note ? run.note : run.created_at}</option>`);
-                });
-            });
-        });
-        if (sortableEnabled) enableSortable(tbody);
     });
 }
 
-function loadTable(sort='', order='', search='', page=1) {
-    if (!swiper) { initSlides(); return; }
-    const numericPage = parseInt(page) || 1;
-    const slideExists = $('#<?php echo $entity; ?>Swiper .swiper-slide').filter(function(){ return parseInt($(this).attr('data-page')) === numericPage; }).length > 0;
-    if (!slideExists) { initSlides(); return; }
-    const slide = $('#<?php echo $entity; ?>Swiper .swiper-slide').filter(function(){ return parseInt($(this).attr('data-page')) === numericPage; }).first();
-    if (!slide.length) { initSlides(); return; }
-    slide.attr('data-loaded','0');
-    swiper.slideTo(numericPage - 1);
-    loadPageIntoSlide(numericPage);
-}
-
-function enableSortable(tbodySelector) {
-    const target = tbodySelector ? $(tbodySelector) : $('#<?php echo $entity; ?>Swiper .swiper-slide').eq(swiper ? swiper.activeIndex : 0).find('tbody');
-    try { target.sortable('destroy'); } catch (e) {}
-    target.sortable({
-        handle: '.dragHandle',
-        update: function(event, ui) {
-            let orderData = [];
-            $(this).find('tr').each(function(index){
-                let id = $(this).data('id');
-                orderData.push({id:id, order:index+1});
-            });
-            $.post('sql_crud_<?php echo $entity; ?>.php',{action:'reorder', order:orderData}, res=>{
-                if(res==='success') Toast.show('Order saved','info');
-                else Toast.show('Failed to save order','error');
-            });
-        }
-    }).disableSelection();
-    sortableEnabled = true;
-}
-
-function disableSortable() {
-    try { $('#<?php echo $entity; ?>Swiper .swiper-slide').find('tbody').sortable('destroy'); } catch (e) {}
-    sortableEnabled = false;
+function loadMapRunsForSlide(slide) {
+    slide.find('.mapRunSelect').each(function() {
+        const sel = $(this);
+        const id = sel.data('entity-id');
+        $.post('sql_crud_<?php echo $entity; ?>.php', {action: 'fetchMapRuns', entity_id: id}, function(res){
+            const runs = JSON.parse(res);
+            sel.empty().append('<option value="">Run...</option>');
+            runs.forEach(r => sel.append(`<option value="${r.id}" ${r.is_active?'selected':''}>${r.id}: ${r.note||r.created_at}</option>`));
+        });
+    });
 }
 
 function ajaxReorder(direction) {
-    $.post('/order_recalc.php?ajax=1', { entity: '<?php echo $entity; ?>', direction: direction, keepNonZero: 0 }, function(data) {
+    $.post('/order_recalc.php?ajax=1', { entity: ENTITY, direction: direction, keepNonZero: 0 }, function(data) {
         if (data.success) {
             Toast.show(data.message, 'success');
-            loadTable('', '', $('#searchInput').val(), currentPage);
+            initSlides();
         } else {
             Toast.show(data.message, 'error');
         }
     }, 'json');
 }
 
-$('#reorderAscBtn').click(()=> ajaxReorder('ASC'));
-$('#reorderDescBtn').click(()=> ajaxReorder('DESC'));
-
-$(document).ready(function(){
+$(document).ready(function() {
     initSlides();
-    $('#searchBtn').click(()=> { initSlides(); });
-    $('#searchInput').on('keyup', e=> { if(e.key==='Enter') initSlides(); });
-
-// Reset button functionality
-$('#resetBtn').click(() => {
-    // Clear the search input
-    $('#searchInput').val('');
     
-    // Reinitialize slides
-    initSlides();
+    $('#searchInput').on('keyup', function(e) { if(e.key==='Enter') initSlides(); });
+    $('#sendSearchBtn').click(function() { initSlides(); });
+    $('#resetSearchBtn').click(function() { $('#searchInput').val(''); initSlides(); });
+    $('#addBtn').click(function() { $.post('sql_crud_<?php echo $entity; ?>.php', {action:'add'}, function(){ initSlides(); Toast.show('Added','success'); }); });
+    $('#reorderAscBtn').click(() => ajaxReorder('ASC'));
+    $('#reorderDescBtn').click(() => ajaxReorder('DESC'));
+
+    // Matrix Button Click
+    $(document).on('click', '.matrixBtn', function() {
+        const id = $(this).closest('tr').data('id');
+        window.location.href = 'view_prompt_matrix.php?entity_type=' + ENTITY + '&entity_id=' + id;
+    });
+
+    // Checkbox Change (Regenerate)
+    $(document).on('change', '.regen-checkbox', function() {
+        const el = $(this);
+        const id = el.closest('tr').data('id');
+        const field = el.data('field');
+        const val = el.is(':checked') ? 1 : 0;
+        
+        $.post('sql_crud_<?php echo $entity; ?>.php', { action: 'update', id: id, field: field, value: val }, function(res) {
+            if(res === 'success') Toast.show('Updated', 'success');
+            else { Toast.show('Error', 'error'); el.prop('checked', !val); }
+        });
+    });
+
+    // Map Run Change Event
+    $(document).on('change', '.mapRunSelect', function() {
+        const sel = $(this);
+        $.post('sql_crud_<?php echo $entity; ?>.php', { 
+            action: 'setActiveMapRun', 
+            entity_id: sel.data('entity-id'), 
+            map_run_id: sel.val() 
+        }, function(res) {
+            if(res === 'success') Toast.show('Map Run Updated', 'success');
+            else Toast.show('Update failed', 'error');
+        });
+    });
+
+    // Inline Edit
+    $(document).on('blur', '[contenteditable="true"]', function() {
+        const el = $(this);
+        const id = el.closest('tr').data('id');
+        const field = el.data('field');
+        const val = el.text();
+        
+        $.post('sql_crud_<?php echo $entity; ?>.php', { action: 'update', id: id, field: field, value: val }, function(res) {
+            if(res!=='success') Toast.show('Error saving','error');
+        });
+    });
+
+    $(document).on('click', '.copyBtn', function() { if(confirm('Copy?')) $.post('sql_crud_<?php echo $entity; ?>.php', {action:'copy', id:$(this).closest('tr').data('id')}, function(){ initSlides(); Toast.show('Copied','success'); }); });
+    $(document).on('click', '.delete', function() { if(confirm('Delete?')) $.post('sql_crud_<?php echo $entity; ?>.php', {action:'delete', id:$(this).closest('tr').data('id')}, function(){ initSlides(); Toast.show('Deleted','success'); }); });
+    $(document).on('click', '.editBtn', function() { if(window.showEntityFormInModal) window.showEntityFormInModal(ENTITY, $(this).closest('tr').data('id')); });
+    if(IS_COMPOSITE) { $(document).on('click', '.puzzleBtn', function() { if(window.showMultiplaneInModal) window.showMultiplaneInModal($(this).closest('tr').data('id')); }); }
+    
+    $(document).on('dblclick', 'a.pswp-gallery-item', function(e) {
+        e.preventDefault(); e.stopPropagation();
+        const type = $(this).data('image-type');
+        if(confirm('Remove this '+type+' image?')) {
+            $.post('sql_crud_<?php echo $entity; ?>.php', {action:'remove_image', id:$(this).data('entity-id'), image_type:type}, function(res){ if(res==='success') { Toast.show('Removed','success'); initSlides(); } });
+        }
+    });
+
+    $('#toggleSortBtn').click(function() {
+        sortableEnabled = !sortableEnabled;
+        if(sortableEnabled) { $(this).addClass('btn-accent'); enableSortable($('.swiper-slide-active tbody')); }
+        else { $(this).removeClass('btn-accent'); $('.ui-sortable').sortable('destroy'); }
+    });
 });
 
-    $(document).on('dblclick', 'a.pswp-gallery-item[data-image-type]', function(e) {
-        e.preventDefault(); e.stopPropagation();
-        const link = $(this);
-        const entityId = link.data('entity-id');
-        const imageType = link.data('image-type');
-        const typeLabel = imageType === 'img2img' ? 'Img2Img preview' : 'ControlNet Map';
-        if (confirm(`Do you really want to remove the ${typeLabel} for this entry?`)) {
-            $.post('sql_crud_<?php echo $entity; ?>.php', { action: 'remove_image', id: entityId, image_type: imageType }, function(res) {
+function enableSortable(tbody) {
+    if(tbody.hasClass('ui-sortable')) tbody.sortable('destroy');
+    tbody.sortable({ handle: '.dragHandle', update: function() {
+        let o=[]; $(this).find('tr').each(function(i){ o.push({id:$(this).data('id'), order:i}); });
+        $.post('sql_crud_<?php echo $entity; ?>.php', {action:'reorder', order:o}, function(){ Toast.show('Saved','success'); });
+    }});
+}
+</script>
+<?php require_once "forge_tool.php"; ?>
+<script src="/js/sage-home-button.js" data-home="/dashboard.php"></script>
+<script>
+    $(document).ready(function() {
+        $(document).on('click', '.runBtn', function() {
+            let id = $(this).data('id');
+            $.post('scheduler_view.php', {
+                action: 'run_now',
+                id: id
+            }, function(res) {
                 if (res === 'success') {
-                    Toast.show(`${typeLabel} removed.`, 'success');
-                    loadTable('', '', $('#searchInput').val(), currentPage);
+                    Toast.show('Task scheduled to run now!', 'success');
                 } else {
-                    Toast.show(`Failed to remove ${typeLabel}.`, 'error');
-                    console.error('Server response:', res);
+                    Toast.show('Failed to trigger task', 'error');
                 }
             });
-        }
-    });
-
-    $(document).on('blur','td[contenteditable="true"]', function(){
-        let td = $(this), value = td.text(), field = td.data('field'), id = td.closest('tr').data('id');
-        $.post('sql_crud_<?php echo $entity; ?>.php',{action:'update',id:id,field:field,value:value}, res=>{
-            if(res!='success') Toast.show('Update failed for ID '+id,'error');
         });
     });
-
-    $(document).on('click','.deleteBtn',function(){
-        if(!confirm('Are you sure?')) return;
-        let id = $(this).closest('tr').data('id');
-        $.post('sql_crud_<?php echo $entity; ?>.php',{action:'delete',id:id}, ()=>{ initSlides(); });
-    });
-
-    $(document).on('click','#addBtn',()=> {
-        $.post('sql_crud_<?php echo $entity; ?>.php',{action:'add'}, ()=>{ initSlides(); });
-    });
-
-    $(document).on('click','.copyBtn',function(){
-        if(!confirm('Are you sure you want to copy this entry?')) return;
-        let id = $(this).closest('tr').data('id');
-        $.post('sql_crud_<?php echo $entity; ?>.php',{action:'copy',id:id}, ()=>{ initSlides(); });
-    });
-
-    $(document).on('click','.regenBtn',function(){
-        let id = $(this).closest('tr').data('id');
-        $.post('sql_crud_<?php echo $entity; ?>.php',{action:'regenerate',id:id}, res=>{
-            if(res=='success') {
-                Toast.show('Regenerate triggered for ID '+id,'success');
-                loadTable('', '', $('#searchInput').val(), currentPage);
-            } else {
-                Toast.show('Failed to trigger regenerate for ID '+id,'error');
-            }
-        });
-    });
-
-    $(document).on('click','.matrixBtn',function(){
-        let id = $(this).closest('tr').data('id');
-        window.location.href = 'view_prompt_matrix.php?entity_type=<?php echo $entity; ?>&entity_id='+id;
-    });
-
-    // --- MODIFIED: '.editBtn' now opens the modal ---
-    $(document).on('click','.editBtn',function(){
-        let id = $(this).closest('tr').data('id');
-        // The modal script provides a global function to open the entity form
-        // ENTITY is a global JS constant defined at the top of this script block
-        window.showEntityFormInModal(ENTITY, id);
-    });
-
-    $(document).on('click', '.toggleRowBtn', function() {
-        const tr = $(this).closest('tr');
-        const id = tr.data('id');
-        const btn = $(this);
-        tr.toggleClass('collapsed');
-        if (tr.hasClass('collapsed')) {
-            btn.text('+');
-            localStorage.setItem(ENTITY + 'row-'+id, 'collapsed');
-        } else {
-            btn.text('−');
-            localStorage.setItem(ENTITY + 'row-'+id, 'expanded');
-        }
-    });
-
-    $(document).on('change', '.mapRunSelect', function() {
-        const select = $(this);
-        const entityId = select.data('entity-id');
-        const mapRunId = select.val();
-        $.post('sql_crud_<?php echo $entity; ?>.php', { action: 'setActiveMapRun', entity_id: entityId, map_run_id: mapRunId }, function(res) {
-            if(res === 'success') {
-                Toast.show('Active map run updated','success');
-                loadTable('', '', $('#searchInput').val(), currentPage);
-            } else {
-                Toast.show('Failed to update active map run','error');
-            }
-        });
-    });
-
-    $('#toggleSortBtn').click(function(){
-        if(sortableEnabled) {
-            disableSortable();
-            $(this).text('+ Drag');
-            sortableEnabled=false;
-        } else {
-            enableSortable();
-            $(this).text('- Drag');
-            sortableEnabled=true;
-        }
-    });
-});
 </script>
-
-<?php if (\App\Core\SpwBase::CDN_USAGE): ?>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/photoswipe.css" />
-    <script src="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/photoswipe.umd.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/photoswipe-lightbox.umd.js"></script>
-<?php else: ?>
-    <link rel="stylesheet" href="/vendor/photoswipe/photoswipe.css" />
-    <script src="/vendor/photoswipe/photoswipe.umd.js"></script>
-    <script src="/vendor/photoswipe/photoswipe-lightbox.umd.js"></script>
-<?php endif; ?>
-
-<?php require "floatool.php"; ?>
-
-<script src="/js/sage-home-button.js" data-home="/dashboard.php"></script>
-
 </body>
 </html>

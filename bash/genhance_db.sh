@@ -1,0 +1,349 @@
+#!/bin/bash
+
+# -----------------------------
+# Resolve script directory
+# -----------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+MYSQL_ARGS=$("$SCRIPT_DIR"/db_name.sh main-conn)
+
+# -----------------------------
+# Load token
+# -----------------------------
+export PAI_TOKEN=$(cat "$SCRIPT_DIR/../token/.pollinationsaitoken")
+
+# -----------------------------
+# Load project roots
+# -----------------------------
+if [ -f "$SCRIPT_DIR/load_root.sh" ]; then
+  source "$SCRIPT_DIR/load_root.sh"
+fi
+
+if [ -z "$FRAMES_ROOT" ] || [ -z "$PROJECT_ROOT" ]; then
+  echo "ERROR: Roots not set. Aborting."
+  exit 1
+fi
+
+# -----------------------------
+# Directories
+# -----------------------------
+FRAMES_DIR="$FRAMES_ROOT"
+mkdir -p "$FRAMES_DIR"
+FRAMES_DIR_REL="${FRAMES_ROOT#$PROJECT_ROOT/public/}"
+
+# -----------------------------
+# Configuration
+# -----------------------------
+USE_TURBO=false 
+DB_USER="root"
+MAX_RETRIES=3
+RETRY_DELAY=3
+
+export FREEIMAGE_KEY=$(cat "$SCRIPT_DIR/../token/.freeimage_key")
+
+# -----------------------------
+# Usage / Arguments
+# -----------------------------
+BASE_PROMPT="$1"   # This is the Enhancement Prompt (e.g. "remove text")
+NEGATIVE_PROMPT="$2"
+SEED_ARG="$3"
+MAP_RUN_ID="$4"
+ENTITY_TYPE="$5"   # This will be the ORIGINAL entity type (e.g. sketches)
+ENTITY_ID="$6"     # This will be the ORIGINAL entity ID
+LIMIT="$7"
+OFFSET="$8"
+NO_STYLES="$9"
+ADD_TO_PROMPT="${10}"
+ENHANCEMENT_ID="${11}"   
+FORCED_IMG2IMG_ID="${12}"
+
+# -----------------------------
+# Default values
+# -----------------------------
+NO_STYLES=${NO_STYLES:-0}
+
+if [ -z "$BASE_PROMPT" ] || [ -z "$MAP_RUN_ID" ] || [ -z "$ENTITY_TYPE" ] || [ -z "$ENTITY_ID" ]; then
+  echo "Usage: $0 prompt neg seed map_run entity_type entity_id ..."
+  exit 1
+fi
+
+# -----------------------------
+# NEW: Fetch Original Entity Description
+# We use this for the database record instead of the enhancement prompt
+# -----------------------------
+ORIG_ENTITY_DESC=$(mysql $MYSQL_ARGS -N -e "SELECT description FROM $ENTITY_TYPE WHERE id = $ENTITY_ID LIMIT 1;")
+# Fallback if empty (though unlikely for sketches)
+if [ -z "$ORIG_ENTITY_DESC" ]; then
+  ORIG_ENTITY_DESC="$BASE_PROMPT"
+fi
+
+# -----------------------------
+# Load styles
+# -----------------------------
+mapfile -t styles < <(mysql $MYSQL_ARGS -N -e "SELECT id, prompt FROM v_styles_helper;")
+TOTAL_STYLES=${#styles[@]}
+
+START=$((OFFSET > 0 ? OFFSET - 1 : 0))
+END=$((LIMIT > 0 ? START + LIMIT - 1 : TOTAL_STYLES - 1))
+[ "$END" -ge "$TOTAL_STYLES" ] && END=$((TOTAL_STYLES - 1))
+
+# -----------------------------
+# Determine mapping table
+# -----------------------------
+MAPPING_TABLE="frames_2_${ENTITY_TYPE}"
+TABLE_EXISTS=$(mysql $MYSQL_ARGS -N -e "SHOW TABLES LIKE '$MAPPING_TABLE';")
+[ -z "$TABLE_EXISTS" ] && { echo "Mapping table '$MAPPING_TABLE' does not exist!"; exit 1; }
+
+# -----------------------------
+# IMG2IMG SETUP
+# -----------------------------
+IMG2IMG_FILENAME=""
+IMG2IMG_PROMPT=""
+DB_IMG2IMG_FRAME_ID="NULL"
+ENTITY_DEPTH2IMG="0"
+
+if [ -n "$FORCED_IMG2IMG_ID" ] && [ "$FORCED_IMG2IMG_ID" -gt 0 ]; then
+  # --- ENHANCEMENT MODE ---
+  echo "Enhancement Mode: Using source frame ID $FORCED_IMG2IMG_ID"
+  IMG2IMG_FRAME_ID="$FORCED_IMG2IMG_ID"
+  
+  if [ -n "$ENHANCEMENT_ID" ] && [ "$ENHANCEMENT_ID" -gt 0 ]; then
+    ENTITY_DEPTH2IMG=$(mysql $MYSQL_ARGS -N -e "SELECT COALESCE(depth2img,0) FROM frame_enhancements WHERE id=$ENHANCEMENT_ID LIMIT 1;")
+  fi
+
+  TARGET_COLUMN="filename"
+  [ "$ENTITY_DEPTH2IMG" = "1" ] && TARGET_COLUMN="depth_map_filename"
+
+  IMG2IMG_FILENAME=$(mysql $MYSQL_ARGS -N -e "SELECT $TARGET_COLUMN FROM frames WHERE id = $IMG2IMG_FRAME_ID LIMIT 1;" | tr -d '\r')
+else
+  # --- STANDARD MODE ---
+  read IMG2IMG_FLAG IMG2IMG_FRAME_ID IMG2IMG_PROMPT ENTITY_DEPTH2IMG < <(
+    mysql $MYSQL_ARGS -N -e \
+      "SELECT COALESCE(img2img,0), COALESCE(img2img_frame_id,0), COALESCE(img2img_prompt,''), COALESCE(depth2img,0) FROM $ENTITY_TYPE WHERE id=$ENTITY_ID;"
+  )
+  if [ "$IMG2IMG_FRAME_ID" -gt 0 ]; then
+    TARGET_COLUMN="filename"
+    [ "$ENTITY_DEPTH2IMG" = "1" ] && TARGET_COLUMN="depth_map_filename"
+
+    IMG2IMG_FILENAME=$(mysql $MYSQL_ARGS -N -e "SELECT $TARGET_COLUMN FROM frames WHERE id = $IMG2IMG_FRAME_ID LIMIT 1;" | tr -d '\r')
+  fi
+fi
+
+if [ "$IMG2IMG_FILENAME" = "NULL" ]; then
+    IMG2IMG_FILENAME=""
+fi
+
+# Resolve absolute path for source image
+if [ -n "$IMG2IMG_FILENAME" ]; then
+    ABS_PATH="$PROJECT_ROOT/public/$IMG2IMG_FILENAME"
+    if [ -f "$ABS_PATH" ]; then
+        IMG2IMG_FILENAME="$ABS_PATH"
+        DB_IMG2IMG_FRAME_ID="$IMG2IMG_FRAME_ID"
+    else
+        echo "WARNING: img2img source file not found at $ABS_PATH."
+        IMG2IMG_FILENAME=""
+        DB_IMG2IMG_FRAME_ID="NULL"
+    fi
+fi
+
+# -----------------------------
+# Upload Source Image
+# -----------------------------
+IMAGE_URL=""
+if [ -n "$IMG2IMG_FILENAME" ] && [ -f "$IMG2IMG_FILENAME" ]; then
+  echo "Uploading source image $IMG2IMG_FILENAME to Freeimage.host..."
+  response=$(curl -s -X POST "https://freeimage.host/api/1/upload" \
+    -F "key=$FREEIMAGE_KEY" \
+    -F "action=upload" \
+    -F "source=@$IMG2IMG_FILENAME" \
+    -F "format=json")
+  IMAGE_URL=$(echo "$response" | jq -r '.image.url')
+  
+  if [ -z "$IMAGE_URL" ] || [ "$IMAGE_URL" = "null" ]; then
+    echo "Failed to upload source image."
+    exit 1
+  fi
+  echo "Uploaded source image URL: $IMAGE_URL"
+fi
+
+# -----------------------------
+# Upload Additional Enhancement Reference Frames
+# -----------------------------
+ADDITIONAL_IMAGE_URLS=""
+if [ -n "$ENHANCEMENT_ID" ] && [ "$ENHANCEMENT_ID" -gt 0 ]; then
+  echo "Checking for additional assigned frames for enhancement ID $ENHANCEMENT_ID..."
+  
+  mapfile -t enhancement_frame_ids < <(mysql $MYSQL_ARGS -N -e \
+    "SELECT frame_id FROM frame_enhancement_frames WHERE frame_enhancement_id = $ENHANCEMENT_ID ORDER BY frame_id ASC;")
+  
+  if [ ${#enhancement_frame_ids[@]} -gt 0 ]; then
+    echo "Found ${#enhancement_frame_ids[@]} additional frame(s) for enhancement ID $ENHANCEMENT_ID"
+    
+    uploaded_extra_urls=()
+    
+    for extra_frame_id in "${enhancement_frame_ids[@]}"; do
+      extra_frame_filename=$(mysql $MYSQL_ARGS -N -e \
+        "SELECT filename FROM frames WHERE id = $extra_frame_id LIMIT 1;" | tr -d '\r')
+      
+      if [ -n "$extra_frame_filename" ] && [ "$extra_frame_filename" != "NULL" ]; then
+        extra_frame_abs_path="$PROJECT_ROOT/public/$extra_frame_filename"
+        
+        if [ -f "$extra_frame_abs_path" ]; then
+          echo "Uploading additional frame $extra_frame_id to Freeimage.host..."
+          response=$(curl -s -X POST "https://freeimage.host/api/1/upload" \
+            -F "key=$FREEIMAGE_KEY" \
+            -F "action=upload" \
+            -F "source=@$extra_frame_abs_path" \
+            -F "format=json")
+          
+          extra_frame_url=$(echo "$response" | jq -r '.image.url')
+          
+          if [ -n "$extra_frame_url" ] && [ "$extra_frame_url" != "null" ]; then
+            echo "Uploaded additional frame $extra_frame_id: $extra_frame_url"
+            uploaded_extra_urls+=("$extra_frame_url")
+          else
+            echo "WARNING: Failed to upload additional frame $extra_frame_id. Response: $response"
+          fi
+        else
+          echo "WARNING: Additional frame file not found: $extra_frame_abs_path"
+        fi
+      fi
+    done
+    
+    if [ ${#uploaded_extra_urls[@]} -gt 0 ]; then
+      ADDITIONAL_IMAGE_URLS=$(IFS=,; echo "${uploaded_extra_urls[*]}")
+      echo "Additional image URLs: $ADDITIONAL_IMAGE_URLS"
+    fi
+  fi
+fi
+
+# Combine primary and additional URLs
+if [ -n "$IMAGE_URL" ] && [ -n "$ADDITIONAL_IMAGE_URLS" ]; then
+  IMAGE_URL="$IMAGE_URL,$ADDITIONAL_IMAGE_URLS"
+  echo "Combined IMAGE_URL: $IMAGE_URL"
+elif [ -z "$IMAGE_URL" ] && [ -n "$ADDITIONAL_IMAGE_URLS" ]; then
+  IMAGE_URL="$ADDITIONAL_IMAGE_URLS"
+  echo "Using only additional frames. IMAGE_URL: $IMAGE_URL"
+fi
+
+# -----------------------------
+# Generate frames
+# -----------------------------
+for ((i=START; i<=END; i++)); do
+  row="${styles[i]}"
+  style_id=$(echo "$row" | awk '{print $1}')
+  style=$(echo "$row" | cut -d' ' -f2-)
+
+  # Build prompt for GENERATION (using enhancement instruction)
+  prompt="$BASE_PROMPT"
+  [ "$NO_STYLES" -eq 0 ] && prompt="$prompt, $style"
+  [ -n "$ADD_TO_PROMPT" ] && prompt="$prompt $ADD_TO_PROMPT"
+  [ -n "$IMG2IMG_PROMPT" ] && [ -n "$IMAGE_URL" ] && prompt="$prompt $IMG2IMG_PROMPT"
+
+  # Build prompt for DATABASE (using original entity description)
+  db_prompt_text="$ORIG_ENTITY_DESC"
+  [ "$NO_STYLES" -eq 0 ] && db_prompt_text="$db_prompt_text, $style"
+  # We assume we wish the stored prompt to represent the sketch content, 
+  # so we use ORIG_ENTITY_DESC + Style.
+
+  # Next frame basename
+  frame_basename=$(mysql $MYSQL_ARGS -N --batch --skip-column-names -e "
+    UPDATE frame_counter
+    SET next_frame = LAST_INSERT_ID(next_frame + 1);
+    SELECT LPAD(LAST_INSERT_ID(), 7, '0');
+  ")
+  frame_basename="frame$frame_basename"
+  outfile="$FRAMES_DIR/$frame_basename.jpg"
+  filename_only="$frame_basename"
+
+  # Encode params
+  url_prompt=$(echo -n "$prompt" | tr -d '?%' | jq -sRr @uri)
+  url_negative=$(echo -n "$NEGATIVE_PROMPT" | tr -d '?%' | jq -sRr @uri)
+
+  echo "Generating image $filename_only [Style ID: $style_id]"
+  echo "Gen Prompt: ${prompt:0:60}..."
+  echo "DB Prompt:  ${db_prompt_text:0:60}..."
+
+  # Seed logic
+  if [ -n "$SEED_ARG" ] && [ "$SEED_ARG" -ne 0 ]; then
+    SEED="$SEED_ARG"
+  else
+    SEED=$(( (RANDOM << 15) | RANDOM ))
+  fi
+
+  attempt=1
+  while [ $attempt -le $MAX_RETRIES ]; do
+    if [ -n "$IMAGE_URL" ]; then
+      # Pollinations Image-to-Image
+      curl -s -L -H "Authorization: Bearer $PAI_TOKEN" \
+        "https://gen.pollinations.ai/image/$url_prompt?model=wan-image&image=$IMAGE_URL&width=1024&height=1024&nologo=true&negative_prompt=$url_negative&seed=$SEED" \
+        -o "$outfile"
+    else
+      # Pollinations Text-to-Image
+      model_param=""
+      [ "$USE_TURBO" = true ] && model_param="&model=turbo"
+      curl -s -L -H "Authorization: Bearer $PAI_TOKEN" \
+        "https://gen.pollinations.ai/image/$url_prompt?model=wan-image&width=1024&height=1024&nologo=true&negative_prompt=$url_negative&seed=$SEED$model_param" \
+        -o "$outfile"
+    fi
+
+    # Validate
+    ffmpeg -v error -i "$outfile" -f null - 2>/dev/null
+    if [ $? -eq 0 ]; then
+      echo "Saved valid image: $outfile"
+
+      # Prepare SQL variables
+      SAFE_NEG_PROMPT=$(echo "$NEGATIVE_PROMPT" | sed "s/'/''/g")
+      SAFE_STYLE=$(echo "$style" | sed "s/'/''/g")
+      
+      # Use the ORIGINAL DESCRIPTION for the DB insert
+      SAFE_DB_PROMPT=$(echo "$db_prompt_text" | sed "s/'/''/g")
+      
+      # Handle img2img prompt for DB insertion
+      SAFE_IMG2IMG_PROMPT="NULL"
+      [ -n "$IMG2IMG_PROMPT" ] && SAFE_IMG2IMG_PROMPT="'$(echo "$IMG2IMG_PROMPT" | sed "s/'/''/g")'"
+
+      # Insert into frames linked to ORIGINAL entity (sketches)
+      FRAME_ID=$(mysql $MYSQL_ARGS -N -e "
+        INSERT INTO frames
+          (filename, name, prompt, prompt_negative, seed, entity_type, entity_id, style, style_id, map_run_id, img2img_frame_id, img2img_prompt)
+        VALUES
+          ('$FRAMES_DIR_REL/$filename_only.jpg',
+           '$filename_only',
+           '$SAFE_DB_PROMPT',
+           '$SAFE_NEG_PROMPT',
+           $SEED,
+           '$ENTITY_TYPE',
+           $ENTITY_ID,
+           '$SAFE_STYLE',
+           $style_id,
+           $MAP_RUN_ID,
+           $DB_IMG2IMG_FRAME_ID,
+           $SAFE_IMG2IMG_PROMPT
+        );
+        SELECT LAST_INSERT_ID();")
+
+      # Map to ORIGINAL mapping table (frames_2_sketches)
+      [ -n "$FRAME_ID" ] && mysql $MYSQL_ARGS -e \
+        "INSERT INTO $MAPPING_TABLE (from_id, to_id) VALUES ($FRAME_ID, $ENTITY_ID);"
+
+      break
+    else
+      echo "Broken image. Retry $attempt/$MAX_RETRIES..."
+      rm -f "$outfile"
+      attempt=$((attempt+1))
+      sleep $RETRY_DELAY
+    fi
+  done
+done
+
+# -----------------------------
+# Clear regenerate flag
+# -----------------------------
+if [ -n "$ENHANCEMENT_ID" ]; then
+  # Enhancement Mode: Clear flag in frame_enhancements
+  mysql $MYSQL_ARGS -e "UPDATE frame_enhancements SET regenerate_images=0 WHERE id=$ENHANCEMENT_ID;"
+else
+  # Standard Mode: Clear flag in entity table
+  mysql $MYSQL_ARGS -e "UPDATE $ENTITY_TYPE SET regenerate_images=0 WHERE id=$ENTITY_ID;"
+fi

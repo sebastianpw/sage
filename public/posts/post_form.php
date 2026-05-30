@@ -5,7 +5,6 @@ require_once PROJECT_ROOT . '/src/Posts/PostManager.php';
 use App\Posts\PostManager;
 
 $postManager = new PostManager($pdo);
-// CHANGED: Added 'sort_order' to the default post array
 $post = [
     'id' => '', 'title' => '', 'slug' => '', 'post_type' => 'image_grid',
     'preview_image_url' => '', 'content' => '', 'media_items' => '', 'sort_order' => 0
@@ -34,13 +33,14 @@ if (isset($_GET['id'])) {
         } else if (theme === 'light') {
             document.documentElement.setAttribute('data-theme', 'light');
         }
-        // If no theme is set, we do nothing and let the CSS media query handle it.
-        } catch (e) {
-        // Fails gracefully
-        }
+        } catch (e) {}
     })();
     </script>
     <link rel="stylesheet" href="/css/base.css">
+    <style>
+        .hidden { display: none; }
+        .helper-box { background: rgba(59, 130, 246, 0.1); padding: 12px; border-radius: 6px; border: 1px solid rgba(59, 130, 246, 0.2); margin-top: 8px; }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -68,7 +68,6 @@ if (isset($_GET['id'])) {
                         <small>Leave blank to auto-generate from title.</small>
                     </div>
 
-                    <!-- NEW: Sort Order Field -->
                     <div class="form-group">
                         <label for="sort_order">Sort Order</label>
                         <input type="number" id="sort_order" name="sort_order" class="form-control" value="<?php echo (int)$post['sort_order']; ?>">
@@ -83,6 +82,7 @@ if (isset($_GET['id'])) {
                         <option value="image_swiper" <?php echo ($post['post_type'] === 'image_swiper') ? 'selected' : ''; ?>>Image Swiper</option>
                         <option value="video_playlist" <?php echo ($post['post_type'] === 'video_playlist') ? 'selected' : ''; ?>>Video Playlist</option>
                         <option value="youtube_playlist" <?php echo ($post['post_type'] === 'youtube_playlist') ? 'selected' : ''; ?>>YouTube Playlist</option>
+                        <option value="url_reference" <?php echo ($post['post_type'] === 'url_reference') ? 'selected' : ''; ?>>URL Reference</option>
                     </select>
                 </div>
 
@@ -98,10 +98,28 @@ if (isset($_GET['id'])) {
                     <small>The main text/HTML content of the post.</small>
                 </div>
                 
+                <!-- Helper UI for URL References -->
+                <div id="url-ref-helper" class="form-group helper-box hidden">
+                    <h4 style="margin: 0 0 10px 0; font-size: 14px; text-transform: uppercase;">URL Reference Settings</h4>
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 2;">
+                            <label for="helper-url">Target URL</label>
+                            <input type="url" id="helper-url" class="form-control" placeholder="https://example.com">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label for="helper-target">Open In</label>
+                            <select id="helper-target" class="form-control">
+                                <option value="_self">Same Tab (_self)</option>
+                                <option value="_blank">New Tab (_blank)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="form-group">
                     <label for="media_items">Media Items (JSON)</label>
                     <textarea id="media_items" name="media_items" class="form-control" required><?php echo htmlspecialchars($post['media_items']); ?></textarea>
-                    <small>The JSON array of images or videos for the post detail page.</small>
+                    <small>The JSON array of items.</small>
                 </div>
 
                 <div class="form-actions">
@@ -111,6 +129,51 @@ if (isset($_GET['id'])) {
             </form>
         </div>
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const typeSelect = document.getElementById('post_type');
+            const helperBox = document.getElementById('url-ref-helper');
+            const helperUrl = document.getElementById('helper-url');
+            const helperTarget = document.getElementById('helper-target');
+            const jsonInput = document.getElementById('media_items');
+
+            function updateUI() {
+                if (typeSelect.value === 'url_reference') {
+                    helperBox.classList.remove('hidden');
+                    // Try to parse existing JSON to fill helper
+                    try {
+                        const data = JSON.parse(jsonInput.value);
+                        const item = Array.isArray(data) ? data[0] : data;
+                        if (item && item.url) {
+                            helperUrl.value = item.url;
+                            helperTarget.value = item.target || '_self';
+                        }
+                    } catch (e) {}
+                } else {
+                    helperBox.classList.add('hidden');
+                }
+            }
+
+            function updateJSON() {
+                if (typeSelect.value !== 'url_reference') return;
+                
+                const url = helperUrl.value;
+                const target = helperTarget.value;
+                const data = [{
+                    url: url,
+                    target: target
+                }];
+                jsonInput.value = JSON.stringify(data, null, 2);
+            }
+
+            typeSelect.addEventListener('change', updateUI);
+            helperUrl.addEventListener('input', updateJSON);
+            helperTarget.addEventListener('change', updateJSON);
+
+            // Initialize
+            updateUI();
+        });
+    </script>
 </body>
 </html>
-

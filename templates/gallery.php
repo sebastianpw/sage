@@ -2,7 +2,22 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=0.6">
+<!-- DEFAULT: Mobile Zoom (0.6) as requested -->
+<meta name="viewport" id="viewportMeta" content="width=device-width, initial-scale=0.6">
+
+<!-- WORKAROUND: Detect Tablet/Desktop and switch to scale 1.0 -->
+<script>
+(function() {
+    // If screen width is larger than a large phone (e.g. > 700px), force Scale 1.0
+    if (screen.width > 700) {
+        var vp = document.getElementById('viewportMeta');
+        if (vp) {
+            vp.setAttribute('content', 'width=device-width, initial-scale=1.0');
+        }
+    }
+})();
+</script>
+
 <title><?= $title ?? '' ?></title>
 
 <script>
@@ -14,10 +29,7 @@
       } else if (theme === 'light') {
         document.documentElement.setAttribute('data-theme', 'light');
       }
-      // If no theme is set, we do nothing and let the CSS media query handle it.
-    } catch (e) {
-      // Fails gracefully
-    }
+    } catch (e) {}
   })();
 </script>
 
@@ -34,9 +46,8 @@
     <script src="/vendor/jquery/jquery-3.7.0.min.js"></script>
 <?php endif; ?>
 
-<!-- REPLACE the entire <style> block in templates/gallery.php with this -->
 <style>
-    /* NEW: Add theme variables so this layout is self-sufficient */
+    /* Theme Variables */
     :root {
         --float-bg: #ffffff;
         --float-border: #d1d5db;
@@ -64,7 +75,7 @@
       }
     }
 
-    /* UPDATED: All styles below now use the theme variables */
+    /* Base Layout */
     body {
         font-family: Arial, sans-serif;
         margin: 0;
@@ -73,11 +84,9 @@
         color: var(--float-text);
     }
 
-    /* Header image */
     .header {
         position: relative;
         text-align: center;
-        /* Color for overlay text, white is usually best for images */
         color: white; 
     }
 
@@ -87,7 +96,6 @@
         object-fit: cover;
     }
 
-    /* Optional headline overlay (hidden if poster has title) */
     .header h1 {
         position: absolute;
         top: 50%;
@@ -99,7 +107,6 @@
         display: none;
     }
 
-    /* Dashboard links container */
     .script-list {
         display: flex;
         flex-wrap: wrap;
@@ -110,7 +117,6 @@
         margin: auto;
     }
 
-    /* Card-style buttons */
     .script-list a {
         display: block;
         padding: 15px 25px;
@@ -128,7 +134,6 @@
         border-color: var(--float-muted);
     }
 
-    /* Horizontal line groups */
     .horizontal-line {
         display: block;
         width: 90%;
@@ -202,4 +207,3 @@
 
 </body>
 </html>
-

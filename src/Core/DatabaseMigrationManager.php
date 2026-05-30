@@ -310,7 +310,7 @@ class DatabaseMigrationManager
         foreach ($differences['missing_views'] as $view) {
             $createSQL = $this->getCreateViewStatement($sourceDb, $view);
             if ($createSQL) {
-                $sql = $this->rebuildCreateViewSQL($createSQL, $targetDb, $view, false);
+                $sql = $this->rebuildCreateViewSQL($createSQL, $sourceDb, $targetDb, $view, false);
                 $statements[] = [
                     'type' => 'CREATE_VIEW',
                     'table' => $view, // Use 'table' key for UI consistency
@@ -329,10 +329,10 @@ class DatabaseMigrationManager
             $createSQL = $change['source_definition'];
             if ($createSQL) {
                 // Rebuild with CREATE OR REPLACE
-                $sql = $this->rebuildCreateViewSQL($createSQL, $targetDb, $view, true); 
+                $sql = $this->rebuildCreateViewSQL($createSQL, $sourceDb, $targetDb, $view, true); 
                 
                 // For rollback, we need the old definition
-                $oldCreateSQL = $this->rebuildCreateViewSQL($change['target_definition'], $targetDb, $view, true);
+                $oldCreateSQL = $this->rebuildCreateViewSQL($change['target_definition'], $targetDb, $targetDb, $view, true);
 
                 $statements[] = [
                     'type' => 'REPLACE_VIEW',
@@ -1096,11 +1096,14 @@ class DatabaseMigrationManager
         );
     }
     
-    private function rebuildCreateViewSQL(string $createViewStatement, string $targetDb, string $viewName, bool $orReplace = false): string
+    private function rebuildCreateViewSQL(string $createViewStatement, string $sourceDb, string $targetDb, string $viewName, bool $orReplace = false): string
     {
         // Extract the SELECT part of the view definition, which is the safest way
         if (preg_match('/AS\s+(SELECT.*)/is', $createViewStatement, $matches)) {
             $selectStatement = rtrim(trim($matches[1]), ';');
+            
+            // Remove source database prefix to avoid pointing to the wrong database
+            $selectStatement = preg_replace("/`{$sourceDb}`\./i", '', $selectStatement);
             
             $replace = $orReplace ? 'OR REPLACE ' : '';
             return "CREATE {$replace}VIEW `{$targetDb}`.`{$viewName}` AS {$selectStatement};";
@@ -1113,6 +1116,9 @@ class DatabaseMigrationManager
             "{$replaceStr} VIEW `{$targetDb}`.`{$viewName}`", 
             $createViewStatement
         );
+
+        // Remove source database prefix
+        $statement = preg_replace("/`{$sourceDb}`\./i", '', $statement);
 
         return rtrim($statement, ' ;') . ';';
     }

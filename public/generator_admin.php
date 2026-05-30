@@ -20,63 +20,144 @@ ob_start();
 .admin-wrap { max-width: 1100px; margin: 0 auto; padding: 18px; color: var(--text); }
 .admin-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
 .admin-head h2 { margin: 0; font-weight: 600; font-size: 1.3rem; color: var(--text); }
-.admin-head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.admin-head-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* Filter Select */
+.filter-select {
+    padding: 6px 30px 6px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(var(--muted-border-rgb), 0.15);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 0.85rem;
+    cursor: pointer;
+    outline: none;
+    height: 34px;
+    line-height: 1.2;
+}
+.filter-select:focus { border-color: var(--accent); }
 
 /* Generator list container */
 .generator-list-container {
     background: var(--card);
     border: 1px solid rgba(var(--muted-border-rgb), 0.08);
     border-radius: 8px;
-    padding: 12px;
+    padding: 8px;
     box-shadow: var(--card-elevation);
 }
 
-/* Generator items */
+/* Generator items - Lean Layout */
 .generator-item {
     background: var(--bg);
     border: 1px solid rgba(var(--muted-border-rgb), 0.12);
-    border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 12px;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
     transition: all 0.15s ease;
     display: flex;
-    align-items: center;
-    gap: 16px;
+    align-items: flex-start; /* Align top so actions don't center vertically on tall items */
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: nowrap;
 }
 .generator-item:last-child { margin-bottom: 0; }
 .generator-item:hover { border-color: var(--accent); }
 
-.generator-info { flex: 1; min-width: 0; }
-.generator-name { 
-    font-weight: 600; 
-    font-size: 1rem; 
-    color: var(--text); 
-    margin-bottom: 4px;
+/* Main content area (Left side) */
+.generator-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0; /* Critical for text wrapping in flex items */
+}
+
+/* Rows within content */
+.generator-meta-row {
     display: flex;
     align-items: center;
     gap: 8px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    flex-wrap: wrap;
+    line-height: 1.2;
+}
+
+.generator-title-row {
+    font-weight: 600; 
+    color: var(--text);
+    font-size: 1rem;
+    word-break: break-word; /* Prevent sticking out */
+    overflow-wrap: anywhere; /* Ensure long words break */
+    line-height: 1.4;
+}
+
+.generator-status-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     flex-wrap: wrap;
 }
-.generator-meta { font-size: 0.85rem; color: var(--text-muted); }
-.generator-meta span { margin-right: 12px; display: inline-block; vertical-align: middle; }
-.generator-meta .area-badge {
+
+/* Drag handle */
+.drag-handle { 
+    cursor: grab; 
+    color: var(--text-muted); 
+    font-size: 1.1rem;
+    line-height: 1;
+    margin-right: 4px;
+    display: inline-flex;
+    align-items: center;
+}
+.drag-handle:hover { color: var(--accent); }
+.drag-handle.disabled { cursor: not-allowed; opacity: 0.3; }
+.dragging-ghost { opacity: 0.4; background: var(--accent-translucent); border: 1px dashed var(--accent); }
+.sortable-chosen .drag-handle { cursor: grabbing; }
+
+/* Badges & Meta */
+.area-badge {
     background: rgba(var(--muted-border-rgb), 0.1);
-    padding: 2px 8px;
+    padding: 1px 6px;
     border-radius: 4px;
     font-size: 0.75rem;
-    margin-right: 4px;
-    display: inline-block;
-    margin-bottom: 4px;
+    color: var(--text-muted);
+    border: 1px solid rgba(var(--muted-border-rgb), 0.15);
 }
 
-.generator-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-
-/* Status badges */
-.status-badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+.status-badge { 
+    display: inline-block; 
+    padding: 2px 8px; 
+    border-radius: 10px; 
+    font-size: 0.7rem; 
+    font-weight: 700; 
+    text-transform: uppercase; 
+    letter-spacing: 0.5px; 
+}
 .status-badge.active { background: rgba(35,134,54,0.12); color: var(--green); }
 .status-badge.inactive { background: rgba(var(--muted-border-rgb), 0.12); color: var(--text-muted); }
 .status-badge.public-badge { background: rgba(59, 130, 246, 0.12); color: #3b82f6; }
 .status-badge.owner-badge { background: rgba(139, 92, 246, 0.12); color: #8b5cf6; }
+
+/* Actions (Right side) */
+.generator-actions { 
+    display: flex; 
+    gap: 4px; 
+    flex-shrink: 0;
+    align-items: flex-start;
+}
+
+/* Icon Buttons */
+.btn-icon {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    line-height: 1;
+    border-radius: 6px;
+}
 
 /* Empty state & Modals */
 .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); }
@@ -96,18 +177,8 @@ ob_start();
 .form-grid { display: grid; gap: 16px; grid-template-columns: repeat(3, 1fr); }
 .form-checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .form-checkbox-label input[type="checkbox"] { cursor: pointer; }
-
-.form-section {
-    border-top: 1px solid rgba(var(--muted-border-rgb), 0.1);
-    margin-top: 20px;
-    padding-top: 20px;
-}
-.form-section-header {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--text);
-    margin-bottom: 16px;
-}
+.form-section { border-top: 1px solid rgba(var(--muted-border-rgb), 0.1); margin-top: 20px; padding-top: 20px; }
+.form-section-header { font-size: 0.9rem; font-weight: 600; color: var(--text); margin-bottom: 16px; }
 
 /* Test parameters */
 .test-params { display: grid; gap: 16px; margin-bottom: 20px; }
@@ -120,12 +191,6 @@ ob_start();
 .spinner { width: 40px; height: 40px; margin: 0 auto 16px; border: 4px solid rgba(var(--muted-border-rgb), 0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Drag and Drop */
-.drag-handle { cursor: grab; color: var(--text-muted); }
-.drag-handle:hover { color: var(--accent); }
-.dragging-ghost { opacity: 0.4; background: var(--accent-translucent); border: 1px dashed var(--accent); }
-.sortable-chosen .drag-handle { cursor: grabbing; }
-
 /* Multi-select component styles */
 .multi-select-container { position: relative; }
 .multi-select-button { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid rgba(var(--muted-border-rgb), 0.12); font-size: 0.9rem; background: var(--bg); color: var(--text); cursor: pointer; user-select: none; }
@@ -134,24 +199,41 @@ ob_start();
 .multi-select-dropdown.visible { display: block; }
 .multi-select-dropdown label { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; font-size: 0.9rem; }
 .multi-select-dropdown label:hover { background: rgba(var(--muted-border-rgb), 0.08); }
-.multi-select-dropdown input[type="checkbox"] { cursor: pointer; }
 
 /* Mobile responsive */
 @media (max-width: 768px) {
     .admin-head { flex-direction: column; align-items: flex-start; }
     .form-grid { grid-template-columns: 1fr; }
-    .generator-item { flex-direction: column; align-items: flex-start; }
-    .generator-actions { width: 100%; }
-    .generator-actions .btn { flex: 1; }
     .modal-card { max-height: 95vh; }
+    
+    .generator-item {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .generator-actions {
+        width: 100%;
+        justify-content: flex-end; /* Right align buttons */
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid rgba(var(--muted-border-rgb), 0.08);
+    }
+    .btn-icon {
+        flex: 1; /* Stretch buttons for easier tapping */
+        height: 40px;
+    }
 }
-@media (max-width: 480px) { .admin-wrap { padding: 12px; } .generator-meta span { display: block; margin: 4px 0; } }
+@media (max-width: 480px) { .admin-wrap { padding: 12px; } }
 </style>
 
 <div class="admin-wrap">
     <div class="admin-head">
         <h2>Generator Admin</h2>
         <div class="admin-head-actions">
+            <!-- AJAX Select Filter -->
+            <select id="areaFilter" class="filter-select" onchange="applyFilter()">
+                <option value="">All Areas</option>
+            </select>
+            
             <a href="/generator_display_areas_admin.php" class="btn btn-sm btn-outline-secondary">Manage Display Areas</a>
             <button class="btn btn-sm btn-primary" onclick="openCreateModal()">+ New Generator</button>
         </div>
@@ -307,58 +389,138 @@ async function loadDisplayAreas() {
         const result = await apiCall('get_display_areas');
         if (result.ok) {
             allDisplayAreas = result.data;
+            // Populate MultiSelect (Modal)
             document.getElementById('multiSelectDropdown').innerHTML = allDisplayAreas.map(area => `<label><input type="checkbox" value="${area.key}" data-label="${escapeHtml(area.label)}"><span>${escapeHtml(area.label)}</span></label>`).join('');
+            
+            // Populate Filter Select (Header)
+            const filterSelect = document.getElementById('areaFilter');
+            allDisplayAreas.forEach(area => {
+                const opt = document.createElement('option');
+                opt.value = area.key;
+                opt.textContent = area.label;
+                filterSelect.appendChild(opt);
+            });
         }
     } catch (e) { console.error('Failed to load display areas:', e); }
 }
 
-async function loadGenerators() {
+function applyFilter() {
+    const filterValue = document.getElementById('areaFilter').value;
+    loadGenerators(filterValue);
+}
+
+async function loadGenerators(filterArea = '') {
+    const container = document.getElementById('generatorListContainer');
+    container.innerHTML = '<div class="empty-state">Loading...</div>';
+    
     try {
-        const result = await apiCall('list');
+        const result = await apiCall('list', { filter_area: filterArea });
         if (result.ok) {
-            renderGenerators(result.data);
-            initSortable();
+            renderGenerators(result.data, filterArea);
+            initSortable(!!filterArea);
         }
     } catch (e) { showToast('Failed to load generators', 'error'); }
 }
 
-function renderGenerators(generators) {
+function renderGenerators(generators, filterArea) {
     const container = document.getElementById('generatorListContainer');
-    if (generators.length === 0) { container.innerHTML = '<div class="empty-state">No generators yet. Create one!</div>'; return; }
+    if (generators.length === 0) { container.innerHTML = '<div class="empty-state">No generators found.</div>'; return; }
+    
+    const isFiltered = !!filterArea;
+
     container.innerHTML = generators.map(gen => {
-        const publicBadge = gen.is_public ? `<span class="status-badge public-badge">PUBLIC</span>` : '';
-        const ownerBadge = gen.is_owner ? `<span class="status-badge owner-badge">MY GENERATOR</span>` : '';
+        // Badges
+        const publicBadge = gen.is_public ? `<span class="status-badge public-badge" title="Public Generator">PUB</span>` : '';
+        const ownerBadge = gen.is_owner ? `<span class="status-badge owner-badge" title="My Generator">ME</span>` : '';
+        const activeBadge = `<span class="status-badge ${gen.active ? 'active' : 'inactive'}" title="Status">${gen.active ? 'ON' : 'OFF'}</span>`;
+        
+        // Meta Info
+        const modelInfo = `<span title="Model: ${escapeHtml(gen.model)}" style="color:var(--text-muted);">🤖 ${escapeHtml(gen.model)}</span>`;
+        const displayAreasHtml = gen.display_areas.length > 0 
+            ? gen.display_areas.map(a => `<span class="area-badge" title="${escapeHtml(a.label)}">${escapeHtml(a.key)}</span>`).join('') 
+            : `<span class="area-badge" style="opacity:0.5;">-</span>`;
+
+        // Permissions
         const canEdit = gen.is_owner || (gen.is_public && isAdmin);
         const canCopy = gen.is_owner || gen.is_public;
-        const dragHandle = gen.is_owner ? `<span class="drag-handle" title="Drag to reorder">☰</span>` : ``;
-        const displayAreasHtml = gen.display_areas.length > 0 ? gen.display_areas.map(a => `<span class="area-badge">${escapeHtml(a.label)}</span>`).join('') : `<span class="area-badge" style="opacity:0.6;">None</span>`;
+        
+        // Drag Handle Logic: Disable/Hide if filtered
+        let dragHandle = '';
+        if (gen.is_owner && !isFiltered) {
+            dragHandle = `<span class="drag-handle" title="Drag to reorder">☰</span>`;
+        } else if (isFiltered) {
+            // Placeholder to keep spacing mostly consistent but indicate disabled state
+            dragHandle = `<span class="drag-handle disabled" title="Sorting disabled while filtered">☷</span>`; 
+        } else {
+             dragHandle = `<span class="drag-handle" style="visibility:hidden">☰</span>`;
+        }
+
+        // Actions
+        let actionsHtml = '';
+        if (canEdit) {
+            actionsHtml += `<button class="btn btn-sm btn-outline-primary btn-icon" onclick="openEditModal(${gen.id})" title="Edit">✏️</button>`;
+        }
+        if (canCopy) {
+            // UPDATED: Using ⎘ icon as requested
+            actionsHtml += `<button class="btn btn-sm btn-outline-secondary btn-icon" onclick="openCopyModal(${gen.id})" title="Copy">⎘</button>`;
+        }
+        if (canEdit) {
+            const toggleIcon = gen.active ? '⏸️' : '▶️';
+            const toggleTitle = gen.active ? 'Disable' : 'Enable';
+            // NOTE: added 'btn-toggle' class so client-side code can update in-place without full reload
+            actionsHtml += `<button class="btn btn-sm btn-outline-secondary btn-icon btn-toggle" onclick="toggleGenerator(${gen.id})" title="${toggleTitle}">${toggleIcon}</button>`;
+            actionsHtml += `<button class="btn btn-sm btn-outline-danger btn-icon" onclick="deleteGenerator(${gen.id})" title="Delete">🗑️</button>`;
+        }
+        // Test button
+        actionsHtml += `<button class="btn btn-sm btn-outline-success btn-icon" onclick="openTestModal(${gen.id})" title="Test">⚗️</button>`;
 
         return `
         <div class="generator-item" data-id="${gen.id}">
-            <div class="generator-info">
-                <div class="generator-name">${dragHandle} ${escapeHtml(gen.title)} ${publicBadge} ${ownerBadge}</div>
-                <div class="generator-meta">
-                    <span>${displayAreasHtml}</span>
-                    <span><strong>Model:</strong> ${escapeHtml(gen.model)}</span>
-                    <span class="status-badge ${gen.active ? 'active' : 'inactive'}">${gen.active ? 'Active' : 'Inactive'}</span>
+            <div class="generator-content">
+                <div class="generator-meta-row">
+                    ${dragHandle}
+                    ${displayAreasHtml}
+                    ${modelInfo}
+                </div>
+                
+                <div class="generator-title-row">
+                    ${escapeHtml(gen.title)}
+                </div>
+                
+                <div class="generator-status-row">
+                    ${activeBadge}
+                    ${publicBadge}
+                    ${ownerBadge}
                 </div>
             </div>
+            
             <div class="generator-actions">
-                ${canEdit ? `<button class="btn btn-sm btn-outline-primary" onclick="openEditModal(${gen.id})">Edit</button>
-                             <button class="btn btn-sm btn-outline-secondary" onclick="openCopyModal(${gen.id})">Copy</button>
-                             <button class="btn btn-sm btn-outline-secondary" onclick="toggleGenerator(${gen.id})">${gen.active ? 'Disable' : 'Enable'}</button>
-                             <button class="btn btn-sm btn-outline-danger" onclick="deleteGenerator(${gen.id})">Delete</button>`
-                          : (canCopy ? `<button class="btn btn-sm btn-outline-secondary" onclick="openCopyModal(${gen.id})">Copy</button>` : '')}
-                <button class="btn btn-sm btn-outline-success" onclick="openTestModal(${gen.id})">⚗️ Test</button>
+                ${actionsHtml}
             </div>
         </div>`;
     }).join('');
 }
 
-function initSortable() {
+function initSortable(isFiltered) {
     const listContainer = document.getElementById('generatorListContainer');
-    if (sortableInstance) sortableInstance.destroy();
-    sortableInstance = new Sortable(listContainer, { animation: 150, handle: '.drag-handle', ghostClass: 'dragging-ghost', onEnd: (evt) => saveOrder(Array.from(evt.to.children).map(item => item.dataset.id)) });
+    
+    // Always destroy previous instance
+    if (sortableInstance) {
+        sortableInstance.destroy();
+        sortableInstance = null;
+    }
+
+    // Do not initialize sortable if a filter is active
+    if (isFiltered) {
+        return;
+    }
+
+    sortableInstance = new Sortable(listContainer, { 
+        animation: 150, 
+        handle: '.drag-handle', 
+        ghostClass: 'dragging-ghost', 
+        onEnd: (evt) => saveOrder(Array.from(evt.to.children).map(item => item.dataset.id)) 
+    });
 }
 
 async function saveOrder(ids) {
@@ -470,7 +632,7 @@ async function saveGenerator() {
         if (result.ok) {
             showToast(result.message, 'success');
             closeFormModal();
-            loadGenerators();
+            loadGenerators(document.getElementById('areaFilter').value); // Reload with current filter
         } else { showToast(result.error, 'error'); }
     } catch (e) { showToast('Failed to save generator: ' + e.message, 'error'); }
 }
@@ -478,18 +640,79 @@ async function saveGenerator() {
 async function deleteGenerator(id) {
     if (!confirm('Delete this generator? This cannot be undone.')) return;
     const result = await apiCall('delete', { id });
-    if (result.ok) { showToast(result.message, 'success'); loadGenerators(); }
+    if (result.ok) { showToast(result.message, 'success'); loadGenerators(document.getElementById('areaFilter').value); }
     else { showToast(result.error, 'error'); }
 }
 
+/*
+  Updated toggleGenerator implementation:
+  - Performs the toggle via API
+  - Updates the specific generator row in-place (badge + button)
+  - Falls back to reloading the list if the DOM row isn't found or response doesn't include expected data
+*/
 async function toggleGenerator(id) {
+    // Find the row and toggle button in DOM
+    const item = document.querySelector(`.generator-item[data-id="${id}"]`);
+    const fallbackReload = () => loadGenerators(document.getElementById('areaFilter').value);
+
+    if (!item) {
+        // If row not found, fall back to reloading the list (safe fallback)
+        return fallbackReload();
+    }
+
+    const toggleBtn = item.querySelector('.btn-toggle');
+    if (!toggleBtn) {
+        // If toggle button not found, fallback
+        return fallbackReload();
+    }
+
+    // Disable the button while request is in-flight
+    toggleBtn.disabled = true;
+
     try {
         const result = await apiCall('toggle', { id });
-        if (result.ok) {
-            showToast(result.message, 'success');
-            loadGenerators();
-        } else { showToast(result.error, 'error'); }
-    } catch (e) { showToast('Failed to toggle generator', 'error'); }
+
+        if (!result || !result.ok) {
+            showToast(result?.error || 'Failed to toggle generator', 'error');
+            toggleBtn.disabled = false;
+            return;
+        }
+
+        // Server returns 'active' in response; use it to update UI
+        const active = (typeof result.active === 'boolean') ? result.active : undefined;
+
+        if (typeof active === 'boolean') {
+            updateGeneratorActiveStateInDOM(item, active, toggleBtn);
+            showToast(result.message || (active ? 'Activated' : 'Deactivated'), 'success');
+        } else {
+            // If response doesn't include 'active', reload list to be safe
+            fallbackReload();
+        }
+    } catch (e) {
+        console.error('Toggle failed:', e);
+        showToast('Failed to toggle generator', 'error');
+        toggleBtn.disabled = false;
+    }
+}
+
+function updateGeneratorActiveStateInDOM(item, active, toggleBtn) {
+    // Update the status badge (first .status-badge inside generator-status-row)
+    const statusBadge = item.querySelector('.generator-status-row .status-badge');
+    if (statusBadge) {
+        statusBadge.classList.toggle('active', active);
+        statusBadge.classList.toggle('inactive', !active);
+        statusBadge.textContent = active ? 'ON' : 'OFF';
+    }
+
+    // Update the toggle button icon + title and re-enable it
+    if (toggleBtn) {
+        toggleBtn.innerHTML = active ? '⏸️' : '▶️';
+        toggleBtn.title = active ? 'Disable' : 'Enable';
+        toggleBtn.disabled = false;
+    }
+
+    // OPTIONAL: if there are other UI elements that should reflect active state (e.g. row styling),
+    // update them here. We keep it minimal to avoid breaking existing UI.
 }
 
 function escapeHtml(text) {

@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SAGE v1.1 Release Notes</title>
+    <style>
+        :root{
+            --text-color: #333;
+            --muted: #666;
+            --heading: #2c3e50;
+            --page-bg: #fff;
+            --link-color: #007bff;        /* main link color */
+            --link-hover: #0056b3;        /* hover color */
+            --link-underline: rgba(0,123,255,0.15);
+            --divider: #eaeaea;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: var(--page-bg);
+        }
+        h1, h2, h3 { color: var(--heading); }
+        h1 { text-align: center; border-bottom: 2px solid var(--divider); padding-bottom: 10px; }
+        .subtitle { text-align: center; font-size: 1.2em; color: var(--muted); margin-top: -10px; margin-bottom: 40px; font-weight: 300; }
+
+        /* Quote References Style */
+        blockquote {
+            background: #f9f9f9;
+            border-left: 5px solid #ccc;
+            margin: 1.5em 10px;
+            padding: 0.5em 10px;
+            font-style: italic;
+            color: #555;
+        }
+
+        .highlight-box {
+            background-color: #f0f7ff;
+            border: 1px solid #cce5ff;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        /* Model list */
+        .model-list { list-style-type: none; padding: 0; margin: 0; }
+        .model-list li { margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #eee; }
+        .model-list strong { display: inline-block; margin-bottom: 0; font-weight: 700; }
+
+        /* Style for the model name link */
+        .model-list strong a {
+            color: var(--link-color);
+            text-decoration: none;
+            border-bottom: 2px solid transparent;
+            padding-bottom: 2px;
+            transition: color 120ms ease, border-color 120ms ease, transform 120ms ease;
+        }
+        .model-list strong a:hover,
+        .model-list strong a:focus {
+            color: var(--link-hover);
+            border-bottom-color: var(--link-underline);
+            transform: translateY(-1px);
+            outline: none;
+        }
+
+        /* Creator row: force new line directly under model name with zero gap */
+        .creator-line {
+            display: block;       /* new line */
+            margin-top: 0;        /* no gap */
+            padding-top: 0;       /* no gap */
+            font-size: 0.95em;
+            color: var(--muted);
+        }
+
+        /* Creator profile link (keeps your existing style but slightly tuned) */
+        .creator-link {
+            color: var(--link-color);
+            text-decoration: none;
+            transition: color 120ms ease, text-decoration 120ms ease;
+        }
+        .creator-link:hover,
+        .creator-link:focus { text-decoration: underline; color: var(--link-hover); }
+
+        /* Generic anchor fallback for other links (licenses, footer) */
+        a {
+            color: var(--link-color);
+            text-decoration: none;
+        }
+        a:hover, a:focus {
+            color: var(--link-hover);
+            text-decoration: underline;
+        }
+
+        .footer { text-align: center; margin-top: 50px; padding-top: 20px; border-top: 2px solid var(--divider); color: #555; }
+
+        /* Small accessibility & layout helpers */
+        a[target="_blank"] { /* visually indicate external link slightly (optional) */ }
+        /* make sure long model names wrap nicely */
+        .model-list strong a { word-break: break-word; white-space: normal; }
+    </style>
+</head>
+<body>
+
+    <h1>SAGE v1.1 — The Notebooks & Styles Update</h1>
+    <p class="subtitle">The next step of Free Open Source AI Creation Engine.</p>
+
+    <p>Hello everyone!</p>
+
+    <p>It has been an intense journey since the first release of <strong><a href="https://github.com/sebastianpw/sage" target="_blank" rel="noopener">SAGE</a></strong> and we just had our first stable release v1.0 ...</p>
+    <p>I have been heads-down working on expanding what SAGE can do, this time specifically focusing on integrating <strong>new external notebooks</strong> to bring a massive array of new visual capabilities to your creative environment.</p>
+
+    <p>For the <strong>SAGE v1.1</strong> release, I want to take a step back from the technical details to focus on the community that makes this possible. While SAGE provides the orchestration and the engine, the fuel comes from the incredible open-source community.</p>
+
+    <h3>Standing on the Shoulders of Giants</h3>
+
+    <p>We must first acknowledge the visionaries at <strong>Stability AI</strong>. As the initiators of Stable Diffusion and the creators of <strong>SDXL Turbo</strong>, their generosity in providing open-source foundation models is the bedrock upon which SAGE is built. Their work is beyond exceptional, and their commitment to open access is a generous gift to creators everywhere.</p>
+
+    <p>I also want to shine a spotlight on <strong>John6666</strong> on Hugging Face for serving as a vital pillar of the community by transferring and converting countless models for access via Hugging Face diffusers. Thank you, John, for being the bridge that connects us to these resources.</p>
+
+    <h3>The Architects of Our Dreams</h3>
+
+    <p>The new anime capabilities in SAGE v1.1 are powered by specific models created by talented artists and engineers. I highly encourage you to visit their profiles, download their models, and support their work.</p>
+    
+    <ul class="model-list">
+        <li>
+            <strong><a href="https://civitai.com/models/260267/animagine-xl-v31" target="_blank" rel="noopener">Animagine XL 3.1</a></strong>
+            <span class="creator-line">Created by <a href="https://civitai.com/user/CagliostroLab" class="creator-link" target="_blank" rel="noopener">CagliostroLab</a></span>
+        </li>
+        <li>
+            <strong><a href="https://civitai.com/models/118406/counterfeitxl" target="_blank" rel="noopener">CounterfeitXL</a></strong>
+            <span class="creator-line">Created by <a href="https://civitai.com/user/rqdwdw" class="creator-link" target="_blank" rel="noopener">rqdwdw</a> (gsdf)</span>
+        </li>
+        <li>
+            <strong><a href="https://civitai.com/models/9942/abyssorangemix3-aom3" target="_blank" rel="noopener">AbyssOrangeMix3</a></strong>
+            <span class="creator-line">Created by <a href="https://civitai.com/user/WarriorMama777" class="creator-link" target="_blank" rel="noopener">WarriorMama777</a></span>
+        </li>
+        <li>
+            <strong><a href="https://civitai.com/models/5414/pastel-mix-stylized-anime-model" target="_blank" rel="noopener">Pastel-Mix</a></strong>
+            <span class="creator-line">Created by <a href="https://civitai.com/user/andite" class="creator-link" target="_blank" rel="noopener">andite</a></span>
+        </li>
+        <li>
+            <strong><a href="https://civitai.com/models/889450/meinaxl" target="_blank" rel="noopener">MeinaXL</a></strong>
+            <span class="creator-line">Created by <a href="https://civitai.com/user/Meina" class="creator-link" target="_blank" rel="noopener">Meina</a></span>
+        </li>
+        <li>
+            <strong><a href="https://civitai.com/models/376130/nova-anime-xl" target="_blank" rel="noopener">Nova Anime XL</a> &amp; <a href="https://civitai.com/models/967405/nova-orange-xl" target="_blank" rel="noopener">Nova Orange XL</a></strong>
+            <span class="creator-line">Created by <a href="https://civitai.com/user/Crody" class="creator-link" target="_blank" rel="noopener">Crody</a></span>
+        </li>
+        
+        <li>
+            <strong><a href="https://civitai.com/models/687637/speciosa-anime" target="_blank" rel="noopener">Speciosa Anime</a></strong>
+            <span class="creator-line">Created by Oraculum</span>
+        </li>
+        
+        <li>
+            <strong><a href="https://civitai.com/models/269232/aam-xl-anime-mix" target="_blank" rel="noopener">AAM XL (Anime Mix)</a></strong>
+            <span class="creator-line">Created by <a href="https://civitai.com/user/Lykon" class="creator-link" target="_blank" rel="noopener">Lykon</a></span>
+        </li>
+        <li>
+            <strong><a href="https://civitai.com/models/72182/sotemix" target="_blank" rel="noopener">SoteMix</a></strong>
+            <span class="creator-line">Created by <a href="https://civitai.com/user/Disty0" class="creator-link" target="_blank" rel="noopener">Disty0</a></span>
+        </li>
+        <li>
+            <strong><a href="https://huggingface.co/EnD-Diffusers/Osenayan_Mix" target="_blank" rel="noopener">Osenayan Mix</a></strong>
+            <span class="creator-line">Created by <a href="https://www.twitch.tv/duskfallcrew" class="creator-link" target="_blank" rel="noopener">Duskfallcrew</a></span>
+        </li>
+        <li>
+            <strong><a href="https://civitai.com/models/7241/mix-pro-v4" target="_blank" rel="noopener">MIX-Pro-V4</a></strong>
+            <span class="creator-line">Created by <a href="https://civitai.com/user/P317cm" class="creator-link" target="_blank" rel="noopener">P317cm</a></span>
+        </li>
+        <li>
+            <strong><a href="https://civitai.com/models/27259/tmnd-mix" target="_blank" rel="noopener">TMND-Mix</a></strong>
+            <span class="creator-line">Created by <a href="https://civitai.com/user/gxf159357233" class="creator-link" target="_blank" rel="noopener">gxf159357233</a></span>
+        </li>
+    </ul>
+    
+    <h3>Licenses & Permissions</h3>
+    
+    <ul>
+        <li>
+            <strong>Stable Diffusion XL 1.0 (Base)</strong> — <em>CreativeML Open RAIL++-M</em><br>
+            <a href="https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/main/LICENSE.md" target="_blank" rel="noopener">Read License on Hugging Face</a>
+        </li>
+        <li>
+            <strong>SDXL Turbo (Stability AI)</strong> — <em>STABILITY AI COMMUNITY LICENSE</em><br>
+            <a href="https://huggingface.co/stabilityai/sdxl-turbo/blob/main/LICENSE.md" target="_blank" rel="noopener">Read License on Hugging Face</a>
+        </li>
+        <li>
+            <strong>Animagine XL 3.1</strong> — <em>Fair AI Public License 1.0-SD</em><br>
+            <a href="https://freedevproject.org/faipl-1.0-sd/" target="_blank" rel="noopener">Read License</a>
+        </li>
+        <li>
+            <strong>General OpenRAIL-M (Common for SD1.5/Mixes)</strong> — <em>CreativeML Open RAIL-M</em><br>
+            <a href="https://huggingface.co/spaces/CompVis/stable-diffusion-license/raw/main/license.txt" target="_blank" rel="noopener">Read License on Hugging Face</a>
+        </li>
+    </ul>
+
+    <hr>
+    
+    <div class="highlight-box">
+        <h3>⚡ The SAGE Inference Ecosystem</h3>
+        <p>While this update focuses on new notebooks, SAGE relies on a powerful constellation of external services to make generation possible:</p>
+        <ul>
+            <li><strong>Kaggle Client (New Notebooks Added):</strong> The core of this update. We leverage Kaggle's infrastructure to run the specific model weights listed.</li>
+            <li><strong>Pollinations.ai:</strong> Our continued partner for high-speed, accessible image generation API calls as well as easy chat access.</li>
+            <li><strong>External Text & Chat APIs:</strong> SAGE continues to utilize external LLM APIs for intelligent prompt creation, chat, and brainstorming.</li>
+        </ul>
+    </div>
+
+    <h3>What is SAGE?</h3>
+    <p>
+        <strong>SAGE</strong> (Storyboard Animation Generation Environment) is an open-source multimedia AI orchestration platform. 
+        It functions as a command center, merging creative generation, development assistance, and intelligent orchestration under one cohesive system.
+    </p>
+    <blockquote>
+        "Open-source multimedia AI orchestration platform for creative storytelling — runs fully on Android via Termux."
+    </blockquote>
+    <p>
+        SAGE acts as the manager of your workflow. It uses PHP and bash automation to control external inference engines for rapid generation.
+        
+        
+        <p>
+        The platform distinguishes itself with a visual-first, responsive user interface featuring a mobile-friendly multi-gallery system, allowing for intuitive swipe navigation and asset organization on touch devices.
+        </p>
+        <p>
+            Under the hood, SAGE relies on a rich semantic database designed to represent every aspect of a story, effectively functioning as a dedicated movie-storyboard visualization engine.
+        </p>
+        <p>
+            This architecture enables creators to manage complex narratives and distinct story elements within a sequential timeline while orchestrating batch workflows and handling storyboards locally, with heavy processing seamlessly delegated to remote servers.
+        </p>
+    </p>
+
+    <div class="footer">
+        <p><strong>Build. Generate. Compose.</strong></p>
+        <p>Your creativity — no permission required.</p>
+        <p>👉 <a href="https://github.com/sebastianpw/sage" target="_blank" rel="noopener">github.com/sebastianpw/sage</a></p>
+    </div>
+    
+    
+    
+    
+    
+    
+    
+<hr style="border:0; border-top:1px solid #ccc; margin:40px 0 10px 0;">
+
+<footer class="legal-footer" style="text-align:center; font-size:0.5em; color:#666; padding:5px 10px;">
+    <!-- Minimalistischer Footer mit Rechts-Links -->
+    <a href="/impressum.php">Impressum</a> |
+    <a href="/datenschutz.php">Datenschutz</a>
+</footer>
+
+<!-- Cookie-Banner -->
+<div id="cookieNotice" style="position: fixed; bottom: 0; left: 0; right: 0; background: #222; color: #fff; padding: 15px; text-align: center; font-size: 14px; display: none; z-index: 9999;">
+</div>
+
+<style>
+/* Footer-Links neutralisieren, höhere Spezifität */
+.legal-footer a {
+    all: unset;           /* entfernt alle geerbten Styles */
+    color: #666 !important;
+    text-decoration: underline !important;
+    font-size: 0.8em !important;
+    cursor: pointer !important;
+    margin: 0 5px;
+}
+.legal-footer a:hover {
+    color: #000 !important;
+}
+.legal-footer {
+    margin-bottom: 100px; /* Höhe des Banners */
+}
+</style>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+$(function(){
+    var lang = $('html').attr('lang') || 'en';
+
+    function showCookieBanner(lang){
+        if(document.cookie.indexOf("cookieAccepted=true") === -1){
+            if(lang === "en"){
+                $("#cookieNotice").html('This website uses cookies to improve the user experience. <button id="acceptCookies">Accept</button>');
+            } else {
+                $("#cookieNotice").html('Diese Website verwendet Cookies, um das Nutzererlebnis zu verbessern. <button id="acceptCookies">Akzeptieren</button>');
+            }
+            $("#cookieNotice").fadeIn();
+        }
+    }
+
+    showCookieBanner(lang);
+
+    $(document).on("click","#acceptCookies",function(){
+        document.cookie="cookieAccepted=true; path=/; max-age="+60*60*24*365;
+        $("#cookieNotice").fadeOut();
+    });
+});
+</script>
+    
+
+</body>
+</html>

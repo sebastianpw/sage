@@ -10,7 +10,8 @@
     "keywords": [],
     "dataset_sources": [
         "spw800621/meinaxl-v2-sdxl",
-        "spw800621/lcm-lora-sdxl"
+        "spw800621/lcm-lora-sdxl",
+        "spw800621/sage-zrok-token"
     ],
     "kernel_sources": [],
     "competition_sources": [],

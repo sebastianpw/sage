@@ -136,7 +136,7 @@ button { padding: 8px 16px; cursor: pointer; border: none; border-radius: 4px; f
 <?php echo $eruda; ?>
 </head>
 <body>
-<?php require "floatool.php"; ?>
+<?php require_once "forge_tool.php"; ?>
 
 <div class="container">
     <div class="header">

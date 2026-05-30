@@ -20,6 +20,7 @@ global $pdo, $pdoSys, $dbname, $sysDbName;
  */
 define('DBTOOL_VERSION', '1.0.0');
 define('RECORDS_PER_PAGE', 50);
+define('EXPORT_CHUNK_SIZE', 50);
 
 /**
  * Helper Functions
@@ -207,6 +208,39 @@ public static function getTablesWithInfo($pdo, $dbName) {
         }
     }
     
+    /**
+     * Returns true if the MySQL column type should be emitted without quotes.
+     */
+    public static function isNumericType($mysqlType) {
+        // Strip any length/precision suffix, e.g. "int(11)" -> "int"
+        $base = strtolower(preg_replace('/\s*\(.*/', '', $mysqlType));
+        return in_array($base, [
+            'int', 'tinyint', 'smallint', 'mediumint', 'bigint',
+            'float', 'double', 'decimal', 'numeric', 'real', 'bit'
+        ], true);
+    }
+
+    /**
+     * Serialize a single value for SQL export using column type info.
+     */
+    public static function quoteExportValue($pdo, $value, $mysqlType) {
+        if ($value === null) {
+            return 'NULL';
+        }
+        if (self::isNumericType($mysqlType)) {
+            return $value;
+        }
+        // Manual quoting: only escape what a single-quoted MySQL string literal
+        // actually requires. PDO::quote() also escapes double quotes which causes
+        // backslashes to be stored literally on reimport.
+        $escaped = str_replace(
+            ['\\',   "'",  "\0"],
+            ['\\\\', "''", ''],
+            $value
+        );
+        return "'" . $escaped . "'";
+    }
+
     public static function exportTableAsSQL($pdo, $table) {
         $sql = "-- Export of table: $table\n\n";
         
@@ -365,7 +399,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $idColumn = $_POST['id_column'] ?? 'id';
         $columns = $_POST['columns'] ?? [];
         $values = $_POST['values'] ?? [];
-        
+        $nullFields = $_POST['null_fields'] ?? [];  // columns explicitly set to NULL
+
+        // Convert any explicitly-nulled fields to actual null
+        foreach ($columns as $i => $colName) {
+            if (in_array($colName, $nullFields)) {
+                $values[$i] = null;
+            }
+        }
+
         $sets = array_map(function($c) { return "`" . DbTool::escapeIdentifier($c) . "` = ?"; }, $columns);
         $values[] = $id;
         
@@ -496,12 +538,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if (!empty($rows)) {
                 $dump .= "-- Data for `$table`\n";
-                foreach ($rows as $r) {
-                    $cols = array_map(function($c) { return "`$c`"; }, array_keys($r));
-                    $vals = array_map(function($v) use ($currentPdo) {
-                        return $v === null ? "NULL" : $currentPdo->quote($v);
-                    }, array_values($r));
-                    $dump .= "INSERT INTO `$table` (" . implode(",", $cols) . ") VALUES (" . implode(",", $vals) . ");\n";
+                // Build column name list and type map in one pass
+                $colMeta = DbTool::getTableInfo($currentPdo, $table);
+                $typeMap = [];
+                foreach ($colMeta as $m) { $typeMap[$m['Field']] = $m['Type']; }
+                $colNames = array_map(function($c) { return "`$c`"; }, array_keys($rows[0]));
+                $colList  = implode(', ', $colNames);
+                $chunks = array_chunk($rows, EXPORT_CHUNK_SIZE);
+                foreach ($chunks as $chunk) {
+                    $valueGroups = array_map(function($r) use ($currentPdo, $typeMap) {
+                        $vals = array_map(function($v, $col) use ($currentPdo, $typeMap) {
+                            return DbTool::quoteExportValue($currentPdo, $v, $typeMap[$col] ?? 'varchar');
+                        }, array_values($r), array_keys($r));
+                        return "(" . implode(', ', $vals) . ")";
+                    }, $chunk);
+                    $dump .= "INSERT INTO `$table` ($colList) VALUES\n  " . implode(",\n  ", $valueGroups) . ";\n";
                 }
                 $dump .= "\n";
             }
@@ -738,12 +789,22 @@ if ($postAction === 'execute_multi_export') {
                             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             
                             if (!empty($rows)) {
-                                foreach ($rows as $row) {
-                                    $values = array_map(function($v) use ($currentPdo) {
-                                        return $v === null ? 'NULL' : $currentPdo->quote($v);
-                                    }, $row);
-                                    
-                                    $sql .= "INSERT INTO `" . DbTool::escapeIdentifier($table) . "` VALUES (" . implode(', ', $values) . ");\n";
+                                $colMeta = DbTool::getTableInfo($currentPdo, $table);
+                                $typeMap = [];
+                                foreach ($colMeta as $m) { $typeMap[$m['Field']] = $m['Type']; }
+                                $colNames = array_map(function($c) {
+                                    return "`" . DbTool::escapeIdentifier($c) . "`";
+                                }, array_keys($rows[0]));
+                                $colList = implode(', ', $colNames);
+                                $chunks = array_chunk($rows, EXPORT_CHUNK_SIZE);
+                                foreach ($chunks as $chunk) {
+                                    $valueGroups = array_map(function($row) use ($currentPdo, $typeMap) {
+                                        $vals = array_map(function($v, $col) use ($currentPdo, $typeMap) {
+                                            return DbTool::quoteExportValue($currentPdo, $v, $typeMap[$col] ?? 'varchar');
+                                        }, array_values($row), array_keys($row));
+                                        return "(" . implode(', ', $vals) . ")";
+                                    }, $chunk);
+                                    $sql .= "INSERT INTO `" . DbTool::escapeIdentifier($table) . "` ($colList) VALUES\n  " . implode(",\n  ", $valueGroups) . ";\n";
                                 }
                                 $sql .= "\n";
                             }
@@ -781,20 +842,29 @@ if ($postAction === 'execute_multi_export') {
                         }
                     }
                     
-                    // Export data (if selected)
+                    // Export data
                     if (in_array($table, $dataTables)) {
                         try {
                             $stmt = $currentPdo->query("SELECT * FROM `" . DbTool::escapeIdentifier($table) . "`");
                             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             
                             if (!empty($rows)) {
-                                $sql .= "-- Data from view (INSERT statements)\n";
-                                foreach ($rows as $row) {
-                                    $values = array_map(function($v) use ($currentPdo) {
-                                        return $v === null ? 'NULL' : $currentPdo->quote($v);
-                                    }, $row);
-                                    
-                                    $sql .= "INSERT INTO `" . DbTool::escapeIdentifier($table) . "` VALUES (" . implode(', ', $values) . ");\n";
+                                $colMeta = DbTool::getTableInfo($currentPdo, $table);
+                                $typeMap = [];
+                                foreach ($colMeta as $m) { $typeMap[$m['Field']] = $m['Type']; }
+                                $colNames = array_map(function($c) {
+                                    return "`" . DbTool::escapeIdentifier($c) . "`";
+                                }, array_keys($rows[0]));
+                                $colList = implode(', ', $colNames);
+                                $chunks = array_chunk($rows, EXPORT_CHUNK_SIZE);
+                                foreach ($chunks as $chunk) {
+                                    $valueGroups = array_map(function($row) use ($currentPdo, $typeMap) {
+                                        $vals = array_map(function($v, $col) use ($currentPdo, $typeMap) {
+                                            return DbTool::quoteExportValue($currentPdo, $v, $typeMap[$col] ?? 'varchar');
+                                        }, array_values($row), array_keys($row));
+                                        return "(" . implode(', ', $vals) . ")";
+                                    }, $chunk);
+                                    $sql .= "INSERT INTO `" . DbTool::escapeIdentifier($table) . "` ($colList) VALUES\n  " . implode(",\n  ", $valueGroups) . ";\n";
                                 }
                                 $sql .= "\n";
                             }
@@ -3631,6 +3701,9 @@ if ($action === 'export' && $table) {
                 </div>
                 <a href="?db=<?= $_GET['db'] ?? 'main' ?>&action=browse&table=<?= urlencode($table) ?>" class="btn btn-secondary">Back to Table</a>
             <?php else: ?>
+            
+            
+
                 <div class="section">
                     <h2 class="section-header">Edit Row: <?= htmlspecialchars($table) ?></h2>
                     <div class="card">
@@ -3639,9 +3712,30 @@ if ($action === 'export' && $table) {
                             <input type="hidden" name="id_column" value="<?= htmlspecialchars($primaryKey) ?>">
                             
                             <div class="card-body">
+                            
+                            
+                            
+                            
+                            
+                            
+                            
+                            
+                            
+                            
+
                                 <?php foreach ($columns as $col): ?>
+                                    <?php
+                                    $value        = $rowData[$col['Field']];
+                                    $isReadonly   = ($col['Key'] === 'PRI' || $col['Extra'] === 'auto_increment');
+                                    $isNullable   = ($col['Null'] === 'YES');
+                                    $isCurrentlyNull = ($value === null);
+                                    $fieldId  = 'field_'  . htmlspecialchars($col['Field']);
+                                    $nullCbId = 'null_cb_' . htmlspecialchars($col['Field']);
+                                    $hiddenId = 'hidden_'  . htmlspecialchars($col['Field']);
+                                    $displayValue = $isCurrentlyNull ? '' : ($value ?? '');
+                                    ?>
                                     <div class="form-group">
-                                        <label for="field_<?= htmlspecialchars($col['Field']) ?>" class="form-label">
+                                        <label for="<?= $fieldId ?>" class="form-label">
                                             <?= htmlspecialchars($col['Field']) ?>
                                             <span style="color: rgba(var(--text-rgb), 0.5); font-size: 0.85rem;">
                                                 (<?= htmlspecialchars($col['Type']) ?>)
@@ -3650,60 +3744,124 @@ if ($action === 'export' && $table) {
                                                 <span class="badge badge-blue" style="font-size: 0.7rem;">PRIMARY KEY</span>
                                             <?php endif; ?>
                                         </label>
-                                        
-                                        <?php 
-                                        $value = $rowData[$col['Field']];
-                                        $disabled = ($col['Key'] === 'PRI' || $col['Extra'] === 'auto_increment') ? 'readonly' : '';
-                                        ?>
-                                        
-                                        <?php if (strpos($col['Type'], 'text') !== false || strpos($col['Type'], 'blob') !== false): ?>
-                                            <textarea 
-                                                id="field_<?= htmlspecialchars($col['Field']) ?>" 
-                                                name="values[]" 
-                                                class="form-control"
-                                                <?= $disabled ?>
-                                            ><?= htmlspecialchars($value ?? '') ?></textarea>
-                                        <?php elseif (strpos($col['Type'], 'int') !== false): ?>
-                                            <input 
-                                                type="number" 
-                                                id="field_<?= htmlspecialchars($col['Field']) ?>" 
-                                                name="values[]" 
-                                                class="form-control"
-                                                value="<?= htmlspecialchars($value ?? '') ?>"
-                                                <?= $disabled ?>
-                                            >
-                                        <?php elseif (strpos($col['Type'], 'datetime') !== false): ?>
-                                            <input 
-                                                type="datetime-local" 
-                                                id="field_<?= htmlspecialchars($col['Field']) ?>" 
-                                                name="values[]" 
-                                                class="form-control"
-                                                value="<?= $value ? date('Y-m-d\TH:i', strtotime($value)) : '' ?>"
-                                                <?= $disabled ?>
-                                            >
-                                        <?php elseif (strpos($col['Type'], 'date') !== false): ?>
-                                            <input 
-                                                type="date" 
-                                                id="field_<?= htmlspecialchars($col['Field']) ?>" 
-                                                name="values[]" 
-                                                class="form-control"
-                                                value="<?= htmlspecialchars($value ?? '') ?>"
-                                                <?= $disabled ?>
-                                            >
-                                        <?php else: ?>
-                                            <input 
-                                                type="text" 
-                                                id="field_<?= htmlspecialchars($col['Field']) ?>" 
-                                                name="values[]" 
-                                                class="form-control"
-                                                value="<?= htmlspecialchars($value ?? '') ?>"
-                                                <?= $disabled ?>
-                                            >
+
+                                        <?php if ($isNullable && !$isReadonly): ?>
+                                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+                                                <input
+                                                    type="checkbox"
+                                                    id="<?= $nullCbId ?>"
+                                                    name="null_fields[]"
+                                                    value="<?= htmlspecialchars($col['Field']) ?>"
+                                                    class="form-check-input null-checkbox"
+                                                    data-target="<?= $fieldId ?>"
+                                                    data-hidden="<?= $hiddenId ?>"
+                                                    <?= $isCurrentlyNull ? 'checked' : '' ?>
+                                                    style="margin: 0; cursor: pointer;"
+                                                >
+                                                <label for="<?= $nullCbId ?>" style="margin: 0; font-size: 0.85rem; color: rgba(var(--text-rgb), 0.6); cursor: pointer; font-style: italic;">
+                                                    NULL
+                                                </label>
+                                            </div>
                                         <?php endif; ?>
-                                        
+
+                                        <?php if (strpos($col['Type'], 'text') !== false || strpos($col['Type'], 'blob') !== false): ?>
+                                            <textarea
+                                                id="<?= $fieldId ?>"
+                                                class="form-control null-aware-input"
+                                                <?= $isReadonly ? 'readonly' : '' ?>
+                                                <?= ($isNullable && $isCurrentlyNull) ? 'style="opacity:0.35;"' : '' ?>
+                                            ><?= htmlspecialchars($displayValue) ?></textarea>
+                                            <textarea
+                                                id="<?= $hiddenId ?>"
+                                                name="values[]"
+                                                style="display:none;"
+                                            ><?= htmlspecialchars($displayValue) ?></textarea>
+
+                                        <?php elseif (strpos($col['Type'], 'int') !== false): ?>
+                                            <input
+                                                type="number"
+                                                id="<?= $fieldId ?>"
+                                                class="form-control null-aware-input"
+                                                value="<?= htmlspecialchars($displayValue) ?>"
+                                                <?= $isReadonly ? 'readonly' : '' ?>
+                                                <?= ($isNullable && $isCurrentlyNull) ? 'style="opacity:0.35;"' : '' ?>
+                                            >
+                                            <input type="hidden" id="<?= $hiddenId ?>" name="values[]" value="<?= htmlspecialchars($displayValue) ?>">
+
+                                        <?php elseif (strpos($col['Type'], 'datetime') !== false): ?>
+                                            <input
+                                                type="datetime-local"
+                                                id="<?= $fieldId ?>"
+                                                class="form-control null-aware-input"
+                                                value="<?= ($value && !$isCurrentlyNull) ? date('Y-m-d\TH:i', strtotime($value)) : '' ?>"
+                                                <?= $isReadonly ? 'readonly' : '' ?>
+                                                <?= ($isNullable && $isCurrentlyNull) ? 'style="opacity:0.35;"' : '' ?>
+                                            >
+                                            <input type="hidden" id="<?= $hiddenId ?>" name="values[]" value="<?= ($value && !$isCurrentlyNull) ? date('Y-m-d\TH:i', strtotime($value)) : '' ?>">
+
+                                        <?php elseif (strpos($col['Type'], 'date') !== false): ?>
+                                            <input
+                                                type="date"
+                                                id="<?= $fieldId ?>"
+                                                class="form-control null-aware-input"
+                                                value="<?= htmlspecialchars($displayValue) ?>"
+                                                <?= $isReadonly ? 'readonly' : '' ?>
+                                                <?= ($isNullable && $isCurrentlyNull) ? 'style="opacity:0.35;"' : '' ?>
+                                            >
+                                            <input type="hidden" id="<?= $hiddenId ?>" name="values[]" value="<?= htmlspecialchars($displayValue) ?>">
+
+                                        <?php elseif (strpos($col['Type'], 'enum') !== false): ?>
+                                            <?php
+                                            // Parse enum values from type string e.g. enum('a','b','c')
+                                            preg_match("/^enum\((.+)\)$/i", $col['Type'], $enumMatch);
+                                            $enumOptions = [];
+                                            if (!empty($enumMatch[1])) {
+                                                preg_match_all("/'([^']+)'/", $enumMatch[1], $enumVals);
+                                                $enumOptions = $enumVals[1] ?? [];
+                                            }
+                                            ?>
+                                            <select
+                                                id="<?= $fieldId ?>"
+                                                class="form-control null-aware-input"
+                                                <?= $isReadonly ? 'disabled' : '' ?>
+                                                <?= ($isNullable && $isCurrentlyNull) ? 'style="opacity:0.35;"' : '' ?>
+                                            >
+                                                <?php if ($isNullable): ?>
+                                                    <option value=""></option>
+                                                <?php endif; ?>
+                                                <?php foreach ($enumOptions as $opt): ?>
+                                                    <option value="<?= htmlspecialchars($opt) ?>" <?= ($displayValue === $opt) ? 'selected' : '' ?>>
+                                                        <?= htmlspecialchars($opt) ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <input type="hidden" id="<?= $hiddenId ?>" name="values[]" value="<?= htmlspecialchars($displayValue) ?>">
+
+                                        <?php else: ?>
+                                            <input
+                                                type="text"
+                                                id="<?= $fieldId ?>"
+                                                class="form-control null-aware-input"
+                                                value="<?= htmlspecialchars($displayValue) ?>"
+                                                <?= $isReadonly ? 'readonly' : '' ?>
+                                                <?= ($isNullable && $isCurrentlyNull) ? 'style="opacity:0.35;"' : '' ?>
+                                            >
+                                            <input type="hidden" id="<?= $hiddenId ?>" name="values[]" value="<?= htmlspecialchars($displayValue) ?>">
+                                        <?php endif; ?>
+
                                         <input type="hidden" name="columns[]" value="<?= htmlspecialchars($col['Field']) ?>">
                                     </div>
                                 <?php endforeach; ?>
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
                             </div>
                             <div class="card-footer flex-gap">
                                 <button type="submit" class="btn btn-primary">Save Changes</button>
@@ -3712,6 +3870,13 @@ if ($action === 'export' && $table) {
                         </form>
                     </div>
                 </div>
+
+                
+                
+                
+                
+                
+                
             <?php endif; ?>
 
         <?php endif; ?>
@@ -3720,6 +3885,57 @@ if ($action === 'export' && $table) {
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         
+
+        // Sync ALL visible inputs to their hidden counterparts on every change.
+        // This covers both nullable fields (which also have the null-checkbox
+        // listener below) and non-nullable fields (which only have this).
+        document.querySelectorAll('.null-aware-input').forEach(function(input) {
+            const hiddenId = 'hidden_' + input.id.replace(/^field_/, '');
+            const hidden = document.getElementById(hiddenId);
+            if (!hidden) return;
+
+            function sync() {
+                hidden.value = input.value;
+            }
+
+            input.addEventListener('input', sync);
+            input.addEventListener('change', sync); // covers select and date pickers
+        });
+
+        // NULL checkbox <-> input bidirectional behavior (edit form)
+        document.querySelectorAll('.null-checkbox').forEach(function(cb) {
+            const targetId = cb.dataset.target;
+            const hiddenId = cb.dataset.hidden;
+            const input = document.getElementById(targetId);
+            const hidden = document.getElementById(hiddenId);
+            if (!input) return;
+
+            cb.addEventListener('change', function() {
+                if (this.checked) {
+                    input.style.opacity = '0.35';
+                    input.value = '';
+                    if (hidden) hidden.value = '';
+                } else {
+                    input.style.opacity = '';
+                    input.focus();
+                }
+            });
+
+            input.addEventListener('input', function() {
+                if (hidden) hidden.value = this.value;
+                if (this.value !== '' && cb.checked) {
+                    cb.checked = false;
+                    input.style.opacity = '';
+                }
+            });
+
+            input.addEventListener('change', function() {
+                if (hidden) hidden.value = this.value;
+            });
+        });
+
+
+
         // Close export menu when clicking outside
         document.addEventListener('click', function(e) {
             const exportMenu = document.getElementById('exportMenu');
@@ -3932,7 +4148,7 @@ if ($action === 'export' && $table) {
     </script>
 
 <?php 
-    //require "floatool.php";
+    //require_once "forge_tool.php";
     //echo $eruda; 
 ?>
 

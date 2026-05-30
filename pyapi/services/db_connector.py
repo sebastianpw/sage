@@ -113,7 +113,7 @@ def _get_cached_connection(cache_key: str) -> Optional[mysql.connector.MySQLConn
     return None
 
 
-def get_db_connection(name: Optional[str] = None, env_key: Optional[str] = None) -> Optional[mysql.connector.MySQLConnection]:
+def get_db_connection(name: Optional[str] = None, env_key: Optional[str] = None, use_cache: bool = True) -> Optional[mysql.connector.MySQLConnection]:
     """
     Return a mysql.connector connection.
 
@@ -155,9 +155,10 @@ def get_db_connection(name: Optional[str] = None, env_key: Optional[str] = None)
     cache_key = env_key_to_use
 
     # return cached connection if alive
-    cached = _get_cached_connection(cache_key)
-    if cached:
-        return cached
+    if use_cache:
+        cached = _get_cached_connection(cache_key)
+        if cached:
+            return cached
 
     # parse and open connection
     params = _build_params_for_env_key(env_key_to_use)
@@ -166,7 +167,7 @@ def get_db_connection(name: Optional[str] = None, env_key: Optional[str] = None)
         return None
 
     conn = _connect_with_params(params)
-    if conn:
+    if conn and use_cache:
         _CONNECTIONS[cache_key] = conn
     return conn
 

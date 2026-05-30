@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAGE v1.1 Release Notes</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        h1 {
+            text-align: center;
+            border-bottom: 2px solid #eaeaea;
+            padding-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            font-size: 1.2em;
+            color: #666;
+            margin-top: -10px;
+            margin-bottom: 40px;
+            font-weight: 300;
+        }
+        .highlight-box {
+            background-color: #f8f9fa;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .model-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        .model-list li {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        .creator-link {
+            display: inline-block;
+            margin-top: 5px;
+            font-size: 0.9em;
+            color: #007bff;
+            text-decoration: none;
+        }
+        .creator-link:hover {
+            text-decoration: underline;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 2px solid #eaeaea;
+            color: #555;
+        }
+        code {
+            background-color: #f1f1f1;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>SAGE v1.1 — The Notebooks & Styles Update</h1>
+    <p class="subtitle">The next step of Free Open Source AI Creation Engine.</p>
+
+    <p>Hello everyone!</p>
+
+    <p>It has been an intense journey since the first stable release of <strong>SAGE v1.0</strong>. I have been heads-down working on expanding what SAGE can do, specifically focusing on integrating <strong>new external notebooks</strong> to bring a massive array of new visual capabilities to your local environment.</p>
+
+    <p>For the <strong>SAGE v1.1</strong> release, I want to take a step back from the technical details to focus on the community that makes this possible. While SAGE provides the orchestration and the engine, the fuel comes from the incredible open-source community.</p>
+
+    <div class="highlight-box">
+        <h3>🚀 Hybrid Power: External APIs & Generators</h3>
+        <p>SAGE is not just about local generation. This release reinforces our hybrid architecture:</p>
+        <ul>
+            <li><strong>Pollinations.ai Integration:</strong> A true game-changer for SAGE users. We now fully support Pollinations for high-speed external image generation, allowing you to create without taxing your local hardware.</li>
+            <li><strong>AI Text & Chat:</strong> SAGE now leverages external APIs for intelligent text operations, enabling AI-assisted prompt creation, brainstorming, and chat functionalities directly within the app.</li>
+        </ul>
+    </div>
+
+    <h3>Standing on the Shoulders of Giants</h3>
+
+    <p>We must first acknowledge the visionaries at <strong>Stability AI</strong>. As the initiators of Stable Diffusion and the creators of <strong>SDXL Turbo</strong>, their generosity in providing open-source foundation models is the bedrock upon which SAGE is built. Their work is beyond exceptional, and their commitment to open access is a generous gift to creators everywhere.</p>
+
+    <p>I also want to shine a spotlight on <strong>John6666</strong> on Hugging Face. Even though he did not create the models himself, he serves as a vital pillar of the community by transferring and converting countless models for access via Hugging Face diffusers. Thank you, John, for being the bridge that connects us to these resources.</p>
+
+    <h3>The Architects of Our Dreams</h3>
+
+    <p>The new anime capabilities in SAGE v1.1 are powered by specific models created by talented artists and engineers. I highly encourage you to visit their profiles, download their models, and support their work.</p>
+
+    <ul class="model-list">
+        <li>
+            <strong>Animagine XL 3.1</strong> — Created by <strong>CagliostroLab</strong><br>
+            <a href="https://civitai.com/user/CagliostroLab" class="creator-link" target="_blank">👉 Visit Profile on Civitai</a>
+        </li>
+        <li>
+            <strong>CounterfeitXL</strong> — Created by <strong>rqdwdw</strong> (gsdf)<br>
+            <a href="https://civitai.com/user/rqdwdw" class="creator-link" target="_blank">👉 Visit Profile on Civitai</a>
+        </li>
+        <li>
+            <strong>AbyssOrangeMix3</strong> — Created by <strong>WarriorMama777</strong><br>
+            <a href="https://civitai.com/user/WarriorMama777" class="creator-link" target="_blank">👉 Visit Profile on Civitai</a>
+        </li>
+        <li>
+            <strong>Pastel-Mix</strong> — Created by <strong>andite</strong><br>
+            <a href="https://civitai.com/user/andite" class="creator-link" target="_blank">👉 Visit Profile on Civitai</a>
+        </li>
+        <li>
+            <strong>MeinaXL</strong> — Created by <strong>Meina</strong><br>
+            <a href="https://civitai.com/user/Meina" class="creator-link" target="_blank">👉 Visit Profile on Civitai</a>
+        </li>
+        <li>
+            <strong>Nova Anime XL & Nova Orange</strong> — Created by <strong>Crody</strong><br>
+            <a href="https://civitai.com/user/Crody" class="creator-link" target="_blank">👉 Visit Profile on Civitai</a>
+        </li>
+        <li>
+            <strong>Speciosa Anime</strong> — Created by <strong>Oraculum</strong><br>
+            <a href="https://civitai.com/user/Oraculum" class="creator-link" target="_blank">👉 Visit Profile on Civitai</a>
+        </li>
+        <li>
+            <strong>AAM XL (Anime Mix)</strong> — Created by <strong>cookey39</strong><br>
+            <a href="https://civitai.com/user/cookey39" class="creator-link" target="_blank">👉 Visit Profile on Civitai</a>
+        </li>
+        <li>
+            <strong>SoteMix</strong> — Created by <strong>Disty0</strong><br>
+            <a href="https://civitai.com/user/Disty0" class="creator-link" target="_blank">👉 Visit Profile on Civitai</a>
+        </li>
+        <li>
+            <strong>Osenayan Mix</strong> — Created by <strong>Duskfallcrew</strong><br>
+            <a href="https://civitai.com/user/Duskfallcrew" class="creator-link" target="_blank">👉 Visit Profile on Civitai</a>
+        </li>
+        <li>
+            <strong>MIX-Pro-V4</strong> — Created by <strong>P317cm</strong><br>
+            <a href="https://civitai.com/user/P317cm" class="creator-link" target="_blank">👉 Visit Profile on Civitai</a>
+        </li>
+        <li>
+            <strong>TMND-Mix</strong> — Created by <strong>gxf159357233</strong><br>
+            <a href="https://civitai.com/user/gxf159357233" class="creator-link" target="_blank">👉 Visit Profile on Civitai</a>
+        </li>
+    </ul>
+
+    <h3>Licenses & Permissions</h3>
+    <p>Respecting the licenses of these open-source tools is vital for the ecosystem. Below are the licenses for the core technologies and models used in this update:</p>
+
+    <ul>
+        <li>
+            <strong>Stable Diffusion XL 1.0 (Base)</strong> — <em>CreativeML Open RAIL++-M</em><br>
+            <a href="https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/main/LICENSE.md" target="_blank">Read License on Hugging Face</a>
+        </li>
+        <li>
+            <strong>SDXL Turbo (Stability AI)</strong> — <em>STABILITY AI NON-COMMERCIAL RESEARCH COMMUNITY LICENSE</em><br>
+            <a href="https://huggingface.co/stabilityai/sdxl-turbo/blob/main/LICENSE" target="_blank">Read License on Hugging Face</a>
+        </li>
+        <li>
+            <strong>Animagine XL 3.1</strong> — <em>Fair AI Public License 1.0-SD</em><br>
+            <a href="https://huggingface.co/cagliostrolab/animagine-xl-3.1/blob/main/LICENSE" target="_blank">Read License on Hugging Face</a>
+        </li>
+        <li>
+            <strong>General OpenRAIL-M (Common for SD1.5/Mixes)</strong> — <em>CreativeML Open RAIL-M</em><br>
+            <a href="https://huggingface.co/spaces/CompVis/stable-diffusion-license" target="_blank">Read License on Hugging Face</a>
+        </li>
+    </ul>
+
+    <hr>
+
+    <h3>What is SAGE?</h3>
+    <p>
+        <strong>SAGE</strong> (Storyboard Animation Generation Environment) is an open-source multimedia AI orchestration platform. 
+        It merges creative generation, development assistance, and intelligent orchestration under one cohesive system. 
+        Uniquely designed to run fully on Android via Termux, it also scales effortlessly to Linux and macOS environments.
+    </p>
+    <p>
+        SAGE transforms your device into a complete AI movie storyboard production studio. 
+        It orchestrates complex workflows via PHP and bash automation, manages projects through an intuitive web GUI, and now integrates new external notebooks for expanded stylistic capabilities. 
+        From local Stable Diffusion XL generation to high-speed external API calls via Pollinations, SAGE provides the tools to organize your visual narrative without technical barriers.
+    </p>
+
+    <div class="footer">
+        <p><strong>Build. Generate. Compose.</strong></p>
+        <p>Your creativity — no permission required.</p>
+        <p>👉 <a href="https://github.com/sebastianpw/sage">github.com/sebastianpw/sage</a></p>
+    </div>
+
+</body>
+</html>

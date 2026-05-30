@@ -1,0 +1,18 @@
+{
+    "title": "sage-flux2-klein-edit",
+    "code_file": "sage-flux2-klein-edit.ipynb",
+    "language": "python",
+    "kernel_type": "notebook",
+    "is_private": true,
+    "enable_gpu": true,
+    "enable_tpu": false,
+    "enable_internet": true,
+    "keywords": [],
+    "dataset_sources": [
+        "spw800621/sage-zrok-token"
+    ],
+    "kernel_sources": [],
+    "competition_sources": [],
+    "model_sources": [],
+    "id": "spw800621/sage-flux2-klein-edit"
+}

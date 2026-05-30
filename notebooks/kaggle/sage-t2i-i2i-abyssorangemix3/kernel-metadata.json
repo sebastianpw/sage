@@ -11,7 +11,8 @@
     "keywords": [],
     "dataset_sources": [
         "spw800621/controlnet-openpose",
-        "spw800621/abyssorangemix3"
+        "spw800621/abyssorangemix3",
+        "spw800621/sage-zrok-token"
     ],
     "kernel_sources": [],
     "competition_sources": [],

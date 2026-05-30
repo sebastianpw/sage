@@ -45,33 +45,29 @@ FRAMES_DIR_REL="${FRAMES_ROOT#$PROJECT_ROOT/public/}"      # relative to public
 GEN_SOURCE="colab"
 USE_TURBO=false             # Only affects text-to-image (Pollinations)
 
-
-
-
 ZROK_URL=$("$SCRIPT_DIR/zrok_echo.sh")
-
-
-
-
 
 DB_USER="root"
 DB_NAME=$("$SCRIPT_DIR/db_name.sh")
-MAX_RETRIES=2
+MAX_RETRIES=1
 RETRY_DELAY=2
 
 export FREEIMAGE_KEY=$(cat "$SCRIPT_DIR/../token/.freeimage_key")
 
 # -----------------------------
 # Usage / Arguments
+# UPDATED: Added Negative Prompt ($2) and Seed ($3)
 # -----------------------------
 BASE_PROMPT="$1"
-MAP_RUN_ID="$2"
-ENTITY_TYPE="$3"
-ENTITY_ID="$4"
-LIMIT="$5"
-OFFSET="$6"
-NO_STYLES="$7"
-ADD_TO_PROMPT="$8"
+NEGATIVE_PROMPT="$2"    # <--- NEW
+SEED_ARG="$3"           # <--- NEW
+MAP_RUN_ID="$4"         # Shifted
+ENTITY_TYPE="$5"        # Shifted
+ENTITY_ID="$6"          # Shifted
+LIMIT="$7"              # Shifted
+OFFSET="$8"             # Shifted
+NO_STYLES="$9"          # Shifted
+ADD_TO_PROMPT="${10}"   # Shifted
 
 # -----------------------------
 # Default values
@@ -82,7 +78,7 @@ NO_STYLES=${NO_STYLES:-0}
 # Validation
 # -----------------------------
 if [ -z "$BASE_PROMPT" ] || [ -z "$MAP_RUN_ID" ] || [ -z "$ENTITY_TYPE" ] || [ -z "$ENTITY_ID" ]; then
-  echo "Usage: $0 \"base prompt\" MAP_RUN_ID \"entity_type\" \"entity_id\" [limit] [offset] [no_styles] [add_to_prompt]"
+  echo "Usage: $0 \"base prompt\" \"neg prompt\" \"seed\" MAP_RUN_ID \"entity_type\" \"entity_id\" [limit] [offset] [no_styles] [add_to_prompt]"
   exit 1
 fi
 
@@ -180,171 +176,92 @@ for ((i=START; i<=END; i++)); do
   # -----------------------------
   # Thread-safe next frame basename (DB-driven)
   # -----------------------------
-
-
-frame_basename=$(mysql $MYSQL_ARGS -N --batch --skip-column-names -e "
-  UPDATE frame_counter
-  SET next_frame = LAST_INSERT_ID(next_frame + 1);
-  SELECT LPAD(LAST_INSERT_ID(), 7, '0');
-")
-frame_basename="frame$frame_basename"
-
+  frame_basename=$(mysql $MYSQL_ARGS -N --batch --skip-column-names -e "
+    UPDATE frame_counter
+    SET next_frame = LAST_INSERT_ID(next_frame + 1);
+    SELECT LPAD(LAST_INSERT_ID(), 7, '0');
+  ")
+  frame_basename="frame$frame_basename"
 
   #outfile="$FRAMES_DIR/$frame_basename.jpg"
   outfile="$FRAMES_DIR/$frame_basename.png"
   filename_only="$frame_basename"
   url_prompt=$(echo "$prompt" | sed -e 's/ /%20/g' -e 's/,/%2C/g')
+  url_negative=$(echo "$NEGATIVE_PROMPT" | sed -e 's/ /%20/g' -e 's/,/%2C/g')
 
+  echo "Generating image $filename_only for prompt: $prompt [style_id=$style_id]"
 
+  # ControlNet image variable; set to path or "false" if not used
+  CONTROLNET_IMAGE="false"
+  # Default ControlNet scale (can be overridden before calling)
+  CONTROLNET_SCALE=1.0  
 
-
-
-
-
-
-
-
-
-
-
-echo "Generating image $filename_only for prompt: $prompt [style_id=$style_id]"
-
-# ControlNet image variable; set to path or "false" if not used
-CONTROLNET_IMAGE="false"
-#CONTROLNET_IMAGE="pose_05.png"
-
-
-
-# Default ControlNet scale (can be overridden before calling)
-CONTROLNET_SCALE=1.0  
-
-# Determine ControlNet flags
-if [ -n "$CONTROLNET_IMAGE" ] && [ "$CONTROLNET_IMAGE" != "false" ]; then
-  USE_CONTROLNET=true
-  CONTROLNET_PARAM="-F control_image=@$CONTROLNET_IMAGE -F controlnet_scale=$CONTROLNET_SCALE"
-else
-  USE_CONTROLNET=false
-  CONTROLNET_PARAM=""
-fi
-
-
-
-
-
-attempt=1
-while [ $attempt -le $MAX_RETRIES ]; do
-  if [ "$GEN_SOURCE" = "pollinations" ]; then
-    if [ -n "$IMAGE_URL" ]; then
-      # Pollinations image-to-image
-      curl -s -L -H "Authorization: Bearer $PAI_TOKEN" \
-        "https://image.pollinations.ai/prompt/$url_prompt?model=kontext&image=$IMAGE_URL&width=1024&height=1024&nologo=true" \
-        -o "$outfile"
-    else
-      # Pollinations text-to-image
-      model_param=""
-      [ "$USE_TURBO" = true ] && model_param="&model=turbo"
-      curl -s -L -H "Authorization: Bearer $PAI_TOKEN" \
-        "https://image.pollinations.ai/prompt/$url_prompt?width=1024&height=1024&nologo=true$model_param" \
-        -o "$outfile"
-    fi
+  # Determine ControlNet flags
+  if [ -n "$CONTROLNET_IMAGE" ] && [ "$CONTROLNET_IMAGE" != "false" ]; then
+    USE_CONTROLNET=true
+    CONTROLNET_PARAM="-F control_image=@$CONTROLNET_IMAGE -F controlnet_scale=$CONTROLNET_SCALE"
   else
-    # Colab/ngrok branch
-    # negative_prompt="nudity, explicit, nsfw, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name"
-     
-    negative_prompt="nudity, nude, naked, bare, topless, underwear, panties, erotic, sexual, explicit, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name"
-
-
-
-# TODO implement seed from entity
-# optional seed; leave empty to get random
-# Optional: set manually, 0 or empty for random
-SEED=0
-
-# If SEED is empty or 0, generate random one
-if [ -z "$SEED" ] || [ "$SEED" -eq 0 ]; then
-  SEED=$(( (RANDOM << 15) | RANDOM ))
-fi
-
-# TODO all prompts use the same sees until seed is stored to make prompts reproduceable
-SEED=36
-
-
-
-
-
-if [ -n "$IMG2IMG_FILENAME" ]; then
-  # image-to-image
-#  curl -s -X POST "$ZROK_URL/generate" \
-#    -F "prompt=$prompt" \
-#    -F "negative_prompt=$negative_prompt" \
-#    -F "height=768" \
-#    -F "width=768" \
-#    -F "num_inference_steps=80" \
-#    -F "guidance_scale=10" \
-#    -F "init_image=@$IMG2IMG_FILENAME" \
-#    -F "strength=0.7" \
-#    -F "use_controlnet=$USE_CONTROLNET" \
-#    -F "seed=$SEED" \
-#    $CONTROLNET_PARAM \
-#    --output "$outfile" 
-
-
-
-curl -s -X POST "$ZROK_URL/generate" \
-    -F "prompt=$prompt" \
-    -F "negative_prompt=$negative_prompt" \
-    -F "guidance_scale=1.5" \
-    -F "num_inference_steps=8" \
-    -F "init_image=@$IMG2IMG_FILENAME" \
-    -F "seed=$SEED" \
-    --output "$outfile" 
-
-
-
-
-
-else
-  # text-to-image only
-#  curl -s -X POST "$ZROK_URL/generate" \
-#    -F "prompt=$prompt" \
-#    -F "negative_prompt=$negative_prompt" \
-#    -F "height=768" \
-#    -F "width=768" \
-#    -F "num_inference_steps=4" \
-#    -F "guidance_scale=10" \
-#    -F "use_controlnet=$USE_CONTROLNET" \
-#    -F "seed=$SEED" \
-#    $CONTROLNET_PARAM \
-#    --output "$outfile" 
-
-
-# TESTING LCM ADAPTER
-  curl -s -X POST "$ZROK_URL/generate" \
-    -F "prompt=$prompt" \
-    -F "negative_prompt=$negative_prompt" \
-    -F "height=768" \
-    -F "width=768" \
-    -F "guidance_scale=1.5" \
-    -F "num_inference_steps=6" \
-    -F "seed=$SEED" \
-    --output "$outfile"
-
-
-
-
-fi
-
-
-
+    USE_CONTROLNET=false
+    CONTROLNET_PARAM=""
   fi
 
-
-
-
-
-
-
+  attempt=1
+  while [ $attempt -le $MAX_RETRIES ]; do
     
+    # -----------------------------
+    # Determine Seed (DB or Random)
+    # -----------------------------
+    if [ -n "$SEED_ARG" ] && [ "$SEED_ARG" -ne 0 ]; then
+      SEED="$SEED_ARG"
+    else
+      SEED=$(( (RANDOM << 15) | RANDOM ))
+    fi
+    echo "Seed: $SEED"
+
+    if [ "$GEN_SOURCE" = "pollinations" ]; then
+      if [ -n "$IMAGE_URL" ]; then
+        # Pollinations image-to-image
+        # Added negative_prompt and seed
+        curl -s -L -H "Authorization: Bearer $PAI_TOKEN" \
+          "https://image.pollinations.ai/prompt/$url_prompt?model=kontext&image=$IMAGE_URL&width=1024&height=1024&nologo=true&negative_prompt=$url_negative&seed=$SEED" \
+          -o "$outfile"
+      else
+        # Pollinations text-to-image
+        model_param=""
+        [ "$USE_TURBO" = true ] && model_param="&model=turbo"
+        # Added negative_prompt and seed
+        curl -s -L -H "Authorization: Bearer $PAI_TOKEN" \
+          "https://image.pollinations.ai/prompt/$url_prompt?width=1024&height=1024&nologo=true&negative_prompt=$url_negative&seed=$SEED$model_param" \
+          -o "$outfile"
+      fi
+    else
+      # Colab/ngrok branch
+
+      if [ -n "$IMG2IMG_FILENAME" ]; then
+        # image-to-image with LCM Settings (8 steps, 1.5 guidance)
+        curl -s -X POST "$ZROK_URL/generate" \
+            -F "prompt=$prompt" \
+            -F "negative_prompt=$NEGATIVE_PROMPT" \
+            -F "guidance_scale=1.5" \
+            -F "num_inference_steps=8" \
+            -F "init_image=@$IMG2IMG_FILENAME" \
+            -F "seed=$SEED" \
+            --output "$outfile" 
+
+      else
+        # text-to-image with LCM Settings (6 steps, 1.5 guidance)
+        curl -s -X POST "$ZROK_URL/generate" \
+          -F "prompt=$prompt" \
+          -F "negative_prompt=$NEGATIVE_PROMPT" \
+          -F "height=768" \
+          -F "width=768" \
+          -F "guidance_scale=1.5" \
+          -F "num_inference_steps=6" \
+          -F "seed=$SEED" \
+          --output "$outfile"
+      fi
+
+    fi
 
     # Validate image
     ffmpeg -v error -i "$outfile" -f null - 2>/dev/null
@@ -352,6 +269,7 @@ fi
       echo "Saved valid image: $outfile"
 
       # Insert frame into DB
+      SAFE_NEG_PROMPT=$(echo "$NEGATIVE_PROMPT" | sed "s/'/''/g")
       SAFE_PROMPT=$(echo "$prompt" | sed "s/'/''/g")
       SAFE_STYLE=$(echo "$style" | sed "s/'/''/g")
       DB_IMG2IMG_FRAME_ID="NULL"
@@ -359,13 +277,16 @@ fi
       DB_IMG2IMG_PROMPT="NULL"
       [ -n "$IMG2IMG_PROMPT" ] && DB_IMG2IMG_PROMPT="'$(echo "$IMG2IMG_PROMPT" | sed "s/'/''/g")'"
 
+      # Added: seed and prompt_negative
       FRAME_ID=$(mysql $MYSQL_ARGS -N -e "
 INSERT INTO frames
-  (filename, name, prompt, entity_type, entity_id, style, style_id, map_run_id, img2img_frame_id, img2img_prompt)
+  (filename, name, prompt, prompt_negative, seed, entity_type, entity_id, style, style_id, map_run_id, img2img_frame_id, img2img_prompt)
 VALUES
   ('$FRAMES_DIR_REL/$filename_only.png',
    '$filename_only',
    '$SAFE_PROMPT',
+   '$SAFE_NEG_PROMPT',
+   $SEED,
    '$ENTITY_TYPE',
    $ENTITY_ID,
    '$SAFE_STYLE',

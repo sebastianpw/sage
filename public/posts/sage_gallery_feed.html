@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAGE Viewer - Daily Updates</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    
+    <style>
+        body { 
+            background: #0f0f0f; 
+            color: #ddd; 
+            margin: 0; 
+            padding: 0; 
+            font-family: system-ui, -apple-system, sans-serif;
+            /* CRITICAL: Prevents scroll jumping */
+            overflow-anchor: none;
+        }
+        .view-container { 
+            max-width: 1100px; 
+            margin: 0 auto; 
+            padding: 10px; 
+            min-height: 100vh;
+        }
+        
+        .topbar { 
+            display: flex; 
+            gap: 12px; 
+            align-items: center; 
+            padding: 12px 16px;
+            background: rgba(20,20,20,0.9);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            position: sticky; 
+            top: 0; 
+            z-index: 100;
+            backdrop-filter: blur(8px);
+        }
+
+        .frames-column { 
+            width: 100%; 
+            max-width: 900px; 
+            margin: 20px auto; 
+            padding-bottom: 100px;
+        }
+
+        /* FRAME & PLACEHOLDER */
+        .frame { 
+            display: block; 
+            position: relative; 
+            background: #111;
+            border-radius: 8px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3); 
+            margin-bottom: 24px;
+            min-height: 250px; 
+        }
+
+        .frame .placeholder { 
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(180deg, #161616 0%, #1a1a1a 100%);
+            z-index: 1;
+        }
+        
+        .spinner {
+            width: 30px; height: 30px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: #777;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 10px;
+        }
+        
+        .frame-info { color: #555; font-size: 11px; font-family: monospace; }
+        
+        /* IMAGE */
+        .frame img { 
+            width: 100%; 
+            height: auto; 
+            display: block; 
+            opacity: 0; 
+            transition: opacity 0.3s ease; 
+            position: relative;
+            z-index: 2; 
+            border-radius: 8px;
+        }
+        
+        .frame.loaded img { opacity: 1; }
+        .frame.loaded .placeholder { display: none; }
+
+        .status { margin-left: auto; font-size: 13px; color: #888; }
+        .btn-reset { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div class="topbar">
+        <div style="color: #ddd; font-weight: 500;">SAGE Viewer</div>
+        <div class="status" id="status">Checking for updates...</div>
+    </div>
+
+    <div class="view-container">
+        <div id="frames" class="frames-column"></div>
+        <div id="loader" style="text-align: center; padding: 20px; display: none; color: #666;">
+            <div class="spinner" style="margin: 0 auto;"></div>
+            <div style="margin-top: 10px; font-size: 12px;">Loading more...</div>
+        </div>
+    </div>
+    
+    <script>
+        // ===== CONFIGURATION =====
+        const CONFIG = {
+            owner: 'sebastianpw',
+            repo: 'sg_showcase_01',
+            path: 'frames_starlightguardians_nu',
+            batch: 30,       // How many images to load at once
+            preload: 4,      // How many images above/below to keep in memory
+            
+            // CACHE SETTINGS
+            cacheHours: 12,  // Updates are checked every 12 hours
+            cacheKey: 'sage_gallery_v3' 
+        };
+    </script>
+
+    <script>
+    (function() {
+        const state = {
+            files: [],
+            loadedCount: 0,
+            observer: null,
+            isLoading: false
+        };
+
+        const els = {
+            frames: document.getElementById('frames'),
+            status: document.getElementById('status'),
+            loader: document.getElementById('loader')
+        };
+
+        // --- 1. JUMP-FREE ENGINE (Height Locking) ---
+        function lockHeight(div, img) {
+            if (!div.style.height) {
+                const h = img.getBoundingClientRect().height;
+                if (h > 50) {
+                    div.style.height = h + 'px';
+                    div.style.minHeight = h + 'px';
+                }
+            }
+        }
+
+        function loadImage(div) {
+            const img = div.querySelector('img');
+            if (!img || div.classList.contains('loaded') || img.src) return;
+
+            img.onload = () => {
+                requestAnimationFrame(() => {
+                    lockHeight(div, img);
+                    div.classList.add('loaded');
+                });
+            };
+            
+            img.onerror = () => {
+                div.querySelector('.frame-info').textContent = 'Load Failed';
+                div.querySelector('.frame-info').style.color = '#d63384';
+            };
+
+            img.src = img.dataset.src;
+        }
+
+        function unloadImage(div) {
+            // Only unload if height is locked (prevents jumps)
+            if (!div.style.height) return;
+
+            const img = div.querySelector('img');
+            if (img && img.src) {
+                img.removeAttribute('src');
+                div.classList.remove('loaded');
+            }
+        }
+
+        // --- 2. OBSERVER (Scroll Logic) ---
+        function initObserver() {
+            state.observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const idx = parseInt(entry.target.dataset.idx);
+                        els.status.innerHTML = `${idx + 1} / ${state.files.length}`;
+                        manageMemory(idx);
+                    }
+                });
+            }, { rootMargin: '600px 0px 600px 0px' });
+        }
+
+        function manageMemory(centerIdx) {
+            const min = centerIdx - CONFIG.preload;
+            const max = centerIdx + CONFIG.preload;
+            const children = els.frames.children;
+            
+            for (let i = 0; i < children.length; i++) {
+                const div = children[i];
+                const idx = parseInt(div.dataset.idx);
+                
+                if (Math.abs(idx - centerIdx) < 50) {
+                    if (idx >= min && idx <= max) {
+                        loadImage(div);
+                    } else {
+                        unloadImage(div);
+                    }
+                }
+            }
+
+            if (centerIdx >= state.loadedCount - 8 && state.loadedCount < state.files.length) {
+                renderBatch();
+            }
+        }
+
+        // --- 3. RENDERING ---
+        function renderBatch() {
+            if (state.isLoading) return;
+            state.isLoading = true;
+            els.loader.style.display = 'block';
+
+            const start = state.loadedCount;
+            const end = Math.min(start + CONFIG.batch, state.files.length);
+            const slice = state.files.slice(start, end);
+
+            if (slice.length === 0) {
+                state.isLoading = false;
+                els.loader.style.display = 'none';
+                return;
+            }
+
+            const frag = document.createDocumentFragment();
+
+            slice.forEach((filename, i) => {
+                const globalIdx = start + i;
+                const div = document.createElement('div');
+                div.className = 'frame';
+                div.dataset.idx = globalIdx;
+                
+                const url = `https://raw.githubusercontent.com/${CONFIG.owner}/${CONFIG.repo}/main/${CONFIG.path}/${filename}`;
+
+                div.innerHTML = `
+                    <div class="placeholder">
+                        <div class="spinner"></div>
+                        <div class="frame-info">#${globalIdx + 1}</div>
+                    </div>
+                    <img data-src="${url}" loading="lazy" alt="Frame ${globalIdx}">
+                `;
+
+                state.observer.observe(div);
+                frag.appendChild(div);
+            });
+
+            els.frames.appendChild(frag);
+            state.loadedCount += slice.length;
+            state.isLoading = false;
+            els.loader.style.display = 'none';
+
+            // Force load visible items immediately
+            if (start === 0) {
+                const firstItems = els.frames.querySelectorAll('.frame');
+                for(let i=0; i<Math.min(firstItems.length, 5); i++) loadImage(firstItems[i]);
+            }
+        }
+
+        // --- 4. DATA LOADING WITH AUTO-EXPIRY ---
+        async function init() {
+            initObserver();
+            
+            try {
+                // 1. Check LocalStorage
+                const raw = localStorage.getItem(CONFIG.cacheKey);
+                let useCache = false;
+                
+                if (raw) {
+                    const data = JSON.parse(raw);
+                    const now = Date.now();
+                    const cacheAge = now - (data.ts || 0);
+                    const maxAge = CONFIG.cacheHours * 60 * 60 * 1000;
+                    
+                    // Logic: Is it valid AND is it fresh?
+                    if (Array.isArray(data.files) && cacheAge < maxAge) {
+                        console.log(`Using cache. Age: ${Math.round(cacheAge/1000/60)} mins`);
+                        state.files = data.files;
+                        useCache = true;
+                    } else {
+                        console.log("Cache expired or invalid. Fetching fresh.");
+                    }
+                }
+
+                if (useCache) {
+                    els.status.innerHTML = `${state.files.length} images (Fast Load)`;
+                    renderBatch();
+                } else {
+                    // 2. Fetch Fresh from GitHub
+                    els.status.innerHTML = 'Updating library...';
+                    const apiUrl = `https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/git/trees/main?recursive=1`;
+                    
+                    const res = await fetch(apiUrl);
+                    if (!res.ok) throw new Error(`GitHub ${res.status}`);
+                    
+                    const json = await res.json();
+                    const prefix = CONFIG.path + '/';
+                    
+                    state.files = json.tree
+                        .filter(item => item.path.startsWith(prefix) && item.path.match(/\.(jpg|png)$/i))
+                        .map(item => item.path.replace(prefix, ''))
+                        .sort((a, b) => {
+                            const na = parseInt(a.replace(/\D/g, '')) || 0;
+                            const nb = parseInt(b.replace(/\D/g, '')) || 0;
+                            return nb - na;
+                        });
+
+                    // 3. Save to Cache with Timestamp
+                    localStorage.setItem(CONFIG.cacheKey, JSON.stringify({
+                        ts: Date.now(),
+                        files: state.files
+                    }));
+
+                    els.status.innerHTML = `${state.files.length} images (Updated)`;
+                    renderBatch();
+                }
+
+            } catch (err) {
+                console.error(err);
+                els.status.innerHTML = 'Error: ' + err.message;
+                // Retry button if it fails
+                els.status.innerHTML += ` <button onclick="location.reload()" class="btn btn-sm btn-outline-light ms-2">Retry</button>`;
+            }
+        }
+
+        init();
+    })();
+    </script>
+</body>
+</html>

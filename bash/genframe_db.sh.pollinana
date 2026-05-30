@@ -54,21 +54,24 @@ DB_USER="root"
 #DB_NAME=$("$(dirname "$0")/db_name.sh")
 DB_NAME=$("$SCRIPT_DIR/db_name.sh")
 MAX_RETRIES=3
-RETRY_DELAY=2
+RETRY_DELAY=3
 
 export FREEIMAGE_KEY=$(cat "$SCRIPT_DIR/../token/.freeimage_key")
 
 # -----------------------------
 # Usage / Arguments
+# CHANGED: Added Negative Prompt ($2) and Seed ($3)
 # -----------------------------
 BASE_PROMPT="$1"
-MAP_RUN_ID="$2"
-ENTITY_TYPE="$3"
-ENTITY_ID="$4"
-LIMIT="$5"
-OFFSET="$6"
-NO_STYLES="$7"
-ADD_TO_PROMPT="$8"
+NEGATIVE_PROMPT="$2"
+SEED_ARG="$3"
+MAP_RUN_ID="$4"
+ENTITY_TYPE="$5"
+ENTITY_ID="$6"
+LIMIT="$7"
+OFFSET="$8"
+NO_STYLES="$9"
+ADD_TO_PROMPT="${10}"
 
 # -----------------------------
 # Default values
@@ -79,7 +82,7 @@ NO_STYLES=${NO_STYLES:-0}
 # Validation
 # -----------------------------
 if [ -z "$BASE_PROMPT" ] || [ -z "$MAP_RUN_ID" ] || [ -z "$ENTITY_TYPE" ] || [ -z "$ENTITY_ID" ]; then
-  echo "Usage: $0 \"base prompt\" MAP_RUN_ID \"entity_type\" \"entity_id\" [limit] [offset] [no_styles] [add_to_prompt]"
+  echo "Usage: $0 \"base prompt\" \"neg prompt\" \"seed\" MAP_RUN_ID \"entity_type\" \"entity_id\" ..."
   exit 1
 fi
 
@@ -246,21 +249,21 @@ frame_basename="frame$frame_basename"
   outfile="$FRAMES_DIR/$frame_basename.jpg"
   #outfile="$FRAMES_DIR/$frame_basename.png"
   filename_only="$frame_basename"
-  url_prompt=$(echo "$prompt" | sed -e 's/ /%20/g' -e 's/,/%2C/g')
+ 
+
+  # URL encode prompts
+#  url_prompt=$(echo -n "$prompt" | jq -sRr @uri)
+#  url_negative=$(echo -n "$NEGATIVE_PROMPT" | jq -sRr @uri)
 
 
-
-
-
-
-
-
-
-
+# Remove ? and % characters completely
+url_prompt=$(echo -n "$prompt" | tr -d '?%' | jq -sRr @uri)
+url_negative=$(echo -n "$NEGATIVE_PROMPT" | tr -d '?%' | jq -sRr @uri)
 
 
 
 echo "Generating image $filename_only for prompt: $prompt [style_id=$style_id]"
+echo "Negative: ${NEGATIVE_PROMPT:0:50}..."
 
 # ControlNet image variable; set to path or "false" if not used
 CONTROLNET_IMAGE="false"
@@ -280,8 +283,13 @@ else
   CONTROLNET_PARAM=""
 fi
 
-
-
+# NEW: Determine SEED
+if [ -n "$SEED_ARG" ] && [ "$SEED_ARG" -ne 0 ]; then
+  SEED="$SEED_ARG"
+else
+  SEED=$(( (RANDOM << 15) | RANDOM ))
+fi
+echo "Using Seed: $SEED"
 
 
 attempt=1
@@ -289,43 +297,30 @@ while [ $attempt -le $MAX_RETRIES ]; do
   if [ "$GEN_SOURCE" = "pollinations" ]; then
     if [ -n "$IMAGE_URL" ]; then
       # Pollinations image-to-image (supports comma-separated URLs)
+      # ADDED: &negative_prompt and &seed
       curl -s -L -H "Authorization: Bearer $PAI_TOKEN" \
-        "https://gen.pollinations.ai/image/$url_prompt?model=nanobanana&image=$IMAGE_URL&width=1024&height=1024&nologo=true" \
+        "https://gen.pollinations.ai/image/$url_prompt?model=nanobanana&image=$IMAGE_URL&width=1024&height=1024&nologo=true&negative_prompt=$url_negative&seed=$SEED" \
         -o "$outfile"
     else
       # Pollinations text-to-image
       model_param=""
       [ "$USE_TURBO" = true ] && model_param="&model=turbo"
+      # ADDED: &negative_prompt and &seed
       curl -s -L -H "Authorization: Bearer $PAI_TOKEN" \
-        "https://gen.pollinations.ai/image/$url_prompt?model=nanobanana&width=1024&height=1024&nologo=true$model_param" \
+        "https://gen.pollinations.ai/image/$url_prompt?model=nanobanana&width=1024&height=1024&nologo=true&negative_prompt=$url_negative&seed=$SEED$model_param" \
         -o "$outfile"
     fi
   else
     # Colab/ngrok branch
-    negative_prompt="nudity, curvy, big tits"
-
-
-
-
-# TODO implement seed from entity
-# optional seed; leave empty to get random
-# Optional: set manually, 0 or empty for random
-SEED=0
-
-# If SEED is empty or 0, generate random one
-if [ -z "$SEED" ] || [ "$SEED" -eq 0 ]; then
-  SEED=$(( (RANDOM << 15) | RANDOM ))
-fi
-
-# TODO all prompts use the same sees until seed is stored to make prompts reproduceable
-SEED=36
-
+    
+    # We now use the variable $NEGATIVE_PROMPT instead of hardcoding
+    # negative_prompt="nudity, curvy, big tits"
 
 if [ -n "$IMG2IMG_FILENAME" ]; then
   # image-to-image
   curl -s -X POST "$NGROK_URL/generate" \
     -F "prompt=$prompt" \
-    -F "negative_prompt=$negative_prompt" \
+    -F "negative_prompt=$NEGATIVE_PROMPT" \
     -F "height=768" \
     -F "width=768" \
     -F "num_inference_steps=125" \
@@ -340,7 +335,7 @@ else
   # text-to-image only
   curl -s -X POST "$NGROK_URL/generate" \
     -F "prompt=$prompt" \
-    -F "negative_prompt=$negative_prompt" \
+    -F "negative_prompt=$NEGATIVE_PROMPT" \
     -F "height=768" \
     -F "width=768" \
     -F "num_inference_steps=95" \
@@ -355,20 +350,14 @@ fi
 
   fi
 
-
-
-
-
-
-
-    
-
     # Validate image
     ffmpeg -v error -i "$outfile" -f null - 2>/dev/null
     if [ $? -eq 0 ]; then
       echo "Saved valid image: $outfile"
 
       # Insert frame into DB
+      # Use the passed NEGATIVE_PROMPT here
+      SAFE_NEG_PROMPT=$(echo "$NEGATIVE_PROMPT" | sed "s/'/''/g")
       SAFE_PROMPT=$(echo "$prompt" | sed "s/'/''/g")
       SAFE_STYLE=$(echo "$style" | sed "s/'/''/g")
       DB_IMG2IMG_FRAME_ID="NULL"
@@ -376,13 +365,16 @@ fi
       DB_IMG2IMG_PROMPT="NULL"
       [ -n "$IMG2IMG_PROMPT" ] && DB_IMG2IMG_PROMPT="'$(echo "$IMG2IMG_PROMPT" | sed "s/'/''/g")'"
 
+      # ADDED: seed column
       FRAME_ID=$(mysql $MYSQL_ARGS -N -e "
 INSERT INTO frames
-  (filename, name, prompt, entity_type, entity_id, style, style_id, map_run_id, img2img_frame_id, img2img_prompt)
+  (filename, name, prompt, prompt_negative, seed, entity_type, entity_id, style, style_id, map_run_id, img2img_frame_id, img2img_prompt)
 VALUES
   ('$FRAMES_DIR_REL/$filename_only.jpg',
    '$filename_only',
    '$SAFE_PROMPT',
+   '$SAFE_NEG_PROMPT',
+   $SEED,
    '$ENTITY_TYPE',
    $ENTITY_ID,
    '$SAFE_STYLE',

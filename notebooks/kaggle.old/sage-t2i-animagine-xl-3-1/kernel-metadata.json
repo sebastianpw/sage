@@ -1,0 +1,18 @@
+{
+  "title": "sage-t2i-animagine-xl-3.1",
+  "code_file": "sage-t2i-animagine-xl-3-1.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "keywords": [],
+  "dataset_sources": [
+    "spw800621/animagine-xl-3-1",
+    "spw800621/lcm-lora-sdxl"
+  ],
+  "kernel_sources": [],
+  "competition_sources": [],
+  "model_sources": []
+}

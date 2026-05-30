@@ -76,6 +76,45 @@ class PostManager {
         ]);
     }
 
+    public function duplicatePost($id) {
+        $post = $this->getPostById($id);
+        if (!$post) {
+            return false;
+        }
+
+        $newTitle = '[Copy of] ' . $post['title'];
+        $newSlug = 'copy-of-' . $post['slug'];
+
+        $sql = "INSERT INTO posts (title, slug, post_type, preview_image_url, content, media_items, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+        $stmt = $this->pdo->prepare($sql);
+        
+        $params = [
+            $newTitle,
+            $newSlug,
+            $post['post_type'],
+            $post['preview_image_url'],
+            $post['content'] ?? null,
+            $post['media_items'], // Raw JSON from DB is preserved
+            (int)($post['sort_order'] ?? 0)
+        ];
+
+        try {
+            if ($stmt->execute($params)) {
+                return $this->pdo->lastInsertId();
+            }
+        } catch (\Exception $e) {
+            // Check for duplicate entry (SQLSTATE 23000) or just fall through to retry
+        }
+
+        // Fallback: If slug already exists, append timestamp
+        $params[1] = $newSlug . '-' . time();
+        if ($stmt->execute($params)) {
+            return $this->pdo->lastInsertId();
+        }
+
+        return false;
+    }
+
     public function deletePost($id) {
         $stmt = $this->pdo->prepare("DELETE FROM posts WHERE id = ?");
         return $stmt->execute([$id]);
@@ -104,4 +143,3 @@ class PostManager {
         return $text;
     }
 }
-

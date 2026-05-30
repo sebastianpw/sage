@@ -83,65 +83,9 @@ $gearMenu = $registry->create('gear_menu', [
 ]);
 
 
-
-$actions_to_add = [
-    [
-        'label' => 'View Frame',
-        'icon' => '👁️',
-        'callback' => 'window.showFrameDetailsModal(frameId);'
-    ],
-    [
-        'label' => 'View Frame Chain',
-        'icon' => '🔗',
-        'callback' => 'window.showFrameChainInModal(frameId);'
-    ],
-    [
-        'label' => 'Import to Generative',
-        'icon' => '⚡',
-        'callback' => 'window.importGenerative(entity, entityId, frameId);'
-    ],
-    [
-        'label' => 'Edit Entity',
-        'icon' => '✏️',
-        'callback' => 'window.showEntityFormInModal(entity, entityId);'
-    ],
-    [
-        'label' => 'Edit Image',
-        'icon' => '🖌️',
-        'callback' => 'const $w = $(wrapper); ImageEditorModal.open({ entity: entity, entityId: entityId, frameId: frameId, src: $w.find(\'img\').attr(\'src\') });'
-    ],
-    [
-        'label' => 'Add to Storyboard',
-        'icon' => '🎬',
-        'callback' => 'window.selectStoryboard(frameId, $(wrapper));'
-    ],
-    [
-        'label' => 'Assign to Composite',
-        'icon' => '🧩',
-        'callback' => 'window.assignToComposite(entity, entityId, frameId);'
-    ],
-    [
-        'label' => 'Import to ControlNet Map',
-        'icon' => '☠️',
-        'callback' => 'window.importControlNetMap(entity, entityId, frameId);'
-    ],
-    [
-        'label' => 'Use Prompt Matrix',
-        'icon' => '🌌',
-        'callback' => 'window.usePromptMatrix(entity, entityId, frameId);'
-    ],
-    [
-        'label' => 'Delete Frame',
-        'icon' => '🗑️',
-        'callback' => 'window.deleteFrame(entity, entityId, frameId);'
-    ],
-];
-
-
+// Use centralized actions
 foreach ($entities_with_menu as $entity) {
-    foreach ($actions_to_add as $action) {
-        $gearMenu->addAction($entity, $action);
-    }
+    $gearMenu->addStandardActions($entity);
 }
 
 $imageEditor = $registry->create('image_editor');

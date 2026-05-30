@@ -139,7 +139,7 @@ abstract class AbstractNuGallery
                data-pswp-width="1024" 
                data-pswp-height="1024"
                title="<?= htmlspecialchars(strip_tags($captionHtml)) ?>">
-                <img src="<?= self::URL_PREFIX . $imgSrcEsc ?>" alt="">
+                <img src="<?= self::URL_PREFIX . $imgSrcEsc ?>" alt="" onload="this.parentElement.dataset.pswpWidth = this.naturalWidth; this.parentElement.dataset.pswpHeight = this.naturalHeight;">
             </a>
 
             <div class="caption" style="max-height: 50px;">
@@ -153,7 +153,16 @@ abstract class AbstractNuGallery
         <?php
         return ob_get_clean();
     }
+    
+    protected function getCrudUrl(): string {
+        require "entity_icons.php";
+        $entity = $this->getGalleryEntity();
+        return '<h2><a href="sql_crud_' . $entity . '.php">' . $entityIcons[$entity] . '</a></h2>';
+    }
 
+    
+    
+    
     /**
      * Main render method
      */
@@ -183,7 +192,7 @@ abstract class AbstractNuGallery
             <div style="padding-left: 35px;" class="gallery-main-header">
                 <?php 
                     $entity = $this->getGalleryEntity();
-                    echo '<h2><a href="sql_crud_' . $entity . '.php">' . $entityIcons[$entity] . '</a></h2>';
+                    echo $this->getCrudUrl();
                 ?>
                 <h2 class="gallery-title"><?= $this->getGalleryTitle() ?></h2>
                 <h2 class="gallery-refresh-link-wrapper"><a href="<?= $this->getGalleryUrl() ?>">↻</a></h2>
@@ -611,7 +620,7 @@ JS;
         
         <?php
         if ($this->showFloatool()) {
-            require $this->spw->getPublicPath() . "/floatool.php";
+            require_once $this->spw->getPublicPath() . "/forge_tool.php";
         }
         
         return ob_get_clean();

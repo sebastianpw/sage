@@ -11,7 +11,7 @@ $entity = isset($_GET['entity']) ? preg_replace('/[^a-z0-9_]/i', '', $_GET['enti
 // Compute FQCN dynamically
 $className = 'App\\Gallery\\' 
            . str_replace(' ', '', ucwords(str_replace('_', ' ', $entity))) 
-           . "Gallery";
+           . "NuGallery";
 
 // check class existence (no more file includes)
 if (!class_exists($className)) {

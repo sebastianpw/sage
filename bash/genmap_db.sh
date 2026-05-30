@@ -32,14 +32,15 @@ FRAMES_DIR_REL="${FRAMES_ROOT#$PROJECT_ROOT/public/}"
 # -----------------------------
 # Config
 # -----------------------------
-ZROK_URL=$("$SCRIPT_DIR/zrok_echo.sh")
+ZROK_URL=$("$SCRIPT_DIR/pyapi_echo.sh")
 #ZROK_URL="https://qbqtyxpox7an.share.zrok.io"
 DB_USER="root"
 DB_NAME=$("$SCRIPT_DIR/db_name.sh")
 MAX_RETRIES=1
 RETRY_DELAY=2
 
-VALID_TYPES=("pose" "hed" "canny" "midas" "mlsd")
+#VALID_TYPES=("pose" "hed" "canny" "midas" "mlsd")
+VALID_TYPES=("hed" "midas")
 
 # -----------------------------
 # Arguments

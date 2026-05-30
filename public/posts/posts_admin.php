@@ -28,6 +28,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         exit;
     }
 
+    // --- COPY POST ---
+    if ($_POST['action'] === 'copy' && isset($_POST['id'])) {
+        if ($postManager->duplicatePost($_POST['id'])) {
+            $_SESSION['notification'] = "Post copied successfully!";
+        } else {
+            $_SESSION['notification'] = "Failed to copy post.";
+        }
+        header('Location: posts_admin.php');
+        exit;
+    }
+
     // --- DELETE POST ---
     if ($_POST['action'] === 'delete' && isset($_POST['id'])) {
         $postManager->deletePost($_POST['id']);
@@ -53,12 +64,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $all_posts = $postManager->getAllPosts();
         $grid_data = [];
         foreach ($all_posts as $p) {
-            $grid_data[] = [
+            $item = [
                 'title' => $p['title'],
-                'file' => $p['slug'] . '.html', // Static link
-                'preview' => $p['preview_image_url']
+                'preview' => $p['preview_image_url'],
+                'type' => $p['post_type']
             ];
+
+            if ($p['post_type'] === 'url_reference') {
+                // Direct link for references
+                $media = json_decode($p['media_items'], true);
+                $data = (is_array($media) && isset($media[0])) ? $media[0] : $media;
+                $item['file'] = $data['url'] ?? '#';
+                $item['target'] = $data['target'] ?? '_self';
+            } else {
+                // Static link for others
+                $item['file'] = $p['slug'] . '.html';
+            }
+            $grid_data[] = $item;
         }
+
         $template = file_get_contents(PROJECT_ROOT . '/templates/post_grid.html');
         $htmlContent = str_replace('{{POSTS_JSON}}', json_encode($grid_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), $template);
         
@@ -86,13 +110,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         // 1. Generate and add index.html (grid view)
         $grid_data = [];
         foreach ($all_posts as $p) {
-            $grid_data[] = ['title' => $p['title'], 'file' => $p['slug'] . '.html', 'preview' => $p['preview_image_url']];
+            $item = [
+                'title' => $p['title'],
+                'preview' => $p['preview_image_url'],
+                'type' => $p['post_type']
+            ];
+            
+            if ($p['post_type'] === 'url_reference') {
+                $media = json_decode($p['media_items'], true);
+                $data = (is_array($media) && isset($media[0])) ? $media[0] : $media;
+                $item['file'] = $data['url'] ?? '#';
+                $item['target'] = $data['target'] ?? '_self';
+            } else {
+                $item['file'] = $p['slug'] . '.html';
+            }
+            $grid_data[] = $item;
         }
+
         $grid_template = file_get_contents(PROJECT_ROOT . '/templates/post_grid.html');
         $grid_html = str_replace('{{POSTS_JSON}}', json_encode($grid_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), $grid_template);
         $zip->addFromString('index.html', $grid_html);
 
         // 2. Generate and add each individual post HTML
+        // Note: We still generate the detail page for URL refs in case people land there, 
+        // which will just redirect them.
         foreach ($all_posts as $post) {
             $post_html = renderPostHtml($post, true); // true for static export
             $zip->addFromString($post['slug'] . '.html', $post_html);
@@ -133,10 +174,7 @@ $posts = $postManager->getAllPosts();
         } else if (theme === 'light') {
             document.documentElement.setAttribute('data-theme', 'light');
         }
-        // If no theme is set, we do nothing and let the CSS media query handle it.
-        } catch (e) {
-        // Fails gracefully
-        }
+        } catch (e) {}
     })();
     </script>
     <link rel="stylesheet" href="/css/base.css">
@@ -173,7 +211,7 @@ $posts = $postManager->getAllPosts();
                         <th>Title / Slug</th>
                         <th>Type</th>
                         <th>Preview</th>
-                        <th>Order</th><!-- NEW COLUMN HEADER -->
+                        <th>Order</th>
                         <th>Last Updated</th>
                         <th>Actions</th>
                     </tr>
@@ -187,13 +225,17 @@ $posts = $postManager->getAllPosts();
                             </td>
                             <td data-label="Type"><span class="post-type-badge"><?php echo str_replace('_', ' ', $post['post_type']); ?></span></td>
                             <td data-label="Preview"><img src="<?php echo htmlspecialchars($post['preview_image_url']); ?>" alt="Preview" style="width: 60px; height: 60px; object-fit: cover; border-radius: 4px;"></td>
-                            <!-- NEW COLUMN DATA -->
                             <td data-label="Order" style="font-weight: bold;"><?php echo (int)$post['sort_order']; ?></td>
                             <td data-label="Updated"><?php echo date('M j, Y H:i', strtotime($post['updated_at'])); ?></td>
                             <td data-label="Actions" class="action-cell">
                                 <div class="flex-gap">
                                     <a href="post_form.php?id=<?php echo $post['id']; ?>" class="btn btn-sm btn-secondary">Edit</a>
                             
+                                    <form action="posts_admin.php" method="post" style="display:inline-block; margin:0;">
+                                        <input type="hidden" name="id" value="<?php echo $post['id']; ?>">
+                                        <button type="submit" name="action" value="copy" class="btn btn-sm btn-secondary">Copy</button>
+                                    </form>
+
                                     <form action="posts_admin.php" method="post" style="display:inline-block; margin:0;">
                                         <input type="hidden" name="id" value="<?php echo $post['id']; ?>">
                                         <button type="submit" name="action" value="export_single" class="btn btn-sm btn-secondary">Export</button>
@@ -213,4 +255,3 @@ $posts = $postManager->getAllPosts();
     </div>
 </body>
 </html>
-

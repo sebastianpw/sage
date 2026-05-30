@@ -96,7 +96,7 @@ def _parse_csv_to_list(csv_text: str) -> List[Dict[str, str]]:
     return items
 
 
-def run_kaggle_command(command: Union[str, List[str]], timeout: int = 300) -> Dict[str, Any]:
+def run_kaggle_command(command: Union[str, List[str]], timeout: int = 900) -> Dict[str, Any]:
     """
     Execute a Kaggle CLI command using subprocess with an argv list (safe).
     Accepts either a string (will be split) or a list of args. Ensures KAGGLE_CONFIG_DIR

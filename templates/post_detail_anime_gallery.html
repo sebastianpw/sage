@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>{{POST_TITLE}}</title>
+
+<!-- Data: either injected inline (live/preview) or loaded from sidecar JS (static export) -->
+{{ANIME_DATA_JS}}
+
+<!-- Anime.js -->
+<script src="https://cdn.jsdelivr.net/npm/animejs@3.2.1/lib/anime.min.js"></script>
+
+<style>
+  :root {
+    --bg-deep: #020204;
+    --bg-surface: #0a0c10;
+    --accent: #7000ff;
+    --accent-glow: #00f0ff;
+    --text: #eceff4;
+    --font-ui: "Inter", system-ui, sans-serif;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--bg-deep);
+    color: var(--text);
+    font-family: var(--font-ui);
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* --- Navigation Sidebar --- */
+  nav.sidebar {
+    position: fixed;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    mix-blend-mode: difference;
+  }
+
+  nav.sidebar button {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.6);
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    padding: 0;
+    position: relative;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  nav.sidebar button::after {
+    content: attr(data-label);
+    position: absolute;
+    right: 25px;
+    top: -6px;
+    background: rgba(0, 0, 0, 0.75);
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    white-space: nowrap;
+    color: #fff;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(10px);
+    transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+    backdrop-filter: blur(4px);
+  }
+
+  nav.sidebar button.show-label::after {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  @media (hover: hover) {
+    nav.sidebar button:hover::after {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  nav.sidebar button:hover { background: #fff; }
+
+  nav.sidebar button.active {
+    background: var(--accent-glow);
+    border-color: var(--accent-glow);
+    transform: scale(1.4);
+    box-shadow: 0 0 15px var(--accent-glow);
+  }
+
+  /* --- Back Button --- */
+  .back-btn {
+    position: fixed;
+    top: 18px;
+    left: 18px;
+    z-index: 200;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(10, 12, 16, 0.75);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.75);
+    padding: 8px 14px;
+    border-radius: 99px;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-decoration: none;
+    backdrop-filter: blur(8px);
+    transition: all 0.25s ease;
+  }
+  .back-btn:hover {
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    border-color: rgba(255,255,255,0.25);
+  }
+  .back-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
+
+  /* --- Header --- */
+  header {
+    min-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: radial-gradient(circle at center, #1a1e29 0%, var(--bg-deep) 70%);
+    padding: 20px;
+    box-sizing: border-box;
+  }
+
+  h1 {
+    font-size: clamp(2.5rem, 6vw, 5rem);
+    background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 0;
+    letter-spacing: -0.03em;
+    text-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  }
+
+  p.subtitle {
+    color: var(--accent-glow);
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    font-weight: 600;
+  }
+
+  .hero-menu {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 40px;
+    max-width: 600px;
+  }
+
+  .hero-menu button {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.8);
+    padding: 10px 20px;
+    border-radius: 99px;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(5px);
+  }
+
+  .hero-menu button:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(112, 0, 255, 0.4);
+  }
+
+  .scroll-indicator {
+    margin-top: 60px;
+    opacity: 0.6;
+    animation: bounce 2s infinite;
+    cursor: pointer;
+  }
+  @keyframes bounce {
+    0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+    40% { transform: translateY(-10px); }
+    60% { transform: translateY(-5px); }
+  }
+
+  /* --- Layout --- */
+  .location-section {
+    position: relative;
+    padding: 100px 0;
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .location-header {
+    position: sticky;
+    top: 20px;
+    z-index: 10;
+    margin-bottom: 60px;
+    padding: 0 5%;
+    pointer-events: none;
+    mix-blend-mode: exclusion;
+  }
+
+  .location-header h2 {
+    font-size: clamp(3rem, 8vw, 6rem);
+    opacity: 0.25;
+    margin: 0;
+    line-height: 0.8;
+    text-transform: uppercase;
+    font-weight: 900;
+    letter-spacing: -2px;
+    color: #fff;
+  }
+
+  .gallery-grid {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15vh;
+    padding: 0 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  /* --- Frame / Card --- */
+  .frame-container {
+    position: relative;
+    width: 100%;
+    height: 60vh;
+    max-height: 800px;
+    perspective: 1000px;
+    will-change: transform;
+    cursor: pointer;
+  }
+
+  @media(min-width: 768px) {
+    .frame-container { width: 80%; }
+    .frame-container:nth-child(even) { align-self: flex-end; width: 70%; }
+  }
+
+  .frame-mask {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 4px;
+    position: relative;
+    background: #0f1219;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .frame-mask img,
+  .frame-mask video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    transform-origin: center center;
+    will-change: transform, filter;
+    display: block;
+    position: absolute;
+    top: 0; left: 0;
+  }
+
+  /* --- Video Badges & Loaders --- */
+  .type-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(112, 0, 255, 0.8);
+    color: white;
+    font-size: 10px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    backdrop-filter: blur(4px);
+    z-index: 2;
+  }
+
+  .loader {
+    width: 40px;
+    height: 40px;
+    border: 2px solid rgba(255,255,255,0.1);
+    border-top-color: rgba(255,255,255,0.8);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    z-index: 1;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    opacity: 1;
+  }
+  .loader.hidden { opacity: 0; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .meta-tag {
+    position: absolute;
+    bottom: -30px;
+    left: 0;
+    font-size: 11px;
+    color: var(--accent-glow);
+    font-family: monospace;
+    opacity: 0.6;
+    letter-spacing: 1px;
+  }
+
+  /* --- Modal --- */
+  .modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.95);
+    z-index: 999;
+    display: grid;
+    place-items: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+    backdrop-filter: blur(10px);
+  }
+  .modal.open { opacity: 1; pointer-events: all; }
+
+  .modal-content {
+    max-width: 95vw;
+    max-height: 95vh;
+    box-shadow: 0 0 30px rgba(0,0,0,0.8);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .close-hint {
+    position: absolute;
+    bottom: 20px;
+    color: rgba(255,255,255,0.5);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+
+  #error-display { color: red; padding: 20px; text-align: center; display: none; }
+</style>
+</head>
+<body>
+
+<!-- Back to gallery -->
+<a class="back-btn" href="{{BACK_TO_GRID_URL}}">
+  <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.2"/><rect x="14" y="3" width="7" height="7" rx="1.2"/><rect x="3" y="14" width="7" height="7" rx="1.2"/><rect x="14" y="14" width="7" height="7" rx="1.2"/></svg>
+  Gallery
+</a>
+
+<!-- Sidebar Navigation -->
+<nav class="sidebar" id="sidebar"></nav>
+
+<header>
+  <h1>{{POST_TITLE}}</h1>
+  <p class="subtitle">{{POST_CONTENT}}</p>
+
+  <nav id="hero-menu" class="hero-menu"></nav>
+
+  <div class="scroll-indicator" onclick="window.scrollTo({top: window.innerHeight, behavior: 'smooth'})">
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 13l5 5 5-5M7 6l5 5 5-5"/>
+    </svg>
+  </div>
+  <div id="error-display"></div>
+</header>
+
+<main id="app"></main>
+
+<div id="modal" class="modal">
+  <img id="modalImg" class="modal-content" src="" style="display:none;" />
+  <video id="modalVideo" class="modal-content" controls playsinline style="display:none;"></video>
+  <div class="close-hint">Tap outside to close</div>
+</div>
+
+<script>
+  window.addEventListener('DOMContentLoaded', function () {
+
+    var app      = document.getElementById('app');
+    var sidebar  = document.getElementById('sidebar');
+    var heroMenu = document.getElementById('hero-menu');
+    var errorBox = document.getElementById('error-display');
+    var modal    = document.getElementById('modal');
+
+    // Dependencies check
+    if (typeof anime === 'undefined' || typeof window.LOCATIONS === 'undefined') {
+      errorBox.style.display = 'block';
+      errorBox.innerHTML = 'Error: Dependencies missing. Check JS files.';
+      return;
+    }
+
+    var locationsData = window.LOCATIONS;
+    var videosData    = window.VIDEOS || {};
+    var activeElements = [];
+    var isTicking = false;
+
+    // --- Intelligent Data Merge & Distribution ---
+    function prepareData() {
+      var combinedData = {};
+      Object.keys(locationsData).forEach(function (locName) {
+        var rawImages     = locationsData[locName].slice();
+        var rawVideos     = videosData[locName] ? videosData[locName].slice() : [];
+
+        var formattedVideos = rawVideos.map(function (v) {
+          return { type: 'video', src: v.url, thumb: v.thumbnail, alt: v.title, width: 1920, height: 1080 };
+        });
+
+        if (formattedVideos.length > 0) {
+          var totalSlots = rawImages.length;
+          var numVideos  = formattedVideos.length;
+          var interval   = totalSlots / (numVideos + 1);
+          for (var i = numVideos - 1; i >= 0; i--) {
+            var targetIndex = Math.floor((i + 1) * interval);
+            rawImages.splice(targetIndex, 0, formattedVideos[i]);
+          }
+        }
+        combinedData[locName] = rawImages;
+      });
+      return combinedData;
+    }
+
+    var displayData = prepareData();
+
+    // --- Build DOM ---
+    function buildUI() {
+      Object.keys(displayData).forEach(function (locName, locIndex) {
+        var items = displayData[locName];
+
+        var section = document.createElement('section');
+        section.className = 'location-section';
+        section.id = 'loc-' + locIndex;
+
+        var header = document.createElement('div');
+        header.className = 'location-header';
+        header.innerHTML = '<h2>' + locName + '</h2>';
+        section.appendChild(header);
+
+        var grid = document.createElement('div');
+        grid.className = 'gallery-grid';
+
+        items.forEach(function (item, imgIndex) {
+          var wrapper = document.createElement('div');
+          wrapper.className = 'frame-container';
+          var flavor = Math.floor(Math.random() * 4);
+          wrapper.dataset.flavor = flavor;
+
+          var isVideo   = item.type === 'video';
+          var badgeHTML = isVideo ? '<div class="type-badge">VIDEO</div>' : '';
+          var mediaHTML = '';
+          var loaderHTML = '';
+
+          if (isVideo) {
+            loaderHTML = '<div class="loader"></div>';
+            mediaHTML  = '<video class="anim-target" poster="' + item.thumb + '" data-src="' + item.src + '" muted loop playsinline preload="none"></video>';
+          } else {
+            var isEager = (locIndex === 0 && imgIndex < 5);
+            if (isEager) {
+              mediaHTML = '<img class="anim-target" src="' + item.src + '" alt="' + item.alt + '" style="opacity:1" />';
+            } else {
+              mediaHTML = '<img class="anim-target" data-src="' + item.src + '" alt="' + item.alt + '" loading="lazy" />';
+            }
+          }
+
+          wrapper.innerHTML =
+            '<div class="frame-mask">' + mediaHTML + loaderHTML + '</div>' +
+            badgeHTML +
+            '<div class="meta-tag">' + (isVideo ? 'VID' : 'IMG') + ' :: ' + locIndex + '.' + imgIndex + '</div>';
+
+          if (isVideo) {
+            var vid  = wrapper.querySelector('video');
+            var load = wrapper.querySelector('.loader');
+            vid.addEventListener('playing', function () { load.classList.add('hidden'); });
+            vid.addEventListener('waiting', function () { load.classList.remove('hidden'); });
+            vid.addEventListener('canplay', function () { load.classList.add('hidden'); });
+          }
+
+          wrapper.addEventListener('click', function (e) {
+            e.stopPropagation();
+            openModal(item);
+          });
+
+          grid.appendChild(wrapper);
+        });
+
+        section.appendChild(grid);
+        app.appendChild(section);
+
+        // Sidebar dot
+        var dot = document.createElement('button');
+        dot.dataset.label = locName;
+        dot.onclick = function () {
+          if (dot._tooltipTimer) clearTimeout(dot._tooltipTimer);
+          dot.classList.add('show-label');
+          dot._tooltipTimer = setTimeout(function () { dot.classList.remove('show-label'); }, 2500);
+          section.scrollIntoView({ behavior: 'smooth' });
+        };
+        sidebar.appendChild(dot);
+
+        // Hero jump button
+        var jumpBtn = document.createElement('button');
+        jumpBtn.textContent = locName;
+        jumpBtn.onclick = function () { section.scrollIntoView({ behavior: 'smooth' }); };
+        heroMenu.appendChild(jumpBtn);
+      });
+    }
+
+    // --- Modal ---
+    var mImg = document.getElementById('modalImg');
+    var mVid = document.getElementById('modalVideo');
+
+    function openModal(item) {
+      if (item.type === 'video') {
+        mImg.style.display = 'none';
+        mVid.style.display = 'block';
+        mVid.src = item.src;
+        mVid.play();
+      } else {
+        mVid.style.display = 'none';
+        mVid.pause();
+        mImg.style.display = 'block';
+        mImg.src = item.src || item.thumb;
+      }
+      modal.classList.add('open');
+    }
+
+    modal.addEventListener('click', function (e) {
+      if (e.target === modal) {
+        modal.classList.remove('open');
+        mVid.pause();
+        mVid.src = '';
+      }
+    });
+
+    // --- Lazy Load & Autoplay ---
+    function initLazyLoad() {
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          var el = entry.target;
+          if (entry.isIntersecting) {
+            if (el.tagName === 'IMG' && el.dataset.src) {
+              el.src = el.dataset.src;
+              el.onload = function () { el.style.opacity = 1; };
+              el.removeAttribute('data-src');
+            } else if (el.tagName === 'VIDEO') {
+              if (el.dataset.src && !el.src) {
+                el.src = el.dataset.src;
+                el.load();
+              }
+              var p = el.play();
+              if (p !== undefined) p.catch(function () {});
+              el.style.opacity = 1;
+            }
+          } else {
+            if (el.tagName === 'VIDEO') { el.pause(); }
+          }
+        });
+      }, { rootMargin: '50% 0px' });
+
+      document.querySelectorAll('.anim-target').forEach(function (el) { observer.observe(el); });
+    }
+
+    // --- Animations ---
+    function initAnimations() {
+      var containers = document.querySelectorAll('.frame-container');
+      containers.forEach(function (container) {
+        var targetEl = container.querySelector('.anim-target');
+        var mask     = container.querySelector('.frame-mask');
+        var flavor   = parseInt(container.dataset.flavor);
+        var tl = anime.timeline({ autoplay: false, duration: 1000, easing: 'linear' });
+
+        switch (flavor) {
+          case 0:
+            tl.add({ targets: targetEl, scale: [1.6, 1.0], filter: ['blur(10px) brightness(1.5)', 'blur(0px) brightness(1)'], rotate: [5, 0], easing: 'easeOutQuad' }, 0);
+            break;
+          case 1:
+            tl.add({ targets: targetEl, translateY: ['-20%', '20%'], scale: [1.2, 1.2], easing: 'linear' }, 0);
+            tl.add({ targets: container, rotateX: [15, -15], easing: 'linear' }, 0);
+            break;
+          case 2:
+            tl.add({ targets: mask, clipPath: ['inset(20% 40%)', 'inset(0% 0%)'], easing: 'easeInOutCubic' }, 0);
+            tl.add({ targets: targetEl, scale: [1.4, 1.0], easing: 'easeOutExpo' }, 0);
+            break;
+          case 3:
+            tl.add({ targets: targetEl, rotate: [-10, 0], scale: [1.3, 1.0], easing: 'easeOutBack' }, 0);
+            tl.add({ targets: container, translateX: [-50, 0], opacity: [0.5, 1], easing: 'easeOutQuad' }, 0);
+            break;
+        }
+
+        activeElements.push({ el: container, tl: tl });
+      });
+    }
+
+    // --- Scroll Loop ---
+    function setupScrollLoop() {
+      var winH = window.innerHeight;
+      window.addEventListener('resize', function () { winH = window.innerHeight; });
+
+      function updateRects() {
+        var scrollY = window.scrollY;
+        activeElements.forEach(function (item) {
+          var r = item.el.getBoundingClientRect();
+          item.top    = r.top + scrollY;
+          item.height = r.height;
+        });
+      }
+      setTimeout(updateRects, 500);
+      window.addEventListener('resize', updateRects);
+
+      function onScroll() {
+        var scrollY = window.scrollY;
+        var center  = scrollY + (winH / 2);
+
+        // Sidebar active state
+        var headers   = document.querySelectorAll('.location-section');
+        var activeIdx = 0;
+        headers.forEach(function (h, i) { if (h.offsetTop <= center) activeIdx = i; });
+        Array.from(sidebar.children).forEach(function (btn, i) { btn.classList.toggle('active', i === activeIdx); });
+
+        // Animation scrub
+        activeElements.forEach(function (item) {
+          if (!item.height) return;
+          var start    = item.top - winH;
+          var end      = item.top - (winH * 0.2);
+          var current  = scrollY - start;
+          var progress = current / (end - start);
+          if (progress < 0) progress = 0;
+          if (progress > 1) progress = 1;
+          item.tl.seek(item.tl.duration * progress);
+        });
+        isTicking = false;
+      }
+
+      window.addEventListener('scroll', function () {
+        if (!isTicking) { window.requestAnimationFrame(onScroll); isTicking = true; }
+      }, { passive: true });
+      onScroll();
+    }
+
+    buildUI();
+    initLazyLoad();
+    initAnimations();
+    setupScrollLoop();
+  });
+</script>
+</body>
+</html>

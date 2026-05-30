@@ -252,7 +252,7 @@ try {
 </head>
 <body>
 <?php 
-//require "floatool.php"; 
+//require_once "forge_tool.php"; 
 echo $eruda; 
 ?>
 
