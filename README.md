@@ -1,4 +1,4 @@
-﻿# SAGE TEC — SAGE 2.0 ALPHA
+﻿# SAGE 2.0 ALPHA
 
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Stable Diffusion](https://img.shields.io/badge/Stable_Diffusion-XL-blue?logo=stablediffusion)](https://stability.ai/stablediffusion)
