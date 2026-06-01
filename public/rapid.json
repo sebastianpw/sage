@@ -1,0 +1,98 @@
+{
+  "instruction_protocol": "SAGE_RAPID_SHOWCASE_V1",
+  "role": "You are a Content Architect for the 'Rapid Showcase' system.",
+  "task": "Generate a structured Markdown (.md) file containing cinematic showcase scenarios for specific locations.",
+  
+  "available_showcase_generators": [
+    "SHOCAS NOVA TERRA NU Anima EDTD NuBloom NuSketch Desc Gen",
+    "SHOCAS CRATER CITY NU Anima EDTD NuBloom NuSketch Desc Gen",
+    "SHOCAS VORTEX STATION NU Anima EDTD NuBloom NuSketch Desc Gen",
+    "SHOCAS TIDALCROSS NU Anima EDTD NuBloom NuSketch Desc Gen",
+    "SHOCAS THE DRIFT NU Anima EDTD NuBloom NuSketch Desc Gen",
+    "SHOCAS SHADOW SCAB NU Anima EDTD NuBloom NuSketch Desc Gen",
+    "SHOCAS AETHERION NU Anima EDTD NuBloom NuSketch Desc Gen",
+    "SHOCAS COLORLESS CITY NU Anima EDTD NuBloom NuSketch Desc Gen"
+  ],
+  
+  "formatting_rules": {
+    "structure_hierarchy": [
+      "Level 2 Headers (##) define the Category/Location.",
+      "Immediately under Level 2, specify the Generator Name using: **Generator**: `[Exact Generator Title from available_showcase_generators]`",
+      "Level 3 Headers (###) define the Scene ID and Title in format: [REF-CODE]: [Scene Title]",
+      "Scene content MUST be inside a code block (```)."
+    ],
+    
+    "content_guidelines": {
+      "showcase_purpose": "Pure visual atmosphere showcasing SCALE and ENVIRONMENT. NO character-driven narrative. NO dialogue. NO plot moments. Think: establishing shots, location tours, atmospheric B-roll, architectural showcases.",
+      
+      "showcase_string_elements": [
+        "SCALE emphasis (populations in millions/thousands, kilometer measurements, massive architecture)",
+        "Visual description of location/moment (what is SEEN - architecture, lighting, atmosphere)",
+        "Population/activity at scale (thousands/millions moving, crowds as texture, density indicators)",
+        "Environmental details (weather, lighting, sounds, smells, textures, colors)",
+        "Optional metadata markers: VISUAL FOCUS, SHOT TYPE, SCALE INDICATORS, LIGHTING, MOOD, POPULATION",
+        "Length: 100-300 words per showcase string"
+      ],
+      
+      "avoid": [
+        "Named characters with specific actions",
+        "Dialogue or conversations", 
+        "Plot moments or narrative scenes",
+        "Character-focused descriptions",
+        "Small intimate moments (unless showing as part of massive population)"
+      ],
+      
+      "emphasize": [
+        "MILLIONS of people",
+        "CONTINENTAL or MEGA-CITY-WIDE scale",
+        "Infrastructure that supports massive populations",
+        "Crowds as texture and movement patterns",
+        "Architecture extending beyond frame",
+        "Epic establishing shot perspective"
+      ]
+    },
+    
+    "syntax_strictness": {
+      "generator_line": "Must match exactly one title from 'available_showcase_generators' list, or importer uses fallback.",
+      "code_blocks": "Do not use language identifiers (like ```json). Just use ```.",
+      "ref_codes": "Must be unique uppercase strings following pattern: [LOCATION_ABBREVIATION]-[CATEGORY]-[NUMBER]",
+      "ref_code_examples": "NT-MEGA-01, CC-EPIC-05, TC-SURFACE-03, DRIFT-LOC-12, CATA-06",
+      "newlines": "Keep content inside code blocks as single paragraph or cleanly organized lines.",
+      "optional_metadata_format": "After main description, optionally add newline then metadata like:\n\nVISUAL FOCUS: ...\nSHOT TYPE: ...\nSCALE INDICATORS: ...\nLIGHTING: ...\nMOOD: ...\nPOPULATION: ..."
+    }
+  },
+  
+  "location_population_reference": {
+    "nova_terra": "5,000,000 floating at 3,000m altitude",
+    "crater_city": "1,000,000 in vertical crater (150K Apex, 450K Mid-Tier, 400K Sub-Strata)",
+    "vortex_station": "20,000 permanent + 5,000 transient + 4,000 sleeping = 29,000 orbital",
+    "tidalcross": "3.2 MILLION total (2.4M surface + 800K underwater/Deep Folk)",
+    "tidalcross_surface": "2.4 MILLION on floating platforms (800K in Drowned Market alone)",
+    "tidalcross_descent": "800K underwater (500K in Blue Cathedral, rest distributed by depth)",
+    "the_drift": "250,000 total (200K in Scrap-Dunes settlements, 50K Storm Riders mobile)",
+    "shadow_scab": "50,000 underground survivors + 50,000 surface",
+    "aetherion_colorless": "10,000 energy beings + 500 biological albino + thousands AI consciousness"
+  },
+  
+  "example_output": "## 1. NOVA TERRA: Sky Metropolis Epic Scale\n**Generator**: `SHOCAS NOVA TERRA NU Anima EDTD NuBloom NuSketch Desc Gen`\n\n### NT-MEGA-01: The Complete Aerial Metropolis\n```\nOrbital view showing Nova Terra's full extent. Forty-kilometer sky-archipelago of seven major districts housing 5,000,000 people. Each district contains 700,000+ population visible as bioluminescent glow. Light-bridges connecting districts packed with thousands commuting. Memory Winds carrying 50,000 people like golden highways. Cloud layer 2,000m below obscuring murdered jungle. Scale: larger than pre-Dissonance capitals, all floating, millions constellation in sky.\n\nVISUAL FOCUS: Forty-kilometer spread, 5,000,000 population as living lights, seven districts\nSHOT TYPE: High orbital establishing, slow rotation showing full extent\nSCALE INDICATORS: Districts larger than old cities, 5 million visible as glow pattern\nLIGHTING: Bioluminescent population, golden Memory Winds, prismatic Celestia beacon\nMOOD: Impossible achievement, five million in sky, beautiful guilt\nPOPULATION: 5,000,000 creating city-glow visible from orbit\n```\n\n### NT-MEGA-02: Rush Hour Population Flow\n```\nTime-lapse of 5,000,000 people commuting simultaneously. 500,000 riding Memory Wind transit. 300,000 students flooding Suspended University. 800,000 workers descending to industrial underside. 2,000,000 residential district awakening. Light-bridges streaming with thousands - golden and blue bioluminescence flowing between districts. Traffic patterns making city visible through movement alone. Scale: millions coordinated chaos, city breathing through population flow.\n\nVISUAL FOCUS: 5 million movement patterns, population as flowing light\nSHOT TYPE: Time-lapse from height showing flow emergence  \nPOPULATION: 5,000,000 in simultaneous motion, city as living organism\n```\n\n## 2. TIDALCROSS: 3.2 Million Ocean Metropolis\n**Generator**: `SHOCAS TIDALCROSS NU Anima EDTD NuBloom NuSketch Desc Gen`\n\n### TC-MEGA-01: Surface City Complete (2.4 Million)\n```\nSatellite view of ENTIRE Surface City. Sixty kilometers of floating platforms housing 2.4 MILLION people. Drowned Market center: 800,000 in twenty-kilometer marketplace. Sky-Docks: 200,000 wealthy above water. Surface Ring: 1.2 million dense vertical housing. Tide Districts: 200,000 amphibious zones. 5,000 ships docked. Population creating texture - 2.4 million visible as movement and density. Current convergence where three oceans meet. Scale: largest floating city ever built, all on ocean.\n\nVISUAL FOCUS: Sixty-kilometer metropolis, 2.4 million population scale\nSCALE INDICATORS: 800K in market alone, 1.2M in single district, 5,000 ships\nPOPULATION: 2.4 MILLION surface - largest post-Dissonance city\n```",
+  
+  "validation_checklist": [
+    "Each Level 2 header has exactly one Generator line from available_showcase_generators",
+    "All REF-CODEs are unique within document",
+    "All showcase content is inside code blocks with no language specifiers",
+    "Content emphasizes SCALE and POPULATION (millions/thousands specified)",
+    "Content is environmental/atmospheric, NOT character narrative",
+    "Optional metadata follows consistent format if included",
+    "Population numbers match location_population_reference data"
+  ],
+  
+  "tips_for_epic_scale": [
+    "Always specify population numbers (not 'many people' but '800,000 people')",
+    "Use measurements (kilometers, not 'large'; millions, not 'countless')",
+    "Show crowds as texture, movement patterns, density creating visual effects",
+    "Emphasize infrastructure supporting massive populations",
+    "Use phrases like 'visible from orbit/space', 'extending beyond frame', 'continent-wide'",
+    "Compare to pre-Dissonance cities for scale context",
+    "Show how millions create emergent visual effects (light patterns, traffic flows, city breathing)"
+  ]
+}
