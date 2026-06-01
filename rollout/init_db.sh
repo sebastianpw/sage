@@ -224,6 +224,9 @@ mysql -h "$MAIN_HOST" -P "${MAIN_PORT:-3306}" -u "$MAIN_USER" -p"$MAIN_PASS" "$M
 echo "Importing data for main database $MAIN_DB..."
 mysql -h "$MAIN_HOST" -P "${MAIN_PORT:-3306}" -u "$MAIN_USER" -p"$MAIN_PASS" "$MAIN_DB" < "$SCRIPT_DIR/init_main_data.sql"
 
+echo "Importing documentations for main database $MAIN_DB..."
+mysql -h "$MAIN_HOST" -P "${MAIN_PORT:-3306}" -u "$MAIN_USER" -p"$MAIN_PASS" "$MAIN_DB" < "$SCRIPT_DIR/sage_main_docs.sql"
+
 echo "Importing dictionaries for main database $MAIN_DB..."
 mysql -h "$MAIN_HOST" -P "${MAIN_PORT:-3306}" -u "$MAIN_USER" -p"$MAIN_PASS" "$MAIN_DB" < "$SCRIPT_DIR/sage_main_dict.sql"
 

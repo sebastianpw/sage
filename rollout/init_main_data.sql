@@ -919,6 +919,17 @@ INSERT INTO `camera_perspectives` (`id`, `name`, `description`, `created_at`) VA
 (5, 'POV', 'Point-of-view shot from the subject\'s perspective', '2025-11-23 18:54:09'),
 (6, 'OVERHEAD', 'Overhead shot of the subject looking directly down from above', '2025-11-23 18:54:09');
 
+
+
+
+
+INSERT INTO `documentation_categories` (`id`, `name`, `created_at`) VALUES ('1', 'General', '2025-12-27 20:45:36');
+
+
+
+
+
+
 --
 -- Dumping data for table `forge_tool_settings`
 --
@@ -1855,7 +1866,12 @@ INSERT INTO `scheduled_tasks` (`id`, `name`, `order`, `script_path`, `args`, `sc
 (75, 'cli_translation_compose', 0, '/var/www/sage/bash/cli_translation_compose.sh', '1', NULL, NULL, '0,1,2,3,4,5,6', '2026-05-16 19:01:40', 1, NULL, 1, 60, 1, 'global', '2026-05-16 18:59:03', '2026-05-16 19:01:40', 0),
 (76, 'gfs 🎌 Factions', 9, '/var/www/sage/bash/genframes_fromdb.sh', 'factions', NULL, NULL, '0,1,2,3,4,5,6', NULL, 1, NULL, 1, 60, 1, 'entity', '2026-05-17 11:34:08', '2026-05-17 11:34:54', 0);
 
+INSERT INTO `scheduled_tasks` (`id`, `name`, `order`, `script_path`, `args`, `schedule_time`, `schedule_interval`, `schedule_dow`, `last_run`, `active`, `description`, `max_concurrent_runs`, `lock_timeout_minutes`, `require_lock`, `lock_scope`, `created_at`, `updated_at`, `run_now`) VALUES ('77', 'cli_md_curator_extract_db', '0', '/var/www/sage/bash/cli_md_curator_extract_db.sh', '1', NULL, NULL, '0,1,2,3,4,5,6', '2026-05-31 22:51:42', '1', NULL, '1', '60', '1', 'global', '2026-05-31 22:51:11', '2026-05-31 22:51:42', '0');
+INSERT INTO `scheduled_tasks` (`id`, `name`, `order`, `script_path`, `args`, `schedule_time`, `schedule_interval`, `schedule_dow`, `last_run`, `active`, `description`, `max_concurrent_runs`, `lock_timeout_minutes`, `require_lock`, `lock_scope`, `created_at`, `updated_at`, `run_now`) VALUES ('80', 'cli_overlay_compose.sh', '0', '/var/www/sage/bash/cli_overlay_compose.sh', '10', NULL, NULL, '0,1,2,3,4,5,6', '2026-05-30 14:08:00', '1', NULL, '1', '60', '1', 'global', '2026-05-21 11:47:47', '2026-05-30 14:08:00', '0');
 
+INSERT INTO `scheduled_tasks` (`id`, `name`, `order`, `script_path`, `args`, `schedule_time`, `schedule_interval`, `schedule_dow`, `last_run`, `active`, `description`, `max_concurrent_runs`, `lock_timeout_minutes`, `require_lock`, `lock_scope`, `created_at`, `updated_at`, `run_now`) VALUES ('81', 'ingest_sketches.sh', '0', '/var/www/sage/bash/ingest_sketches.sh', '10', NULL, NULL, '0,1,2,3,4,5,6', NULL, '1', NULL, '1', '60', '1', 'global', '2026-06-01 00:51:34', '2026-06-01 00:52:36', '0');
+INSERT INTO `scheduled_tasks` (`id`, `name`, `order`, `script_path`, `args`, `schedule_time`, `schedule_interval`, `schedule_dow`, `last_run`, `active`, `description`, `max_concurrent_runs`, `lock_timeout_minutes`, `require_lock`, `lock_scope`, `created_at`, `updated_at`, `run_now`) VALUES ('82', 'ingest_docs.sh', '0', '/var/www/sage/bash/ingest_docs.sh', '10', NULL, NULL, '0,1,2,3,4,5,6', NULL, '1', NULL, '1', '60', '1', 'global', '2026-06-01 00:51:41', '2026-06-01 00:53:12', '0');
+INSERT INTO `scheduled_tasks` (`id`, `name`, `order`, `script_path`, `args`, `schedule_time`, `schedule_interval`, `schedule_dow`, `last_run`, `active`, `description`, `max_concurrent_runs`, `lock_timeout_minutes`, `require_lock`, `lock_scope`, `created_at`, `updated_at`, `run_now`) VALUES ('83', 'ingest_kg.sh', '0', '/var/www/sage/bash/ingest_kg.sh', '10', NULL, NULL, '0,1,2,3,4,5,6', NULL, '1', NULL, '1', '60', '1', 'global', '2026-06-01 00:53:27', '2026-06-01 00:53:52', '0');
 
 --
 -- Dumping data for table `scheduler_heartbeat`
@@ -2144,13 +2160,15 @@ INSERT INTO `task_wrappers` (`id`, `task_id`, `name`, `summary`, `fixed_args`, `
 (41, 66, 'cli_kg_to_sketch', 'cli_kg_to_sketch_generator_db.sh', '1', '🦖', 1040, 1),
 (42, 65, 'cli_lore_to_sketch', 'cli_lore_to_sketch_generator_db.sh ', '1', '🐆', 1050, 1),
 (43, 68, 'cli_md_curator_aggregate', 'cli_md_curator_aggregate_db.sh', '1', '📑', 1070, 1),
-(44, 67, 'cli_md_curator_extract', 'cli_md_curator_extract_db.sh', '1', '🪙', 1060, 1),
+(44, 77, 'cli_md_curator_extract', 'cli_md_curator_extract_db.sh', '1', '🪙', 1060, 1),
 (45, 70, 'cli_sequence_curator.sh', 'cli_sequence_curator.sh', '10', '⚖️', 1020, 1),
 (46, 69, 'cli_auto_curate_sketches.sh', 'cli_auto_curate_sketches.sh', '10', '⚖️', 1010, 1),
 (47, 67, 'cli_sketch_tag_extractor', 'cli_sketch_tag_extractor', '1', '🔖', 1080, 1),
 (48, 71, 'cli_github_sync', 'cli_github_sync', '1', '😺', 0, 1),
 (49, 74, 'cli_narrative_sequence_compose', 'cli_narrative_sequence_compose.sh', '1', '🪶', 1075, 1),
-(50, 75, 'cli_translation_compose.sh', 'cli_translation_compose.sh', '1', '📜', 1085, 1);
+(50, 75, 'cli_translation_compose.sh', 'cli_translation_compose.sh', '1', '📜', 1085, 1),
+(51, 80, 'cli_overlay_compose.sh', 'cli_overlay_compose.sh', '1', '📜', 1086, 1);
+
 
 --
 -- Dumping data for table `video_counter`

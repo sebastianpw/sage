@@ -507,12 +507,36 @@ foreach ($tokenFiles as $key => $filename) {
     <?php require_once __DIR__ . '/forge_tool.php'; ?>
 
     <!-- ── THEATRICAL HEADER ── -->
+    
+   <div class="dashboard-header-image">
+        <img src="theatrical.jpg" alt="Starlight Guardians Theatrical Poster">
+        <div style="position:absolute; top:12px; right:16px; display:flex; gap:8px; align-items:center;">
+        
+                   
+            <a href="dashdocs.php" title="Documentation Mode" style="background: none; border: none; font-size:22px; cursor:pointer; text-decoration: none; display: flex; align-items: center; justify-content: center; height: 36px; width: 36px;">✨</a>
+            
+        
+            <button id="themeToggle" aria-pressed="false" title="Toggle theme" style="background: none; border: none; font-size:24px; cursor:pointer;">🌙</button>
+            
+            
+
+            
+            
+            
+        </div>
+    </div>
+    
+    
+    <?php /*
     <div class="dashboard-header-image">
         <img src="theatrical.jpg" alt="Starlight Guardians Theatrical Poster">
         <div style="position:absolute; top:12px; right:16px; display:flex; gap:8px; align-items:center;">
             <button id="themeToggle" aria-pressed="false" title="Toggle theme" style="background: none; border: none; font-size:24px; cursor:pointer;">🌙</button>
         </div>
     </div>
+    */
+    ?>
+    
 
     <div class="forge-layout">
         <!-- ── FORGE HEADER ── -->
@@ -592,9 +616,26 @@ foreach ($tokenFiles as $key => $filename) {
                             
                             
                             <a href="view_storyboards.php" class="link-card"><div class="link-card-title">📽️ Storyboards</div></a>
+                            
+                            
+                            
+                            
+                                                                                   
+                            <a href="sbcut.php" class="link-card"><div class="link-card-title">🔪 Storyboard Cut</div></a>
+                            
+                            
+                            
+                            
+                            
+                            
                             <a href="view_storyboards_chains.php" class="link-card"><div class="link-card-title">☍ SB Chains</div></a>
                             
                             <a href="view_storyboards_pg.php" class="link-card"><div class="link-card-title">🧨 Hot Storyboards</div></a>
+                            
+                            
+                            
+                            
+
                             
                             
                             
@@ -613,6 +654,20 @@ foreach ($tokenFiles as $key => $filename) {
                                 <a href="auto_narratives_v11.php" class="duo-button-half">🧵 Auto Sequencer</a>
                             </div>
                             
+                            
+                            
+                            
+                            <a href="narseq.php" class="link-card"><div class="link-card-title">✂️ Sequence Cut</div></a>
+                            
+                            
+                            
+                            
+                                                                                    
+                            <a href="cinemagic_editor.php" class="link-card"><div class="link-card-title">🃏 CineMagic Editor</div></a>
+                            
+                            
+                            
+                            
                             <!-- Standard Buttons -->
                             <a href="sceki/index.php" class="link-card"><div class="link-card-title">🍳 Scene Kitchen</div></a>
                             <a href="sketch_continuity_batch.php" class="link-card"><div class="link-card-title">🎩 Continuity</div></a>
@@ -625,9 +680,6 @@ foreach ($tokenFiles as $key => $filename) {
                             
                             
                             
-                            
-                                                        
-                            <a href="cinemagic_editor.php" class="link-card"><div class="link-card-title">🃏 CineMagic Editor</div></a>
                             
                             
                             <!-- Duo Buttons -->
@@ -762,6 +814,11 @@ foreach ($tokenFiles as $key => $filename) {
                     <div class="cat-content" id="cat-scripts" style="display:none;">
                         <div class="link-grid">
                         
+                        
+                        
+                        
+                            <a href="view_md_categories.php" class="link-card"><div class="link-card-title">📖 Scripts Lib</div></a>
+                            
 
                         
                             <a href="wroom.php" class="link-card"><div class="link-card-title">🏎️ Wroom</div></a>
@@ -775,9 +832,17 @@ foreach ($tokenFiles as $key => $filename) {
                             <a href="timelines.php" class="link-card"><div class="link-card-title">🛣️ Timelines</div></a>
                             
                            
+                       
+                        
+                            <a href="plunar.php" class="link-card"><div class="link-card-title">🌜 PluNar</div></a>
+                            
                         
                         
-                            <a href="view_md_categories.php" class="link-card"><div class="link-card-title">📖 Scripts Lib</div></a>
+                        
+                        
+                            
+                            
+                            
                             <a href="style_profiles_forge.php" class="link-card"><div class="link-card-title">💐 Style Profiles</div></a>
                             <a href="sketch_templates_forge.php" class="link-card"><div class="link-card-title">👨‍👩‍👧‍👦 Shot Templates</div></a>
                             <a href="dictionaries_admin.php" class="link-card"><div class="link-card-title">📚 Dictionaries</div></a>
@@ -1280,8 +1345,15 @@ foreach ($tokenFiles as $key => $filename) {
                         
                         
                         
-                        
-                        
+                       
+                            <a href="todo.php" class="link-card"><div class="link-card-title">🎫 SAGE TODOs</div></a>
+                            
+                            
+                       
+                            <a href="recipe_forge.php" class="link-card"><div class="link-card-title">🥫 Code Recipes</div></a>
+                            
+                            
+                            
                        
                        
                             <a href="sketchup.php" class="link-card"><div class="link-card-title">🍅 Sketchup</div></a>
@@ -1297,6 +1369,18 @@ foreach ($tokenFiles as $key => $filename) {
                             <a href="cinemagic_hub/index.php" class="link-card"><div class="link-card-title">🎴 Magazine Hub</div></a>
                             
                             
+                           
+                            <a href="pytoon/index.php" class="link-card"><div class="link-card-title">💥 Pytoon</div></a>
+                            
+                            
+                            
+                             
+                            <a href="mail_hub/index.php" class="link-card"><div class="link-card-title">📬 Mail Hub</div></a>
+                            
+                            
+                            
+                            
+                            
                             
                             
                             
@@ -1309,9 +1393,12 @@ foreach ($tokenFiles as $key => $filename) {
                             -->
                             
                             
-                            <a href="recipe_forge.php" class="link-card"><div class="link-card-title">🥫 Code Recipes</div></a>
+                            
+                            
                             <a href="view_json_categories.php" class="link-card"><div class="link-card-title">📟 JSON Lib</div></a>
-                            <a href="todo.php" class="link-card"><div class="link-card-title">🎫 SAGE TODOs</div></a>
+                            
+                            
+                            
                             <a href="bootstrap-icons.html" class="link-card"><div class="link-card-title">🔣 Bootstrap Icons</div></a>
                             <a href="view_md.php?category_id=1" class="link-card"><div class="link-card-title">🎓 Documentation</div></a>
                             <a href="codeboard.php" class="link-card"><div class="link-card-title">⌨️ SAGE codeboard</div></a>
