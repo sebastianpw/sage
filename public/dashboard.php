@@ -670,7 +670,7 @@ foreach ($tokenFiles as $key => $filename) {
                             
                             <!-- Standard Buttons -->
                             <a href="sceki/index.php" class="link-card"><div class="link-card-title">🍳 Scene Kitchen</div></a>
-                            <a href="sketch_continuity_batch.php" class="link-card"><div class="link-card-title">🎩 Continuity</div></a>
+                            <a href="sketch_continuity.php" class="link-card"><div class="link-card-title">🎩 Continuity</div></a>
                             <a href="view_curated_sketches_analysis.php?sort=newest" class="link-card"><div class="link-card-title">🕵️ Scene Curation</div></a>
                             
                             
