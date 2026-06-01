@@ -2083,6 +2083,23 @@ INSERT INTO `sketch_templates` (`id`, `name`, `core_idea`, `shot_type`, `camera_
 
 
 
+INSERT INTO `editorial_series` (`id`, `name`, `description`, `created_at`, `updated_at`) VALUES ('1', 'FIRST SERIES', NULL, '2025-12-30 12:35:11', '2025-12-30 12:35:11');
+INSERT INTO `editorial_seasons` (`id`, `series_id`, `number`, `name`, `created_at`, `updated_at`) VALUES ('1', '1', '1', 'SEASON ONE', '2025-12-30 12:37:26', '2025-12-30 12:37:26');
+INSERT INTO `editorial_episodes` (`id`, `season_id`, `number`, `name`, `created_at`, `updated_at`) VALUES ('1', '1', '1', 'EPISODE ONE', '2025-12-30 12:38:26', '2025-12-30 12:38:26');
+
+
+
+INSERT INTO `storyboard_categories` (`id`, `name`, `code`, `sort_order`) VALUES ('1', 'Editorial', 'editorial', '10');
+INSERT INTO `storyboard_categories` (`id`, `name`, `code`, `sort_order`) VALUES ('2', 'Locations', 'location', '20');
+INSERT INTO `storyboard_categories` (`id`, `name`, `code`, `sort_order`) VALUES ('3', 'Characters', 'character', '30');
+INSERT INTO `storyboard_categories` (`id`, `name`, `code`, `sort_order`) VALUES ('4', 'Assets & Props', 'assets', '40');
+INSERT INTO `storyboard_categories` (`id`, `name`, `code`, `sort_order`) VALUES ('5', 'Narratives', 'narrative', '50');
+INSERT INTO `storyboard_categories` (`id`, `name`, `code`, `sort_order`) VALUES ('6', 'Public Relations', 'pr', '60');
+INSERT INTO `storyboard_categories` (`id`, `name`, `code`, `sort_order`) VALUES ('7', 'Drafts & Sketches', 'drafts', '70');
+INSERT INTO `storyboard_categories` (`id`, `name`, `code`, `sort_order`) VALUES ('99', 'Misc / General', 'misc', '99');
+INSERT INTO `storyboard_categories` (`id`, `name`, `code`, `sort_order`) VALUES ('100', 'Shot Drafts', 'shotdrafts', '15');
+INSERT INTO `storyboard_categories` (`id`, `name`, `code`, `sort_order`) VALUES ('101', 'Factions', 'faction', '35');
+
 
 
 
