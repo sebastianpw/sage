@@ -34,13 +34,37 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # ---------------------------------------------------------------------------
-# Job store — in-process dict.  Survives normal operation; cleared on restart.
-# For persistence across restarts a file-backed store or SQLite can replace this.
+# Job store — file-backed dictionary to survive Uvicorn reloads in Codespaces
 # ---------------------------------------------------------------------------
 _jobs: Dict[str, dict] = {}
 _JOBS_DIR = Path(tempfile.gettempdir()) / "sage_magazine_pdf_jobs"
 _JOBS_DIR.mkdir(parents=True, exist_ok=True)
 
+def _job_dir(job_id: str) -> Path:
+    d = _JOBS_DIR / job_id
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+def _save_job(job_id: str, data: dict) -> None:
+    _jobs[job_id] = data
+    state_file = _job_dir(job_id) / "state.json"
+    try:
+        state_file.write_text(json.dumps(data))
+    except Exception as e:
+        logger.warning(f"Could not save job state to disk for {job_id}: {e}")
+
+def _get_job(job_id: str) -> Optional[dict]:
+    if job_id in _jobs:
+        return _jobs[job_id]
+    state_file = _job_dir(job_id) / "state.json"
+    if state_file.exists():
+        try:
+            data = json.loads(state_file.read_text())
+            _jobs[job_id] = data
+            return data
+        except Exception:
+            pass
+    return None
 
 # ---------------------------------------------------------------------------
 # Pydantic models (used for documentation only — actual input via Form/File)
@@ -52,21 +76,6 @@ class FrameEntry(BaseModel):
 
 
 class MagazineJobMeta(BaseModel):
-    """
-    JSON that the PHP client sends as the 'job_meta' form field.
-
-    Fields
-    ------
-    series_title      : displayed on cover / header
-    sequence_name     : episode / issue title
-    sequence_id       : DB id (stored in job record)
-    series_id         : DB id (stored in job record)
-    languages         : list of lang codes, e.g. ["en","de"]
-    asset_url_prefix  : only used as fallback label in metadata
-    frames            : ordered list of FrameEntry objects
-    cover_frame_id    : optional frame_id to use as full-bleed cover page
-    description       : optional synopsis shown on intro page
-    """
     series_title: str
     sequence_name: str
     sequence_id: int
@@ -76,20 +85,13 @@ class MagazineJobMeta(BaseModel):
     frames: List[FrameEntry]
     cover_frame_id: Optional[int] = None
     description: Optional[str] = ""
-    localized_sequence_names: Dict[str, str] = {}  # NEW: Language overrides
-    localized_descriptions: Dict[str, str] = {}    # NEW: Language overrides
+    localized_sequence_names: Dict[str, str] = {}  
+    localized_descriptions: Dict[str, str] = {}    
     
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-def _job_dir(job_id: str) -> Path:
-    d = _JOBS_DIR / job_id
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
 
 def _image_path(job_id: str, frame_id: int) -> Optional[Path]:
     """Return the saved image path for a frame, or None if missing."""
@@ -170,31 +172,54 @@ def _build_pdf_for_language(
     if meta.cover_frame_id is not None:
         cover_img_path = _image_path(job_id, meta.cover_frame_id)
 
+    is_upright_cover = False
+
     if cover_img_path:
         try:
             img = RLImage(str(cover_img_path))
-            scale = BODY_W / img.imageWidth
-            img.drawWidth = BODY_W
+
+            # Detect portrait cover
+            is_upright_cover = img.imageHeight > img.imageWidth
+
+            # IMPORTANT:
+            # ReportLab Frame has internal padding, so do NOT size the image
+            # to the raw frame box. Subtract the default 6 pt padding on each side.
+            cover_pad = 6  # points (ReportLab default frame padding)
+            cover_max_w = BODY_W - (2 * cover_pad)
+            cover_max_h = (PAGE_H - 2 * MARGIN - 6 * mm) - (2 * cover_pad)
+
+            if is_upright_cover:
+                # Portrait cover: fill as much of the usable page as possible,
+                # but still stay within the true drawable area.
+                max_h = cover_max_h
+            else:
+                # Landscape/square cover: keep room for title/intro text
+                max_h = PAGE_H * 0.42
+
+            scale = min(cover_max_w / img.imageWidth, max_h / img.imageHeight)
+            img.drawWidth = img.imageWidth * scale
             img.drawHeight = img.imageHeight * scale
-            max_h = PAGE_H * 0.42
-            if img.drawHeight > max_h:
-                scale2 = max_h / img.drawHeight
-                img.drawWidth *= scale2
-                img.drawHeight = max_h
+
             story.append(img)
-            story.append(Spacer(1, 8 * mm))
+
+            # No extra spacer for upright covers
+            if not is_upright_cover:
+                story.append(Spacer(1, 8 * mm))
+
         except Exception as e:
             logger.warning("Cover image load failed for job %s: %s", job_id, e)
+            
+    # Only append the metadata overlay texts if the cover is not upright
+    if not is_upright_cover:
+        story.append(Paragraph(meta.series_title, style_title))
+        story.append(Paragraph(actual_seq_name, style_subtitle))
+        story.append(Paragraph(lang.upper(), style_lang_badge))
 
-    story.append(Paragraph(meta.series_title, style_title))
-    story.append(Paragraph(actual_seq_name, style_subtitle))
-    story.append(Paragraph(lang.upper(), style_lang_badge))
-
-    if actual_desc:
-        story.append(Spacer(1, 4 * mm))
-        for line in actual_desc.strip().split("\n"):
-            if line.strip():
-                story.append(Paragraph(line.strip(), style_desc))
+        if actual_desc:
+            story.append(Spacer(1, 4 * mm))
+            for line in actual_desc.strip().split("\n"):
+                if line.strip():
+                    story.append(Paragraph(line.strip(), style_desc))
 
     story.append(PageBreak())
 
@@ -252,7 +277,12 @@ def _build_job(job_id: str, meta: MagazineJobMeta) -> None:
     Background thread: builds one PDF per language, zips them, cleans up images.
     Updates _jobs[job_id] throughout.
     """
-    _jobs[job_id]["status"] = "processing"
+    job_data = _get_job(job_id)
+    if not job_data: return
+
+    job_data["status"] = "processing"
+    _save_job(job_id, job_data)
+    
     job_dir = _job_dir(job_id)
     zip_path = job_dir / f"magazine_{meta.series_id}_seq{meta.sequence_id}.zip"
 
@@ -277,14 +307,16 @@ def _build_job(job_id: str, meta: MagazineJobMeta) -> None:
             except Exception:
                 pass
 
-        _jobs[job_id]["status"] = "done"
-        _jobs[job_id]["result_zip"] = str(zip_path)
+        job_data["status"] = "done"
+        job_data["result_zip"] = str(zip_path)
+        _save_job(job_id, job_data)
         logger.info("PDF job %s done → %s", job_id, zip_path)
 
     except Exception as exc:
         logger.exception("PDF job %s failed: %s", job_id, exc)
-        _jobs[job_id]["status"] = "error"
-        _jobs[job_id]["error_message"] = str(exc)
+        job_data["status"] = "error"
+        job_data["error_message"] = str(exc)
+        _save_job(job_id, job_data)
 
 
 # ---------------------------------------------------------------------------
@@ -293,17 +325,6 @@ def _build_job(job_id: str, meta: MagazineJobMeta) -> None:
 
 @router.post("/submit")
 async def submit_pdf_job(request: Request):
-    """
-    Submit an async PDF export job.
-
-    The client POSTs:
-      - job_meta  : JSON string matching MagazineJobMeta schema
-      - images    : one UploadFile per frame, with field name 'images'
-
-    Returns { job_id, status } immediately.
-    Poll /magazine-pdf/status/{job_id} for completion.
-    Download via /magazine-pdf/download/{job_id} when status == "done".
-    """
     form = await request.form()
     job_meta_str = form.get("job_meta")
     images = form.getlist("images")
@@ -358,8 +379,8 @@ async def submit_pdf_job(request: Request):
 
     logger.info("Job %s created, %d images saved, languages=%s", job_id, saved, meta.languages)
 
-    # Register job
-    _jobs[job_id] = {
+    # Register job safely to disk
+    job_data = {
         "status": "pending",
         "series_id": meta.series_id,
         "sequence_id": meta.sequence_id,
@@ -367,6 +388,7 @@ async def submit_pdf_job(request: Request):
         "result_zip": None,
         "error_message": None,
     }
+    _save_job(job_id, job_data)
 
     # Launch background thread
     t = threading.Thread(target=_build_job, args=(job_id, meta), daemon=True)
@@ -377,14 +399,7 @@ async def submit_pdf_job(request: Request):
 
 @router.get("/status/{job_id}")
 async def poll_pdf_job(job_id: str):
-    """
-    Poll the status of a PDF export job.
-
-    Returns:
-      { job_id, status, languages, series_id, sequence_id, error_message }
-    status ∈ { pending, processing, done, error }
-    """
-    job = _jobs.get(job_id)
+    job = _get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -400,11 +415,7 @@ async def poll_pdf_job(job_id: str):
 
 @router.get("/download/{job_id}")
 async def download_pdf_job(job_id: str):
-    """
-    Download the completed ZIP when status == 'done'.
-    The ZIP contains one PDF per requested language.
-    """
-    job = _jobs.get(job_id)
+    job = _get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     if job["status"] != "done":
@@ -424,15 +435,11 @@ async def download_pdf_job(job_id: str):
 
 @router.delete("/cleanup/{job_id}")
 async def cleanup_pdf_job(job_id: str):
-    """
-    Optional: explicitly remove job files and record after download.
-    """
     job = _jobs.pop(job_id, None)
-    if job and job.get("result_zip"):
-        try:
-            shutil.rmtree(str(_JOBS_DIR / job_id), ignore_errors=True)
-        except Exception:
-            pass
+    try:
+        shutil.rmtree(str(_JOBS_DIR / job_id), ignore_errors=True)
+    except Exception:
+        pass
     return JSONResponse({"deleted": job_id})
 
 

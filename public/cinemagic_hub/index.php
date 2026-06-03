@@ -130,6 +130,7 @@ select.form-control { cursor: pointer; }
 
 .sb-picker-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 300000; display: none; align-items: flex-end; justify-content: center; }
 .sb-picker-backdrop.active { display: flex; }
+#assetPickerBackdrop { z-index: 300010; }
 .sb-picker-sheet { width: 100%; max-width: 800px; background: var(--bg-raised); border: 1px solid var(--border); border-bottom: none; border-radius: 14px 14px 0 0; padding: 0 0 max(16px,env(safe-area-inset-bottom)); max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 -8px 40px rgba(0,0,0,0.6); animation: slideUp 0.22s ease; }
 @keyframes slideUp { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .sb-picker-handle { text-align: center; padding: 10px 0 4px; cursor: pointer; }
@@ -181,7 +182,6 @@ select.form-control { cursor: pointer; }
 @media (max-width: 960px) {
     .hamburger { display: flex; }
     .brand-text { display: none; }
-    .brand-text { display: flex; }
     .sidebar { position: fixed; left: -280px; top: 52px; bottom: 0; transition: left 0.3s ease; border-right: none; box-shadow: 4px 0 20px rgba(0,0,0,0.5); }
     .sidebar.open { left: 0; }
     .sidebar-overlay.active { display: block; opacity: 1; }
@@ -231,6 +231,10 @@ select.form-control { cursor: pointer; }
                 <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
                 Dashboard
             </button>
+            <button class="nav-item" data-view="sitemaps" onclick="switchView('sitemaps', this)">
+                <svg viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+                Sitemaps
+            </button>
             <button class="nav-item" onclick="openLangManager()">
                 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                 System Languages
@@ -254,6 +258,40 @@ select.form-control { cursor: pointer; }
             <div class="covers-grid" id="dashboard-covers"></div>
         </div>
 
+        <!-- Sitemaps View -->
+        <div class="view" id="view-sitemaps">
+            <div class="card">
+                <div class="card-hdr">
+                    <div class="card-title">Sitemaps &amp; Indexing</div>
+                </div>
+                <div class="card-body">
+                    <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">
+                        Generate the Global XML Sitemap for Google. To merge multiple SAGE systems, download the local JSON from your other systems and import it here.
+                    </p>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Production Base URL</label>
+                            <input type="text" class="form-control" id="sitemap-base-url" placeholder="https://petersebring.com/">
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:12px; margin-top:8px;">
+                        <button class="btn-secondary" onclick="downloadLocalSitemap()">Download Local URLs (JSON)</button>
+                        <button class="btn-primary" onclick="downloadGlobalSitemap()">Generate Global sitemap.xml</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-hdr">
+                    <div class="card-title">External Merged Sitemaps</div>
+                    <button class="btn-secondary" onclick="openSitemapImport()">Import JSON</button>
+                </div>
+                <div class="card-body" id="sitemap-imports-list">
+                    <div class="spinner"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- Series Editor View -->
         <div class="view" id="view-series-editor">
             <div class="card">
@@ -270,7 +308,6 @@ select.form-control { cursor: pointer; }
                         <button class="btn-secondary" id="btn-rollout" onclick="rolloutSeries()" style="display:none;" title="Rollout to GitHub Pages">
                             <svg viewBox="0 0 24 24" style="width:14px;height:14px;"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
                         </button>
-                        <!-- PDF Export button — shown only when series is loaded -->
                         <button class="btn-secondary" id="btn-pdf-export" onclick="openPdfExportView()" style="display:none;" title="Export PDF Issues">
                             <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.5;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                             PDF
@@ -288,13 +325,19 @@ select.form-control { cursor: pointer; }
                             <label class="form-label">Magazine Title</label>
                             <input type="text" class="form-control" id="series-title" placeholder="e.g. The Anima Chronicles">
                         </div>
-                        <div class="form-group">
-                            <label class="form-label">Publishing Status</label>
-                            <select class="form-control" id="series-status">
-                                <option value="draft">Draft</option>
-                                <option value="published">Published</option>
-                                <option value="archived">Archived</option>
-                            </select>
+                        <div class="form-group" style="display:grid; grid-template-columns: 1fr 100px; gap: 16px;">
+                            <div style="display:flex; flex-direction:column; gap:6px;">
+                                <label class="form-label">Status</label>
+                                <select class="form-control" id="series-status">
+                                    <option value="draft">Draft</option>
+                                    <option value="published">Published</option>
+                                    <option value="archived">Archived</option>
+                                </select>
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:6px;">
+                                <label class="form-label">Sort Order</label>
+                                <input type="number" class="form-control" id="series-sort" value="0">
+                            </div>
                         </div>
                     </div>
                     <div class="form-row">
@@ -302,7 +345,7 @@ select.form-control { cursor: pointer; }
                             <label class="form-label">Cover Image URL</label>
                             <div style="display:flex;gap:8px;">
                                 <input type="text" class="form-control" id="series-cover" placeholder="/img/cover.jpg" style="flex:1;">
-                                <button type="button" class="btn-secondary" onclick="openAssetPickerSheet()">Select Frame</button>
+                                <button type="button" class="btn-secondary" onclick="openAssetPickerSheet('series')">Select Frame</button>
                             </div>
                         </div>
                         <div class="form-group">
@@ -312,6 +355,20 @@ select.form-control { cursor: pointer; }
                                 <option value="hero_backdrop">Cinematic Immersive (Backdrop)</option>
                             </select>
                         </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Landing Page Script Name (Optional)</label>
+                            <input type="text" class="form-control" id="series-script" placeholder="e.g. index_faust">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">SEO Keywords</label>
+                            <input type="text" class="form-control" id="series-seo-kw" placeholder="mag, comic, story...">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">SEO Description</label>
+                        <textarea class="form-control" id="series-seo-desc" rows="2" placeholder="Meta description..."></textarea>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Supported Languages</label>
@@ -340,6 +397,7 @@ select.form-control { cursor: pointer; }
                             <option value="">— Select an unassigned Cinemagic to attach —</option>
                         </select>
                         <button class="btn-secondary" onclick="assignSeason()">+ Add Season</button>
+                        <button class="btn-secondary" onclick="openEpisodeMetaModal()" id="btn-ep-meta" style="display:none;">Edit Episode Meta</button>
                     </div>
                 </div>
             </div>
@@ -466,32 +524,85 @@ select.form-control { cursor: pointer; }
     </div>
 </div>
 
+<!-- Episode Meta Bottom Sheet Modal -->
+<div class="sb-picker-backdrop" id="epMetaBackdrop" onmousedown="if(event.target===this) closeEpisodeMetaModal()">
+    <div class="sb-picker-sheet" style="max-width:600px; margin:auto; padding-bottom: 20px;">
+        <div class="sb-picker-handle" onclick="closeEpisodeMetaModal()"><div class="sb-picker-handle-bar"></div></div>
+        <div class="sb-picker-header">
+            <div class="sb-picker-title">Episode Metadata</div>
+            <button class="sb-picker-close" onclick="closeEpisodeMetaModal()">✕</button>
+        </div>
+        <div style="padding:16px; display:flex; flex-direction:column; gap:16px; overflow-y:auto; max-height: 60vh;">
+            <div class="form-group">
+                <label class="form-label">Select Episode</label>
+                <select class="form-control" id="ep-meta-select" onchange="loadEpisodeMeta()"></select>
+            </div>
+            
+            <div id="ep-meta-fields" style="display:none; flex-direction:column; gap:16px;">
+                <input type="hidden" id="ep-meta-cinemagic-id">
+                <div class="form-group">
+                    <label class="form-label">Cover Image URL</label>
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" class="form-control" id="ep-cover" placeholder="/img/ep_cover.jpg" style="flex:1;">
+                        <button type="button" class="btn-secondary" onclick="openAssetPickerSheet('episode')">Select</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">SEO Keywords</label>
+                    <input type="text" class="form-control" id="ep-seo-kw" placeholder="Comma separated keywords...">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">SEO Description</label>
+                    <textarea class="form-control" id="ep-seo-desc" rows="2" placeholder="Meta description..."></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <label class="form-label">Social & Newsletter Links</label>
+                        <button class="btn-secondary" style="padding:4px 8px; font-size:10px;" onclick="addSocialLinkRow()">+ Add Link</button>
+                    </div>
+                    <div id="ep-social-list" style="display:flex; flex-direction:column; gap:8px; margin-top:8px;"></div>
+                </div>
+                <button class="btn-primary" onclick="saveEpisodeMeta()">Save Episode Meta</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div id="toast-container"></div>
 
 <script>
 let currentPickerTab   = 'sequences';
 let tempSelectedAsset  = null;
+let pickerTarget       = 'series'; 
 let containerCurPage   = 1;
 let containerTotalPages = 1;
 let selectedContainerId = null;
 let containerSearchTimer = null;
 let systemLanguages = [];
 
-// PDF export runtime state
 const pdfExport = {
     seriesId:    0,
     seriesTitle: '',
     seriesLangs: [],
-    activeJobs:  {},  // pyapi_job_id → { job_db_id, pyapi_url, ready }
+    activeJobs:  {},
 };
 
 document.addEventListener('DOMContentLoaded', () => {
     refreshCurrent();
     initLangs();
-    const saved = localStorage.getItem('sage_pyapi_url');
-    if (saved) document.getElementById('pdf-pyapi-url').value = saved;
+    
+    // Resume Base URL
+    const savedPy = localStorage.getItem('sage_pyapi_url');
+    if (savedPy) document.getElementById('pdf-pyapi-url').value = savedPy;
     document.getElementById('pdf-pyapi-url').addEventListener('change', function() {
         localStorage.setItem('sage_pyapi_url', this.value.trim());
+    });
+    
+    const savedBase = localStorage.getItem('sage_sitemap_base');
+    if (savedBase) document.getElementById('sitemap-base-url').value = savedBase;
+    document.getElementById('sitemap-base-url').addEventListener('change', function() {
+        localStorage.setItem('sage_sitemap_base', this.value.trim());
     });
 });
 
@@ -511,6 +622,8 @@ function switchView(view, btn = null) {
         document.getElementById('sidebar').classList.remove('open');
         document.getElementById('sidebar-overlay').classList.remove('active');
     }
+    
+    if (view === 'sitemaps') loadSitemapImports();
 }
 
 function refreshCurrent() {
@@ -547,6 +660,89 @@ async function loadSidebar() {
         `).join('');
     }
 }
+
+// ── Sitemaps ────────────────────────────────────────────────────────
+function getSitemapBaseUrl() {
+    const u = document.getElementById('sitemap-base-url').value.trim();
+    if (!u) { toast('Please enter a Base URL first', 'error'); return null; }
+    return u;
+}
+
+function downloadLocalSitemap() {
+    const b = getSitemapBaseUrl();
+    if (!b) return;
+    window.location.href = `api.php?action=download_local_sitemap_json&base_url=${encodeURIComponent(b)}`;
+}
+
+function downloadGlobalSitemap() {
+    const b = getSitemapBaseUrl();
+    if (!b) return;
+    window.location.href = `api.php?action=download_global_sitemap_xml&base_url=${encodeURIComponent(b)}`;
+}
+
+async function loadSitemapImports() {
+    const list = document.getElementById('sitemap-imports-list');
+    list.innerHTML = '<div class="spinner"></div>';
+    const res = await api({ action: 'get_sitemap_imports' });
+    if (!res.success) return;
+    
+    if (!res.imports.length) {
+        list.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">No external sitemaps imported yet.</div>';
+        return;
+    }
+    
+    list.innerHTML = res.imports.map(i => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--bg-float);border:1px solid var(--border);border-radius:6px;margin-bottom:8px;">
+            <div>
+                <strong style="color:var(--text-bright);font-size:14px;">${escHtml(i.system_name)}</strong>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Imported: ${i.created_at}</div>
+            </div>
+            <button class="btn-icon" style="color:var(--red);" onclick="deleteSitemapImport(${i.id}, '${escHtml(i.system_name)}')">
+                <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+    `).join('');
+}
+
+function openSitemapImport() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.onchange = e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async ev => {
+            try {
+                const jsonStr = ev.target.result;
+                const arr = JSON.parse(jsonStr);
+                if (!Array.isArray(arr)) throw new Error("JSON must be an array of URLs");
+                
+                const name = prompt("Enter a system name for these URLs (e.g. 'SAGE Node 2'):");
+                if (!name) return;
+                
+                const res = await api({ action: 'import_sitemap_json', system_name: name, urls_json: jsonStr });
+                if (res.success) {
+                    toast('Sitemap imported successfully!', 'success');
+                    loadSitemapImports();
+                } else {
+                    toast(res.error || 'Import failed', 'error');
+                }
+            } catch (err) {
+                toast('Invalid JSON format: ' + err.message, 'error');
+            }
+        };
+        reader.readAsText(file);
+    };
+    input.click();
+}
+
+async function deleteSitemapImport(id, name) {
+    if (!confirm(`Delete imported sitemap for "${name}"?`)) return;
+    const res = await api({ action: 'delete_sitemap_import', id });
+    if (res.success) loadSitemapImports();
+}
+
 
 // ── Languages ────────────────────────────────────────────────────────────────
 async function initLangs() {
@@ -619,17 +815,21 @@ async function openSeriesEditor(id = null, btn = null) {
     if (!btn && id) btn = document.querySelector(`.nav-item[data-id="${id}"]`);
     switchView('series-editor', btn);
 
-    const els = ['btn-preview', 'btn-export', 'btn-rollout', 'btn-delete', 'seasons-card', 'btn-pdf-export'];
+    const els = ['btn-preview', 'btn-export', 'btn-rollout', 'btn-delete', 'seasons-card', 'btn-pdf-export', 'btn-ep-meta'];
 
     if (!id) {
         document.getElementById('editor-title').textContent = 'New Magazine Series';
         document.getElementById('series-id').value         = '';
         document.getElementById('series-title').value      = '';
         document.getElementById('series-status').value     = 'draft';
+        document.getElementById('series-sort').value       = '0';
         document.getElementById('series-prefix').value     = '';
         document.getElementById('series-cover').value      = '';
         document.getElementById('series-template').value   = 'default';
         document.getElementById('series-desc').value       = '';
+        document.getElementById('series-script').value     = '';
+        document.getElementById('series-seo-kw').value     = '';
+        document.getElementById('series-seo-desc').value   = '';
         renderLangCheckboxes('en');
         els.forEach(e => document.getElementById(e).style.display = 'none');
     } else {
@@ -641,10 +841,14 @@ async function openSeriesEditor(id = null, btn = null) {
         document.getElementById('series-id').value       = s.id;
         document.getElementById('series-title').value    = s.title;
         document.getElementById('series-status').value   = s.status;
+        document.getElementById('series-sort').value     = s.sort_order || 0;
         document.getElementById('series-prefix').value   = s.asset_url_prefix || '';
         document.getElementById('series-cover').value    = s.cover_image_url || '';
         document.getElementById('series-template').value = s.template || 'default';
         document.getElementById('series-desc').value     = s.description || '';
+        document.getElementById('series-script').value   = s.landing_page_script || '';
+        document.getElementById('series-seo-kw').value   = s.seo_keywords || '';
+        document.getElementById('series-seo-desc').value = s.seo_description || '';
 
         renderLangCheckboxes(s.supported_languages || 'en');
 
@@ -682,10 +886,14 @@ async function saveSeries() {
         title:              document.getElementById('series-title').value.trim(),
         description:        document.getElementById('series-desc').value.trim(),
         status:             document.getElementById('series-status').value,
+        sort_order:         document.getElementById('series-sort').value,
         cover_image_url:    document.getElementById('series-cover').value.trim(),
         template:           document.getElementById('series-template').value,
         supported_languages: langs,
         asset_url_prefix:   document.getElementById('series-prefix').value.trim(),
+        landing_page_script:document.getElementById('series-script').value.trim(),
+        seo_keywords:       document.getElementById('series-seo-kw').value.trim(),
+        seo_description:    document.getElementById('series-seo-desc').value.trim(),
     };
     if (!payload.title) return toast('Title required', 'error');
     const data = await api(payload);
@@ -736,6 +944,123 @@ async function rolloutSeries() {
     const data = await api({ action: 'rollout_series', id });
     if (data.success) toast('Rollout queued to Forge Jobs!', 'success');
     else toast(data.error || 'Rollout failed', 'error');
+}
+
+// ── Episode Meta Modal ────────────────────────────────────────────────────────
+async function openEpisodeMetaModal() {
+    const sid = document.getElementById('series-id').value;
+    if (!sid) return;
+
+    document.getElementById('epMetaBackdrop').classList.add('active');
+    document.getElementById('ep-meta-fields').style.display = 'none';
+    
+    const sel = document.getElementById('ep-meta-select');
+    sel.innerHTML = '<option value="">— Loading... —</option>';
+    
+    const res = await api({ action: 'get_series_episodes', series_id: sid });
+    if (!res.success || !res.episodes || !res.episodes.length) {
+        sel.innerHTML = '<option value="">— No episodes attached —</option>';
+        return;
+    }
+    
+    sel.innerHTML = '<option value="">— Select Episode —</option>' +
+        res.episodes.map(ep => `<option value="${ep.id}" data-cid="${ep.cinemagic_id}">${escHtml(ep.season_name)}: ${escHtml(ep.name)}</option>`).join('');
+}
+
+function closeEpisodeMetaModal() {
+    document.getElementById('epMetaBackdrop').classList.remove('active');
+}
+
+async function loadEpisodeMeta() {
+    const sel = document.getElementById('ep-meta-select');
+    const seqId = sel.value;
+    const opt = sel.options[sel.selectedIndex];
+    const cid = opt ? opt.getAttribute('data-cid') : null;
+    
+    if (!seqId || !cid) {
+        document.getElementById('ep-meta-fields').style.display = 'none';
+        return;
+    }
+    
+    document.getElementById('ep-meta-cinemagic-id').value = cid;
+    
+    const res = await api({ action: 'get_episode_meta', cinemagic_id: cid, sequence_id: seqId });
+    const meta = res.success ? (res.meta || {}) : {};
+    
+    document.getElementById('ep-cover').value    = meta.cover_image_url || '';
+    document.getElementById('ep-seo-kw').value   = meta.seo_keywords || '';
+    document.getElementById('ep-seo-desc').value = meta.seo_description || '';
+    
+    const list = document.getElementById('ep-social-list');
+    list.innerHTML = '';
+    
+    let socials = [];
+    try { socials = meta.social_links ? JSON.parse(meta.social_links) : []; } catch(e){}
+    
+    if (!socials.length) {
+        socials = [
+            { type: 'instagram', url: 'https://www.instagram.com/starlightguardianscom/' },
+            { type: 'youtube', url: 'https://www.youtube.com/@starlightguardianscom' },
+            { type: 'newsletter', url: 'https://petersebring.com/newsletter.php' }
+        ];
+    }
+    
+    if (socials.length) {
+        socials.forEach(s => addSocialLinkRow(s.type, s.url));
+    }
+    
+    document.getElementById('ep-meta-fields').style.display = 'flex';
+}
+
+function addSocialLinkRow(type = 'instagram', url = '') {
+    const list = document.getElementById('ep-social-list');
+    const row = document.createElement('div');
+    row.className = 'social-row';
+    row.style.display = 'flex'; row.style.gap = '8px';
+    row.innerHTML = `
+        <select class="form-control social-type" style="width:120px;">
+            <option value="instagram" ${type==='instagram'?'selected':''}>Instagram</option>
+            <option value="youtube" ${type==='youtube'?'selected':''}>YouTube</option>
+            <option value="facebook" ${type==='facebook'?'selected':''}>Facebook</option>
+            <option value="twitter" ${type==='twitter'?'selected':''}>Twitter/X</option>
+            <option value="newsletter" ${type==='newsletter'?'selected':''}>Newsletter</option>
+        </select>
+        <input type="text" class="form-control social-url" placeholder="https://..." value="${escHtml(url)}" style="flex:1;">
+        <button class="btn-icon" style="color:var(--red);" onclick="this.parentElement.remove()">
+            <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+    `;
+    list.appendChild(row);
+}
+
+async function saveEpisodeMeta() {
+    const seqId = document.getElementById('ep-meta-select').value;
+    const cid   = document.getElementById('ep-meta-cinemagic-id').value;
+    if (!seqId || !cid) return;
+    
+    const socials = [];
+    document.querySelectorAll('.social-row').forEach(row => {
+        const type = row.querySelector('.social-type').value;
+        const url  = row.querySelector('.social-url').value.trim();
+        if (url) socials.push({ type, url });
+    });
+    
+    const payload = {
+        action: 'save_episode_meta',
+        cinemagic_id: cid,
+        sequence_id: seqId,
+        cover_image_url: document.getElementById('ep-cover').value.trim(),
+        seo_keywords:    document.getElementById('ep-seo-kw').value.trim(),
+        seo_description: document.getElementById('ep-seo-desc').value.trim(),
+        social_links:    JSON.stringify(socials)
+    };
+    
+    const res = await api(payload);
+    if (res.success) {
+        toast('Episode meta saved!', 'success');
+    } else {
+        toast(res.error || 'Failed to save', 'error');
+    }
 }
 
 // ── PDF Export ────────────────────────────────────────────────────────────────
@@ -801,7 +1126,6 @@ async function submitPdfExportJob() {
     btn.textContent = 'Submitting to PyAPI...';
 
     try {
-        // PHP now does ALL the heavy lifting, file packaging, and PyAPI submission
         const res = await api({
             action:      'submit_pdf_export_job',
             series_id:   pdfExport.seriesId,
@@ -817,7 +1141,6 @@ async function submitPdfExportJob() {
 
         toast(`Job submitted — ID: ${pyJobId.slice(0, 8)}…`, 'success');
 
-        // Track + poll
         pdfExport.activeJobs[pyJobId] = { job_db_id: jobDbId, pyapi_url: pyapiUrl, ready: false };
         schedulePdfPoll(pyJobId);
         await refreshPdfJobs();
@@ -838,33 +1161,29 @@ async function pollPdfJob(pyJobId) {
     const info = pdfExport.activeJobs[pyJobId];
     if (!info) return;
     try {
-        const resp = await fetch(`${info.pyapi_url}/magazine-pdf/status/${pyJobId}`);
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const data = await resp.json();
-
-        // ADDED missing pyapi_job_id and pyapi_url so the PHP backend knows how to fetch the zip when done
-        await api({
-            action:        'update_pdf_job_status',
-            job_db_id:     info.job_db_id,
-            status:        data.status,
-            error_message: data.error_message || '',
-            pyapi_job_id:  pyJobId,
-            pyapi_url:     info.pyapi_url
+        const res = await api({
+            action:       'poll_pyapi_job',
+            job_db_id:    info.job_db_id,
+            pyapi_job_id: pyJobId,
+            pyapi_url:    info.pyapi_url
         });
+
+        if (!res.success) throw new Error(res.error || 'Server proxy poll failed');
 
         await refreshPdfJobs();
 
-        if (data.status === 'done') {
+        if (res.status === 'done') {
             info.ready = true;
             toast('PDF export ready! Download below.', 'success');
-        } else if (data.status === 'error') {
-            toast('PDF job error: ' + (data.error_message || 'unknown'), 'error');
+        } else if (res.status === 'error') {
+            toast('PDF job error: ' + (res.error_message || 'unknown'), 'error');
             delete pdfExport.activeJobs[pyJobId];
         } else {
             schedulePdfPoll(pyJobId);
         }
     } catch (e) {
         console.warn('Poll error', pyJobId, e);
+        // Let it continue trying in case it was a momentary network drop
         schedulePdfPoll(pyJobId);
     }
 }
@@ -905,7 +1224,8 @@ async function refreshPdfJobs() {
 }
 
 // ── Asset Picker ──────────────────────────────────────────────────────────────
-function openAssetPickerSheet() {
+function openAssetPickerSheet(target = 'series') {
+    pickerTarget = target;
     tempSelectedAsset = null;
     document.getElementById('assetPickerBackdrop').classList.add('active');
     containerCurPage = 1; selectedContainerId = null;
@@ -1022,7 +1342,10 @@ function updatePickerCount() {
 }
 
 function confirmAssetSelection() {
-    if (tempSelectedAsset) document.getElementById('series-cover').value = tempSelectedAsset;
+    if (tempSelectedAsset) {
+        if (pickerTarget === 'series') document.getElementById('series-cover').value = tempSelectedAsset;
+        if (pickerTarget === 'episode') document.getElementById('ep-cover').value = tempSelectedAsset;
+    }
     closeAssetPickerSheet();
 }
 
@@ -1050,10 +1373,7 @@ function escHtml(s) {
 }
 </script>
 
-
 <?php echo $eruda ?? ''; ?>
-
 
 </body>
 </html>
-
