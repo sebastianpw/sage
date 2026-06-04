@@ -8,11 +8,58 @@ use App\UI\Modules\ModuleRegistry;
 $spw = \App\Core\SpwBase::getInstance();
 $pdo = $spw->getPDO();
 
-function renderStoryboardBrowseFragment(PDO $pdo, int $page, int $pageSize): string
+if (isset($_GET['ajax_storyboard_json']) && $_GET['ajax_storyboard_json'] === '1') {
+    header('Content-Type: application/json; charset=utf-8');
+    $search = $_GET['search'] ?? '';
+    $page = max(1, (int)($_GET['page'] ?? 1));
+    $pageSize = 10;
+    
+    $where = "WHERE 1=1";
+    $params = [];
+    if ($search !== '') {
+        $where .= " AND (name LIKE ? OR description LIKE ?)";
+        $params[] = "%$search%";
+        $params[] = "%$search%";
+    }
+    
+    $countStmt = $pdo->prepare("SELECT COUNT(*) FROM storyboards $where");
+    $countStmt->execute($params);
+    $total = (int)$countStmt->fetchColumn();
+    $totalPages = max(1, (int)ceil($total / $pageSize));
+    $page = max(1, min($page, $totalPages));
+    $offset = ($page - 1) * $pageSize;
+    
+    $stmt = $pdo->prepare("SELECT id, name, category, is_archived FROM storyboards $where ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?");
+    $bindIdx = 1;
+    foreach ($params as $p) $stmt->bindValue($bindIdx++, $p, PDO::PARAM_STR);
+    $stmt->bindValue($bindIdx++, $pageSize, PDO::PARAM_INT);
+    $stmt->bindValue($bindIdx, $offset, PDO::PARAM_INT);
+    $stmt->execute();
+    
+    echo json_encode([
+        'success' => true,
+        'storyboards' => $stmt->fetchAll(PDO::FETCH_ASSOC),
+        'page' => $page,
+        'totalPages' => $totalPages,
+        'total' => $total
+    ]);
+    exit;
+}
+
+function renderStoryboardBrowseFragment(PDO $pdo, int $page, int $pageSize, string $search = ''): string
 {
     $pageSize = max(1, $pageSize);
 
-    $countStmt = $pdo->query("SELECT COUNT(*) FROM storyboards");
+    $where = "WHERE 1=1";
+    $params = [];
+    if ($search !== '') {
+        $where .= " AND (sb.name LIKE ? OR sb.description LIKE ?)";
+        $params[] = "%$search%";
+        $params[] = "%$search%";
+    }
+
+    $countStmt = $pdo->prepare("SELECT COUNT(*) FROM storyboards sb $where");
+    $countStmt->execute($params);
     $totalStoryboards = (int)$countStmt->fetchColumn();
     $totalPages = max(1, (int)ceil($totalStoryboards / $pageSize));
     $page = max(1, min($page, $totalPages));
@@ -44,11 +91,17 @@ function renderStoryboardBrowseFragment(PDO $pdo, int $page, int $pageSize): str
                 LIMIT 1
             )
         LEFT JOIN frames pf ON sfp.frame_id = pf.id
+        $where
         ORDER BY sb.updated_at DESC, sb.id DESC
         LIMIT ? OFFSET ?
     ");
-    $stmt->bindValue(1, $pageSize, PDO::PARAM_INT);
-    $stmt->bindValue(2, $offset, PDO::PARAM_INT);
+    
+    $bindIdx = 1;
+    foreach ($params as $p) {
+        $stmt->bindValue($bindIdx++, $p, PDO::PARAM_STR);
+    }
+    $stmt->bindValue($bindIdx++, $pageSize, PDO::PARAM_INT);
+    $stmt->bindValue($bindIdx, $offset, PDO::PARAM_INT);
     $stmt->execute();
     $storyboards = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -59,6 +112,9 @@ function renderStoryboardBrowseFragment(PDO $pdo, int $page, int $pageSize): str
             <div class="forge-logo-icon">⬛</div>
             <span>Storyboards</span>
         </div>
+        
+        <input type="text" id="sb-search-input" class="forge-page-input" style="width: 150px; text-align: left;" placeholder="Search..." value="<?php echo htmlspecialchars($search); ?>">
+        
         <div class="forge-save-status">Tap a storyboard to open it</div>
     </div>
 
@@ -157,13 +213,15 @@ function renderStoryboardBrowseFragment(PDO $pdo, int $page, int $pageSize): str
 $storyboardId = (int)($_GET['id'] ?? 0);
 
 if (!$storyboardId && isset($_GET['ajax_storyboard_list']) && (string)$_GET['ajax_storyboard_list'] === '1') {
-    echo renderStoryboardBrowseFragment($pdo, max(1, (int)($_GET['sb_page'] ?? 1)), 10);
+    $search = $_GET['search'] ?? '';
+    echo renderStoryboardBrowseFragment($pdo, max(1, (int)($_GET['sb_page'] ?? 1)), 10, $search);
     exit;
 }
 
 if (!$storyboardId) {
     $pageTitle = 'Storyboards';
     $listPage = max(1, (int)($_GET['sb_page'] ?? 1));
+    $search = $_GET['search'] ?? '';
 
     ob_start();
 
@@ -578,7 +636,7 @@ if (!$storyboardId) {
 
     <div class="view-container storyboard-wrap">
         <div id="storyboard-browser">
-            <?php echo renderStoryboardBrowseFragment($pdo, $listPage, 10); ?>
+            <?php echo renderStoryboardBrowseFragment($pdo, $listPage, 10, $search); ?>
         </div>
     </div>
 
@@ -586,29 +644,50 @@ if (!$storyboardId) {
 
     <script>
     $(function(){
-      function loadStoryboardBrowserPage(page) {
+      function loadStoryboardBrowserPage(page, search) {
         let p = parseInt(page, 10);
         if (isNaN(p) || p < 1) p = 1;
 
+        if (search === undefined) {
+            search = $('#sb-search-input').val() || '';
+        }
+
         const $input = $('#sb-page-input');
         const maxPage = parseInt($input.attr('max'), 10) || p;
-        if (p > maxPage) p = maxPage;
+        if (p > maxPage && maxPage > 0) p = maxPage;
         $input.val(p);
         $('#browse-save-status').text('Loading...');
 
         $.get(window.location.pathname, {
           ajax_storyboard_list: 1,
-          sb_page: p
+          sb_page: p,
+          search: search
         })
         .done(function(html){
+          const focusSearch = document.activeElement && document.activeElement.id === 'sb-search-input';
           $('#storyboard-browser').html(html);
+          
+          if (focusSearch) {
+              const $newInput = $('#sb-search-input');
+              $newInput.focus();
+              const val = $newInput.val();
+              if (val) {
+                  $newInput[0].setSelectionRange(val.length, val.length);
+              }
+          }
+          
           if (window.history && window.history.replaceState) {
             const nextUrl = new URL(window.location.href);
             nextUrl.searchParams.delete('id');
             nextUrl.searchParams.delete('page');
             nextUrl.searchParams.delete('ajax_storyboard_list');
             nextUrl.searchParams.set('sb_page', p);
-            history.replaceState(null, '', nextUrl.pathname + '?' + nextUrl.searchParams.toString());
+            if (search) {
+                nextUrl.searchParams.set('search', search);
+            } else {
+                nextUrl.searchParams.delete('search');
+            }
+            history.replaceState(null, '', nextUrl.pathname + nextUrl.search);
           }
         })
         .fail(function(xhr, status){
@@ -617,6 +696,15 @@ if (!$storyboardId) {
           }
         });
       }
+
+      let searchTimeout;
+      $(document).on('input', '#sb-search-input', function(){
+        const val = $(this).val();
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function(){
+            loadStoryboardBrowserPage(1, val);
+        }, 400);
+      });
 
       $(document).on('change', '#sb-page-input', function(){
         loadStoryboardBrowserPage(this.value);
@@ -1055,131 +1143,49 @@ require __DIR__ . '/modal_frame_details.php';
 
 .sb-menu { position: absolute !important; }
 
-.storyboard-browser-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 8px;
-    align-items: stretch;
+/* Import Modal styles */
+.sb-modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8); z-index: 1000;
+    display: none; align-items: center; justify-content: center;
 }
-
-.storyboard-browser-card {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 10px 12px;
-    background: var(--forge-card);
-    border: 1px solid var(--forge-border);
+.sb-modal-box {
+    background: var(--forge-bg); border: 1px solid var(--forge-border);
+    border-radius: var(--forge-radius); width: 90%; max-width: 500px;
+    max-height: 80vh; display: flex; flex-direction: column;
+}
+.sb-modal-header {
+    padding: 10px 15px; border-bottom: 1px solid var(--forge-border);
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: var(--sans); color: var(--forge-text-bright); font-weight: 700;
+}
+.sb-modal-close {
+    background: none; border: none; color: var(--forge-text-dim); cursor: pointer; font-size: 1.2rem; transition: color 0.2s;
+}
+.sb-modal-close:hover { color: var(--forge-red); }
+.sb-modal-search {
+    padding: 10px 15px; border-bottom: 1px solid var(--forge-border);
+}
+.sb-modal-search input {
+    width: 100%; padding: 8px; border: 1px solid var(--forge-border);
+    background: var(--forge-surface); color: var(--forge-text);
+    border-radius: var(--forge-radius); font-family: var(--sans); outline: none;
+}
+.sb-modal-search input:focus { border-color: var(--forge-amber); }
+.sb-modal-list {
+    flex: 1; overflow-y: auto; padding: 10px;
+}
+.sb-modal-item {
+    padding: 10px; border-bottom: 1px solid var(--forge-border);
+    cursor: pointer; display: flex; flex-direction: column; gap: 4px;
     border-radius: var(--forge-radius);
-    text-decoration: none;
-    color: var(--forge-text);
-    transition: border-color 0.2s, background 0.2s, transform 0.2s;
-    min-height: 110px;
 }
-.storyboard-browser-card:hover {
-    border-color: var(--forge-border-glow);
-    background: var(--forge-card-hover);
-    transform: translateY(-1px);
-}
-
-.storyboard-browser-preview {
-    width: 100%;
-    height: 96px;
-    border: 1px solid var(--forge-border);
-    border-radius: calc(var(--forge-radius) - 1px);
-    overflow: hidden;
-    background: var(--forge-surface);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-.storyboard-browser-preview img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-}
-.storyboard-browser-preview-empty {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--forge-text-dim);
-    font-size: 1.2rem;
-}
-
-.storyboard-browser-card-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 10px;
-}
-
-.storyboard-browser-name {
-    font-family: var(--sans);
-    font-size: 0.92rem;
-    font-weight: 700;
-    color: var(--forge-text-bright);
-    line-height: 1.2;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-}
-
-.storyboard-browser-desc {
-    font-family: var(--mono);
-    font-size: 0.72rem;
-    color: var(--forge-text-dim);
-    line-height: 1.4;
-    min-height: 2.8em;
-}
-
-.storyboard-browser-count {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-family: var(--mono);
-    font-size: 0.65rem;
-    color: var(--forge-text-dim);
-    white-space: nowrap;
-}
-.storyboard-browser-count i {
-    color: var(--forge-amber);
-}
-
-.storyboard-browser-meta {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    font-family: var(--mono);
-    font-size: 0.65rem;
-    color: var(--forge-text-dim);
-}
-
-.storyboard-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 6px;
-    border: 1px solid var(--forge-border);
-    border-radius: 999px;
-    font-family: var(--mono);
-    font-size: 0.6rem;
-    color: var(--forge-text-dim);
-    background: transparent;
-    flex-shrink: 0;
-    white-space: nowrap;
-}
-
-.storyboard-browser-empty {
-    padding: 14px 12px;
-    border: 1px dashed var(--forge-border);
-    border-radius: var(--forge-radius);
-    font-family: var(--mono);
-    font-size: 0.74rem;
-    color: var(--forge-text-dim);
-    background: var(--forge-surface);
+.sb-modal-item:hover { background: var(--forge-card-hover); }
+.sb-modal-item-title { font-weight: 700; color: var(--forge-text-bright); font-family: var(--sans); }
+.sb-modal-item-meta { font-size: 0.7rem; color: var(--forge-text-dim); font-family: var(--mono); }
+.sb-modal-pagination {
+    padding: 10px; border-top: 1px solid var(--forge-border);
+    display: flex; justify-content: space-between; align-items: center;
 }
 </style>
 
@@ -1234,6 +1240,10 @@ require __DIR__ . '/modal_frame_details.php';
             <i class="fa fa-trash"></i> Delete selected
         </button>
 
+        <button type="button" id="btn-import-selected" class="forge-tool-btn">
+            <i class="fa fa-file-import"></i> Copy to Storyboard
+        </button>
+
         <label style="display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:0.72rem; color:var(--forge-text-dim);">
             <input type="checkbox" id="check-all">
             Select all
@@ -1286,6 +1296,27 @@ require __DIR__ . '/modal_frame_details.php';
         <?php endforeach; ?>
     </div>
 
+</div>
+
+<!-- Modal for importing to another storyboard -->
+<div id="sb-import-modal" class="sb-modal-overlay">
+    <div class="sb-modal-box">
+        <div class="sb-modal-header">
+            <span>Select Target Storyboard</span>
+            <button class="sb-modal-close" title="Close"><i class="fa fa-times"></i></button>
+        </div>
+        <div class="sb-modal-search">
+            <input type="text" id="sb-modal-search-input" placeholder="Search storyboards...">
+        </div>
+        <div class="sb-modal-list" id="sb-modal-list">
+            <!-- Items injected here -->
+        </div>
+        <div class="sb-modal-pagination">
+            <button class="forge-page-btn" id="sb-modal-prev">Prev</button>
+            <span class="forge-page-meta" id="sb-modal-page-info">Page 1</span>
+            <button class="forge-page-btn" id="sb-modal-next">Next</button>
+        </div>
+    </div>
 </div>
 
 <?= $spw->getJquery() ?>
@@ -1390,6 +1421,137 @@ $(function(){
       $('#save-status').text('Delete failed: server error');
       $('#save-status-2').text('Delete failed: server error');
     });
+  });
+
+  // Modal logic for Import button
+  let modalPage = 1;
+  let modalSearch = '';
+  
+  function loadModalStoryboards() {
+    $('#sb-modal-list').html('<div style="text-align:center; padding: 20px; color: var(--forge-text-dim);">Loading...</div>');
+    $.get(window.location.pathname, {
+        ajax_storyboard_json: 1,
+        page: modalPage,
+        search: modalSearch
+    }).done(function(res) {
+        if (res.success) {
+            $('#sb-modal-list').empty();
+            if (res.storyboards.length === 0) {
+                $('#sb-modal-list').html('<div style="text-align:center; padding: 20px; color: var(--forge-text-dim);">No storyboards found.</div>');
+            } else {
+                res.storyboards.forEach(function(sb) {
+                    const $item = $('<div class="sb-modal-item"></div>');
+                    $item.data('id', sb.id);
+                    $item.data('name', sb.name);
+                    
+                    const $title = $('<div class="sb-modal-item-title"></div>').text(sb.name);
+                    const isArchived = sb.is_archived == 1 ? ' <span class="storyboard-badge">archived</span>' : '';
+                    const $meta = $('<div class="sb-modal-item-meta"></div>').html('#' + sb.id + ' &middot; ' + sb.category + isArchived);
+                    
+                    $item.append($title, $meta);
+                    $('#sb-modal-list').append($item);
+                });
+            }
+            $('#sb-modal-page-info').text('Page ' + res.page + ' of ' + res.totalPages);
+            $('#sb-modal-prev').prop('disabled', res.page <= 1).toggleClass('primary', res.page > 1);
+            $('#sb-modal-next').prop('disabled', res.page >= res.totalPages).toggleClass('primary', res.page < res.totalPages);
+            modalPage = res.page;
+        }
+    });
+  }
+
+  let msTimeout;
+  $('#sb-modal-search-input').on('input', function() {
+      modalSearch = $(this).val();
+      modalPage = 1;
+      clearTimeout(msTimeout);
+      msTimeout = setTimeout(loadModalStoryboards, 300);
+  });
+
+  $('#sb-modal-prev').on('click', function() {
+      if (modalPage > 1) {
+          modalPage--;
+          loadModalStoryboards();
+      }
+  });
+
+  $('#sb-modal-next').on('click', function() {
+      modalPage++;
+      loadModalStoryboards();
+  });
+
+  $('.sb-modal-close').on('click', function() {
+      $('#sb-import-modal').css('display', 'none');
+  });
+
+  function selectedOriginalFrameIds() {
+    return $('.frame-check:checked').map(function(){
+      return parseInt($(this).closest('.frame-card').data('frame-id'), 10);
+    }).get().filter(Boolean);
+  }
+
+  $('#btn-import-selected').on('click', function() {
+      const ids = selectedOriginalFrameIds();
+      const rawChecked = $('.frame-check:checked').length;
+      
+      if (rawChecked === 0) {
+          alert('No frames selected.');
+          return;
+      }
+      
+      if (ids.length === 0) {
+          alert('Selected frames are standalone and cannot be copied.');
+          return;
+      }
+      
+      if (ids.length < rawChecked) {
+          if (!confirm((rawChecked - ids.length) + ' selected frame(s) are standalone and will be skipped. Continue?')) {
+              return;
+          }
+      }
+      
+      modalPage = 1;
+      modalSearch = '';
+      $('#sb-modal-search-input').val('');
+      loadModalStoryboards();
+      $('#sb-import-modal').css('display', 'flex');
+  });
+
+  $(document).on('click', '.sb-modal-item', function() {
+      const targetSbId = $(this).data('id');
+      const targetSbName = $(this).data('name');
+      const ids = selectedOriginalFrameIds();
+      
+      if (!confirm('Copy ' + ids.length + ' frame(s) to "' + targetSbName + '"?')) return;
+      
+      $('#sb-import-modal').css('display', 'none');
+      $('#save-status').text('Copying...');
+      
+      const fd = new URLSearchParams(); 
+      fd.append('storyboard_id', targetSbId); 
+      fd.append('frame_ids', JSON.stringify(ids));
+      
+      fetch('/storyboard_import.php', { 
+          method: 'POST', 
+          body: fd, 
+          headers: {'Content-Type':'application/x-www-form-urlencoded'} 
+      })
+      .then(r => r.json())
+      .then(d => {
+          if (d.success) {
+              $('#save-status').text('Copied to ' + targetSbName);
+              if (typeof Toast !== 'undefined') Toast.show(d.message || 'Frames copied successfully', 'success');
+              $('#check-all').prop('checked', false).trigger('change');
+          } else {
+              $('#save-status').text('Copy failed');
+              if (typeof Toast !== 'undefined') Toast.show('Failed: ' + (d.message || 'error'), 'error');
+          }
+      })
+      .catch(e => {
+          $('#save-status').text('Copy error');
+          console.error(e);
+          if (typeof Toast !== 'undefined') Toast.show('Error during copy', 'error');
+      });
   });
 
   $(document).on('click', '.btn-delete', function(){

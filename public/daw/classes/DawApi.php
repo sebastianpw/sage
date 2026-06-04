@@ -54,7 +54,13 @@ class DawApi
                 case 'delete_shot_daw_save': $this->deleteShotDawSave();      break;
 
                 // ── PyAPI Bounce Registration ────────────────────────────────
+                case 'daw_bounce_poll':      $this->pollDawBounce();          break;
                 case 'register_bounce':      $this->registerBounce();         break;
+
+
+
+
+
 
                 default:
                     echo json_encode(['status' => 'error', 'message' => 'Unknown action']);
@@ -398,12 +404,66 @@ class DawApi
     }
 
     // ─── PyAPI Mixdown DB Storage & Mapping ──────────────────────────────────
+    
+    
+    
+    
+    
+    
+   
+    private function pollDawBounce(): void
+    {
+        $pyapiUrl = $_POST['pyapi_url'] ?? '';
+        $taskId   = $_POST['task_id'] ?? '';
+
+        if (!$pyapiUrl || !$taskId) {
+            echo json_encode(['status' => 'error', 'message' => 'Missing pyapi_url or task_id']);
+            return;
+        }
+
+        // Route polling through PHP exactly like the submission
+        $url = rtrim($pyapiUrl, '/') . '/daw/status/' . $taskId;
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err = curl_error($ch);
+        curl_close($ch);
+
+        if ($httpCode >= 400 || !$response) {
+            echo json_encode(['status' => 'error', 'message' => "PyAPI returned HTTP $httpCode: $err"]);
+            return;
+        }
+
+        $data = json_decode($response, true);
+        if (!$data) {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid JSON from PyAPI']);
+            return;
+        }
+
+        // Return PyAPI's exact response structure to JS
+        echo json_encode([
+            'status' => 'success',
+            'task_status' => $data['status'] ?? 'pending',
+            'error' => $data['error'] ?? ''
+        ]);
+    }
+
+
+    
+    
+    
+    
+    
+
     private function registerBounce(): void
     {
         $taskId     = $_POST['task_id']     ?? '';
         $entityType = $_POST['entity_type'] ?? '';
         $entityId   = (int)($_POST['entity_id'] ?? 0);
         $bounceName = $_POST['name']        ?? 'DAW Mixdown';
+        $pyapiUrl   = $_POST['pyapi_url']   ?? '';
 
         if (!$taskId || !preg_match('/^[a-f0-9\-]+$/i', $taskId)) {
             echo json_encode(['status' => 'error', 'message' => 'Invalid task ID']);
@@ -471,6 +531,16 @@ class DawApi
 
             $this->pdo->commit();
 
+            // Cleanup PyAPI Temp folder now that we safely moved the WAV file via PHP
+            if ($pyapiUrl) {
+                $cleanupUrl = rtrim($pyapiUrl, '/') . "/daw/cleanup/{$taskId}";
+                $ch = curl_init($cleanupUrl);
+                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "DELETE");
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_exec($ch);
+                curl_close($ch);
+            }
+
             echo json_encode([
                 'status'   => 'success',
                 'audio_id' => $audioId,
@@ -478,8 +548,12 @@ class DawApi
             ]);
 
         } catch (Exception $e) {
-            $this->pdo->rollBack();
+            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
             echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
         }
     }
+
+
+
+
 }

@@ -1,6 +1,6 @@
 <?php
-// public/videos_curator.php
-// Videos Curator -- Video Management with Curator Interface
+// public/videos.php
+// Videos -- Video Management with Regenerator Interface
 // ----------------------------------------------------
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/env_locals.php';
@@ -113,7 +113,7 @@ if (isset($_REQUEST['api_action'])) {
     exit;
 }
 
-$pageTitle = 'Videos Curator';
+$pageTitle = 'Videos Regenerator';
 ob_start();
 ?>
 <!-- Dependencies -->

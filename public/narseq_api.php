@@ -14,6 +14,107 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 try {
     switch ($action) {
 
+        case 'list_storyboards':
+            $q = trim($_GET['q'] ?? '');
+            $sql = "SELECT id, name, description FROM storyboards";
+            $params = [];
+            if ($q !== '') {
+                $sql .= " WHERE name LIKE ? OR description LIKE ?";
+                $params[] = "%$q%";
+                $params[] = "%$q%";
+            }
+            $sql .= " ORDER BY id DESC LIMIT 50";
+            
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $res = [];
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $meta = $row['description'] ?? '';
+                if (mb_strlen($meta) > 40) {
+                    $meta = mb_substr($meta, 0, 40) . '...';
+                }
+                $res[] = [
+                    'id' => $row['id'],
+                    'label' => $row['name'],
+                    'meta' => $meta
+                ];
+            }
+            echo json_encode(['status' => 'success', 'data' => $res]);
+            break;
+
+        case 'list_storyboard_frames':
+            $sbId = (int)($_GET['storyboard_id'] ?? 0);
+            $page = (int)($_GET['page'] ?? 1);
+            $perPage = (int)($_GET['per_page'] ?? 9);
+            if ($page < 1) $page = 1;
+            $offset = ($page - 1) * $perPage;
+            
+            $where = ["sf.storyboard_id = ?"];
+            $params = [$sbId];
+            
+            if (!empty($_GET['entity_type'])) {
+                $where[] = "f.entity_type = ?";
+                $params[] = $_GET['entity_type'];
+            }
+            
+            if (!empty($_GET['search'])) {
+                $where[] = "(s.name LIKE ? OR f.name LIKE ?)";
+                $params[] = "%" . $_GET['search'] . "%";
+                $params[] = "%" . $_GET['search'] . "%";
+            }
+            if (!empty($_GET['entity_id'])) {
+                $where[] = "f.entity_id = ?";
+                $params[] = (int)$_GET['entity_id'];
+            }
+            if (!empty($_GET['frame_id'])) {
+                $where[] = "sf.frame_id = ?";
+                $params[] = (int)$_GET['frame_id'];
+            }
+            
+            $whereClause = implode(" AND ", $where);
+            
+            $countStmt = $pdo->prepare("SELECT COUNT(*) FROM storyboard_frames sf JOIN frames f ON f.id = sf.frame_id LEFT JOIN sketches s ON s.id = f.entity_id WHERE $whereClause");
+            $countStmt->execute($params);
+            $total = (int)$countStmt->fetchColumn();
+            
+            $sql = "
+                SELECT sf.frame_id, sf.filename as sf_filename, f.entity_id as sketch_id, f.name as frame_name, s.name as sketch_name, f.filename as f_filename
+                FROM storyboard_frames sf
+                JOIN frames f ON f.id = sf.frame_id
+                LEFT JOIN sketches s ON s.id = f.entity_id
+                WHERE $whereClause
+                ORDER BY sf.sort_order ASC, sf.id ASC
+                LIMIT $perPage OFFSET $offset
+            ";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            
+            $data = [];
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $filename = $row['sf_filename'] ?: $row['f_filename'];
+                if (strpos($filename, 'http') !== 0 && strpos($filename, 'view_frame.php') === false) {
+                    $parts = array_map('rawurlencode', explode('/', ltrim($filename, '/')));
+                    $filename = '/' . implode('/', $parts);
+                }
+                $data[] = [
+                    'entity_id' => $row['sketch_id'],
+                    'frame_id' => $row['frame_id'],
+                    'filename' => $filename,
+                    'entity_name' => $row['sketch_name'],
+                    'frame_name' => $row['frame_name']
+                ];
+            }
+            
+            echo json_encode([
+                'status' => 'success',
+                'meta' => [
+                    'total' => $total,
+                    'pages' => max(1, ceil($total / $perPage))
+                ],
+                'data' => $data
+            ]);
+            break;
+
         case 'copy_sequence':
             $sequenceId = (int)($_POST['sequence_id'] ?? 0);
             $newName    = trim($_POST['new_name'] ?? '');
@@ -278,7 +379,6 @@ try {
             ]);
             break;
             
-            
         case 'remove_sequence_item':
             $sequenceId = (int)($_POST['sequence_id'] ?? 0);
             $itemIndex  = (int)($_POST['item_index'] ?? -1);
@@ -309,10 +409,6 @@ try {
             echo json_encode(['success' => true]);
             break;
 
-            
-            
-            
-
         case 'export_sequence':
             $sequenceId = (int)($_POST['sequence_id'] ?? 0);
             if (!$sequenceId) throw new Exception('Sequence ID required.');
@@ -330,12 +426,6 @@ try {
             // Parse sequence data array
             $itemIds = json_decode($seq['sequence_data'] ?? '[]', true) ?: [];
             
-            
-            
-            
-            
-            
-            
              // Pre-fetch all sketch data
             $sketchIds = [];
             foreach ($itemIds as $item) {
@@ -345,10 +435,6 @@ try {
             $sketchIds = array_values(array_unique($sketchIds));
             
             $sketchesData = [];
-            
-            
-            
-            
             
             if (!empty($sketchIds)) {
                 $in = implode(',', array_fill(0, count($sketchIds), '?'));

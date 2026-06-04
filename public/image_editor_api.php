@@ -1,7 +1,7 @@
 <?php
 // public/image_editor_api.php
 // Handles temporary image edits WITHOUT saving to database.
-// All existing actions unchanged. New: 'grade' action.
+// All existing actions unchanged. New: 'grade' action, 'chromakey_bg' action.
 
 require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
@@ -169,6 +169,41 @@ try {
             $processedImageData = $imageService->removeBackground($sourceFullPath, $model, $quality);
             $note               = "Background Removed";
             break;
+
+        // ── NEW: CHROMAKEY_BG action ─────────────────────────────────────
+        // Sends image to /image/chromakey-async, polls /status/{task_id}.
+        // Returns a temp file exactly like other actions — history/undo works.
+
+        case 'chromakey_bg':
+            if (!$imageService->checkRemBgHealth()) {
+                throw new Exception("Background removal service is offline (Echo not reachable).");
+            }
+            $color     = $data['color']     ?? '#00FF00';
+            $threshold = isset($data['threshold']) ? floatval($data['threshold']) : 0.15;
+            $softness  = isset($data['softness'])  ? floatval($data['softness'])  : 0.05;
+
+            $processedImageData = $imageService->removeBackgroundChromakey($sourceFullPath, $color, $threshold, $softness);
+            $note               = "Greenscreen Removed";
+            // Force PNG extension for the temp file since result is always RGBA PNG
+            $extension = 'png';
+
+            // Save directly and exit (bypass the shared extension detection below)
+            $tempBasename = 'temp_' . uniqid() . '_' . time();
+            $tempFilename = $tempBasename . '.png';
+            $tempRel      = 'temp/' . $tempFilename;
+            $tempFull     = $projectRoot . '/public/' . ltrim($tempRel, '/');
+            $tempDir      = dirname($tempFull);
+            if (!is_dir($tempDir)) mkdir($tempDir, 0755, true);
+            if (file_put_contents($tempFull, $processedImageData) === false) {
+                throw new Exception("Failed to save temporary image.");
+            }
+            echo json_encode([
+                'success'  => true,
+                'filename' => $tempRel,
+                'message'  => 'Greenscreen removal applied (temporary)',
+                'is_temp'  => true,
+            ]);
+            exit;
 
         // ── NEW: GRADE action ────────────────────────────────────────────
         // Sends settings_json to Pillow /image/grade endpoint.

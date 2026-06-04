@@ -188,6 +188,164 @@ try {
             echo json_encode(['success' => true, 'new_id' => $newId]);
             break;
 
+        case 'clone_to_narrative':
+            $id = (int)($_POST['id'] ?? 0);
+            if (!$id) throw new Exception('Invalid storyboard ID');
+
+            $pdo->beginTransaction();
+
+            $stmt = $pdo->prepare("
+                SELECT sf.*, f.entity_type, f.entity_id, f.filename as frame_filename, f.prompt, f.prompt_negative, f.seed, f.name as source_frame_name
+                FROM storyboard_frames sf
+                LEFT JOIN frames f ON sf.frame_id = f.id
+                WHERE sf.storyboard_id = ?
+                ORDER BY sf.sort_order ASC
+            ");
+            $stmt->execute([$id]);
+            $storyboardFrames = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (empty($storyboardFrames)) {
+                $pdo->rollBack();
+                throw new Exception('Storyboard has no frames');
+            }
+
+            $toMigrate = [];
+            foreach ($storyboardFrames as $sf) {
+                if ($sf['frame_id'] && $sf['entity_type'] && $sf['entity_type'] !== 'sketches') {
+                    $toMigrate[$sf['entity_type']][$sf['entity_id']][] = $sf;
+                }
+            }
+
+            $migratedFrameMap = [];
+
+            if (!empty($toMigrate)) {
+                $stmtCheckEntityMap = $pdo->prepare("SELECT target_sketch_id FROM sketch_migration_entities WHERE source_type = ? AND source_id = ?");
+                $stmtInsertEntityMap = $pdo->prepare("INSERT INTO sketch_migration_entities (source_type, source_id, target_sketch_id) VALUES (?, ?, ?)");
+
+                $stmtSketch = $pdo->prepare("
+                    INSERT INTO sketches 
+                    (name, description, prompt_negative, seed, created_at, updated_at, active_map_run_id, regenerate_images)
+                    VALUES (?, ?, ?, ?, NOW(), NOW(), ?, 0)
+                ");
+
+                $stmtFrame = $pdo->prepare("
+                    INSERT INTO frames 
+                    (map_run_id, name, filename, prompt, prompt_negative, seed, entity_type, entity_id, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, 'sketches', ?, NOW())
+                ");
+
+                $stmtLink = $pdo->prepare("INSERT INTO frames_2_sketches (from_id, to_id) VALUES (?, ?)");
+
+                $stmtCheckFrameMap = $pdo->prepare("SELECT target_frame_id FROM sketch_migration_frames WHERE source_frame_id = ?");
+                $stmtInsertFrameMap = $pdo->prepare("INSERT IGNORE INTO sketch_migration_frames (source_frame_id, target_frame_id) VALUES (?, ?)");
+
+                foreach ($toMigrate as $sourceType => $entities) {
+                    $note = "Storyboard Clone Migration from " . ucfirst($sourceType);
+                    $stmtMR = $pdo->prepare("INSERT INTO map_runs (entity_type, note, created_at) VALUES ('sketches', ?, NOW())");
+                    $stmtMR->execute([$note]);
+                    $newMapRunId = $pdo->lastInsertId();
+
+                    foreach ($entities as $sourceId => $frames) {
+                        try {
+                            $entityDataStmt = $pdo->prepare("SELECT * FROM `$sourceType` WHERE id = ?");
+                            $entityDataStmt->execute([$sourceId]);
+                            $eData = $entityDataStmt->fetch(PDO::FETCH_ASSOC);
+                        } catch (Exception $e) {
+                            $eData = null; // Table might not exist or other issues
+                        }
+
+                        if (!$eData) continue;
+
+                        $stmtCheckEntityMap->execute([$sourceType, $sourceId]);
+                        $targetSketchId = $stmtCheckEntityMap->fetchColumn();
+
+                        if ($targetSketchId) {
+                            $pdo->prepare("UPDATE sketches SET updated_at = NOW() WHERE id = ?")->execute([$targetSketchId]);
+                        } else {
+                            $baseName = $eData['name'] ?? 'Unknown';
+                            $newName = $baseName;
+
+                            $checkName = $pdo->prepare("SELECT id FROM sketches WHERE name = ?");
+                            $checkName->execute([$newName]);
+                            if ($checkName->fetch()) {
+                                $newName = $baseName . " (Mig " . date('ymd') . ")";
+                            }
+
+                            $stmtSketch->execute([
+                                $newName,
+                                $eData['description'] ?? '',
+                                $eData['prompt_negative'] ?? '',
+                                $eData['seed'] ?? null,
+                                $newMapRunId
+                            ]);
+                            $targetSketchId = $pdo->lastInsertId();
+                            $stmtInsertEntityMap->execute([$sourceType, $sourceId, $targetSketchId]);
+                        }
+
+                        foreach ($frames as $fRow) {
+                            $sourceFrameId = $fRow['frame_id'];
+
+                            $stmtCheckFrameMap->execute([$sourceFrameId]);
+                            $targetFrameId = $stmtCheckFrameMap->fetchColumn();
+
+                            if (!$targetFrameId) {
+                                $stmtFrame->execute([
+                                    $newMapRunId,
+                                    $fRow['source_frame_name'] ?? $eData['name'] ?? 'Frame',
+                                    $fRow['frame_filename'] ?? $fRow['filename'],
+                                    $fRow['prompt'],
+                                    $fRow['prompt_negative'],
+                                    $fRow['seed'],
+                                    $targetSketchId
+                                ]);
+                                $targetFrameId = $pdo->lastInsertId();
+
+                                $stmtLink->execute([$targetFrameId, $targetSketchId]);
+                                $stmtInsertFrameMap->execute([$sourceFrameId, $targetFrameId]);
+                            }
+
+                            $migratedFrameMap[$sourceFrameId] = [
+                                'sketch_id' => $targetSketchId,
+                                'frame_id' => $targetFrameId
+                            ];
+                        }
+                    }
+                }
+            }
+
+            $sequenceData = [];
+            foreach ($storyboardFrames as $sf) {
+                if (!$sf['frame_id']) continue; // Skip standalone frames with no original frame
+
+                if ($sf['entity_type'] === 'sketches') {
+                    $sequenceData[] = [
+                        'sketch_id' => (int)$sf['entity_id'],
+                        'frame_id' => (int)$sf['frame_id']
+                    ];
+                } elseif (isset($migratedFrameMap[$sf['frame_id']])) {
+                    $sequenceData[] = [
+                        'sketch_id' => (int)$migratedFrameMap[$sf['frame_id']]['sketch_id'],
+                        'frame_id' => (int)$migratedFrameMap[$sf['frame_id']]['frame_id']
+                    ];
+                }
+            }
+
+            $sbStmt = $pdo->prepare("SELECT * FROM storyboards WHERE id = ?");
+            $sbStmt->execute([$id]);
+            $sb = $sbStmt->fetch(PDO::FETCH_ASSOC);
+
+            $seqName = "SB Clone: " . $sb['name'];
+            $seqDesc = $sb['description'];
+
+            $insertSeq = $pdo->prepare("INSERT INTO narrative_sequences (name, description, sequence_data, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())");
+            $insertSeq->execute([$seqName, $seqDesc, json_encode($sequenceData)]);
+            $newSeqId = $pdo->lastInsertId();
+
+            $pdo->commit();
+
+            echo json_encode(['success' => true, 'sequence_id' => $newSeqId]);
+            break;
+
         case 'delete':
             $id = (int)($_POST['id'] ?? 0);
             if (!$id) throw new Exception('Invalid ID');

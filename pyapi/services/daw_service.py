@@ -9,10 +9,10 @@ import uuid
 import shutil
 import subprocess
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["daw"])
@@ -23,7 +23,32 @@ TEMP_DIR      = PROJECT_ROOT.parent / "services_data" / "daw_temp"
 RENDER_DIR.mkdir(parents=True, exist_ok=True)
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
+# ---------------------------------------------------------------------------
+# Job store — file-backed dictionary to survive Uvicorn reloads in Codespaces
+# ---------------------------------------------------------------------------
 TASKS: Dict[str, Dict] = {}
+
+def _save_task(task_id: str, data: dict) -> None:
+    TASKS[task_id] = data
+    state_file = TEMP_DIR / task_id / "state.json"
+    try:
+        if state_file.parent.exists():
+            state_file.write_text(json.dumps(data))
+    except Exception as e:
+        logger.warning(f"Could not save DAW task state to disk for {task_id}: {e}")
+
+def _get_task(task_id: str) -> Optional[dict]:
+    if task_id in TASKS:
+        return TASKS[task_id]
+    state_file = TEMP_DIR / task_id / "state.json"
+    if state_file.exists():
+        try:
+            data = json.loads(state_file.read_text())
+            TASKS[task_id] = data
+            return data
+        except Exception:
+            pass
+    return None
 
 def cleanup(path: Path):
     try:
@@ -59,6 +84,9 @@ def _build_fx_string(curr_out: str, fx_chain: list, p_state: dict, prefix: str) 
 
 
 def render_bounce(task_id: str, task_dir: Path, files_map: Dict[str, Path], state: dict):
+    job_data = _get_task(task_id)
+    if not job_data: return
+
     try:
         out_path = RENDER_DIR / f"bounce_{task_id}.wav"
         
@@ -175,13 +203,15 @@ def render_bounce(task_id: str, task_dir: Path, files_map: Dict[str, Path], stat
         if proc.returncode != 0:
             raise RuntimeError(f"FFmpeg failed: {proc.stderr}")
 
-        TASKS[task_id]["status"] = "completed"
-        TASKS[task_id]["result_path"] = str(out_path)
+        job_data["status"] = "completed"
+        job_data["result_path"] = str(out_path)
+        _save_task(task_id, job_data)
 
     except Exception as e:
         logger.exception(f"[{task_id}] Render failed")
-        TASKS[task_id]["status"] = "failed"
-        TASKS[task_id]["error"]  = str(e)
+        job_data["status"] = "failed"
+        job_data["error"]  = str(e)
+        _save_task(task_id, job_data)
     finally:
         cleanup(task_dir)
 
@@ -203,7 +233,8 @@ async def bounce_async(
             files_map[uf.filename] = dest
 
         state = json.loads(state_json)
-        TASKS[task_id] = {"status": "processing"}
+        job_data = {"status": "processing"}
+        _save_task(task_id, job_data)
 
         background_tasks.add_task(
             render_bounce,
@@ -217,18 +248,30 @@ async def bounce_async(
 
 @router.get("/status/{task_id}")
 async def task_status(task_id: str):
-    if task_id not in TASKS:
+    task = _get_task(task_id)
+    if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    return {"status": TASKS[task_id]["status"], "error": TASKS[task_id].get("error", "")}
+    return {"status": task["status"], "error": task.get("error", "")}
 
 @router.get("/download/{task_id}")
 async def download_result(task_id: str):
-    if task_id not in TASKS:
+    task = _get_task(task_id)
+    if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    task = TASKS[task_id]
     if task["status"] != "completed":
         raise HTTPException(status_code=400, detail="Audio is not ready yet.")
     path = Path(task["result_path"])
     if not path.exists():
         raise HTTPException(status_code=500, detail="Result file missing from server.")
     return FileResponse(path, media_type="audio/wav", filename="sage_mixdown.wav")
+
+@router.delete("/cleanup/{task_id}")
+async def cleanup_daw_task(task_id: str):
+    task = TASKS.pop(task_id, None)
+    try:
+        shutil.rmtree(str(TEMP_DIR / task_id), ignore_errors=True)
+    except Exception:
+        pass
+    return JSONResponse({"deleted": task_id})
+
+

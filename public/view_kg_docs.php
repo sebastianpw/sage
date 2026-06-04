@@ -634,12 +634,17 @@ html { font-size: 130% !important; }
             <div class="js-folders" data-doc-id="<?= h($displayId) ?>"></div>
         </div>
 
+
         <div class="card-footer">
             <details class="raw-foldable">
-                <summary class="raw-summary">RAW JSON SOURCE</summary>
+                <summary class="raw-summary" style="display:flex; justify-content:space-between; align-items:center;">
+                    <button class="download-btn" onclick="copyCardJson('<?= h($displayId) ?>', this, event)" style="margin:0;">📋 Copy JSON</button>
+                    <span>RAW JSON SOURCE</span>
+                </summary>
                 <div class="raw-content"><?= h(json_encode($payload, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE)) ?></div>
             </details>
         </div>
+
 
         <!-- PAYLOAD -->
         <script type="application/json" id="payload-<?= h($displayId) ?>">
@@ -720,6 +725,56 @@ let modalHistory    =[];
 let modalHistoryIdx = -1;
 let currentNodeId   = null;   // kg_node id currently shown in modal
 let visualSwiper = null;
+
+
+
+// --- CLIPBOARD HELPERS ---
+window.copyCardJson = function(docId, btnElement, event) {
+    if(event) { event.stopPropagation(); event.preventDefault(); }
+    const payloadEl = document.getElementById('payload-' + docId);
+    if(payloadEl) {
+        let text = payloadEl.textContent;
+        try {
+            // Re-stringify to ensure clean formatting
+            text = JSON.stringify(JSON.parse(text), null, 2);
+        } catch(e) {}
+        copyToClipboardAction(text, btnElement);
+    }
+};
+
+window.copyToClipboardAction = function(text, btnElement, event) {
+    if(event) { event.stopPropagation(); event.preventDefault(); }
+    
+    const onSuccess = () => {
+        if(!btnElement) return;
+        const origText = btnElement.innerHTML;
+        btnElement.innerHTML = "✅ Copied!";
+        btnElement.style.background = "var(--curator-color)";
+        btnElement.style.color = "#fff";
+        setTimeout(() => { 
+            btnElement.innerHTML = origText; 
+            btnElement.style.background = "";
+            btnElement.style.color = "";
+        }, 2000);
+    };
+
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(onSuccess).catch(err => console.error(err));
+    } else {
+        // Fallback for older browsers / non-HTTPS
+        let textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try { document.execCommand('copy'); onSuccess(); } catch (err) { console.error('Copy fallback failed', err); }
+        textArea.remove();
+    }
+};
+
+
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 function init() {
@@ -1284,10 +1339,33 @@ function createDetailBlock(label, content) {
 function renderRawData(container, data) {
     const det = document.createElement('details');
     det.className = 'raw-foldable';
-    det.innerHTML = `<summary class="raw-summary">INSPECT RAW JSON</summary>`;
+    det.style.marginTop = '20px';
+    
+    const summary = document.createElement('summary');
+    summary.className = 'raw-summary';
+    summary.style.display = 'flex';
+    summary.style.justifyContent = 'space-between';
+    summary.style.alignItems = 'center';
+    
+    const btn = document.createElement('button');
+    btn.className = 'download-btn';
+    btn.style.margin = '0';
+    btn.innerHTML = '📋 Copy JSON';
+    btn.onclick = (e) => {
+        copyToClipboardAction(JSON.stringify(data, null, 2), btn, e);
+    };
+    
+    const span = document.createElement('span');
+    span.innerHTML = 'INSPECT RAW JSON';
+    
+    summary.appendChild(btn);
+    summary.appendChild(span);
+    
     const pre = document.createElement('div');
     pre.className = 'raw-content';
     pre.textContent = JSON.stringify(data, null, 2);
+    
+    det.appendChild(summary);
     det.appendChild(pre);
     container.appendChild(det);
 }

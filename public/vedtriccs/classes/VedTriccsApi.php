@@ -12,7 +12,7 @@ class VedTriccsApi
         $this->pdo = $pdo;
     }
 
-    public function dispatch(): void
+public function dispatch(): void
     {
         header('Content-Type: application/json');
         $action = $_REQUEST['api_action'] ?? '';
@@ -39,7 +39,6 @@ class VedTriccsApi
                 case 'get_pyapi_url':            $this->getPyApiUrlAction();       break;
 
                 // ── Transition metadata (NEW) ─────────────────────────────────
-                // Connectors are stored per clip-pair, keyed by (project_file_id, clip_a_key, clip_b_key)
                 case 'list_transitions':         $this->listTransitions();         break;
                 case 'save_connector':           $this->saveConnector();           break;
                 case 'load_connectors':          $this->loadConnectors();          break;
@@ -55,6 +54,7 @@ class VedTriccsApi
                 case 'unassign_demo':            $this->unassignDemo();            break;
 
                 // ── VED-style export (full timeline via PyAPI) ─────────────────
+                case 'ved_bounce_poll':          $this->pollVedBounce();           break;
                 case 'register_bounce':          $this->registerBounce();          break;
 
                 default:
@@ -709,6 +709,46 @@ class VedTriccsApi
     }
 
     // ─── VED-style full bounce ────────────────────────────────────────────────
+// ─── VED-style full bounce ────────────────────────────────────────────────
+
+    private function pollVedBounce(): void
+    {
+        $pyapiUrl = $_POST['pyapi_url'] ?? '';
+        $taskId   = $_POST['task_id'] ?? '';
+
+        if (!$pyapiUrl || !$taskId) {
+            echo json_encode(['status' => 'error', 'message' => 'Missing pyapi_url or task_id']);
+            return;
+        }
+
+        // Route polling through PHP exactly like the submission
+        $url = rtrim($pyapiUrl, '/') . '/ved/status/' . $taskId;
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err = curl_error($ch);
+        curl_close($ch);
+
+        if ($httpCode >= 400 || !$response) {
+            echo json_encode(['status' => 'error', 'message' => "PyAPI returned HTTP $httpCode: $err"]);
+            return;
+        }
+
+        $data = json_decode($response, true);
+        if (!$data) {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid JSON from PyAPI']);
+            return;
+        }
+
+        // Return PyAPI's exact response structure to JS
+        echo json_encode([
+            'status' => 'success',
+            'task_status' => $data['status'] ?? 'pending',
+            'error' => $data['error'] ?? ''
+        ]);
+    }
 
     private function registerBounce(): void
     {
@@ -718,16 +758,17 @@ class VedTriccsApi
         $canvasW    = (int)($_POST['canvas_w'] ?? 0);
         $canvasH    = (int)($_POST['canvas_h'] ?? 0);
         $durationS  = (int)($_POST['duration_s'] ?? 0);
+        $pyapiUrl   = $_POST['pyapi_url']   ?? $this->getPyApiUrl();
 
         if (!$taskId || !preg_match('/^[a-f0-9\-]+$/i', $taskId)) {
             echo json_encode(['status'=>'error','message'=>'Invalid task ID']); return;
         }
 
-        $pyApiUrl = $this->getPyApiUrl() . '/ved/download/' . $taskId;
-        $tmpFile  = tempnam(sys_get_temp_dir(), 'vtexport_');
-        $fp       = fopen($tmpFile, 'w+');
-        $ext      = 'mp4';
-        $ch       = curl_init($pyApiUrl);
+        $pyDlUrl = rtrim($pyapiUrl, '/') . '/ved/download/' . $taskId;
+        $tmpFile = tempnam(sys_get_temp_dir(), 'vtexport_');
+        $fp      = fopen($tmpFile, 'w+');
+        $ext     = 'mp4';
+        $ch      = curl_init($pyDlUrl);
         curl_setopt($ch, CURLOPT_FILE, $fp);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_HEADERFUNCTION, function($curl, $header) use (&$ext) {
@@ -811,13 +852,23 @@ class VedTriccsApi
             }
             $this->pdo->commit();
             
+            // Cleanup PyAPI Temp folder
+            if ($pyapiUrl) {
+                $cleanupUrl = rtrim($pyapiUrl, '/') . "/ved/cleanup/{$taskId}";
+                $chC = curl_init($cleanupUrl);
+                curl_setopt($chC, CURLOPT_CUSTOMREQUEST, "DELETE");
+                curl_setopt($chC, CURLOPT_RETURNTRANSFER, true);
+                curl_exec($chC);
+                curl_close($chC);
+            }
+
             echo json_encode(['status'=>'success','video_id'=>$videoId,'filename'=>"videos/$filename"]);
         } catch (Exception $e) {
-            $this->pdo->rollBack(); @unlink($tmpFile);
+            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
+            @unlink($tmpFile);
             echo json_encode(['status'=>'error','message'=>$e->getMessage()]);
         }
     }
-
     // ─── Table bootstrap ──────────────────────────────────────────────────────
 
     private function ensureTables(): void

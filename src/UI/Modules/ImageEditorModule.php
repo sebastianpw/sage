@@ -25,6 +25,10 @@ namespace App\UI\Modules;
  *   - Curves:   RGB master + per-channel R/G/B
  *   - Film Looks presets (replaces old Presets tab)
  *   - Save / Load named grade profiles
+ *
+ * NEW (surgical addition):
+ *   - "Remove Greenscreen" button in Crop tab AI Tools section
+ *   - Chromakey color picker modal (same LAB-space algorithm as vidrembg)
  */
 class ImageEditorModule
 {
@@ -107,7 +111,7 @@ class ImageEditorModule
                         <button class="ie-tab" data-tab="grade">Grade</button>
                     </div>
 
-                    <!-- ── TAB: CROP (UNCHANGED) ── -->
+                    <!-- ── TAB: CROP (UNCHANGED except new greenscreen button) ── -->
                     <div class="ie-tab-content active" data-tab-content="crop">
                         <div class="ie-tool-group">
                             <label><strong>Crop Mode</strong></label>
@@ -129,6 +133,7 @@ class ImageEditorModule
                         <div class="ie-tool-group">
                             <label><strong>AI Tools</strong></label>
                             <button class="ie-btn ie-btn-secondary" id="ieRemoveBgBtn">Remove Background</button>
+                            <button class="ie-btn ie-btn-secondary" id="ieChromakeyBtn">Remove Greenscreen</button>
                         </div>
                     </div>
 
@@ -167,6 +172,62 @@ class ImageEditorModule
             <button class="ie-btn ie-btn-secondary" id="ieUndoBtn" disabled>Undo</button>
             <button class="ie-btn ie-btn-primary"   id="ieSaveBtn" disabled>Save</button>
             <button class="ie-btn ie-btn-secondary" id="ieCloseBtn">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── CHROMAKEY COLOR PICKER MODAL ── -->
+<!-- Overlays the image editor; same bottom-sheet pattern as view_video_details -->
+<div id="ieChromakeyModal" class="ie-ck-overlay" style="display:none;">
+    <div class="ie-ck-sheet">
+        <div class="ie-ck-header">
+            <span class="ie-ck-title">◩ Remove Greenscreen</span>
+            <button class="ie-ck-close" id="ieChromakeyClose">×</button>
+        </div>
+
+        <!-- Color row: swatch + hex input + pick-from-image button -->
+        <div class="ie-ck-color-row">
+            <div class="ie-ck-swatch" id="ieChromakaySwatch" title="Current color"></div>
+            <input type="text" class="ie-ck-hex-input" id="ieChromakeyHex" value="#00FF00" maxlength="7"
+                   placeholder="#00FF00">
+            <input type="color" id="ieChromakeyNativePicker" value="#00FF00"
+                   style="width:36px;height:36px;border:none;padding:0;cursor:pointer;border-radius:4px;flex-shrink:0;">
+        </div>
+
+        <!-- Threshold / softness sliders -->
+        <div class="ie-ck-sliders">
+            <div class="ie-tool-group">
+                <div class="range-row">
+                    <div class="range-label">Threshold</div>
+                    <input type="range" id="ieChromakeyThreshold" class="ig-slider"
+                           min="0" max="100" step="1" value="15" data-default="15">
+                    <div class="range-value" id="ieChromakeyThresholdVal">15</div>
+                </div>
+            </div>
+            <div class="ie-tool-group">
+                <div class="range-row">
+                    <div class="range-label">Softness</div>
+                    <input type="range" id="ieChromakaySoftness" class="ig-slider"
+                           min="0" max="100" step="1" value="5" data-default="5">
+                    <div class="range-value" id="ieChromakaySoftnessVal">5</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sampler canvas: tap image to sample color -->
+        <div class="ie-ck-sampler-hint">Tap the green area on the image to sample color:</div>
+        <div class="ie-ck-sampler-wrap" id="ieCkSamplerWrap">
+            <canvas id="ieCkSamplerCanvas"></canvas>
+        </div>
+        <div class="ie-ck-sampler-result" id="ieCkSamplerResult" style="display:none;">
+            <div class="ie-ck-sampler-swatch" id="ieCkSamplerSwatch"></div>
+            <span class="ie-ck-sampler-hex" id="ieCkSamplerHex">#00FF00</span>
+            <button class="ie-ck-use-btn" id="ieCkUseColorBtn">Use</button>
+        </div>
+
+        <div class="ie-ck-footer">
+            <button class="ie-btn ie-btn-secondary" id="ieChromakayCancelBtn" style="flex:0.5;margin:0;">Cancel</button>
+            <button class="ie-btn ie-btn-primary"   id="ieChromakeyConfirmBtn" style="flex:1;margin:0;">Apply Removal</button>
         </div>
     </div>
 </div>
@@ -527,6 +588,88 @@ HTML;
 /* ── FILTER PRESETS (kept for BC, hidden in Grade tab) ── */
 .ie-filter-presets{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
 
+/* ── CHROMAKEY MODAL ── */
+/* Sits above the image editor modal (z-index: 999999999+1) */
+.ie-ck-overlay{
+    position:fixed;top:0;left:0;right:0;bottom:0;
+    z-index:999999999;
+    background:rgba(0,0,0,.82);
+    display:flex;align-items:flex-end;justify-content:center;
+}
+@media(min-width:600px){
+    .ie-ck-overlay{align-items:center;}
+}
+.ie-ck-sheet{
+    width:100%;max-width:480px;
+    background:#0e1319;
+    border:1px solid #1c2535;
+    border-radius:12px 12px 0 0;
+    display:flex;flex-direction:column;
+    max-height:88dvh;overflow:hidden;
+    font-family:'Space Mono','Fira Mono',monospace;
+}
+@media(min-width:600px){
+    .ie-ck-sheet{border-radius:10px;max-height:82dvh;}
+}
+.ie-ck-header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:12px 14px 10px;border-bottom:1px solid #1c2535;flex-shrink:0;
+}
+.ie-ck-title{font-size:0.8rem;font-weight:700;color:#f5a623;letter-spacing:1.5px;text-transform:uppercase;}
+.ie-ck-close{
+    width:30px;height:30px;background:none;border:1px solid #1c2535;color:#5a6a80;
+    border-radius:4px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;
+    transition:all .15s;
+}
+.ie-ck-close:hover{border-color:#f05060;color:#f05060;}
+.ie-ck-color-row{
+    display:flex;align-items:center;gap:10px;
+    padding:12px 14px;border-bottom:1px solid #1c2535;flex-shrink:0;
+}
+.ie-ck-swatch{
+    width:36px;height:36px;border-radius:4px;border:2px solid rgba(255,255,255,.15);
+    flex-shrink:0;cursor:pointer;transition:border-color .15s;
+}
+.ie-ck-hex-input{
+    flex:1;padding:8px 10px;background:#080b10;border:1px solid #1c2535;
+    color:#c8d4e8;border-radius:4px;font-family:inherit;font-size:0.85rem;
+    letter-spacing:1px;
+}
+.ie-ck-hex-input:focus{outline:none;border-color:#f5a623;}
+.ie-ck-sliders{padding:10px 14px 4px;flex-shrink:0;}
+.ie-ck-sampler-hint{
+    padding:4px 14px 2px;font-size:0.65rem;color:#5a6a80;flex-shrink:0;
+}
+.ie-ck-sampler-wrap{
+    flex:1;min-height:120px;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;
+    background:#000;cursor:crosshair;touch-action:none;
+}
+#ieCkSamplerCanvas{display:block;max-width:100%;max-height:100%;}
+.ie-ck-sampler-result{
+    display:flex;align-items:center;gap:10px;
+    padding:10px 14px;border-top:1px solid #1c2535;
+    border-bottom:1px solid #1c2535;flex-shrink:0;
+}
+.ie-ck-sampler-swatch{
+    width:32px;height:32px;border-radius:4px;
+    border:2px solid rgba(255,255,255,.15);flex-shrink:0;
+}
+.ie-ck-sampler-hex{
+    font-size:1rem;font-weight:700;letter-spacing:2px;color:#c8d4e8;
+}
+.ie-ck-use-btn{
+    margin-left:auto;padding:5px 12px;background:none;
+    border:1px solid #f5a623;color:#f5a623;border-radius:4px;
+    font-family:inherit;font-size:0.7rem;font-weight:700;cursor:pointer;
+    transition:all .15s;
+}
+.ie-ck-use-btn:hover{background:rgba(245,166,35,.12);}
+.ie-ck-footer{
+    display:flex;gap:8px;padding:10px 14px;
+    border-top:1px solid #1c2535;flex-shrink:0;
+}
+
 /* ── RESPONSIVE ── */
 @media(max-width:768px){
     .ie-editor-layout{grid-template-columns:1fr}
@@ -579,6 +722,10 @@ JS;
     let activeCurveChannel = 'rgb'; // 'rgb' | 'r' | 'g' | 'b'
     let curvePoints = { rgb: getDefaultCurve(), r: getDefaultCurve(), g: getDefaultCurve(), b: getDefaultCurve() };
     let gradePreviewTimer = null;
+
+    // Chromakey state
+    let ckSamplerImg        = null;
+    const CK_SAMPLE_RADIUS  = 10;
 
     function getDefaultGradeState() {
         return {
@@ -848,6 +995,124 @@ JS;
         } catch(err) {
             showToast('Save request failed', 'error'); console.error(err);
         } finally { hideLoadingOverlay(); }
+    }
+
+    // ╔═══════════════════════════════════════════════════════════════════╗
+    // ║  NEW: Chromakey Modal                                           ║
+    // ╚═══════════════════════════════════════════════════════════════════╝
+
+    function openChromakeyModal() {
+        // Load current image into sampler canvas
+        const src = currentTempFile ? '/' + currentTempFile : currentData.originalSrc;
+        ckLoadSamplerImage(src);
+
+        // Reset result row
+        document.getElementById('ieCkSamplerResult').style.display = 'none';
+
+        document.getElementById('ieChromakeyModal').style.display = 'flex';
+    }
+
+    function closeChromakeyModal() {
+        document.getElementById('ieChromakeyModal').style.display = 'none';
+    }
+
+    function ckSetColor(hex) {
+        hex = hex.toUpperCase();
+        if (!/^#[0-9A-F]{6}$/.test(hex)) return;
+        document.getElementById('ieChromakeyHex').value        = hex;
+        document.getElementById('ieChromakaySwatch').style.background = hex;
+        document.getElementById('ieChromakeyNativePicker').value = hex;
+    }
+
+    function ckLoadSamplerImage(src) {
+        const canvas = document.getElementById('ieCkSamplerCanvas');
+        const wrap   = document.getElementById('ieCkSamplerWrap');
+        const ctx    = canvas.getContext('2d');
+        const img    = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = function() {
+            ckSamplerImg = img;
+            const wrapW = wrap.clientWidth  || 320;
+            const wrapH = wrap.clientHeight || 180;
+            const scale = Math.min(wrapW / img.naturalWidth, wrapH / img.naturalHeight);
+            canvas.width  = Math.round(img.naturalWidth  * scale);
+            canvas.height = Math.round(img.naturalHeight * scale);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        };
+        img.onerror = function() { showToast('Could not load image for color sampling', 'error'); };
+        img.src = src + (src.indexOf('?') > -1 ? '&' : '?') + 'ck=' + Date.now();
+    }
+
+    function ckSampleAt(clientX, clientY) {
+        const canvas = document.getElementById('ieCkSamplerCanvas');
+        const ctx    = canvas.getContext('2d');
+        const rect   = canvas.getBoundingClientRect();
+        const canvasX = clientX - rect.left;
+        const canvasY = clientY - rect.top;
+
+        const r = CK_SAMPLE_RADIUS;
+        let totalR = 0, totalG = 0, totalB = 0, count = 0;
+        const x0 = Math.max(0, Math.round(canvasX - r));
+        const y0 = Math.max(0, Math.round(canvasY - r));
+        const x1 = Math.min(canvas.width  - 1, Math.round(canvasX + r));
+        const y1 = Math.min(canvas.height - 1, Math.round(canvasY + r));
+        const imgData = ctx.getImageData(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+        const data = imgData.data;
+        for (let py = y0; py <= y1; py++) {
+            for (let px = x0; px <= x1; px++) {
+                const dx = px - canvasX, dy = py - canvasY;
+                if (dx * dx + dy * dy <= r * r) {
+                    const idx = ((py - y0) * (x1 - x0 + 1) + (px - x0)) * 4;
+                    totalR += data[idx]; totalG += data[idx + 1]; totalB += data[idx + 2];
+                    count++;
+                }
+            }
+        }
+        if (count === 0) return null;
+        const avgR = Math.round(totalR / count);
+        const avgG = Math.round(totalG / count);
+        const avgB = Math.round(totalB / count);
+        const hex = '#' + [avgR, avgG, avgB].map(v => v.toString(16).padStart(2, '0')).join('').toUpperCase();
+
+        // Draw indicator ring
+        if (ckSamplerImg) ctx.drawImage(ckSamplerImg, 0, 0, canvas.width, canvas.height);
+        ctx.beginPath(); ctx.arc(canvasX, canvasY, r + 2, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 2.5; ctx.stroke();
+        ctx.beginPath(); ctx.arc(canvasX, canvasY, r, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.stroke();
+
+        // Show result row
+        document.getElementById('ieCkSamplerResult').style.display = 'flex';
+        document.getElementById('ieCkSamplerSwatch').style.background = hex;
+        document.getElementById('ieCkSamplerHex').textContent = hex;
+
+        return hex;
+    }
+
+    async function applyChromakeyBg() {
+        const hexEl     = document.getElementById('ieChromakeyHex');
+        const hex       = (hexEl ? hexEl.value.trim().toUpperCase() : '#00FF00');
+        const threshold = (parseInt(document.getElementById('ieChromakeyThreshold').value) || 15) / 100;
+        const softness  = (parseInt(document.getElementById('ieChromakaySoftness').value)  || 5)  / 100;
+
+        if (!/^#[0-9A-F]{6}$/.test(hex)) {
+            showToast('Invalid hex color', 'error');
+            return;
+        }
+
+        closeChromakeyModal();
+
+        await executeAction(
+            TEMP_API_ENDPOINT,
+            {
+                action:      'chromakey_bg',
+                source_file: currentTempFile || currentData.originalFilename,
+                color:       hex,
+                threshold:   threshold,
+                softness:    softness,
+            },
+            'Greenscreen Removal'
+        );
     }
 
     // ╔═══════════════════════════════════════════════════════════════════╗
@@ -1544,6 +1809,7 @@ JS;
         if (cropper) { cropper.destroy(); cropper = null; }
         destroyFabric();
         document.getElementById('imageEditorModal').style.display = 'none';
+        closeChromakeyModal();
         currentData = {}; editHistory = []; operationHistory = [];
         hasUnsavedChanges = false; currentTempFile = null;
     }
@@ -1625,6 +1891,72 @@ JS;
             colorPicker.addEventListener('input', function() { colorText.value = this.value; });
             colorText.addEventListener('input',   function() { try { colorPicker.value = this.value; } catch(e){} });
         }
+
+        // ── NEW: Chromakey button ──
+        modal.querySelector('#ieChromakeyBtn')?.addEventListener('click', openChromakeyModal);
+
+        // ── Chromakey modal wiring ──
+        const ckModal = document.getElementById('ieChromakeyModal');
+        if (ckModal) {
+            document.getElementById('ieChromakeyClose')?.addEventListener('click', closeChromakeyModal);
+            document.getElementById('ieChromakayCancelBtn')?.addEventListener('click', closeChromakeyModal);
+            document.getElementById('ieChromakeyConfirmBtn')?.addEventListener('click', applyChromakeyBg);
+
+            // Hex input → swatch sync
+            document.getElementById('ieChromakeyHex')?.addEventListener('input', function() {
+                const v = this.value.trim();
+                if (/^#[0-9A-Fa-f]{6}$/.test(v)) {
+                    document.getElementById('ieChromakaySwatch').style.background = v;
+                    document.getElementById('ieChromakeyNativePicker').value = v;
+                }
+            });
+
+            // Native color picker → hex + swatch sync
+            document.getElementById('ieChromakeyNativePicker')?.addEventListener('input', function() {
+                const v = this.value.toUpperCase();
+                document.getElementById('ieChromakeyHex').value = v;
+                document.getElementById('ieChromakaySwatch').style.background = v;
+            });
+
+            // Slider value display
+            document.getElementById('ieChromakeyThreshold')?.addEventListener('input', function() {
+                document.getElementById('ieChromakeyThresholdVal').textContent = this.value;
+            });
+            document.getElementById('ieChromakaySoftness')?.addEventListener('input', function() {
+                document.getElementById('ieChromakaySoftnessVal').textContent = this.value;
+            });
+
+            // Sampler canvas: click / touch to sample
+            const samplerCanvas = document.getElementById('ieCkSamplerCanvas');
+            if (samplerCanvas) {
+                samplerCanvas.addEventListener('click', function(e) {
+                    ckSampleAt(e.clientX, e.clientY);
+                });
+                samplerCanvas.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                    const t = e.changedTouches[0];
+                    ckSampleAt(t.clientX, t.clientY);
+                }, { passive: false });
+            }
+
+            // "Use" button: copy sampled color into main hex field
+            document.getElementById('ieCkUseColorBtn')?.addEventListener('click', function() {
+                const hex = document.getElementById('ieCkSamplerHex').textContent.trim();
+                if (/^#[0-9A-F]{6}$/.test(hex)) {
+                    ckSetColor(hex);
+                    // Auto-apply the removal immediately for better mobile UX
+                    applyChromakeyBg();
+                }
+            });
+
+            // Close on overlay click
+            ckModal.addEventListener('click', function(e) {
+                if (e.target === ckModal) closeChromakeyModal();
+            });
+        }
+
+        // Init default swatch color
+        ckSetColor('#00FF00');
 
         // ── Grade tab bindings ──
 

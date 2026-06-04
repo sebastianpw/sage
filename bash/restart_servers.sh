@@ -60,8 +60,6 @@ sleep 10
 
 "$SCRIPT_DIR/../pyapi/run_server.sh"
 
-"$SCRIPT_DIR/../chroma-server/stop_chroma.sh"
-"$SCRIPT_DIR/../chroma-server/run_chroma.sh"
 
 check_wake_lock() {
     if command -v termux-wake-lock >/dev/null 2>&1; then

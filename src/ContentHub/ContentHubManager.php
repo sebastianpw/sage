@@ -17,6 +17,10 @@ class ContentHubManager
     public function __construct(\PDO $pdo)
     {
         $this->pdo = $pdo;
+        // Ensure magazine_highlight is in post_type enum seamlessly without inflating
+        try {
+            $this->pdo->exec("ALTER TABLE content_hub_posts MODIFY COLUMN post_type ENUM('image_grid','image_swiper','video_playlist','youtube_playlist','url_reference','story','reel','thread','scrollmagic_gallery','cinematic_story','anime_gallery','narrative_gallery','spatial_viewer','magazine_highlight') NOT NULL DEFAULT 'image_grid'");
+        } catch (\Exception $e) {}
     }
 
     // ── Post CRUD ──────────────────────────────────────────────────────────
@@ -92,6 +96,43 @@ class ContentHubManager
         $stmt->bindValue(':limit', $limit, \PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    }
+    
+    public function getPublishedEpisodes(): array {
+        $sql = "SELECT s.id as series_id, s.title as series_title, s.asset_url_prefix,
+                       ns.id as sequence_id, ns.name as episode_name, ns.sequence_data,
+                       cs.chapter_label, cs.cover_image_url as ep_cover, s.landing_page_script
+                FROM cinemagic_series s
+                JOIN cinemagic_series_2_cinemagics sc ON sc.series_id = s.id
+                JOIN cinemagics_2_sequences cs ON cs.cinemagic_id = sc.cinemagic_id
+                JOIN narrative_sequences ns ON ns.id = cs.sequence_id
+                WHERE s.status = 'published'
+                ORDER BY s.sort_order DESC, s.id DESC, sc.sort_order ASC, cs.sort_order ASC";
+        $episodes = $this->pdo->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
+
+        foreach ($episodes as &$ep) {
+            $cover = $ep['ep_cover'];
+            if (!$cover) {
+                // Fallback: Use the first page of the episode exactly as done in reading section
+                $items = json_decode($ep['sequence_data'] ?? '[]', true) ?: [];
+                if (!empty($items)) {
+                    $first = $items[0];
+                    $sid = is_array($first) ? (int)($first['sketch_id']??0) : (int)$first;
+                    $fid = is_array($first) ? (int)($first['frame_id']??0) : 0;
+                    if ($fid) {
+                        $fStmt = $this->pdo->prepare("SELECT filename FROM frames WHERE id = ?");
+                        $fStmt->execute([$fid]);
+                        $cover = $fStmt->fetchColumn();
+                    } else if ($sid) {
+                        $fStmt = $this->pdo->prepare("SELECT f.filename FROM frames f INNER JOIN frames_2_sketches m ON m.from_id = f.id WHERE f.entity_id = ? ORDER BY f.id DESC LIMIT 1");
+                        $fStmt->execute([$sid]);
+                        $cover = $fStmt->fetchColumn();
+                    }
+                }
+            }
+            $ep['resolved_cover'] = $cover;
+        }
+        return ['success' => true, 'episodes' => $episodes];
     }
 
     public function savePost(array $data, string $publicPathAbs = ''): array
@@ -190,8 +231,9 @@ class ContentHubManager
             $insertedId = (int)$this->pdo->lastInsertId();
         }
 
-        // Handle copying media to a dedicated post sub-folder
-        if ($publicPathAbs) {
+        // Handle copying media to a dedicated post sub-folder (skip for highlights since they act dynamically for grid indexing)
+        $postType = $data['post_type'] ?? 'image_grid';
+        if ($publicPathAbs && $postType !== 'magazine_highlight') {
             $postDirRel = '/content_hub/posts/post' . $insertedId;
             $postDirAbs = rtrim($publicPathAbs, '/') . $postDirRel;
             if (!file_exists($postDirAbs)) {
@@ -382,7 +424,7 @@ HTML;
             $langPickerHtml = <<<HTML
 <div class="lang-picker" id="lang-picker">
     <button class="lang-toggle" id="lang-toggle" aria-expanded="false">
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
         <span>EN</span>
     </button>
     <div class="lang-menu" role="menu"><a href="index.html">EN</a></div>
@@ -390,12 +432,74 @@ HTML;
 HTML;
         }
 
-        // ── Published magazine series ──────────────────────────────────────
+        // ── Published magazine series + Highlights ──────────────────────────────────────
         $magazineCardsHtml = '';
         
-        try {
-            $whereClause = $isPreview ? "status != 'archived'" : "status = 'published'";
-            $seriesStmt = $this->pdo->prepare("SELECT * FROM cinemagic_series WHERE $whereClause ORDER BY id ASC");
+try {
+            // 1. HIGHLIGHTS
+            $hlStmt = $this->pdo->prepare("SELECT * FROM content_hub_posts WHERE post_type = 'magazine_highlight' AND status = 'published' ORDER BY sort_order DESC, scheduled_at DESC, created_at DESC LIMIT 5");
+            $hlStmt->execute();
+            $highlights = $hlStmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            foreach ($highlights as $hl) {
+                $title = htmlspecialchars($hl['title']);
+                $cover = $hl['preview_image_url'];
+                $media = json_decode($hl['media_items'], true) ?: [];
+                $seqId = (int)($media['sequence_id'] ?? 0);
+                $seriesId = (int)($media['series_id'] ?? 0);
+                $assetPrefix = $hl['asset_url_prefix'] ?? '';
+
+                // Fetch series title to construct the exact slug CinemagicHub uses (e.g. p-r3sh0r75)
+                $seriesTitle = '';
+                if ($seriesId) {
+                    $stStmt = $this->pdo->prepare("SELECT title FROM cinemagic_series WHERE id = ?");
+                    $stStmt->execute([$seriesId]);
+                    $seriesTitle = $stStmt->fetchColumn() ?: '';
+                }
+                $seriesSlug = preg_replace('/[^a-z0-9]+/', '-', strtolower($seriesTitle)) ?: 'series_' . $seriesId;
+                $repoAssetPath = 'cinemagic_hub/' . $seriesSlug . '/assets';
+
+                $suffix = $langCode === 'en' ? '' : '_' . $langCode;
+                
+                // Reverted back to the flattened HTML structure for the link
+                $href = $isPreview
+                    ? '../cinemagic_hub/api.php?action=preview_episode&series_id=' . $seriesId . '&seq_id=' . $seqId . '&lang=' . $langCode
+                    : 'ep_' . $seqId . $suffix . '.html';
+
+                if ($cover) {
+                    if ($isPreview) {
+                        $cover = str_starts_with($cover, '/') ? $cover : '/' . $cover;
+                    } else {
+                        // EXACT MATCH TO CinemagicHubManager::resolveImageUrl logic (Confirmed Working)
+                        if ($assetPrefix !== '') {
+                            $cover = rtrim($assetPrefix, '/') . '/' . $repoAssetPath . '/' . basename($cover);
+                        } else if (!preg_match('/^https?:\/\//i', $cover)) {
+                            $cover = '../' . $repoAssetPath . '/' . basename($cover);
+                        }
+                    }
+                    $cover = htmlspecialchars($cover);
+                    $thumbHtml = '<img class="mag-card-cover" src="' . $cover . '" alt="' . $title . '" loading="lazy">';
+                } else {
+                    $thumbHtml = '<div class="mag-card-cover-placeholder"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 9h18M9 21V9"/></svg></div>';
+                }
+
+                $metaLine = htmlspecialchars($hl['content'] ?? 'Featured Episode');
+
+                $magazineCardsHtml .= <<<HTML
+<a class="mag-card highlight-card fade-up" href="{$href}">
+    <div class="highlight-badge">Featured Episode</div>
+    {$thumbHtml}
+    <div class="mag-card-body">
+        <div class="mag-card-label">Magazine</div>
+        <div class="mag-card-title">{$title}</div>
+        <div class="mag-card-meta">{$metaLine}</div>
+    </div>
+</a>
+HTML;
+            }
+
+            // 2. REGULAR SERIES
+            $seriesStmt = $this->pdo->prepare("SELECT * FROM cinemagic_series WHERE status = 'published' ORDER BY sort_order DESC, id DESC");
             $seriesStmt->execute();
             $seriesList = $seriesStmt->fetchAll(\PDO::FETCH_ASSOC);
 
@@ -405,29 +509,23 @@ HTML;
                 $status  = $series['status'] ?? 'draft';
                 $seriesSlug = preg_replace('/[^a-z0-9]+/', '-', strtolower($series['title'] ?? '')) ?: 'series_' . $sid;
 
-                // FIX: Match exact cover URL logic from CinemagicHub
+                // EXACT MATCH TO CinemagicHubManager Cover Logic (Confirmed Working)
                 $cover = $series['cover_image_url'] ?? '';
                 if ($cover) {
                     if ($isPreview) {
-                        // Local preview: use native absolute path, no prefix
                         $cover = str_starts_with($cover, '/') ? $cover : '/' . $cover;
                     } else {
-                        // Export/Rollout: handle relative vs prefixed paths
                         $urlPrefix = $series['asset_url_prefix'] ?? '';
                         $repoAssetPath = 'cinemagic_hub/' . $seriesSlug . '/assets';
-                        
                         if ($urlPrefix !== '') {
-                            // Example: https://cdn.example.com/cinemagic_hub/slug/assets/cover.jpg
                             $cover = rtrim($urlPrefix, '/') . '/' . $repoAssetPath . '/' . basename($cover);
-                        } else {
-                            // Example: ../cinemagic_hub/slug/assets/cover.jpg (since we are in content_hub/index.html)
+                        } else if (!preg_match('/^https?:\/\//i', $cover)) {
                             $cover = '../' . $repoAssetPath . '/' . basename($cover);
                         }
                     }
                     $cover = htmlspecialchars($cover);
                 }
 
-                // Sequence counters wrapped safely
                 $seasonCount  = 0;
                 $episodeCount = 0;
                 try {
@@ -454,10 +552,31 @@ HTML;
                 $metaLine = implode(' &middot; ', $metaParts);
                 if ($metaLine === '') $metaLine = 'Magazine Series';
 
-                // Adjusted Link path
+                $scriptName = trim($series['landing_page_script'] ?? '');
+                if ($scriptName === '') {
+                    try {
+                        $fstStmt = $this->pdo->prepare("
+                            SELECT cs.sequence_id
+                            FROM cinemagic_series_2_cinemagics sc
+                            JOIN cinemagics_2_sequences cs ON cs.cinemagic_id = sc.cinemagic_id
+                            WHERE sc.series_id = ?
+                            ORDER BY sc.sort_order ASC, cs.sort_order ASC
+                            LIMIT 1
+                        ");
+                        $fstStmt->execute([$sid]);
+                        $firstSeq = $fstStmt->fetchColumn();
+                        $scriptName = $firstSeq ? 'index_' . $firstSeq : 'index_' . $sid;
+                    } catch (\Throwable $e) {
+                        $scriptName = 'index_' . $sid;
+                    }
+                }
+                
+                $suffix = $langCode === 'en' ? '' : '_' . $langCode;
+                
+                // Reverted back to the flattened HTML structure for the link
                 $href = $isPreview
-                    ? '../cinemagic_hub/api.php?action=preview_series&id=' . $sid
-                    : 'index_mag.html';
+                    ? '../cinemagic_hub/api.php?action=preview_series&id=' . $sid . '&lang=' . $langCode
+                    : $scriptName . $suffix . '.html';
 
                 if ($cover) {
                     $thumbHtml = '<img class="mag-card-cover" src="' . $cover . '" alt="' . $title . '" loading="lazy">';
@@ -477,31 +596,75 @@ HTML;
 HTML;
             }
         } catch (\Throwable $e) {}
+        
+        
+        
+        
+        
+        
 
         if ($magazineCardsHtml === '') {
             $magazineCardsHtml = '<div class="mag-empty">No published magazine series yet.</div>';
         }
 
         // ── Assemble ───────────────────────────────────────────────────
+        // ── Assemble ───────────────────────────────────────────────────
         $template = file_get_contents($projectRoot . '/templates/post_grid.html');
         $year     = date('Y');
 
+        $seoMeta = <<<HTML
+<title>Starlight Guardians — The Anima Chronicles</title>
+<meta name="keywords" content="Starlight Guardians, The Anima Chronicles, original anime series, sci-fi fantasy anime, animated comic series, indie anime, webtoon science fiction, original animated universe, Anima magic system, Crater City, Shadow-Scab, Drift Coalition, Nova Terra, Tidalcross, Emberveil, Vortex Station, partnership versus force, anime worldbuilding, independent animation">
+<meta name="description" content="Starlight Guardians: The Anima Chronicles is an original science fiction and fantasy animated series spanning five seasons across seven civilizations. An Anime story about what it costs to stop performing compliance — and what becomes possible when a world learns to ask before it takes.">
+HTML;
+        $template = str_replace('<title>Starlight Guardians — The Anima Chronicles</title>', $seoMeta, $template);
+
+        $gaCode = '';
+
+
+
+
+        if (!$isPreview) {
+            $gaCode = <<<HTML
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-SBSTRVS0NR"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-SBSTRVS0NR');
+</script>
+HTML;
+        }
+
         return str_replace(
-            ['{{POSTS_JSON}}', '{{MAGAZINE_CARDS_HTML}}', '{{LANG_PICKER_HTML}}', '{{LANG_CODE}}', '{{YEAR}}'],
+            ['{{POSTS_JSON}}', '{{MAGAZINE_CARDS_HTML}}', '{{LANG_PICKER_HTML}}', '{{LANG_CODE}}', '{{YEAR}}', '</body>'],
             [
                 json_encode($gridData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
                 $magazineCardsHtml,
                 $langPickerHtml,
                 htmlspecialchars($langCode),
                 $year,
+                $gaCode . "\n</body>"
             ],
             $template
         );
+
+
+        
+        
+        
+        
     }
     
    public function exportPostZip(int $id, string $publicPathAbs): ?string {
         $post = $this->getPostById($id);
         if (!$post) return null;
+
+        if ($post['post_type'] === 'magazine_highlight') {
+            die("Magazine highlights are embedded directly within the grid and do not have standalone HTML pages.");
+        }
         
         $tempDir = sys_get_temp_dir();
         $zipName = $tempDir . '/post_' . $id . '_' . time() . '.zip';
@@ -568,6 +731,19 @@ HTML;
         $zip->addFromString('content_hub/index.html', $this->exportGridHtml(false));
         
         foreach ($posts as $post) {
+            if ($post['post_type'] === 'magazine_highlight') {
+                if (!empty($post['preview_image_url'])) {
+                    $file = ltrim($post['preview_image_url'], '/');
+                    if (!preg_match('/^https?:\/\//i', $file)) {
+                        $absPath = rtrim($publicPathAbs ?? '', '/') . '/' . $file;
+                        if (file_exists($absPath)) {
+                            $zip->addFile($absPath, $file);
+                        }
+                    }
+                }
+                continue; // Skip individual HTML processing for highlight instances
+            }
+            
             $prefix = $post['asset_url_prefix'] ?? '';
             $html = $this->renderPostHtml($post, true, $prefix, false);
             $zip->addFromString('content_hub/posts/' . $post['slug'] . '.html', $html);
@@ -626,66 +802,81 @@ HTML;
         $gridHtml = $this->exportGridHtml(false);
         file_put_contents($contentHubDir . '/index.html', $gridHtml);
 
-        // 2. Export the Post HTML (applying the defined prefix)
-        $postsDir = $contentHubDir . '/posts';
-        if (!is_dir($postsDir)) {
-            @mkdir($postsDir, 0777, true);
-        }
-        $postHtml = $this->renderPostHtml($post, true, $post['asset_url_prefix'] ?? '', true);
-        file_put_contents($postsDir . '/' . $post['slug'] . '.html', $postHtml);
-
-        // 3. For cinematic_story also write the sidecar data JS into the assets sub-folder
-        if ($post['post_type'] === 'cinematic_story') {
-            $assetsDirAbs = $postsDir . '/post' . $id;
-            if (!is_dir($assetsDirAbs)) {
-                @mkdir($assetsDirAbs, 0777, true);
+        if ($post['post_type'] === 'magazine_highlight') {
+            // Bundle simply the highlight image for the grid index logic
+            if (!empty($post['preview_image_url'])) {
+                $file = ltrim($post['preview_image_url'], '/');
+                if (!preg_match('/^https?:\/\//i', $file)) {
+                    $absPath = rtrim($publicPathAbs, '/') . '/' . $file;
+                    $destAbs = rtrim($targetRepo, '/') . '/' . $file;
+                    if (file_exists($absPath)) {
+                        @mkdir(dirname($destAbs), 0777, true);
+                        @copy($absPath, $destAbs);
+                    }
+                }
             }
-            $storyData = $this->buildCinematicStoryData($post, $post['asset_url_prefix'] ?? '');
-            $jsContent = 'var storyboardData = ' . json_encode($storyData, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ';' . "\n";
-            file_put_contents($assetsDirAbs . '/data_' . $id . '.js', $jsContent);
-        }
-
-        // 3b. For anime_gallery also write the sidecar data JS into the assets sub-folder
-        if ($post['post_type'] === 'anime_gallery') {
-            $assetsDirAbs = $postsDir . '/post' . $id;
-            if (!is_dir($assetsDirAbs)) {
-                @mkdir($assetsDirAbs, 0777, true);
+        } else {
+            // 2. Export the Post HTML (applying the defined prefix)
+            $postsDir = $contentHubDir . '/posts';
+            if (!is_dir($postsDir)) {
+                @mkdir($postsDir, 0777, true);
             }
-            [$locations, $videos] = $this->buildAnimeGalleryData($post, $post['asset_url_prefix'] ?? '');
-            $jsContent  = 'window.LOCATIONS = ' . json_encode($locations, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ';' . "\n";
-            $jsContent .= 'window.VIDEOS = '    . json_encode($videos,    JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ';' . "\n";
-            file_put_contents($assetsDirAbs . '/data_' . $id . '.js', $jsContent);
-        }
+            $postHtml = $this->renderPostHtml($post, true, $post['asset_url_prefix'] ?? '', true);
+            file_put_contents($postsDir . '/' . $post['slug'] . '.html', $postHtml);
 
-        // 3c. For narrative_gallery also write the sidecar data JS into the assets sub-folder
-        if ($post['post_type'] === 'narrative_gallery') {
-            $assetsDirAbs = $postsDir . '/post' . $id;
-            if (!is_dir($assetsDirAbs)) {
-                @mkdir($assetsDirAbs, 0777, true);
+            // 3. For cinematic_story also write the sidecar data JS into the assets sub-folder
+            if ($post['post_type'] === 'cinematic_story') {
+                $assetsDirAbs = $postsDir . '/post' . $id;
+                if (!is_dir($assetsDirAbs)) {
+                    @mkdir($assetsDirAbs, 0777, true);
+                }
+                $storyData = $this->buildCinematicStoryData($post, $post['asset_url_prefix'] ?? '');
+                $jsContent = 'var storyboardData = ' . json_encode($storyData, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ';' . "\n";
+                file_put_contents($assetsDirAbs . '/data_' . $id . '.js', $jsContent);
             }
-            $seqData   = $this->buildNarrativeGalleryData($post, $post['asset_url_prefix'] ?? '');
-            $jsContent  = 'const sequenceData = '  . json_encode($seqData, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ';' . "\n";
-            $jsContent .= 'const rawExportData = {};' . "\n";
-            file_put_contents($assetsDirAbs . '/data_' . $id . '.js', $jsContent);
-        }
 
-        // 3d. For spatial_viewer also write the sidecar data JS into the assets sub-folder
-        if ($post['post_type'] === 'spatial_viewer') {
-            $assetsDirAbs = $postsDir . '/post' . $id;
-            if (!is_dir($assetsDirAbs)) {
-                @mkdir($assetsDirAbs, 0777, true);
+            // 3b. For anime_gallery also write the sidecar data JS into the assets sub-folder
+            if ($post['post_type'] === 'anime_gallery') {
+                $assetsDirAbs = $postsDir . '/post' . $id;
+                if (!is_dir($assetsDirAbs)) {
+                    @mkdir($assetsDirAbs, 0777, true);
+                }
+                [$locations, $videos] = $this->buildAnimeGalleryData($post, $post['asset_url_prefix'] ?? '');
+                $jsContent  = 'window.LOCATIONS = ' . json_encode($locations, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ';' . "\n";
+                $jsContent .= 'window.VIDEOS = '    . json_encode($videos,    JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ';' . "\n";
+                file_put_contents($assetsDirAbs . '/data_' . $id . '.js', $jsContent);
             }
-            $spatialData = $this->buildSpatialViewerData($post, $post['asset_url_prefix'] ?? '');
-            $jsContent = 'const seqData = ' . json_encode($spatialData, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ';' . "\n";
-            file_put_contents($assetsDirAbs . '/data_' . $id . '.js', $jsContent);
-        }
 
-        // 4. Copy Post Assets relative to local repo mirroring the content_hub/posts structure dynamically
-        $sourceAssetsDir = rtrim($publicPathAbs, '/') . '/content_hub/posts/post' . $id;
-        $targetAssetsDir = $postsDir . '/post' . $id;
+            // 3c. For narrative_gallery also write the sidecar data JS into the assets sub-folder
+            if ($post['post_type'] === 'narrative_gallery') {
+                $assetsDirAbs = $postsDir . '/post' . $id;
+                if (!is_dir($assetsDirAbs)) {
+                    @mkdir($assetsDirAbs, 0777, true);
+                }
+                $seqData   = $this->buildNarrativeGalleryData($post, $post['asset_url_prefix'] ?? '');
+                $jsContent  = 'const sequenceData = '  . json_encode($seqData, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ';' . "\n";
+                $jsContent .= 'const rawExportData = {};' . "\n";
+                file_put_contents($assetsDirAbs . '/data_' . $id . '.js', $jsContent);
+            }
 
-        if (is_dir($sourceAssetsDir)) {
-            $this->recursiveCopy($sourceAssetsDir, $targetAssetsDir);
+            // 3d. For spatial_viewer also write the sidecar data JS into the assets sub-folder
+            if ($post['post_type'] === 'spatial_viewer') {
+                $assetsDirAbs = $postsDir . '/post' . $id;
+                if (!is_dir($assetsDirAbs)) {
+                    @mkdir($assetsDirAbs, 0777, true);
+                }
+                $spatialData = $this->buildSpatialViewerData($post, $post['asset_url_prefix'] ?? '');
+                $jsContent = 'const seqData = ' . json_encode($spatialData, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ';' . "\n";
+                file_put_contents($assetsDirAbs . '/data_' . $id . '.js', $jsContent);
+            }
+
+            // 4. Copy Post Assets relative to local repo mirroring the content_hub/posts structure dynamically
+            $sourceAssetsDir = rtrim($publicPathAbs, '/') . '/content_hub/posts/post' . $id;
+            $targetAssetsDir = $postsDir . '/post' . $id;
+
+            if (is_dir($sourceAssetsDir)) {
+                $this->recursiveCopy($sourceAssetsDir, $targetAssetsDir);
+            }
         }
 
         // 5. Enqueue GitHub Sync job
@@ -835,8 +1026,30 @@ HTML;
                 break;
         }
         
-        return str_replace(array_keys($replacements), array_values($replacements), $template);
+        $html = str_replace(array_keys($replacements), array_values($replacements), $template);
+        
+        if ($forStaticExport) {
+            $gaCode = <<<HTML
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-SBSTRVS0NR"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-SBSTRVS0NR');
+</script>
+HTML;
+            $html = str_replace('</body>', $gaCode . "\n</body>", $html);
+        }
+
+        return $html;
     }
+
+  
+    
+    
+    
 
     // ── Cinematic Story: data assembly ────────────────────────────────────
 
@@ -1722,3 +1935,5 @@ HTML;
         return json_decode($json) !== null ? $json : '[]';
     }
 }
+
+

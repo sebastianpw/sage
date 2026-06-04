@@ -1,0 +1,43 @@
+{
+  "paths": [
+    "src",
+    "bash",
+    "notebooks",
+    "pyapi",
+    "templates",
+    "public/js",
+    "public/css",
+    "public/api",
+    "public/cinemagic_hub",
+    "public/content_hub",
+    "public/pytoon",
+    "public/mail_hub",
+    "public/daw",
+    "public/docs",
+    "public/vendor",
+    "public/amplitude",
+    "public/mannequin",
+    "public/posts",
+    "public/sceki",
+    "public/ved",
+    "public/vedtriccs",
+    "public/*.php"
+  ],
+  "excludes": [
+    "public/daw/bak.sh",
+    "public/ved/bak.sh",
+    "public/vedtriccs/bak.sh",
+    "public/content_hub/posts",
+    "public/adminer",
+    "pyapi/venv",
+    "pyapi/__pycache__",
+    "pyapi/services/__pycache__",
+    "pyapi/services/muvitriccs/__pycache__",
+    "pyapi/services/muvitriccs/transitions/__pycache__",
+    ".env.local",
+    "pyapi/serv.conf.json",
+    "pyapi/requirements.txt",
+    "bash/pyapi_echo.sh",
+    "pyapi/requirements.txt"
+  ]
+}

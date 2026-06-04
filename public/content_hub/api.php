@@ -52,6 +52,9 @@ try {
             $id = (int)($_REQUEST['id'] ?? 0);
             $post = $hub->getPostById($id);
             if ($post) {
+                if ($post['post_type'] === 'magazine_highlight') {
+                    die("Magazine highlights are embedded directly within the grid and do not have standalone HTML pages.");
+                }
                 $html = $hub->renderPostHtml($post, true, $post['asset_url_prefix'] ?? '', true);
                 header('Content-Type: text/html');
                 header('Content-Disposition: attachment; filename="' . $post['slug'] . '.html"');
@@ -156,6 +159,10 @@ try {
             echo json_encode($result);
             exit;
 
+        case 'get_published_episodes':
+            echo json_encode($hub->getPublishedEpisodes());
+            exit;
+
         default:
             echo json_encode(['success' => false, 'error' => 'Unknown action']);
             exit;
@@ -164,4 +171,6 @@ try {
     echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     exit;
 }
+
+
 

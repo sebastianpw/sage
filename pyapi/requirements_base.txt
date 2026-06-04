@@ -31,3 +31,4 @@ mysql-connector-python
 python-dotenv
 imageio[ffmpeg]
 imageio-ffmpeg
+pdf2image

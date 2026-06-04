@@ -11,7 +11,7 @@ if (isset($_REQUEST['api_action'])) {
     $action = $_REQUEST['api_action'];
     try {
         if ($action === 'get_map_runs') {
-            $limit  = (int)($_GET['limit'] ?? 7);
+            $limit  = (int)($_GET['limit'] ?? 4);
             $offset = (int)($_GET['offset'] ?? 0);
             $search = $_GET['search'] ?? '';
             $where = "entity_type = 'sketches'";
@@ -299,12 +299,12 @@ function loadMapRuns(page) {
     const list = document.getElementById('mrList');
     const search = document.getElementById('mrSearch').value.trim();
     if (page === 1) list.scrollTop = 0;
-    fetch(`?api_action=get_map_runs&limit=7&offset=${(page-1)*7}&search=${encodeURIComponent(search)}`)
+    fetch(`?api_action=get_map_runs&limit=4&offset=${(page-1)*4}&search=${encodeURIComponent(search)}`)
         .then(r => r.json())
         .then(res => {
             if (res.status !== 'success') return;
             curPage = page;
-            totalPages = Math.ceil(res.total / 7) || 1;
+            totalPages = Math.ceil(res.total / 4) || 1;
             document.getElementById('mrPageInput').value = curPage;
             document.getElementById('mrTotalPages').textContent = `/ ${totalPages}`;
             document.getElementById('mrPrev').disabled = curPage <= 1;

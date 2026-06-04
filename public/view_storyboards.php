@@ -763,6 +763,7 @@ $(function() {
                                 <i class="fa ${archiveBtnIcon}"></i>
                             </button>
                             <button class="sb-action-btn btn-edit" data-id="${sb.id}" title="Edit"><i class="fa fa-edit"></i></button>
+                            <button class="sb-action-btn btn-clone-seq" data-id="${sb.id}" title="Clone to Narrative Sequence"><i class="fa fa-film"></i></button>
                             <button class="sb-action-btn btn-copy" data-id="${sb.id}" title="Duplicate"><i class="fa fa-copy"></i></button>
                             <button class="sb-action-btn danger btn-delete" data-id="${sb.id}" title="Delete"><i class="fa fa-trash"></i></button>
                         </div>
@@ -936,6 +937,22 @@ $(function() {
         $.post('storyboards_api.php', { action: 'copy', id: id }).done(function(res) {
             if (res.success) loadStoryboards();
             else alert('Copy failed: ' + (res.message || 'Unknown error'));
+        });
+    });
+
+    $(document).on('click', '.btn-clone-seq', function(e) {
+        e.stopPropagation();
+        const id = $(this).data('id');
+        if(!confirm('Clone storyboard into a Narrative Sequence?')) return;
+        $.post('storyboards_api.php', { action: 'clone_to_narrative', id: id }).done(function(res) {
+            if (res.success) {
+                alert('Successfully cloned to Narrative Sequence ID: ' + res.sequence_id);
+                window.location.href = '/narratives_v11.php?sequence_id=' + res.sequence_id;
+            } else {
+                alert('Clone failed: ' + (res.message || 'Unknown error'));
+            }
+        }).fail(function() {
+            alert('Clone failed: server error');
         });
     });
 

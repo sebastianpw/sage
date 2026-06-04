@@ -38,8 +38,32 @@ TEMP_DIR     = PROJECT_ROOT.parent / "services_data" / "ved_temp"
 RENDER_DIR.mkdir(parents=True, exist_ok=True)
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
+# ---------------------------------------------------------------------------
+# Job store — file-backed dictionary to survive Uvicorn reloads in Codespaces
+# ---------------------------------------------------------------------------
 TASKS: Dict[str, Dict] = {}
 
+def _save_task(task_id: str, data: dict) -> None:
+    TASKS[task_id] = data
+    state_file = TEMP_DIR / task_id / "state.json"
+    try:
+        if state_file.parent.exists():
+            state_file.write_text(json.dumps(data))
+    except Exception as e:
+        logger.warning(f"Could not save VED task state to disk for {task_id}: {e}")
+
+def _get_task(task_id: str) -> Optional[dict]:
+    if task_id in TASKS:
+        return TASKS[task_id]
+    state_file = TEMP_DIR / task_id / "state.json"
+    if state_file.exists():
+        try:
+            data = json.loads(state_file.read_text())
+            TASKS[task_id] = data
+            return data
+        except Exception:
+            pass
+    return None
 
 def cleanup(path: Path):
     try:
@@ -292,6 +316,9 @@ def render_ved(
     canvas_w: int,
     canvas_h: int,
 ):
+    job_data = _get_task(task_id)
+    if not job_data: return
+
     try:
         # Force even dimensions for libx264 yuv420p
         canvas_w = canvas_w if canvas_w % 2 == 0 else canvas_w - 1
@@ -313,8 +340,9 @@ def render_ved(
             ]
             cmd.extend(vcodec + acodec + ["-shortest", str(out_path)])
             subprocess.run(cmd, check=True, capture_output=True)
-            TASKS[task_id]["status"] = "completed"
-            TASKS[task_id]["result_path"] = str(out_path)
+            job_data["status"] = "completed"
+            job_data["result_path"] = str(out_path)
+            _save_task(task_id, job_data)
             return
 
         track_vol  = {t["id"]: float(t.get("vol", 1.0)) for t in tracks}
@@ -551,14 +579,16 @@ def render_ved(
         if proc.returncode != 0:
             raise RuntimeError(f"FFmpeg error:\n{proc.stderr[-2000:]}")
 
-        TASKS[task_id]["status"]      = "completed"
-        TASKS[task_id]["result_path"] = str(out_path)
+        job_data["status"]      = "completed"
+        job_data["result_path"] = str(out_path)
+        _save_task(task_id, job_data)
         logger.info(f"[{task_id}] Render complete → {out_path}")
 
     except Exception as e:
         logger.exception(f"[{task_id}] Render failed")
-        TASKS[task_id]["status"] = "failed"
-        TASKS[task_id]["error"]  = str(e)
+        job_data["status"] = "failed"
+        job_data["error"]  = str(e)
+        _save_task(task_id, job_data)
     finally:
         cleanup(task_dir)
 
@@ -589,7 +619,10 @@ async def compose_async(
             files_map[uf.filename] = dest
 
         state = json.loads(state_json)
-        TASKS[task_id] = {"status": "processing"}
+        
+        # Save initial state to disk
+        job_data = {"status": "processing"}
+        _save_task(task_id, job_data)
 
         background_tasks.add_task(
             render_ved,
@@ -604,22 +637,34 @@ async def compose_async(
 
 @router.get("/status/{task_id}")
 async def task_status(task_id: str):
-    if task_id not in TASKS:
+    task = _get_task(task_id)
+    if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return {
-        "status": TASKS[task_id]["status"],
-        "error":  TASKS[task_id].get("error", ""),
+        "status": task["status"],
+        "error":  task.get("error", ""),
     }
 
 
 @router.get("/download/{task_id}")
 async def download_result(task_id: str):
-    if task_id not in TASKS:
+    task = _get_task(task_id)
+    if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    task = TASKS[task_id]
     if task["status"] != "completed":
         raise HTTPException(status_code=400, detail="Video not ready yet")
     path = Path(task["result_path"])
     if not path.exists():
         raise HTTPException(status_code=500, detail="Result file missing")
     return FileResponse(path, media_type="video/mp4", filename=path.name)
+
+@router.delete("/cleanup/{task_id}")
+async def cleanup_ved_task(task_id: str):
+    task = TASKS.pop(task_id, None)
+    try:
+        shutil.rmtree(str(TEMP_DIR / task_id), ignore_errors=True)
+    except Exception:
+        pass
+    return JSONResponse({"deleted": task_id})
+
+

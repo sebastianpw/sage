@@ -285,16 +285,10 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
 .scene-block { position:relative; background:var(--pl-card); border:1px solid var(--pl-border); border-radius:6px; padding:16px; padding-left:36px; margin-bottom:10px; box-shadow:0 4px 15px rgba(0,0,0,.2); transition: border 0.15s, padding 0.15s; }
 [data-theme="light"] .scene-block { box-shadow:0 2px 8px rgba(0,0,0,.05); }
 
-
-
-
 /* Drag Handle */
 .drag-handle { position:absolute; left:0; top:0; bottom:0; width:32px; display:flex; align-items:center; justify-content:center; color:var(--pl-text-dim); font-size:1rem; cursor:grab; opacity:0.3; transition:opacity .2s; touch-action:none; user-select:none; border-right:1px solid var(--pl-border); }
 .scene-block:hover .drag-handle { opacity:1; }
 .drag-handle:active { cursor:grabbing; color:var(--pl-teal); background:rgba(58,181,200,0.05); }
-
-
-
 
 /* Remove Button */
 .item-remove-btn {
@@ -303,15 +297,13 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
     border: 1px solid rgba(255,255,255,0.05);
     display: flex; align-items: center; justify-content: center;
     cursor: pointer; transition: all 0.15s; font-size: 1.3rem; z-index: 10; 
-    opacity: 0.85; /* Always visible now */
+    opacity: 0.85; 
 }
 [data-theme="light"] .item-remove-btn { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.05); }
 .item-remove-btn:hover, .item-remove-btn:active { 
     background: rgba(255, 68, 68, 0.1); color: #ff4444 !important; 
     border-color: rgba(255, 68, 68, 0.3); opacity: 1; 
 }
-
-
 
 .sketch-flex { display: flex; gap: 15px; align-items: center; }
 
@@ -421,10 +413,6 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
 .ff-pswp-item { display: block; width: 100%; height: 100%; }
 .ff-result-card img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
 .ff-result-label {
-
-
-    
-    
     position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7);
     color: #fff; font-size: 0.6rem; padding: 3px 4px; white-space: nowrap; overflow: hidden;
     text-overflow: ellipsis; pointer-events: none;
@@ -484,18 +472,11 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
             $thumb         = $framesBySketch[$sid][0]['filename'];
         }
     ?>
-    
-    
-    
-    
-    
         <div class="seq-item-wrap" data-idx="<?= $idx ?>">
             <div class="scene-block">
                 <div class="item-remove-btn" title="Remove from sequence" onclick="removeSequenceItem(this)"><i class="bi bi-x"></i></div>
                 <div class="drag-handle" title="Drag to reorder"><i class="bi bi-grip-vertical"></i></div>
                 <div class="sketch-flex">
-                
-                
                     <div style="display:flex; flex-direction:column; align-items:center; flex-shrink:0;">
                         <div class="sketch-thumb" 
                              data-active-frame="<?= $activeFrameId ?>"
@@ -621,7 +602,7 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
                 <!-- STORYBOARD -->
                 <div class="forge-tab-pane" id="pane-storyboard">
                     <label class="ff-label">Storyboard</label>
-                    <input type="text" id="ffSearch-storyboard" class="su-input" placeholder="Search storyboards..." oninput="ffDebounceSearch('storyboard', this.value)">
+                    <input type="text" id="ffSearch-storyboard" class="su-input" placeholder="Search storyboards..." onfocus="ffDebounceSearch('storyboard', this.value)" oninput="ffDebounceSearch('storyboard', this.value)">
                     <div class="ff-dropdown" id="ffDrop-storyboard"></div>
                 </div>
                 <!-- MAP RUN -->
@@ -685,9 +666,6 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="/js/toast.js"></script>
 
-
-
-
 <!-- PhotoSwipe Lightbox Module -->
 <script type="module">
     import PhotoSwipeLightbox from 'https://cdn.jsdelivr.net/npm/photoswipe@5/dist/photoswipe-lightbox.esm.js';
@@ -724,9 +702,6 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
         if (window.initLightbox) window.initLightbox();
     });
 </script>
-
-
-
 
 <script>
 const originalName = <?= json_encode($seq['name']) ?>;
@@ -1089,11 +1064,6 @@ function renderInsertedItem(res, insertIndex) {
             <div class="item-remove-btn" title="Remove from sequence" onclick="removeSequenceItem(this)"><i class="bi bi-x"></i></div>
             <div class="drag-handle" title="Drag to reorder"><i class="bi bi-grip-vertical"></i></div>
             <div class="sketch-flex">
-
-
-            
-            
-            
                 <div style="display:flex; flex-direction:column; align-items:center; flex-shrink:0;">
                     <div class="sketch-thumb" data-active-frame="${res.frame.id}">
                         <a href="${res.frame.filename}" class="editor-pswp-item" data-pswp-width="1024" data-pswp-height="1024" target="_blank">
@@ -1138,9 +1108,6 @@ function reindexSequenceVisuals() {
         if (numLabel) numLabel.textContent = String(i + 1).padStart(2, '0');
     });
 }
-
-
-
 
 function removeSequenceItem(btn) {
     if (!confirm('Remove this item from the sequence?')) return;
@@ -1190,13 +1157,6 @@ function removeSequenceItem(btn) {
         });
 }
 
-
-
-
-
-
-
-
 // ── Forge Filter Enhanimaticism Logic ──────────────────────────────────────────
 let ffState = {
     fuzz: null, doc: null, kg: null, seq: null, storyboard: null, map_run: null,
@@ -1230,26 +1190,35 @@ function ffDebounceSearch(slot, q) {
     clearTimeout(ffDebounceTimer);
     ffDebounceTimer = setTimeout(() => {
         const dd = document.getElementById(`ffDrop-${slot}`);
-        if (!q) { dd.classList.remove('open'); return; }
+        if (!q && slot !== 'storyboard') { dd.classList.remove('open'); return; }
         dd.innerHTML = '<div class="forge-dropdown-loading">Searching...</div>';
         dd.classList.add('open');
         
-        fetch(`filter_forge_api.php?action=list_filter_options&mode=${slot}&q=${encodeURIComponent(q)}&entity_type=sketches`)
+        let url = `filter_forge_api.php?action=list_filter_options&mode=${slot}&q=${encodeURIComponent(q || '')}&entity_type=sketches`;
+        
+        if (slot === 'storyboard') {
+            url = `narseq_api.php?action=list_storyboards&q=${encodeURIComponent(q || '')}`;
+        }
+        
+        fetch(url)
             .then(r => r.json())
             .then(res => {
-                if (res.status !== 'success' || !res.data.length) {
-                    dd.innerHTML = '<div class="forge-dropdown-loading">No results</div>';
+                if (res.status !== 'success' || !res.data || !res.data.length) {
+                    dd.innerHTML = '<div class="forge-dropdown-loading" style="padding: 8px 10px; font-size: 0.75rem; color: var(--pl-text-dim);">No results</div>';
                     return;
                 }
                 dd.innerHTML = res.data.map(item => {
                     const safe = JSON.stringify(item).replace(/"/g, '&quot;');
                     return `<div class="ff-dropdown-item" onclick="ffSelectItem('${slot}', ${safe})">
                         <span>${item.label}</span>
-                        <span class="forge-dropdown-item-meta">${item.meta||''}</span>
+                        <span class="forge-dropdown-item-meta" style="font-size:0.65rem; color:var(--pl-text-dim); margin-left:8px;">${item.meta||''}</span>
                     </div>`;
                 }).join('');
             })
-            .catch(err => console.error("Filter Search Error", err));
+            .catch(err => {
+                console.error("Filter Search Error", err);
+                dd.innerHTML = '<div class="forge-dropdown-loading" style="padding: 8px 10px; font-size: 0.75rem; color: #ef4444;">Error searching</div>';
+            });
     }, 300);
 }
 
@@ -1308,10 +1277,6 @@ function renderActiveFilters() {
     }
 }
 
-
-
-
-
 function runForgeSearch(page) {
     ffCurrentPage = page;
     const p = new URLSearchParams();
@@ -1322,12 +1287,17 @@ function runForgeSearch(page) {
     p.set('page', page);
 
     let hasFilter = false;
+    let useNarseqApi = false;
 
     if (ffState.fuzz) { p.set('fuzz_id', ffState.fuzz.id); hasFilter = true; }
     if (ffState.doc) { p.set('doc_id', ffState.doc.id); hasFilter = true; }
     if (ffState.kg) { p.set('kg_node_id', ffState.kg.id); hasFilter = true; }
     if (ffState.seq) { p.set('seq_id', ffState.seq.id); hasFilter = true; }
-    if (ffState.storyboard) { p.set('storyboard_id', ffState.storyboard.id); hasFilter = true; }
+    if (ffState.storyboard) { 
+        p.set('storyboard_id', ffState.storyboard.id); 
+        hasFilter = true; 
+        useNarseqApi = true; // Route exactly mapped storyboard logic through local narseq API
+    }
     if (ffState.map_run) { p.set('map_run_id', ffState.map_run.id); hasFilter = true; }
     if (ffState.vectorText) { p.set('vector_text', ffState.vectorText); hasFilter = true; }
     if (ffState.textSearch) { p.set('search', ffState.textSearch); hasFilter = true; }
@@ -1340,20 +1310,20 @@ function runForgeSearch(page) {
         p.set('sort_by', 'id');
         p.set('sort_order', 'desc');
     }
+    
+    if (useNarseqApi) {
+        p.set('action', 'list_storyboard_frames');
+    }
 
     const grid = document.getElementById('ffResultGrid');
-    
-    
-    
-    
-    
-    
     
     grid.innerHTML = '<div class="forge-result-empty">Searching Forge...</div>';
     document.getElementById('ffPagination').style.display = 'none';
     document.getElementById('ffResultMeta').textContent = 'Searching...';
 
-    fetch('filter_forge_api.php?' + p.toString())
+    const endpoint = useNarseqApi ? 'narseq_api.php?' : 'filter_forge_api.php?';
+
+    fetch(endpoint + p.toString())
         .then(async r => {
             if (!r.ok) throw new Error('HTTP status ' + r.status);
             const text = await r.text();
@@ -1361,7 +1331,7 @@ function runForgeSearch(page) {
                 return JSON.parse(text);
             } catch (e) {
                 console.error("JSON Parse Error on Forge Search:", text);
-                throw new Error("Invalid JSON returned by filter_forge_api.php");
+                throw new Error("Invalid JSON returned by API");
             }
         })
         .then(res => {
@@ -1378,11 +1348,7 @@ function runForgeSearch(page) {
                 return;
             }
             
-            
-            
-            
-            
-grid.innerHTML = res.data.map(row => `
+            grid.innerHTML = res.data.map(row => `
                 <div class="ff-result-card" data-sketch-id="${row.entity_id}" data-frame-id="${row.frame_id}">
                     <div class="ff-drag-indicator" title="Drag to insert" onclick="event.preventDefault(); event.stopPropagation();"><i class="bi bi-arrows-move"></i></div>
                     <a href="${row.filename}" class="ff-pswp-item" data-pswp-width="1024" data-pswp-height="1024" target="_blank">
@@ -1410,14 +1376,6 @@ grid.innerHTML = res.data.map(row => `
             if (window.initForgeLightbox) window.initForgeLightbox();
         })
         .catch(err => {
-
-            
-            
-            
-            
-            
-            
-            
             console.error("Forge Search Network/Parse Error:", err);
             grid.innerHTML = '<div class="forge-result-empty">Network error. Check console.</div>';
         });

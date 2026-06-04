@@ -44,7 +44,7 @@ def _open_image(upload: UploadFile) -> Image.Image:
     return img
 
 
-def _save_jpg(img: Image.Image, path: Path, quality: int = 92) -> None:
+def _save_jpg(img: Image.Image, path: Path, quality: int = 85) -> None:
     if img.mode in ("RGBA", "LA", "P"):
         bg = Image.new("RGB", img.size, (255, 255, 255))
         bg.paste(img, mask=img.split()[-1] if img.mode in ("RGBA", "LA") else None)
@@ -63,7 +63,7 @@ async def compose_cover(
     scale: float = Form(1.0),
     canvas_w: int = Form(1080),
     canvas_h: int = Form(1920),
-    quality: int = Form(92),
+    quality: int = Form(85),
 ):
     """
     Place an uploaded image onto a 1080×1920 (16:9 portrait) black canvas
@@ -115,7 +115,7 @@ async def split_pdf(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     dpi: int = Form(150),
-    quality: int = Form(88),
+    quality: int = Form(85),
 ):
     """
     Accept a PDF upload, rasterise every page to JPEG at `dpi`, zip them,

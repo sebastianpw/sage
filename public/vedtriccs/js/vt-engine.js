@@ -455,3 +455,165 @@ function vtRemoveClipInternal(id) {
     VT_STATE.clips.splice(idx, 1);
     if (VT_STATE.selectedClipId === id) VT_STATE.selectedClipId = null;
 }
+
+
+// ─── PyAPI Full Project Bounce ────────────────────────────────────────────────
+
+let _vtBouncePollingInterval = null;
+
+function vtSetBounceStatus(msg) {
+    const el = document.getElementById('bounceStatusMsg');
+    if (el) el.textContent = msg;
+}
+
+function vtOpenBounceModal() {
+    document.getElementById('bounceBackdrop').classList.add('open');
+    const btn = document.getElementById('mbBtnBounce');
+    if (btn) btn.classList.add('active');
+}
+
+function vtCloseBounceModal() {
+    document.getElementById('bounceBackdrop').classList.remove('open');
+    const btn = document.getElementById('mbBtnBounce');
+    if (btn) btn.classList.remove('active');
+}
+
+function vtCancelBounce() {
+    if (_vtBouncePollingInterval) {
+        clearInterval(_vtBouncePollingInterval);
+        _vtBouncePollingInterval = null;
+    }
+    vtCloseBounceModal();
+    Toast.show('Bounce cancelled', 'info');
+}
+
+async function vtBounceProject() {
+    if (!VT_STATE.clips.length) { Toast.show('Timeline is empty', 'warn'); return; }
+
+    vtOpenBounceModal();
+    vtSetBounceStatus('Collecting video assets…');
+
+    const state = vtSerialize();
+    const uniqueUrls = [...new Set(VT_STATE.clips.map(c => c.url).filter(Boolean))];
+    const urlToFilename = {};
+    const formData = new FormData();
+
+    for (let i = 0; i < uniqueUrls.length; i++) {
+        const url = uniqueUrls[i];
+        vtSetBounceStatus(`Fetching asset ${i + 1} of ${uniqueUrls.length}…`);
+        try {
+            const blob = await fetch(url).then(r => {
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                return r.blob();
+            });
+            const ext = url.split('.').pop().split('?')[0] || 'mp4';
+            const filename = `asset_${i}.${ext}`;
+            urlToFilename[url] = filename;
+            formData.append('files', blob, filename);
+        } catch (e) {
+            vtCloseBounceModal();
+            Toast.show(`Failed to fetch: ${url}`, 'error');
+            return;
+        }
+    }
+
+    // Attach bounce filename back to serialized state
+    state.clips.forEach(c => {
+        if (c.url) c.bounce_filename = urlToFilename[c.url];
+    });
+
+    formData.append('state_json', JSON.stringify(state));
+    formData.append('canvas_w', VT_PROJECT.canvasW);
+    formData.append('canvas_h', VT_PROJECT.canvasH);
+
+    vtSetBounceStatus('Uploading & queuing render…');
+
+    try {
+        const resUrl = await vtApi('get_pyapi_url');
+        if (resUrl.status !== 'success') throw new Error(resUrl.message);
+
+        const pyapiUrl = resUrl.url;
+
+        const res = await fetch(`${pyapiUrl}/ved/compose-async`, {
+            method: 'POST',
+            body: formData
+        }).then(r => r.json());
+
+        if (res.status === 'queued' || res.status === 'processing') {
+            vtSetBounceStatus('Rendering on server…');
+            vtPollBounceJob(pyapiUrl, res.task_id);
+        } else {
+            vtCloseBounceModal();
+            Toast.show('Bounce failed: ' + (res.detail || res.status), 'error');
+        }
+    } catch (e) {
+        vtCloseBounceModal();
+        Toast.show('Network or PyAPI error', 'error');
+        console.error(e);
+    }
+}
+
+function vtPollBounceJob(pyapiUrl, taskId) {
+    if (_vtBouncePollingInterval) clearInterval(_vtBouncePollingInterval);
+
+    _vtBouncePollingInterval = setInterval(async () => {
+        try {
+            // PHP proxy request
+            const res = await fetch('?api_action=ved_bounce_poll', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    pyapi_url: pyapiUrl,
+                    task_id:   taskId
+                })
+            }).then(r => r.json());
+
+            if (res.status !== 'success') {
+                return; // Transient network error
+            }
+
+            if (res.task_status === 'completed') {
+                clearInterval(_vtBouncePollingInterval);
+                _vtBouncePollingInterval = null;
+                vtSetBounceStatus('Done! Saving to database…');
+
+                // Determine project file context
+                const projSel = document.getElementById('fileProjectSelect');
+                const eName = (projSel && projSel.options[projSel.selectedIndex]) ? projSel.options[projSel.selectedIndex].text : 'VED Export';
+
+                const regBody = new URLSearchParams({
+                    api_action: 'register_bounce',
+                    task_id: taskId,
+                    pyapi_url: pyapiUrl,
+                    animatic_id: VT_STATE.animaticId || 0,
+                    name: eName + ' ' + new Date().toLocaleTimeString(),
+                    canvas_w: VT_PROJECT.canvasW,
+                    canvas_h: VT_PROJECT.canvasH,
+                    duration_s: Math.ceil(VT_STATE.projectDuration)
+                });
+
+                fetch('?api_action=register_bounce', { method: 'POST', body: regBody })
+                    .then(r => r.json())
+                    .then(dbRes => {
+                        vtCloseBounceModal();
+                        if (dbRes.status === 'success') {
+                            Toast.show(`Bounce saved to DB (Video #${dbRes.video_id})`, 'success');
+                        } else {
+                            Toast.show('DB Error: ' + (dbRes.message || 'unknown'), 'error');
+                        }
+                    }).catch(e => {
+                        vtCloseBounceModal();
+                        Toast.show('Network error while saving to DB', 'error');
+                    });
+
+            } else if (res.task_status === 'failed') {
+                clearInterval(_vtBouncePollingInterval);
+                _vtBouncePollingInterval = null;
+                vtCloseBounceModal();
+                Toast.show('Bounce failed: ' + (res.error || 'unknown error'), 'error');
+            }
+        } catch (e) {
+            // keep polling
+        }
+    }, 2000);
+}

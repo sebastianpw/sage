@@ -6,6 +6,12 @@
 require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
 
+
+
+
+
+
+
 use App\UI\Modules\ModuleRegistry;
 
 $spw = \App\Core\SpwBase::getInstance();
@@ -45,6 +51,24 @@ if (!$storyId) {
                     <span>#<?= $s['id'] ?> — <?= htmlspecialchars($s['title']) ?></span>
                     <span style="color:var(--text-muted);"><?= date('Y-m-d', strtotime($s['created_at'])) ?></span>
                 </a>
+                
+                <button onclick="deleteStory(<?= $s['id'] ?>, <?= htmlspecialchars(json_encode($s['title']), ENT_QUOTES, 'UTF-8') ?>)"
+        title="Delete story"
+        style="flex-shrink:0;width:38px;height:38px;border:none;border-left:1px solid var(--border);background:transparent;color:#f05060;cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;transition:background .15s;"
+        onmouseover="this.style.background='rgba(240,80,96,.12)'" onmouseout="this.style.background='transparent'">
+    <i class="bi bi-trash"></i>
+</button>
+                
+                <?php /*
+                <button onclick="deleteStory(<?= $s['id'] ?>, <?= json_encode($s['title']) ?>)"
+                        title="Delete story"
+                        style="flex-shrink:0;width:38px;height:38px;border:none;border-left:1px solid var(--border);background:transparent;color:#f05060;cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;transition:background .15s;"
+                        onmouseover="this.style.background='rgba(240,80,96,.12)'" onmouseout="this.style.background='transparent'">
+                    <i class="bi bi-trash"></i>
+                </button>
+                */ ?>
+                
+                
             </div>
         <?php endforeach; ?>
         <?php if (empty($stories)): ?>
@@ -104,6 +128,22 @@ if (!$storyId) {
                     window.location.href = '?id=' + res.story_id;
                 } else {
                     Toast.show(res.message || 'Create failed.', 'error');
+                }
+            });
+    }
+    function deleteStory(storyId, title) {
+        if (!confirm('Delete story "' + title + '" and ALL its scenes, groups, blocks and entity references?\n\nThis cannot be undone.')) return;
+        var fd = new URLSearchParams();
+        fd.append('action', 'delete_story');
+        fd.append('story_id', storyId);
+        fetch('plush_api.php', { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+                if (res.success) {
+                    Toast.show('Story deleted.', 'info');
+                    setTimeout(function() { window.location.reload(); }, 700);
+                } else {
+                    Toast.show(res.message || 'Delete failed.', 'error');
                 }
             });
     }
@@ -1785,7 +1825,7 @@ window.deleteLanguage = function(code) {
 <?php
 
 
-// echo $eruda ?? "";
+//echo $eruda ?? "";
 
 
 $content = ob_get_clean();

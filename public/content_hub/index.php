@@ -473,20 +473,21 @@ select.form-control { cursor: pointer; }
         </div>
     </div>
 
-    <!-- ── ALL POSTS VIEW ─────────────────────────────────── -->
+
+
+
+
+<!-- ── ALL POSTS VIEW ─────────────────────────────────── -->
     <div class="view" id="view-posts">
-    
-        <div class="page-hdr" style="display:none;/*remove*/">
-            <div style="display:none;/*remove*/">
+        <div class="page-hdr" style="display:none;">
+            <div>
                 <div class="page-title">All Posts</div>
                 <div class="page-sub">Manage and organize all your content</div>
             </div>
-            <button class="btn-primary" onclick="openPostModal()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Post</button>
         </div>
         
-        
         <div class="filter-bar">
-            <select style="max-width:70px;" class="filter-select" id="post-platform" onchange="loadPosts()">
+            <select style="max-width:110px;" class="filter-select" id="post-platform" onchange="loadPosts()">
                 <option value="">Platforms [all]</option>
                 <option value="instagram">Instagram</option>
                 <option value="tiktok">TikTok</option>
@@ -495,7 +496,7 @@ select.form-control { cursor: pointer; }
                 <option value="facebook">Facebook</option>
                 <option value="website">Website</option>
             </select>
-            <select style="max-width:70px;" class="filter-select" id="post-status" onchange="loadPosts()">
+            <select style="max-width:110px;" class="filter-select" id="post-status" onchange="loadPosts()">
                 <option value="">Status [all]</option>
                 <option value="draft">Draft</option>
                 <option value="scheduled">Scheduled</option>
@@ -503,22 +504,37 @@ select.form-control { cursor: pointer; }
                 <option value="archived">Archived</option>
             </select>
             
-        </div>
-        
-        
-        <div style="margin-left: auto; display: flex; gap: 8px;">
+            <div style="margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap;">
                 <a href="api.php?action=preview_grid" target="_blank" class="btn-secondary">Preview Grid</a>
                 <button class="btn-secondary" onclick="doExport('export_grid')">Download Grid HTML</button>
                 <button class="btn-secondary" onclick="doExport('export_all_html')">Download All HTML</button>
+                
+                <!-- NEW: HIGHLIGHT EPISODE BUTTON -->
+                <button class="btn-primary" onclick="openHighlightModal()" style="background:var(--purple); color:#fff; border:none; box-shadow:0 0 10px rgba(168, 85, 247, 0.4);">
+                    <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> Add Highlight
+                </button>
+
+                <button class="btn-primary" onclick="openPostModal()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Post</button>
             </div>
-        
-        
-        
+        </div>
         
         <div id="post-list-container"><div class="spinner"></div></div>
     </div>
 
 </main>
+</div>
+
+<!-- ═══ HIGHLIGHT EPISODE MODAL ═══ -->
+<div class="modal-overlay" id="highlight-modal-overlay" onclick="closeHighlightModalOnOverlay(event)">
+<div class="modal" id="highlight-modal">
+    <div class="modal-hdr">
+        <div class="modal-title">Select Episode to Highlight</div>
+        <button class="btn-icon" onclick="closeHighlightModal()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body" style="max-height: 60vh; overflow-y: auto; padding: 10px;">
+        <div id="highlight-episodes-list"><div class="spinner"></div></div>
+    </div>
+</div>
 </div>
 
 <!-- ═══ POST MODAL ═══ -->
@@ -558,11 +574,9 @@ select.form-control { cursor: pointer; }
       <option value="scrollmagic_gallery">ScrollMagic Gallery</option>
       <option value="cinematic_story">Cinematic Story</option>
       <option value="anime_gallery">Anime Gallery</option>
-      
       <option value="narrative_gallery">Narrative Gallery</option>
-      
       <option value="spatial_viewer">Spatial Viewer</option>
-      
+      <option value="magazine_highlight">Magazine Highlight</option>
   </select>
   
             </div>
@@ -975,6 +989,8 @@ async function loadPosts() {
             } catch(e) {}
             if (!allPlatforms.length && p.platform) allPlatforms = [p.platform];
             platformBadges = allPlatforms.map(pl => `<span class="badge badge-${pl}">${capitalize(pl)}</span>`).join('');
+            
+            const isHighlight = p.post_type === 'magazine_highlight';
 
             return `
         <div class="post-row" onclick="openPostModal(${p.id})" tabindex="0">
@@ -982,7 +998,7 @@ async function loadPosts() {
                 ? `<img class="post-thumb-sm" src="${escHtml(p.preview_image_url)}" alt="" onerror="this.style.display='none'">`
                 : `<div class="post-thumb-sm" style="display:flex;align-items:center;justify-content:center;"><svg style="width:18px;height:18px;stroke:var(--text-dim);fill:none;" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>`}
             <div class="post-info-col">
-                <div class="post-name">${escHtml(p.title)}</div>
+                <div class="post-name">${isHighlight ? '<span style="color:var(--amber);">[Highlight]</span> ' : ''}${escHtml(p.title)}</div>
                 <div class="post-meta-row">
                     <span class="badge badge-${p.status ?? 'draft'}">${capitalize(p.status ?? 'draft')}</span>
                     ${platformBadges}
@@ -991,6 +1007,7 @@ async function loadPosts() {
                 <div class="post-date-inline">${p.scheduled_at ? formatDate(p.scheduled_at) : formatDate(p.created_at)} &nbsp;#${p.sort_order ?? 0}</div>
             </div>
             <div class="post-actions-col" onclick="event.stopPropagation()">
+                ${!isHighlight ? `
                 <button class="btn-icon" title="Rollout to GitHub" onclick="event.stopPropagation(); doRollout(${p.id}, '${escHtml(p.title)}')">
                     <svg viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
                 </button>
@@ -1000,6 +1017,7 @@ async function loadPosts() {
                 <button class="btn-icon" title="Export Post ZIP" onclick="event.stopPropagation(); doExportPost(${p.id})">
                     <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 </button>
+                ` : ''}
                 <button class="btn-icon" title="Edit" onclick="openPostModal(${p.id})"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
                 <button class="btn-icon" title="Delete" style="color:var(--red)" onclick="confirmDelete(${p.id},'${escHtml(p.title)}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
             </div>
@@ -1516,6 +1534,72 @@ async function savePost() {
         toast(data.error ?? 'Save failed', 'error');
     }
 }
+
+// ── Highlight Modal Logic ──
+function openHighlightModal() {
+    el('highlight-modal-overlay').classList.add('open');
+    loadPublishedEpisodesForHighlight();
+}
+
+function closeHighlightModal() {
+    el('highlight-modal-overlay').classList.remove('open');
+}
+
+function closeHighlightModalOnOverlay(e) {
+    if (e.target === el('highlight-modal-overlay')) closeHighlightModal();
+}
+
+async function loadPublishedEpisodesForHighlight() {
+    const list = el('highlight-episodes-list');
+    list.innerHTML = '<div class="spinner"></div>';
+    
+    const data = await api({ action: 'get_published_episodes' });
+    if (!data.success || !data.episodes || !data.episodes.length) {
+        list.innerHTML = '<div class="empty-state"><p>No published episodes available.</p></div>';
+        return;
+    }
+    
+    list.innerHTML = data.episodes.map(ep => {
+        const cover = ep.resolved_cover || '';
+        return `
+        <div class="post-row" style="grid-template-columns: 48px 1fr auto; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px;" onclick="createHighlightPost(${ep.series_id}, ${ep.sequence_id}, '${escHtml(ep.episode_name)}', '${escHtml(cover)}', '${escHtml(ep.chapter_label || '')}', '${escHtml(ep.asset_url_prefix || '')}')">
+            <img class="post-thumb-sm" src="${escHtml(cover)}" onerror="this.style.display='none'">
+            <div class="post-info-col">
+                <div class="post-name">${escHtml(ep.episode_name)}</div>
+                <div class="post-meta-row">
+                    <span style="font-size:11px;color:var(--text-muted); font-weight: 500;">${escHtml(ep.series_title)}</span>
+                    ${ep.chapter_label ? `<span style="font-size:10px;color:var(--amber); border-left:1px solid var(--border); padding-left:8px;">${escHtml(ep.chapter_label)}</span>` : ''}
+                </div>
+            </div>
+            <button class="btn-primary">Select</button>
+        </div>`;
+    }).join('');
+}
+
+async function createHighlightPost(seriesId, seqId, epName, coverUrl, chapterLabel, prefix) {
+    const payload = {
+        action: 'save_post',
+        title: epName,
+        status: 'published',
+        post_type: 'magazine_highlight',
+        preview_image_url: coverUrl,
+        content: chapterLabel || 'Featured Episode',
+        asset_url_prefix: prefix,
+        media_items: JSON.stringify({ series_id: seriesId, sequence_id: seqId }),
+        platforms_json: '["website"]',
+        platform: 'website'
+    };
+    
+    const res = await api(payload);
+    if (res.success) {
+        toast('Highlight added successfully!', 'success');
+        closeHighlightModal();
+        if (currentView === 'posts') loadPosts();
+    } else {
+        toast(res.error || 'Failed to add highlight', 'error');
+    }
+}
+// ───────────────────────────
 
 async function confirmDelete(id, title) {
     if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;

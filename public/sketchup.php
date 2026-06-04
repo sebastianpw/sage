@@ -118,6 +118,25 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
 
 .row-flex { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
 
+/* ── Mode Tabs ────────────────────────────────────────────────────────────── */
+.su-mode-tabs { display:flex; gap:0; border:1px solid var(--pl-border); border-radius:6px; overflow:hidden; margin-bottom:24px; }
+.su-mode-tab { flex:1; padding:10px 8px; background:transparent; border:none; color:var(--pl-text-dim); font-family:'Space Mono',monospace; font-size:.7rem; cursor:pointer; transition:all .2s; text-align:center; border-right:1px solid var(--pl-border); display:flex; flex-direction:column; align-items:center; gap:4px; line-height:1.2; }
+.su-mode-tab:last-child { border-right:none; }
+.su-mode-tab i { font-size:1rem; }
+.su-mode-tab:hover { background:rgba(245,166,35,.06); color:var(--pl-text); }
+.su-mode-tab.active { background:rgba(58,181,200,.12); color:var(--pl-teal); border-bottom:2px solid var(--pl-teal); }
+.su-mode-tab.active-plush { background:rgba(167,139,250,.12); color:var(--pl-purple); border-bottom:2px solid var(--pl-purple); }
+
+/* Mode panels */
+.su-mode-panel { display:none; }
+.su-mode-panel.active { display:block; }
+
+/* Resolved sketches summary banner */
+.su-resolved-banner { padding:10px 14px; background:rgba(58,181,200,.07); border:1px solid rgba(58,181,200,.25); border-radius:5px; font-family:'Space Mono',monospace; font-size:.72rem; color:var(--pl-teal); margin-bottom:14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.su-resolved-banner.plush { background:rgba(167,139,250,.07); border-color:rgba(167,139,250,.25); color:var(--pl-purple); }
+.su-resolved-banner .su-banner-clear { margin-left:auto; background:none; border:1px solid currentColor; border-radius:3px; color:inherit; font-family:'Space Mono',monospace; font-size:.65rem; cursor:pointer; padding:2px 7px; opacity:.7; transition:opacity .15s; }
+.su-resolved-banner .su-banner-clear:hover { opacity:1; }
+
 /* Modals */
 .su-modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:300000; display:none; align-items:center; justify-content:center; backdrop-filter:blur(2px); }
 .su-modal-backdrop.active { display:flex; }
@@ -136,6 +155,27 @@ window.SketchUpApp = (function() {
     let kgNodes = [];
     let searchTimeout = null;
 
+    // ── Mode state ────────────────────────────────────────────────────────────
+    // 'standard' | 'sequence' | 'plush'
+    let currentMode = 'standard';
+
+    // Resolved sketch IDs from sequence/plush modes (kept separate so standard mode is unaffected)
+    let resolvedSketchIds = [];    // array of {id, name}
+    let resolvedPlushEntities = []; // array of entity records (for plush mode passthrough)
+
+    function setMode(mode) {
+        currentMode = mode;
+        ['standard','sequence','plush'].forEach(m => {
+            const tab = document.getElementById('su-tab-' + m);
+            const panel = document.getElementById('su-panel-' + m);
+            if (!tab || !panel) return;
+            const isActive = m === mode;
+            tab.className = 'su-mode-tab' + (isActive ? (m === 'plush' ? ' active-plush' : ' active') : '');
+            panel.className = 'su-mode-panel' + (isActive ? ' active' : '');
+        });
+    }
+
+    // ── Standard mode: Sketch search ─────────────────────────────────────────
     function searchSketches(q) {
         clearTimeout(searchTimeout);
         if (!q.trim()) { document.getElementById('sketchAc').style.display = 'none'; return; }
@@ -213,23 +253,175 @@ window.SketchUpApp = (function() {
         `).join('');
     }
 
+    // ── Narrative Sequence mode ───────────────────────────────────────────────
+    let seqSearchTimeout = null;
+    let selectedSequenceId = null;
+
+    function searchSequences(q) {
+        clearTimeout(seqSearchTimeout);
+        const ac = document.getElementById('seqAc');
+        if (!q.trim()) { ac.style.display = 'none'; return; }
+        seqSearchTimeout = setTimeout(() => {
+            fetch('sketchup_api.php', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({action:'search_narrative_sequences', q})
+            }).then(r=>r.json()).then(res => {
+                if (!res.ok || !res.results.length) { ac.style.display = 'none'; return; }
+                ac.innerHTML = res.results.map(r => `
+                    <div class="su-ac-item" onclick="SketchUpApp.selectSequence(${r.id}, '${r.name.replace(/'/g, "\\'")}')">
+                        <span style="color:var(--pl-text-dim); font-family:'Space Mono',monospace; font-size:0.7rem; margin-right:6px;">#${r.id}</span>
+                        ${r.name}
+                    </div>
+                `).join('');
+                ac.style.display = 'block';
+            });
+        }, 250);
+    }
+
+    function selectSequence(id, name) {
+        selectedSequenceId = id;
+        const inp = document.getElementById('seqSearch');
+        if (inp) inp.value = name;
+        document.getElementById('seqAc').style.display = 'none';
+        resolveSequenceSketches(id, name);
+    }
+
+    function resolveSequenceSketches(seqId, seqName) {
+        const banner = document.getElementById('seqResolvedBanner');
+        if (banner) { banner.style.display = 'flex'; banner.innerHTML = '<i class="bi bi-hourglass-split"></i> Resolving sketches from sequence…'; }
+        resolvedSketchIds = [];
+        fetch('sketchup_api.php', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({action:'resolve_sequence_sketches', sequence_id: seqId})
+        }).then(r=>r.json()).then(res => {
+            if (!res.ok) { Toast.show(res.error || 'Failed to resolve sequence.', 'error'); if(banner) banner.style.display='none'; return; }
+            resolvedSketchIds = res.sketches || [];
+            if (banner) {
+                banner.style.display = 'flex';
+                banner.innerHTML = `<i class="bi bi-check2-circle"></i> <strong>${resolvedSketchIds.length}</strong> sketch(es) resolved from <em>${seqName}</em> <button class="su-banner-clear" onclick="SketchUpApp.clearSequenceResolution()">Clear</button>`;
+            }
+        });
+    }
+
+    function clearSequenceResolution() {
+        resolvedSketchIds = [];
+        selectedSequenceId = null;
+        const inp = document.getElementById('seqSearch');
+        if (inp) inp.value = '';
+        const banner = document.getElementById('seqResolvedBanner');
+        if (banner) banner.style.display = 'none';
+    }
+
+    // ── PLUSH mode ────────────────────────────────────────────────────────────
+    let plushSearchTimeout = null;
+    let selectedPlushId = null;
+    let selectedPlushType = 'story'; // 'story' | 'collection'
+
+    function setPlushType(type) {
+        selectedPlushType = type;
+        clearPlushResolution();
+        ['story','collection'].forEach(t => {
+            const btn = document.getElementById('plushTypeBtn-' + t);
+            if (btn) btn.className = 'pl-btn pl-btn-secondary' + (t === type ? ' active-plush-type' : '');
+        });
+        const inp = document.getElementById('plushSearch');
+        if (inp) { inp.value = ''; inp.placeholder = type === 'story' ? 'Search PLUSH story…' : 'Search PLUSH collection…'; }
+    }
+
+    function searchPlush(q) {
+        clearTimeout(plushSearchTimeout);
+        const ac = document.getElementById('plushAc');
+        if (!q.trim()) { ac.style.display = 'none'; return; }
+        plushSearchTimeout = setTimeout(() => {
+            fetch('sketchup_api.php', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({action:'search_plush', q, plush_type: selectedPlushType})
+            }).then(r=>r.json()).then(res => {
+                if (!res.ok || !res.results.length) { ac.style.display = 'none'; return; }
+                ac.innerHTML = res.results.map(r => `
+                    <div class="su-ac-item" onclick="SketchUpApp.selectPlush(${r.id}, '${r.name.replace(/'/g, "\\'")}')">
+                        <span style="color:var(--pl-text-dim); font-family:'Space Mono',monospace; font-size:0.7rem; margin-right:6px;">#${r.id}</span>
+                        ${r.name}
+                    </div>
+                `).join('');
+                ac.style.display = 'block';
+            });
+        }, 250);
+    }
+
+    function selectPlush(id, name) {
+        selectedPlushId = id;
+        const inp = document.getElementById('plushSearch');
+        if (inp) inp.value = name;
+        document.getElementById('plushAc').style.display = 'none';
+        resolvePlushEntities(id, name);
+    }
+
+    function resolvePlushEntities(plushId, plushName) {
+        const banner = document.getElementById('plushResolvedBanner');
+        if (banner) { banner.style.display = 'flex'; banner.innerHTML = '<i class="bi bi-hourglass-split"></i> Resolving PLUSH linked entities…'; }
+        resolvedSketchIds = [];
+        resolvedPlushEntities = [];
+        fetch('sketchup_api.php', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({action:'resolve_plush_entities', plush_id: plushId, plush_type: selectedPlushType})
+        }).then(r=>r.json()).then(res => {
+            if (!res.ok) { Toast.show(res.error || 'Failed to resolve PLUSH entities.', 'error'); if(banner) banner.style.display='none'; return; }
+            resolvedSketchIds    = res.sketches || [];
+            resolvedPlushEntities = res.entities || [];
+            if (banner) {
+                const parts = [];
+                if (resolvedSketchIds.length) parts.push(`<strong>${resolvedSketchIds.length}</strong> sketch(es)`);
+                if (resolvedPlushEntities.length) parts.push(`<strong>${resolvedPlushEntities.length}</strong> entity ref(s)`);
+                banner.style.display = 'flex';
+                banner.innerHTML = `<i class="bi bi-check2-circle"></i> ${parts.join(', ')} resolved from <em>${plushName}</em> <button class="su-banner-clear" onclick="SketchUpApp.clearPlushResolution()">Clear</button>`;
+            }
+        });
+    }
+
+    function clearPlushResolution() {
+        resolvedSketchIds = [];
+        resolvedPlushEntities = [];
+        selectedPlushId = null;
+        const inp = document.getElementById('plushSearch');
+        if (inp) inp.value = '';
+        const banner = document.getElementById('plushResolvedBanner');
+        if (banner) banner.style.display = 'none';
+    }
+
+    // ── Export (all modes) ────────────────────────────────────────────────────
     function exportData(format) {
         const include_tables = Array.from(document.querySelectorAll('.chk-table:checked')).map(cb => cb.value);
         const include_frames = document.getElementById('chkFrames').checked;
         const include_kg = document.getElementById('chkKg').checked;
-        
+
+        // Merge sketch IDs from active mode
+        let allSketchIds = [];
+        if (currentMode === 'standard') {
+            allSketchIds = selectedSketches.map(s => s.id);
+        } else {
+            // sequence or plush: use resolved IDs
+            allSketchIds = resolvedSketchIds.map(s => s.id !== undefined ? s.id : s);
+        }
+
+        // Also include standard ranges always
+        const sketch_ranges = sketchRanges;
+
         const config = {
-            sketch_ids: selectedSketches.map(s => s.id),
-            sketch_ranges: sketchRanges,
+            sketch_ids: allSketchIds,
+            sketch_ranges,
             include_tables,
             include_frames,
             kg_nodes: include_kg ? kgNodes.map(n => n.id) : [],
-            kg_include_edges: include_kg ? document.getElementById('kgIncludeEdges').checked : false
+            kg_include_edges: include_kg ? document.getElementById('kgIncludeEdges').checked : false,
+            // Pass mode + resolved plush entities for PLUSH mode
+            export_mode: currentMode,
+            plush_entities: currentMode === 'plush' ? resolvedPlushEntities : []
         };
 
-        if (!config.sketch_ids.length && !config.sketch_ranges.length && !config.kg_nodes.length) {
-            if(window.Toast) Toast.show('Please select at least one Sketch or KG Node to export.', 'warn');
-            else alert('Please select at least one Sketch or Knowledge Graph Node to export.');
+        if (!config.sketch_ids.length && !config.sketch_ranges.length && !config.kg_nodes.length && !config.plush_entities.length) {
+            if(window.Toast) Toast.show('Please select at least one source to export.', 'warn');
+            else alert('Please select at least one source to export.');
             return;
         }
 
@@ -297,7 +489,7 @@ window.SketchUpApp = (function() {
         }
         c.innerHTML = kgNodes.map(n => `
             <span class="beat-entity-chip" style="border-color:var(--pl-purple); color:var(--pl-purple); background:rgba(167,139,250,0.1);">
-                <span style="cursor:pointer;" onclick="SketchUpApp.openEntityModal('kg_nodes', ${n.id}, '${n.name.replace(/'/g, "\\'")}')">🌿 ${n.name}</span>
+                <span style="cursor:pointer;" onclick="SketchUpApp.openEntityModal('kg_nodes', ${n.id}, '${n.name.replace(/'/g, "\\'")}')">\uD83C\uDF3F ${n.name}</span>
                 <button class="chip-remove" title="Mini Graph" onclick="SketchUpApp.openKgNodeGraph(${n.id})" type="button" style="margin-left:4px; opacity:1;"><i class="bi bi-diagram-2-fill"></i></button>
                 <button class="chip-remove" onclick="SketchUpApp.removeKgNode(${n.id})" style="margin-left:4px;"><i class="bi bi-x"></i></button>
             </span>`).join('');
@@ -418,6 +610,7 @@ window.SketchUpApp = (function() {
     }
 
     return {
+        setMode,
         searchSketches, addSketch, removeSketch,
         addRange, removeRange, exportData,
         addKgNode, removeKgNode, openKgNodeGraph,
@@ -425,7 +618,11 @@ window.SketchUpApp = (function() {
         setKgTreeFilter: (f) => { kgTreeFilter = f.trim().toLowerCase(); renderKgTree(); },
         openEntityModal, closeEntityModal,
         _kgNodeAdded: (id) => kgNodes.some(n => n.id === id),
-        _getKgNodes: () => kgNodes
+        _getKgNodes: () => kgNodes,
+        // Sequence mode
+        searchSequences, selectSequence, clearSequenceResolution,
+        // PLUSH mode
+        setPlushType, searchPlush, selectPlush, clearPlushResolution
     };
 })();
 </script>
@@ -444,34 +641,101 @@ window.SketchUpApp = (function() {
 <!-- 3. Workspace -->
 <div class="workspace" id="sketchup-workspace">
 
-    <div class="scene-block">
-        <div class="scene-header">
-            <h3 class="scene-title"><i class="bi bi-image"></i> Specific Sketches</h3>
-        </div>
-        <div class="su-ac-wrap">
-            <input type="text" id="sketchSearch" class="su-input" placeholder="Search sketch by ID or Name..." oninput="SketchUpApp.searchSketches(this.value)">
-            <div id="sketchAc" class="su-ac-dropdown"></div>
-        </div>
-        <div id="sketchChips" class="beat-entity-chips"></div>
+    <!-- ── Mode Switcher ──────────────────────────────────────────────────── -->
+    <div class="su-mode-tabs">
+        <button class="su-mode-tab active" id="su-tab-standard" onclick="SketchUpApp.setMode('standard')">
+            <i class="bi bi-search"></i>
+            <span>Standard</span>
+        </button>
+        <button class="su-mode-tab" id="su-tab-sequence" onclick="SketchUpApp.setMode('sequence')">
+            <i class="bi bi-collection-play"></i>
+            <span>Narrative Sequence</span>
+        </button>
+        <button class="su-mode-tab" id="su-tab-plush" onclick="SketchUpApp.setMode('plush')">
+            <i class="bi bi-bookmark-heart"></i>
+            <span>PLUSH</span>
+        </button>
     </div>
 
-    <div class="scene-block">
-        <div class="scene-header" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
-            <label class="su-check-label" style="margin-bottom:0;">
-                <input type="checkbox" id="chkRanges" onchange="document.getElementById('rangesWrap').style.display = this.checked ? 'block' : 'none'">
-                <span class="scene-title" style="margin:0;"><i class="bi bi-arrow-left-right"></i> Include ID Ranges</span>
-            </label>
+    <!-- ── Standard Mode Panel ───────────────────────────────────────────── -->
+    <div class="su-mode-panel active" id="su-panel-standard">
+        <div class="scene-block">
+            <div class="scene-header">
+                <h3 class="scene-title"><i class="bi bi-image"></i> Specific Sketches</h3>
+            </div>
+            <div class="su-ac-wrap">
+                <input type="text" id="sketchSearch" class="su-input" placeholder="Search sketch by ID or Name..." oninput="SketchUpApp.searchSketches(this.value)">
+                <div id="sketchAc" class="su-ac-dropdown"></div>
+            </div>
+            <div id="sketchChips" class="beat-entity-chips"></div>
         </div>
-        <div id="rangesWrap" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--pl-border);">
-            <div id="rangesList" class="beat-entity-chips" style="margin-bottom: 12px;"></div>
-            <div class="row-flex">
-                <input type="number" id="rangeStart" class="su-input" placeholder="Start ID" style="width: 120px;">
-                <input type="number" id="rangeEnd" class="su-input" placeholder="End ID" style="width: 120px;">
-                <button class="pl-btn pl-btn-secondary" onclick="SketchUpApp.addRange()">+ Add Range</button>
+
+        <div class="scene-block">
+            <div class="scene-header" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
+                <label class="su-check-label" style="margin-bottom:0;">
+                    <input type="checkbox" id="chkRanges" onchange="document.getElementById('rangesWrap').style.display = this.checked ? 'block' : 'none'">
+                    <span class="scene-title" style="margin:0;"><i class="bi bi-arrow-left-right"></i> Include ID Ranges</span>
+                </label>
+            </div>
+            <div id="rangesWrap" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--pl-border);">
+                <div id="rangesList" class="beat-entity-chips" style="margin-bottom: 12px;"></div>
+                <div class="row-flex">
+                    <input type="number" id="rangeStart" class="su-input" placeholder="Start ID" style="width: 120px;">
+                    <input type="number" id="rangeEnd" class="su-input" placeholder="End ID" style="width: 120px;">
+                    <button class="pl-btn pl-btn-secondary" onclick="SketchUpApp.addRange()">+ Add Range</button>
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- ── Narrative Sequence Mode Panel ────────────────────────────────── -->
+    <div class="su-mode-panel" id="su-panel-sequence">
+        <div class="scene-block">
+            <div class="scene-header">
+                <h3 class="scene-title"><i class="bi bi-collection-play"></i> Select Narrative Sequence</h3>
+            </div>
+            <p style="font-size:.8rem; color:var(--pl-text-dim); margin:0 0 12px; line-height:1.5;">
+                Resolves all sketches that are part of the selected narrative sequence via its <code>sequence_data</code> JSON and <code>frames_2_sketches</code> linkage.
+            </p>
+            <div class="su-ac-wrap">
+                <input type="text" id="seqSearch" class="su-input" placeholder="Search narrative sequence by ID or name…" oninput="SketchUpApp.searchSequences(this.value)">
+                <div id="seqAc" class="su-ac-dropdown"></div>
+            </div>
+            <!-- Resolved banner -->
+            <div id="seqResolvedBanner" class="su-resolved-banner" style="display:none;"></div>
+        </div>
+    </div>
+
+    <!-- ── PLUSH Mode Panel ──────────────────────────────────────────────── -->
+    <div class="su-mode-panel" id="su-panel-plush">
+        <div class="scene-block">
+            <div class="scene-header">
+                <h3 class="scene-title" style="color:var(--pl-purple);"><i class="bi bi-bookmark-heart"></i> Select PLUSH Source</h3>
+            </div>
+            <p style="font-size:.8rem; color:var(--pl-text-dim); margin:0 0 14px; line-height:1.5;">
+                Resolves all entity references (characters, factions, locations, sketches, KG nodes) from highlight blocks in the selected PLUSH story or collection.
+                Sketch entities are added to the sketch export; other entity types are included as reference data.
+            </p>
+            <!-- Type toggle -->
+            <div class="row-flex" style="margin-bottom:14px;">
+                <button class="pl-btn pl-btn-secondary active-plush-type" id="plushTypeBtn-story" onclick="SketchUpApp.setPlushType('story')"
+                    style="border-color:var(--pl-purple); color:var(--pl-purple); background:rgba(167,139,250,.1);">
+                    <i class="bi bi-journal-text"></i> Story
+                </button>
+                <button class="pl-btn pl-btn-secondary" id="plushTypeBtn-collection" onclick="SketchUpApp.setPlushType('collection')">
+                    <i class="bi bi-collection"></i> Collection
+                </button>
+            </div>
+            <div class="su-ac-wrap">
+                <input type="text" id="plushSearch" class="su-input" placeholder="Search PLUSH story…" oninput="SketchUpApp.searchPlush(this.value)">
+                <div id="plushAc" class="su-ac-dropdown"></div>
+            </div>
+            <!-- Resolved banner -->
+            <div id="plushResolvedBanner" class="su-resolved-banner plush" style="display:none;"></div>
+        </div>
+    </div>
+
+    <!-- ── Additional Options (all modes) ────────────────────────────────── -->
     <div class="scene-block" style="display: flex; flex-wrap: wrap; gap: 30px;">
         <div style="flex: 1; min-width: 250px;">
             <div class="scene-header">
@@ -527,10 +791,13 @@ window.SketchUpApp = (function() {
 document.addEventListener('DOMContentLoaded', () => {
     // Hide AC on click outside
     document.addEventListener('click', (e) => {
+        // Standard sketch AC
         const wrap = document.querySelector('.su-ac-wrap');
         if (wrap && !wrap.contains(e.target)) {
-            const ac = document.getElementById('sketchAc');
-            if (ac) ac.style.display = 'none';
+            ['sketchAc','seqAc','plushAc'].forEach(id => {
+                const ac = document.getElementById(id);
+                if (ac) ac.style.display = 'none';
+            });
         }
     });
 
@@ -547,6 +814,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const kgEdges = document.getElementById('kgIncludeEdges');
     if (kgEdges) kgEdges.addEventListener('change', SketchUpApp.updateKgPreview);
+
+    // Style the active plush type button on init
+    document.getElementById('plushTypeBtn-story').style.cssText = 'border-color:var(--pl-purple);color:var(--pl-purple);background:rgba(167,139,250,.1);';
 });
 </script>
 

@@ -51,6 +51,23 @@ class CinemagicHubManager
               UNIQUE KEY `uq_seq_lang` (`sequence_id`, `language_code`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         ");
+
+        // Safely add new enhancements
+        try {
+            $this->pdo->exec("
+                ALTER TABLE `cinemagic_series` 
+                ADD COLUMN IF NOT EXISTS `landing_page_script` VARCHAR(255) DEFAULT NULL,
+                ADD COLUMN IF NOT EXISTS `seo_keywords` TEXT DEFAULT NULL,
+                ADD COLUMN IF NOT EXISTS `seo_description` TEXT DEFAULT NULL;
+            ");
+            $this->pdo->exec("
+                ALTER TABLE `cinemagics_2_sequences`
+                ADD COLUMN IF NOT EXISTS `cover_image_url` VARCHAR(512) DEFAULT NULL,
+                ADD COLUMN IF NOT EXISTS `seo_keywords` TEXT DEFAULT NULL,
+                ADD COLUMN IF NOT EXISTS `seo_description` TEXT DEFAULT NULL,
+                ADD COLUMN IF NOT EXISTS `social_links` JSON DEFAULT NULL;
+            ");
+        } catch (\Exception $e) {}
     }
 
     // ── Global System Languages ───────────────────────────────────────────────────
@@ -100,7 +117,7 @@ class CinemagicHubManager
 
     public function getPublishedMagazines(): array
     {
-        $stmt = $this->pdo->query("SELECT id, title, cover_image_url, asset_url_prefix FROM cinemagic_series WHERE status = 'published' ORDER BY id DESC");
+        $stmt = $this->pdo->query("SELECT id, title, cover_image_url, asset_url_prefix FROM cinemagic_series WHERE status = 'published' ORDER BY sort_order DESC, id DESC");
         $series = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
         foreach ($series as &$s) {
@@ -119,20 +136,15 @@ class CinemagicHubManager
         return ['success' => true, 'magazines' => $series];
     }
     
-    
-    
-    
-       public function getPublishedMagazinesForLocal(): array
+    public function getPublishedMagazinesForLocal(): array
     {
-        $stmt = $this->pdo->query("SELECT id, title, cover_image_url FROM cinemagic_series WHERE status = 'published' ORDER BY id DESC");
+        $stmt = $this->pdo->query("SELECT id, title, cover_image_url FROM cinemagic_series WHERE status = 'published' ORDER BY sort_order DESC, id DESC");
         $series = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
         foreach ($series as &$s) {
             $cover = $s['cover_image_url'] ?? '';
             if ($cover) {
-                
                     $cover = str_starts_with($cover, '/') ? $cover : '/' . $cover;
-                
             }
             $s['resolved_cover'] = $cover;
         }
@@ -142,7 +154,7 @@ class CinemagicHubManager
 
     public function getSeriesList(): array
     {
-        $stmt = $this->pdo->query("SELECT id, title, status FROM cinemagic_series ORDER BY id DESC");
+        $stmt = $this->pdo->query("SELECT id, title, status FROM cinemagic_series ORDER BY sort_order DESC, id DESC");
         return ['success' => true, 'series' => $stmt->fetchAll(\PDO::FETCH_ASSOC)];
     }
 
@@ -184,18 +196,23 @@ class CinemagicHubManager
         $title  = $data['title'] ?? 'Untitled Series';
         $desc   = $data['description'] ?? '';
         $status = $data['status'] ?? 'draft';
+        $sort   = (int)($data['sort_order'] ?? 0);
         $prefix = $data['asset_url_prefix'] ?? '';
         $cover  = $data['cover_image_url'] ?? null;
         $tmpl   = $data['template'] ?? 'default';
         $langs  = $data['supported_languages'] ?? 'en';
+        
+        $script   = !empty($data['landing_page_script']) ? trim($data['landing_page_script']) : null;
+        $seoKw    = $data['seo_keywords'] ?? null;
+        $seoDesc  = $data['seo_description'] ?? null;
 
         if ($id) {
-            $stmt = $this->pdo->prepare("UPDATE cinemagic_series SET title=?, description=?, status=?, asset_url_prefix=?, cover_image_url=?, template=?, supported_languages=?, updated_at=NOW() WHERE id=?");
-            $stmt->execute([$title, $desc, $status, $prefix, $cover, $tmpl, $langs, $id]);
+            $stmt = $this->pdo->prepare("UPDATE cinemagic_series SET title=?, description=?, status=?, sort_order=?, asset_url_prefix=?, cover_image_url=?, template=?, supported_languages=?, landing_page_script=?, seo_keywords=?, seo_description=?, updated_at=NOW() WHERE id=?");
+            $stmt->execute([$title, $desc, $status, $sort, $prefix, $cover, $tmpl, $langs, $script, $seoKw, $seoDesc, $id]);
             return ['success' => true, 'id' => $id];
         } else {
-            $stmt = $this->pdo->prepare("INSERT INTO cinemagic_series (title, description, status, asset_url_prefix, cover_image_url, template, supported_languages, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
-            $stmt->execute([$title, $desc, $status, $prefix, $cover, $tmpl, $langs]);
+            $stmt = $this->pdo->prepare("INSERT INTO cinemagic_series (title, description, status, sort_order, asset_url_prefix, cover_image_url, template, supported_languages, landing_page_script, seo_keywords, seo_description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
+            $stmt->execute([$title, $desc, $status, $sort, $prefix, $cover, $tmpl, $langs, $script, $seoKw, $seoDesc]);
             return ['success' => true, 'id' => (int)$this->pdo->lastInsertId()];
         }
     }
@@ -224,6 +241,134 @@ class CinemagicHubManager
         $stmt->execute([$seriesId, $cinemagicId]);
         return ['success' => true];
     }
+
+    public function getCinemagicIdForSequenceInSeries(int $seriesId, int $sequenceId): ?int 
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT cs.cinemagic_id 
+            FROM cinemagics_2_sequences cs
+            JOIN cinemagic_series_2_cinemagics sc ON sc.cinemagic_id = cs.cinemagic_id
+            WHERE sc.series_id = ? AND cs.sequence_id = ? LIMIT 1
+        ");
+        $stmt->execute([$seriesId, $sequenceId]);
+        $id = $stmt->fetchColumn();
+        return $id ? (int)$id : null;
+    }
+
+    public function getEpisodeMeta(int $cinemagicId, int $sequenceId): array 
+    {
+        $stmt = $this->pdo->prepare("SELECT cover_image_url, seo_keywords, seo_description, social_links FROM cinemagics_2_sequences WHERE cinemagic_id = ? AND sequence_id = ?");
+        $stmt->execute([$cinemagicId, $sequenceId]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    public function saveEpisodeMeta(int $cinemagicId, int $sequenceId, array $data): array 
+    {
+        $stmt = $this->pdo->prepare("
+            UPDATE cinemagics_2_sequences 
+            SET cover_image_url = ?, seo_keywords = ?, seo_description = ?, social_links = ?
+            WHERE cinemagic_id = ? AND sequence_id = ?
+        ");
+        $stmt->execute([
+            $data['cover_image_url'] ?? null,
+            $data['seo_keywords'] ?? null,
+            $data['seo_description'] ?? null,
+            $data['social_links'] ?? null,
+            $cinemagicId,
+            $sequenceId
+        ]);
+        return ['success' => true];
+    }
+    
+    
+    
+    
+    
+   // ── Sitemaps (Local & Imported) ───────────────────────────────────────────────
+
+    public function getSitemapImports(): array
+    {
+        $stmt = $this->pdo->query("SELECT id, system_name, created_at FROM sitemap_imports ORDER BY id DESC");
+        return ['success' => true, 'imports' => $stmt->fetchAll(\PDO::FETCH_ASSOC)];
+    }
+
+    public function importSitemapJson(string $name, array $urls): array
+    {
+        if (empty($name)) return ['success' => false, 'error' => 'System name required'];
+        $stmt = $this->pdo->prepare("INSERT INTO sitemap_imports (system_name, urls_json) VALUES (?, ?) ON DUPLICATE KEY UPDATE urls_json = ?, created_at = NOW()");
+        $json = json_encode($urls, JSON_UNESCAPED_SLASHES);
+        $stmt->execute([$name, $json, $json]);
+        return ['success' => true];
+    }
+
+    public function deleteSitemapImport(int $id): array
+    {
+        $stmt = $this->pdo->prepare("DELETE FROM sitemap_imports WHERE id = ?");
+        $stmt->execute([$id]);
+        return ['success' => true];
+    }
+
+    public function generateLocalSitemapUrls(string $baseUrl): array
+    {
+        $baseUrl = rtrim($baseUrl, '/');
+        $urls = [];
+        
+        // 1. Content Hub Index
+        $urls[] = $baseUrl . '/index.html';
+
+        // 2. Published Series & Episodes
+        $seriesList = $this->pdo->query("SELECT * FROM cinemagic_series WHERE status = 'published'")->fetchAll(\PDO::FETCH_ASSOC);
+        
+        foreach ($seriesList as $series) {
+            $script = $this->getSeriesLandingScriptName($series);
+            $langsRaw = $series['supported_languages'] ?? 'en';
+            $langs = array_filter(array_map('trim', explode(',', $langsRaw)));
+            if (!in_array('en', $langs)) array_unshift($langs, 'en');
+
+            $epStmt = $this->pdo->prepare("
+                SELECT ns.id FROM cinemagic_series_2_cinemagics sc
+                JOIN cinemagics_2_sequences cs ON cs.cinemagic_id = sc.cinemagic_id
+                JOIN narrative_sequences ns ON ns.id = cs.sequence_id
+                WHERE sc.series_id = ?
+            ");
+            $epStmt->execute([$series['id']]);
+            $epIds = $epStmt->fetchAll(\PDO::FETCH_COLUMN);
+
+            foreach ($langs as $lang) {
+                $suffix = $lang === 'en' ? '' : '_' . $lang;
+                $urls[] = $baseUrl . '/' . $script . $suffix . '.html';
+                
+                foreach ($epIds as $epId) {
+                    $urls[] = $baseUrl . '/ep_' . $epId . $suffix . '.html';
+                }
+            }
+        }
+        return array_unique($urls);
+    }
+
+    public function buildGlobalSitemapXml(string $baseUrl): string
+    {
+        $urls = $this->generateLocalSitemapUrls($baseUrl);
+        
+        $stmt = $this->pdo->query("SELECT urls_json FROM sitemap_imports");
+        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+            $imported = json_decode($row['urls_json'], true) ?: [];
+            $urls = array_merge($urls, $imported);
+        }
+        
+        $urls = array_unique($urls);
+        
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
+        $xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
+        foreach ($urls as $url) {
+            $xml .= "  <url>\n    <loc>" . htmlspecialchars($url) . "</loc>\n  </url>\n";
+        }
+        $xml .= '</urlset>';
+        return $xml;
+    }
+    
+    
+    
 
     // ── Asset / Frame Picker ──────────────────────────────────────────────────────
 
@@ -313,7 +458,7 @@ class CinemagicHubManager
         return $assets;
     }
 
-    // ── Slug / Repo Path Helpers ──────────────────────────────────────────────────
+    // ── Slug / Repo Path / Script Helpers ─────────────────────────────────────────
 
     private function seriesSlug(int $seriesId, string $title): string
     {
@@ -344,6 +489,25 @@ class CinemagicHubManager
         return str_starts_with($filename, '/') ? $filename : '/' . $filename;
     }
 
+    public function getSeriesLandingScriptName(array $series): string 
+    {
+        $script = trim($series['landing_page_script'] ?? '');
+        if ($script !== '') return $script;
+
+        $stmt = $this->pdo->prepare("
+            SELECT cs.sequence_id
+            FROM cinemagic_series_2_cinemagics sc
+            JOIN cinemagics_2_sequences cs ON cs.cinemagic_id = sc.cinemagic_id
+            WHERE sc.series_id = ?
+            ORDER BY sc.sort_order ASC, cs.sort_order ASC
+            LIMIT 1
+        ");
+        $stmt->execute([$series['id']]);
+        $firstSeq = $stmt->fetchColumn();
+
+        return $firstSeq ? 'index_' . $firstSeq : 'index_' . $series['id'];
+    }
+
     // ── Data Resolution for Exports & Previews ────────────────────────────────────
 
     public function getEpisodeData(
@@ -361,10 +525,30 @@ class CinemagicHubManager
 
         $publicPathAbs = \App\Core\SpwBase::getInstance()->getPublicPath();
 
-        // Determine series_id
-        $stmtSer = $this->pdo->prepare("SELECT sc.series_id FROM cinemagics_2_sequences cs JOIN cinemagic_series_2_cinemagics sc ON sc.cinemagic_id = cs.cinemagic_id WHERE cs.sequence_id = ? LIMIT 1");
+        // Determine series
+        $stmtSer = $this->pdo->prepare("
+            SELECT s.* 
+            FROM cinemagic_series s
+            JOIN cinemagic_series_2_cinemagics sc ON sc.series_id = s.id
+            JOIN cinemagics_2_sequences cs ON cs.cinemagic_id = sc.cinemagic_id
+            WHERE cs.sequence_id = ? LIMIT 1
+        ");
         $stmtSer->execute([$seqId]);
-        $seriesId = $stmtSer->fetchColumn();
+        $series = $stmtSer->fetch(\PDO::FETCH_ASSOC);
+        $seriesId = $series ? (int)$series['id'] : null;
+
+        // Fetch Episode Specific Meta 
+        $epMeta = [];
+        $cinemagicInfo = null;
+        if ($seriesId) {
+            $cId = $this->getCinemagicIdForSequenceInSeries($seriesId, $seqId);
+            if ($cId) {
+                $epMeta = $this->getEpisodeMeta($cId, $seqId);
+                $stmtCM = $this->pdo->prepare("SELECT id, name FROM cinemagics WHERE id = ?");
+                $stmtCM->execute([$cId]);
+                $cinemagicInfo = $stmtCM->fetch(\PDO::FETCH_ASSOC);
+            }
+        }
 
         // Check if PDF exists locally
         $pdfUrl = null;
@@ -458,15 +642,12 @@ class CinemagicHubManager
             } catch (\Exception $e) {}
         }
 
-        $stmtCM = $this->pdo->prepare("SELECT c.id, c.name FROM cinemagics c JOIN cinemagics_2_sequences cs ON cs.cinemagic_id = c.id WHERE cs.sequence_id = ? ORDER BY c.id ASC LIMIT 1");
-        $stmtCM->execute([$seqId]);
-        $cinemagicInfo = $stmtCM->fetch(\PDO::FETCH_ASSOC);
-
         $episodesNav = [];
         if ($cinemagicInfo) {
             $stmtEp = $this->pdo->prepare("
                 SELECT ns.id, ns.name, cs.sort_order, cs.chapter_label,
-                       so_en.name_overlay AS en_name, so_lang.name_overlay AS lang_name
+                       so_en.name_overlay AS en_name, so_lang.name_overlay AS lang_name,
+                       cs.cover_image_url, ns.sequence_data
                 FROM narrative_sequences ns 
                 JOIN cinemagics_2_sequences cs ON cs.sequence_id = ns.id 
                 LEFT JOIN sequence_overlay_texts so_en ON so_en.sequence_id = ns.id AND so_en.language_code = 'en'
@@ -484,6 +665,8 @@ class CinemagicHubManager
                     'id'            => $ep['id'],
                     'name'          => $epName,
                     'chapter_label' => $ep['chapter_label'],
+                    'cover_raw'     => $ep['cover_image_url'] ?? '',
+                    'seq_data_raw'  => $ep['sequence_data'] ?? '',
                     'url'           => sprintf($linkFormat, $ep['id'])
                 ];
             }
@@ -533,6 +716,96 @@ class CinemagicHubManager
             ];
         }
 
+        // Determine First Image for Episode Cover Fallback
+        $explicitCoverUrl = $epMeta['cover_image_url'] ?? '';
+        $episodeCoverUrl  = $explicitCoverUrl ? $this->resolveImageUrl($explicitCoverUrl, $urlPrefix, $makeLocalRelative, $repoAssetPath) : (!empty($frames) ? $frames[0]['thumb'] : '');
+
+        // Determine Next Episode or Random Series
+        $currentIdx = 0;
+        foreach ($episodesNav as $i => $ep) {
+            if ((int)$ep['id'] === (int)$seqId) {
+                $currentIdx = $i;
+                break;
+            }
+        }
+        $nextEp = ($currentIdx < count($episodesNav) - 1) ? $episodesNav[$currentIdx + 1] : null;
+        $nextTeaser = null;
+
+        if ($nextEp) {
+            $nxtCovRaw = $nextEp['cover_raw'];
+            if (!$nxtCovRaw && $nextEp['seq_data_raw']) {
+                $nxtFrames = $this->getSequenceFrames((int)$nextEp['id']);
+                if (!empty($nxtFrames)) $nxtCovRaw = $nxtFrames[0]['url'];
+            }
+            $nxtCovUrl = $nxtCovRaw ? $this->resolveImageUrl($nxtCovRaw, $urlPrefix, $makeLocalRelative, $repoAssetPath) : '';
+            
+            $nextTeaser = [
+                'type'  => 'next_episode',
+                'title' => $nextEp['chapter_label'] ?: $nextEp['name'],
+                'cover' => $nxtCovUrl,
+                'url'   => $nextEp['url']
+            ];
+            
+            
+            
+            
+            
+            
+            
+            
+        } elseif ($series) {
+            // Fetch ALL other published series for client-side randomization
+            $randStmt = $this->pdo->prepare("SELECT * FROM cinemagic_series WHERE status = 'published' AND id != ?");
+            $randStmt->execute([$seriesId]);
+            $otherSeriesList = $randStmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            $randomTeasers = [];
+            foreach ($otherSeriesList as $rs) {
+                $rsCover  = $rs['cover_image_url'] ?? '';
+                $rsPrefix = $rs['asset_url_prefix'] ?? '';
+                $rsSlug   = $this->seriesSlug((int)$rs['id'], $rs['title']);
+                $rsScript = $this->getSeriesLandingScriptName($rs);
+                $suffix   = $langCode === 'en' ? '' : '_' . $langCode;
+                
+                $isPreview = strpos($linkFormat, 'api.php') !== false;
+
+                if ($isPreview) {
+                    $rsUrl = "api.php?action=preview_series&id={$rs['id']}&lang={$langCode}";
+                    $rsCovUrl = $rsCover ? (str_starts_with($rsCover, '/') ? $rsCover : '/' . $rsCover) : '';
+                } else {
+                    // FLATTENED LINK: Drops the slug folder so it points straight to the root
+                    $rsUrl = "../{$rsScript}{$suffix}.html";
+                    
+                    if ($rsCover) {
+                        if ($rsPrefix !== '') {
+                            $rsCovUrl = rtrim($rsPrefix, '/') . "/cinemagic_hub/{$rsSlug}/assets/" . basename($rsCover);
+                        } elseif ($makeLocalRelative) {
+                            // Cover images remain inside their respective series' assets folder
+                            $rsCovUrl = "../{$rsSlug}/assets/" . basename($rsCover);
+                        } else {
+                            $rsCovUrl = str_starts_with($rsCover, '/') ? $rsCover : '/' . $rsCover;
+                        }
+                    } else {
+                        $rsCovUrl = '';
+                    }
+                }
+
+                $randomTeasers[] = [
+                    'title' => $rs['title'],
+                    'cover' => $rsCovUrl,
+                    'url'   => $rsUrl
+                ];
+            }
+
+                
+            $nextTeaser = ['type' => 'random_series', 'options' => $randomTeasers];
+        }
+
+
+
+            
+            
+
         return [
             'id'           => $seqId,
             'name'         => $finalSeqName,
@@ -540,9 +813,17 @@ class CinemagicHubManager
             'cinemagic'    => $cinemagicInfo,
             'episodes_nav' => $episodesNav,
             'pdf_url'      => $pdfUrl,
-            'frames'       => $frames
+            'frames'       => $frames,
+            'meta_kw'      => $epMeta['seo_keywords'] ?? ($series['seo_keywords'] ?? ''),
+            'meta_desc'    => $epMeta['seo_description'] ?? ($series['seo_description'] ?? ''),
+            'social_links' => json_decode($epMeta['social_links'] ?? '[]', true) ?: [],
+            'episode_cover'=> $episodeCoverUrl,
+            'episode_cover_raw' => $explicitCoverUrl,
+            'next_teaser'  => $nextTeaser,
+            'is_preview'   => strpos($linkFormat, 'api.php') !== false
         ];
     }
+
 
     public function renderEpisodeHtml(array $epData): string
     {
@@ -551,6 +832,9 @@ class CinemagicHubManager
         $titleSuffix = $cmName ? ' — ' . $cmName : '';
         $desc        = !empty($epData['description']) ? nl2br(htmlspecialchars($epData['description'])) : '';
         $showNav     = count($epData['episodes_nav']) > 1;
+
+        $metaKw   = htmlspecialchars($epData['meta_kw'] ?? '');
+        $metaDesc = htmlspecialchars($epData['meta_desc'] ?? '');
 
         $currentIdx = 0;
         foreach ($epData['episodes_nav'] as $i => $ep) {
@@ -562,6 +846,20 @@ class CinemagicHubManager
         $prevEp = ($currentIdx > 0) ? $epData['episodes_nav'][$currentIdx - 1] : null;
         $nextEp = ($currentIdx < count($epData['episodes_nav']) - 1) ? $epData['episodes_nav'][$currentIdx + 1] : null;
 
+
+// Episode Cover (Fallback to first image already resolved in array)
+        $epCoverHtml = '';
+        if (!empty($epData['episode_cover'])) {
+            $safeCoverUrl = htmlspecialchars($epData['episode_cover']);
+            $epCoverHtml = '<div class="ep-cover-wrapper observe-me visible">' . "\n" .
+                           '    <img src="' . $safeCoverUrl . '" class="ep-cover-img" alt="Cover">' . "\n" .
+                           '</div>' . "\n" .
+                           '<div class="ep-scroll-indicator observe-me visible">' . "\n" .
+                           '    <svg viewBox="0 0 24 24"><line x1="12" y1="4" x2="12" y2="20"/><polyline points="17 15 12 20 7 15"/></svg>' . "\n" .
+                           '</div>';
+        }
+        
+        
         $panelsHtml = '';
         foreach ($epData['frames'] as $index => $f) {
             $imgHtml = '';
@@ -626,6 +924,7 @@ HTML;
         }
 
         $langHtml = '';
+        $langCode = $epData['current_lang'] ?? 'en';
         if (!empty($epData['available_langs']) && count($epData['available_langs']) > 1) {
             $langOptions = '';
             foreach ($epData['available_langs'] as $l) {
@@ -637,7 +936,7 @@ HTML;
                 }
                 $langOptions .= '<a href="' . $url . '">' . strtoupper($l) . '</a>';
             }
-            $currL = strtoupper($epData['current_lang'] ?? 'EN');
+            $currL = strtoupper($langCode);
             $langHtml = <<<HTML
 <div class="lang-picker" id="lang-picker">
     <button class="lang-toggle" id="lang-toggle" aria-expanded="false">
@@ -658,9 +957,119 @@ document.addEventListener('click', function(e) {
 HTML;
         }
 
-        $topRightHtml = '';
-        if ($langHtml || $pdfBtnHtml) {
-            $topRightHtml = '<div class="top-actions">' . $pdfBtnHtml . $langHtml . '</div>';
+        // Share Icon functionality
+        $shareTexts = [
+            'en' => 'Check out this episode: ',
+            'de' => 'Sieh dir diese Episode an: ',
+            'pt' => 'Confira este episódio: '
+        ];
+        
+        
+        
+        
+        
+        $shareTitle = $shareTexts[$langCode] ?? $shareTexts['en'];
+        $shareHtml = <<<HTML
+<button class="lang-toggle" onclick="shareEpisode(this)" data-title="{$shareTitle}{$title}">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+    <span class="lang-label">SHARE</span>
+</button>
+<script>
+function shareEpisode(btn) {
+    if (navigator.share) {
+        navigator.share({ title: btn.dataset.title, url: window.location.href }).catch(console.error);
+    } else {
+        navigator.clipboard.writeText(window.location.href);
+        alert("Link copied!");
+    }
+}
+</script>
+HTML;
+
+        // Add the Newsletter Button
+        $newsletterHtml = <<<HTML
+<a href="https://petersebring.com/newsletter.php" class="lang-toggle" style="text-decoration:none;" target="_blank" title="Subscribe to Newsletter">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+    <span class="lang-label">NEWS</span>
+</a>
+HTML;
+
+        $topRightHtml = '<div class="top-actions">' . $newsletterHtml . $shareHtml . $pdfBtnHtml . $langHtml . '</div>';
+  
+        
+        
+        
+        
+        
+        
+        
+        // End Info Box (Next Teaser + Social Links)
+        $endTeaserHtml = '';
+        if (!empty($epData['next_teaser'])) {
+            $nt = $epData['next_teaser'];
+            if ($nt['type'] === 'next_episode') {
+                $preText = 'Continue Reading:';
+                $endTeaserHtml .= <<<HTML
+<a href="{$nt['url']}" class="end-teaser-link">
+    <img src="{$nt['cover']}" class="end-teaser-cover" alt="Cover">
+    <div class="end-teaser-text">
+        <div class="end-teaser-pre">{$preText}</div>
+        <div class="end-teaser-title">{$nt['title']}</div>
+    </div>
+</a>
+HTML;
+            } elseif ($nt['type'] === 'random_series' && !empty($nt['options'])) {
+                // Client-side execution for true randomness on static exported HTML
+                $optionsJson = json_encode($nt['options'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES);
+                $endTeaserHtml .= <<<HTML
+<a href="#" class="end-teaser-link" id="random-teaser-link" style="display:none;">
+    <img src="" class="end-teaser-cover" id="random-teaser-cover" alt="Cover">
+    <div class="end-teaser-text">
+        <div class="end-teaser-pre">Also discover:</div>
+        <div class="end-teaser-title" id="random-teaser-title"></div>
+    </div>
+</a>
+<script>
+(function(){
+    var options = {$optionsJson};
+    if(options && options.length > 0) {
+        var pick = options[Math.floor(Math.random() * options.length)];
+        var link = document.getElementById('random-teaser-link');
+        var cover = document.getElementById('random-teaser-cover');
+        var title = document.getElementById('random-teaser-title');
+        if(link && pick) {
+            link.href = pick.url;
+            if (pick.cover) { cover.src = pick.cover; } else { cover.style.display = 'none'; }
+            title.textContent = pick.title;
+            link.style.display = 'flex';
+        }
+    }
+})();
+</script>
+HTML;
+            }
+        }
+
+
+        $socialLinksHtml = '';
+        if (!empty($epData['social_links'])) {
+            $icons = [
+                'instagram' => '<rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>',
+                'youtube'   => '<path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33 2.78 2.78 0 0 0 1.94 2c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.33 29 29 0 0 0-.46-5.33z"/><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"/>',
+                'facebook'  => '<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>',
+                'twitter'   => '<path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"/>',
+                'newsletter'=> '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>'
+            ];
+            foreach ($epData['social_links'] as $sl) {
+                $svg = $icons[$sl['type']] ?? $icons['newsletter'];
+                $socialLinksHtml .= '<a href="'.htmlspecialchars($sl['url']).'" class="soc-icon" target="_blank"><svg viewBox="0 0 24 24">'.$svg.'</svg></a>';
+            }
+        }
+
+        $endBoxHtml = '';
+        if ($endTeaserHtml || $socialLinksHtml) {
+            $socWrap = $socialLinksHtml ? '<div class="soc-wrap">'.$socialLinksHtml.'</div>' : '';
+            $endBoxHtml = '<div class="ep-end-box observe-me">' . $endTeaserHtml . $socWrap . '</div>';
         }
 
         $descHtml  = $desc ? '<p class="seq-desc">' . $desc . '</p>' : '';
@@ -668,11 +1077,13 @@ HTML;
 
         return <<<HTML
 <!doctype html>
-<html lang="en">
+<html lang="{$langCode}">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=0" />
     <title>{$title}{$titleSuffix}</title>
+    <meta name="keywords" content="{$metaKw}">
+    <meta name="description" content="{$metaDesc}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
@@ -683,13 +1094,29 @@ HTML;
         .seq-header { text-align: center; padding: 100px 20px 80px; width: 100%; box-sizing: border-box; }
         .seq-title { font-family: var(--font-title); font-size: 2.5rem; font-weight: 400; margin: 0 0 20px 0; color: var(--accent-color); line-height: 1.2; letter-spacing: 2px; }
         .seq-desc { font-size: 1.1rem; opacity: 0.7; line-height: 1.6; max-width: 600px; margin: 0 auto; }
+        
+        
+
+
+        .ep-cover-wrapper { width: 100%; display: flex; justify-content: center; margin-bottom: 60px; padding: 0 20px; box-sizing: border-box; }
+        .ep-cover-img { width: 100%; max-width: 600px; height: auto; border-radius: 4px; box-shadow: 0 10px 40px rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.05); }
+        .ep-scroll-indicator { width: 100%; display: flex; justify-content: center; margin-bottom: 120px; color: var(--accent-color); opacity: 0.5; }
+        .ep-scroll-indicator svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.5; animation: floatDown 2.5s infinite ease-in-out; }
+        @keyframes floatDown { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(10px); } }
+
+
+
+        
+        
+        
+        
         .panel { width: 100%; display: flex; flex-direction: column; align-items: center; margin-bottom: 80px; }
         .panel-img { width: 100%; height: auto; display: block; margin: 0; box-shadow: 0 4px 40px rgba(0,0,0,0.8); border-radius: 2px; }
         .text-blocks { width: 100%; padding: 50px 20px 30px; box-sizing: border-box; display: flex; flex-direction: column; gap: 35px; align-items: center; }
         .story-text { font-size: 1.25rem; line-height: 1.8; font-weight: 400; text-align: center; max-width: 650px; color: var(--text-color); letter-spacing: 0.5px; text-shadow: 0 2px 6px rgba(0,0,0,0.9); }
         .observe-me { opacity: 0; transform: translateY(25px); transition: opacity 1s cubic-bezier(0.25, 1, 0.5, 1), transform 1s cubic-bezier(0.25, 1, 0.5, 1); }
         .observe-me.visible { opacity: 1; transform: translateY(0); }
-        .end-mark { margin: 60px 0 120px; font-family: var(--font-title); color: var(--accent-color); font-size: 1.5rem; letter-spacing: 4px; opacity: 0.4; }
+        .end-mark { margin: 60px 0 30px; font-family: var(--font-title); color: var(--accent-color); font-size: 1.5rem; letter-spacing: 4px; opacity: 0.4; text-align: center; }
         
         .top-actions { position: fixed; top: 20px; right: 20px; z-index: 999; display: flex; gap: 8px; align-items: flex-start; }
         .lang-picker { position: relative; }
@@ -699,7 +1126,23 @@ HTML;
         .lang-picker.open .lang-menu { display: flex; }
         .lang-menu a { padding: 10px 16px; color: var(--nav-text); text-decoration: none; font-family: var(--font-title); font-size: 0.65rem; text-align: center; transition: background 0.2s, color 0.2s; }
         .lang-menu a:hover { background: var(--nav-active-bg); color: var(--nav-active); }
+ 
         
+       /* End Box Teaser & Socials */
+        .ep-end-box { width: calc(100% - 40px); max-width: 500px; margin: 0 auto 120px; padding: 20px; background: rgba(10,10,14,0.6); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; backdrop-filter: blur(10px); box-sizing: border-box; }
+        
+        
+        
+        .end-teaser-link { display: flex; gap: 20px; align-items: center; text-decoration: none; padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.05); transition: transform 0.2s; }
+        .end-teaser-link:hover { transform: translateX(4px); }
+        .end-teaser-cover { width: 80px; aspect-ratio: 3/4; object-fit: cover; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+        .end-teaser-pre { font-family: var(--font-title); font-size: 0.6rem; letter-spacing: 2px; color: var(--accent-color); opacity: 0.7; text-transform: uppercase; margin-bottom: 6px; }
+        .end-teaser-title { font-family: var(--font-body); font-size: 1.1rem; color: var(--text-color); line-height: 1.4; }
+        .soc-wrap { display: flex; justify-content: center; gap: 16px; padding-top: 20px; }
+        .soc-icon { width: 36px; height: 36px; border-radius: 50%; background: var(--nav-bg); border: 1px solid var(--nav-border); display: flex; align-items: center; justify-content: center; color: var(--nav-text); transition: 0.2s; }
+        .soc-icon:hover { color: var(--accent-color); border-color: var(--accent-color); background: var(--nav-active-bg); transform: translateY(-2px); }
+        .soc-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+
         .ep-nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 200; display: flex; flex-direction: column; --ep-bar-h: 44px; }
         .ep-nav-toggle { align-self: center; margin-bottom: -1px; background: var(--nav-bg); border: 1px solid var(--nav-border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 5px 18px 2px; font-family: var(--font-title); font-size: 0.6rem; letter-spacing: 2px; color: var(--nav-text); cursor: pointer; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); transition: color 0.2s; user-select: none; display: flex; align-items: center; gap: 8px; }
         .ep-nav-toggle:hover { color: var(--nav-active); }
@@ -728,8 +1171,10 @@ HTML;
         <h1 class="seq-title">{$title}</h1>
         {$descHtml}
     </div>
+    {$epCoverHtml}
     {$panelsHtml}
     <div class="end-mark observe-me">&#10086; FIN &#10086;</div>
+    {$endBoxHtml}
 </div>
 {$navHtml}
 <script>
@@ -753,13 +1198,34 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (active) active.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
             }
         });
-    }
+        }
 });
 </script>
-</body>
-</html>
 HTML;
+
+        // Append Google Analytics if not in preview mode
+        if (empty($epData['is_preview'])) {
+            $html .= <<<HTML
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-SBSTRVS0NR"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-SBSTRVS0NR');
+</script>
+
+HTML;
+        }
+
+        $html .= "</body>\n</html>";
+        return $html;
     }
+
+
+
 
     public function renderSeriesIndexHtml(
         int    $seriesId,
@@ -816,6 +1282,10 @@ HTML;
         $desc     = $series['description'] ? nl2br(htmlspecialchars($series['description'])) : '';
         $template = $series['template'] ?? 'default';
 
+        $metaKw   = htmlspecialchars($series['seo_keywords'] ?? '');
+        $metaDesc = htmlspecialchars($series['seo_description'] ?? '');
+        $script   = $this->getSeriesLandingScriptName($series);
+
         $previewBadge = $isPreview
             ? "<div style='position:absolute;top:20px;left:50%;transform:translateX(-50%);background:var(--accent-color);color:#000;padding:6px 16px;border-radius:4px;font-family:var(--font-title);font-size:0.7rem;font-weight:bold;letter-spacing:2px;z-index:999;text-transform:uppercase;'>Preview Mode</div>"
             : "";
@@ -848,7 +1318,7 @@ HTML;
                     $url = "api.php?action=preview_series&id={$seriesId}&lang={$l}";
                 } else {
                     $suffix = $l === 'en' ? '' : '_' . $l;
-                    $url = "index{$suffix}.html";
+                    $url = $script . $suffix . '.html';
                 }
                 $langOptions .= '<a href="' . $url . '">' . strtoupper($l) . '</a>';
             }
@@ -896,11 +1366,13 @@ HTML;
 
             return <<<HTML
 <!doctype html>
-<html lang="en">
+<html lang="{$langCode}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{$title}</title>
+    <meta name="keywords" content="{$metaKw}">
+    <meta name="description" content="{$metaDesc}">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
     <style>
         :root { --bg-color: #020202; --text-color: #e5e0d8; --accent-color: #cda434; --font-title: 'Cinzel', serif; --font-body: 'Lora', serif; }
@@ -933,6 +1405,71 @@ HTML;
 HTML;
         }
 
+        
+
+
+        $gaCode = '';
+        if (!$isPreview) {
+            $gaCode = <<<HTML
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-SBSTRVS0NR"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-SBSTRVS0NR');
+</script>
+HTML;
+        }
+
+        if ($template === 'hero_backdrop' && $cover) {
+            $heroBgTag = $firstEpHref
+                ? "<a href='{$firstEpHref}' class='hero-bg' aria-label='Read first episode'></a>"
+                : "<div class='hero-bg'></div>";
+
+            return <<<HTML
+<!doctype html>
+<html lang="{$langCode}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>{$title}</title>
+    <meta name="keywords" content="{$metaKw}">
+    <meta name="description" content="{$metaDesc}">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+    <style>
+        :root { --bg-color: #020202; --text-color: #e5e0d8; --accent-color: #cda434; --font-title: 'Cinzel', serif; --font-body: 'Lora', serif; }
+        body, html { margin: 0; padding: 0; background-color: var(--bg-color); color: var(--text-color); font-family: var(--font-body); min-height: 100vh; overflow-x: hidden; }
+        .hero-bg { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: url('{$cover}') center/cover no-repeat; z-index: 1; display: block; text-decoration: none; cursor: pointer; }
+        .hero-bg::after { content:''; position:absolute; inset:0; background: linear-gradient(to bottom, rgba(2,2,2,0.6) 0%, rgba(2,2,2,0.95) 100%); }
+        .content { position: relative; z-index: 10; max-width: 800px; margin: 0 auto; padding: 100px 20px 80px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+        .series-title { font-family: var(--font-title); font-size: 3rem; font-weight: 400; margin: 0 0 24px; color: var(--accent-color); line-height: 1.2; letter-spacing: 3px; text-shadow: 0 4px 20px rgba(0,0,0,0.8); }
+        .series-desc { font-size: 1.15rem; opacity: 0.85; line-height: 1.7; max-width: 650px; margin: 0 auto 60px; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
+        .toc { width: 100%; max-width: 500px; text-align: left; background: rgba(10,10,15,0.6); padding: 40px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); backdrop-filter: blur(10px); }
+        .season-hdr { font-family: var(--font-title); font-size: 1rem; color: #888; letter-spacing: 2px; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin: 30px 0 16px; }
+        .season-hdr:first-child { margin-top: 0; }
+        .ep-link { display: block; color: var(--text-color); text-decoration: none; font-size: 1.1rem; padding: 8px 0; transition: color 0.2s, transform 0.2s; border-radius: 4px; }
+        .ep-link:hover { color: var(--accent-color); transform: translateX(6px); }
+        {$commonStyles}
+        @media (max-width: 768px) { .series-title { font-size: 2.2rem; } .toc { padding: 25px 20px; } }
+    </style>
+</head>
+<body>
+    {$previewBadge}
+    {$topRightHtml}
+    {$heroBgTag}
+    <div class="content">
+        <h1 class="series-title">{$title}</h1>
+        <p class="series-desc">{$desc}</p>
+        <div class="toc">{$tocHtml}</div>
+    </div>
+    {$gaCode}
+</body>
+</html>
+HTML;
+        }
+
         if ($cover && $firstEpHref) {
             $coverHtml = "<a href='{$firstEpHref}'><img src='{$cover}' class='cover-img' alt='Cover'></a>";
         } elseif ($cover) {
@@ -943,11 +1480,13 @@ HTML;
 
         return <<<HTML
 <!doctype html>
-<html lang="en">
+<html lang="{$langCode}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{$title}</title>
+    <meta name="keywords" content="{$metaKw}">
+    <meta name="description" content="{$metaDesc}">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
     <style>
         :root { --bg-color: #020202; --text-color: #e5e0d8; --accent-color: #cda434; --font-title: 'Cinzel', serif; --font-body: 'Lora', serif; }
@@ -973,10 +1512,16 @@ HTML;
         <p class="series-desc">{$desc}</p>
         <div class="toc">{$tocHtml}</div>
     </div>
+    {$gaCode}
 </body>
 </html>
 HTML;
     }
+
+
+
+
+
 
     // ── Rollout and Export Zip Generation ─────────────────────────────────────────
 
@@ -997,6 +1542,8 @@ HTML;
         $langsRaw       = $series['supported_languages'] ?? 'en';
         $langs          = array_filter(array_map('trim', explode(',', $langsRaw)));
         if (!in_array('en', $langs)) array_unshift($langs, 'en');
+        
+        $scriptName = $this->getSeriesLandingScriptName($series);
 
         $epStmt = $this->pdo->prepare("
             SELECT ns.id, ns.name, c.name as season_name
@@ -1042,6 +1589,18 @@ HTML;
                 $sidecarJson = json_encode($epDataForHtml, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
                 $zip->addFromString("data/ep_{$seqId}{$suffix}.js", "const episodeData = " . $sidecarJson . ";\n// export default episodeData;");
 
+                // Check episode cover assets
+                if (!empty($epDataForHtml['episode_cover_raw'])) {
+                    $covFn = ltrim($epDataForHtml['episode_cover_raw'], '/');
+                    if (!str_starts_with($covFn, 'http')) {
+                        $covAbs = rtrim($publicPathAbs, '/') . '/' . $covFn;
+                        if (file_exists($covAbs) && !in_array($covFn, $copiedAssets)) {
+                            $zip->addFile($covAbs, 'assets/' . basename($covFn));
+                            $copiedAssets[] = $covFn;
+                        }
+                    }
+                }
+
                 // Package corresponding PDF
                 $pdfLocalRel = "media/magazines/series_{$seriesId}/magazine_seq{$seqId}_{$lang}.pdf";
                 $absPdf = rtrim($publicPathAbs, '/') . '/' . $pdfLocalRel;
@@ -1064,7 +1623,7 @@ HTML;
                 }
             }
 
-            $zip->addFromString("index{$suffix}.html", $this->renderSeriesIndexHtml(
+            $zip->addFromString("{$scriptName}{$suffix}.html", $this->renderSeriesIndexHtml(
                 $seriesId, false, $urlPrefix, $makeRel, $repoAssetsPath, $lang, $langs
             ));
         }
@@ -1087,6 +1646,7 @@ HTML;
         $repoAssetsPath = $this->repoAssetsPath($seriesId, $series['title']);
         $outDir         = rtrim($targetRepo, '/') . '/cinemagic_hub/' . $seriesSlug;
         $urlPrefix      = $series['asset_url_prefix'] ?? '';
+        $scriptName     = $this->getSeriesLandingScriptName($series);
 
         $langsRaw = $series['supported_languages'] ?? 'en';
         $langs    = array_filter(array_map('trim', explode(',', $langsRaw)));
@@ -1139,6 +1699,17 @@ HTML;
                 $sidecarJson = json_encode($epDataForHtml, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
                 file_put_contents($outDir . "/data/ep_{$seqId}{$suffix}.js", "const episodeData = " . $sidecarJson . ";");
 
+                if (!empty($epDataForHtml['episode_cover_raw'])) {
+                    $covFn = ltrim($epDataForHtml['episode_cover_raw'], '/');
+                    if (!str_starts_with($covFn, 'http')) {
+                        $covAbs = rtrim($publicPathAbs, '/') . '/' . $covFn;
+                        if (file_exists($covAbs) && !in_array($covFn, $copiedAssets)) {
+                            @copy($covAbs, $outDir . '/assets/' . basename($covFn));
+                            $copiedAssets[] = $covFn;
+                        }
+                    }
+                }
+
                 // Rollout corresponding PDF
                 $pdfLocalRel = "media/magazines/series_{$seriesId}/magazine_seq{$seqId}_{$lang}.pdf";
                 $absPdf = rtrim($publicPathAbs, '/') . '/' . $pdfLocalRel;
@@ -1161,7 +1732,7 @@ HTML;
                 }
             }
 
-            file_put_contents($outDir . "/index{$suffix}.html", $this->renderSeriesIndexHtml(
+            file_put_contents($outDir . "/{$scriptName}{$suffix}.html", $this->renderSeriesIndexHtml(
                 $seriesId, false, $urlPrefix, $makeRel, $repoAssetsPath, $lang, $langs
             ));
         }
@@ -1192,6 +1763,9 @@ HTML;
 
         return ['success' => true];
     }
+    
+    
+    
 
     public function getPdfExportData(int $seriesId, int $sequenceId): array
     {
@@ -1342,8 +1916,21 @@ HTML;
             if (!empty(trim($row['description_overlay']))) $locDescs[$l] = trim($row['description_overlay']);
         }
 
+        
         $finalSeqName = $locNames['en'] ?? $seq['name'];
         $finalSeqDesc = $locDescs['en'] ?? $seq['description'];
+
+        // Check if an explicit episode cover was set via Episode Meta
+        $customCoverFile = null;
+        $cId = $this->getCinemagicIdForSequenceInSeries($seriesId, $sequenceId);
+        $epMeta = $cId ? $this->getEpisodeMeta($cId, $sequenceId) : [];
+        if (!empty($epMeta['cover_image_url'])) {
+            $fn = ltrim($epMeta['cover_image_url'], '/');
+            if (!str_starts_with($fn, 'http')) {
+                $customCoverFile = $fn;
+                $coverFrameId = 0; // Use magic ID 0 for the explicit cover
+            }
+        }
 
         return [
             'success'                  => true,
@@ -1352,9 +1939,11 @@ HTML;
             'localized_sequence_names' => $locNames,
             'localized_descriptions'   => $locDescs,
             'cover_frame_id'           => $coverFrameId,
+            'custom_cover_file'        => $customCoverFile,
             'frames'                   => $frames
         ];
     }
+
 
     /**
      * Replaces JS client logic: packages local files and JSON into a robust PHP cURL request directly to PyAPI.
@@ -1449,6 +2038,24 @@ HTML;
             $body .= $content . "\r\n";
             $count++;
         }
+        
+        // Attach the explicit episode cover if one exists
+        if (!empty($exportData['custom_cover_file'])) {
+            $absPath = rtrim($publicPathAbs, '/') . '/' . ltrim($exportData['custom_cover_file'], '/');
+            if (file_exists($absPath)) {
+                $mime = mime_content_type($absPath) ?: 'image/jpeg';
+                $content = file_get_contents($absPath);
+                
+                $body .= "--" . $boundary . "\r\n";
+                $body .= "Content-Disposition: form-data; name=\"images\"; filename=\"image_0.jpg\"\r\n";
+                $body .= "Content-Type: " . $mime . "\r\n\r\n";
+                $body .= $content . "\r\n";
+                $count++;
+            } else {
+                error_log("PDF Export: Custom cover file missing at " . $absPath);
+            }
+        }
+
         $body .= "--" . $boundary . "--\r\n";
 
         if ($count === 0 && !empty($exportData['frames'])) {

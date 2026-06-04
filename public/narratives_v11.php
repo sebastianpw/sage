@@ -10,6 +10,7 @@
 //      Filter payload dynamically bundles these toggles.
 // V11.1: Forge filter option added directly into the context select to replace the empty global state.
 // V11.2: Frame switcher in forge results; direct Chroma collection query options; fuzz promoted-only.
+// V11.3: Forge filter modal upgraded to narseq tabbed sidebar evolution (Filter Forge v2).
 // ----------------------------------------------------
 require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
@@ -103,14 +104,8 @@ ob_start();
     .lib-thumb img { width: 100%; height: 100%; object-fit: cover; transition: opacity 0.2s; }
     
     /* Frame Navigation Arrows (Library) */
-    
-
     .frame-nav-btn { position: absolute; bottom: 0; width: 40px; height: 40px; background: rgba(0,0,0,0.25); color: rgba(255,255,255,0.6); display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 25; font-size: 1.2rem; transition: background 0.2s, color 0.2s; opacity: 1; }
     .frame-nav-btn:hover { background: var(--highlight); color: white; }
-    
-    
-    
-    
     .frame-nav-left { left: 0; border-top-right-radius: 8px; }
     .frame-nav-right { right: 0; border-top-left-radius: 8px; }
 
@@ -253,7 +248,7 @@ ob_start();
     /* Player Frame Navigation Arrows — same unobtrusive corner style as library */
     .player-frame-nav {
         position: absolute;
-        bottom: 100px; /* sits above the player-controls row */
+        bottom: 100px;
         width: 50px;
         height: 60px;
         background: rgba(0,0,0,0.5);
@@ -302,10 +297,6 @@ ob_start();
     .load-name { font-weight: 700; font-size: 1.1rem; color: var(--text); }
     .load-meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; display: flex; justify-content: space-between; }
 
-    
-    
-    
-    
     /* IFRAME MODAL — true full-screen, no chrome, close button floats over iframe */
     #iframe-modal {
         padding: 0;
@@ -333,16 +324,10 @@ ob_start();
         border: none; border-radius: 0; margin: 0; padding: 0;
         transform: none; background: var(--bg); display: block;
     }
-    
-    
-    
-    
-    
-    
 
     /* ENTITY PREVIEW MODAL (Peek) — sits above the filter modal */
     #entity-preview-modal {
-        z-index: 5000; /* above filter modal at 4000 */
+        z-index: 5000;
     }
     #entity-preview-modal .modal-content {
         max-width: 700px;
@@ -371,249 +356,158 @@ ob_start();
         flex-shrink: 0;
         margin-top: 4px;
     }
-    .preview-section {
-        margin-bottom: 14px;
-    }
-    .preview-section-title {
-        font-size: 0.72rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        color: var(--text-muted);
-        letter-spacing: 0.05em;
-        margin-bottom: 6px;
-    }
-    .preview-value {
-        font-size: 0.92rem;
-        line-height: 1.55;
-        color: var(--text);
-    }
-    .preview-value.mono {
-        font-family: monospace;
-        font-size: 0.82rem;
-        color: var(--text-muted);
-    }
-    .preview-pill-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px;
-        margin-top: 2px;
-    }
-    .preview-pill {
-        font-size: 0.78rem;
-        padding: 2px 10px;
-        border-radius: 10px;
-        background: rgba(255,255,255,0.06);
-        border: 1px solid var(--border);
-        color: var(--text);
-    }
-    .preview-kv-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px 16px;
-    }
+    .preview-section { margin-bottom: 14px; }
+    .preview-section-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; margin-bottom: 6px; }
+    .preview-value { font-size: 0.92rem; line-height: 1.55; color: var(--text); }
+    .preview-value.mono { font-family: monospace; font-size: 0.82rem; color: var(--text-muted); }
+    .preview-pill-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+    .preview-pill { font-size: 0.78rem; padding: 2px 10px; border-radius: 10px; background: rgba(255,255,255,0.06); border: 1px solid var(--border); color: var(--text); }
+    .preview-kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
     .preview-kv-item {}
-    .preview-kv-key {
-        font-size: 0.7rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        color: var(--text-muted);
-        margin-bottom: 2px;
-    }
-    .preview-kv-val {
-        font-size: 0.85rem;
-        color: var(--text);
-        line-height: 1.4;
-    }
-    .preview-loading {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 40px 0;
-        gap: 12px;
-        color: var(--text-muted);
-        font-size: 0.9rem;
-    }
-    .preview-spinner {
-        width: 22px; height: 22px;
-        border: 3px solid rgba(255,255,255,0.1);
-        border-top-color: var(--highlight);
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-        flex-shrink: 0;
-    }
-    .preview-not-found {
-        padding: 30px 0;
-        text-align: center;
-        color: var(--text-muted);
-        font-size: 0.9rem;
-    }
+    .preview-kv-key { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px; }
+    .preview-kv-val { font-size: 0.85rem; color: var(--text); line-height: 1.4; }
+    .preview-loading { display: flex; align-items: center; justify-content: center; padding: 40px 0; gap: 12px; color: var(--text-muted); font-size: 0.9rem; }
+    .preview-spinner { width: 22px; height: 22px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--highlight); border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
+    .preview-not-found { padding: 30px 0; text-align: center; color: var(--text-muted); font-size: 0.9rem; }
 
     /* ================================================================
-       FORGE FILTER MODAL STYLES
+       FORGE FILTER MODAL — tabbed sidebar compose-modal style (narseq evolution)
        ================================================================ */
-    #forge-filter-modal .modal-content {
-        max-width: 700px;
-        max-height: 90vh;
-        overflow-y: auto;
+    /* The forge modal uses a bottom-sheet compose-modal layout */
+    #forge-filter-modal {
+        align-items: flex-end;
+        justify-content: center;
         padding: 0;
-        border: 1px solid rgba(245, 158, 11, 0.3);
     }
-
-    .forge-modal-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 16px 20px;
-        background: rgba(245, 158, 11, 0.06);
-        border-bottom: 1px solid rgba(245, 158, 11, 0.2);
-        position: sticky;
-        top: 0;
-        z-index: 10;
-    }
-    .forge-modal-header h3 {
-        margin: 0;
-        font-size: 1rem;
-        font-weight: 700;
-        color: #f59e0b;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .forge-modal-body {
-        padding: 18px 20px;
+    #forge-filter-modal .modal-content {
+        padding: 0;
+        border: 1px solid rgba(245, 158, 11, 0.25);
+        border-bottom: none;
+        border-radius: 14px 14px 0 0;
+        max-width: 700px;
+        width: 100%;
+        height: 65vh;
+        max-height: 85vh;
         display: flex;
         flex-direction: column;
-        gap: 16px;
-    }
-
-    /* Forge filter section card */
-    .forge-section {
-        border: 1px solid var(--border);
-        border-radius: 8px;
         overflow: hidden;
+        box-shadow: 0 -8px 40px rgba(0,0,0,0.6);
+        animation: slideUpForge 0.22s ease;
     }
-    .forge-section-head {
-        padding: 10px 14px;
-        background: var(--card);
-        font-size: 0.78rem;
+    @keyframes slideUpForge { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    .forge-cm-handle { text-align: center; padding: 10px 0 4px; cursor: pointer; flex-shrink: 0; }
+    .forge-cm-handle-bar { display: inline-block; width: 40px; height: 4px; background: rgba(245,158,11,0.3); border-radius: 2px; }
+
+    .forge-cm-header {
+        padding: 4px 16px 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid rgba(245,158,11,0.15);
+        flex-shrink: 0;
+    }
+    .forge-cm-title {
+        font-size: 0.9rem;
         font-weight: 700;
+        color: #f59e0b;
         text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--text-muted);
-        border-bottom: 1px solid var(--border);
+        letter-spacing: 1px;
+        font-family: 'Space Mono', monospace;
         display: flex;
         align-items: center;
         gap: 8px;
     }
-    .forge-section-head .forge-section-icon {
-        font-size: 1rem;
-        opacity: 0.8;
-    }
-    .forge-section-body {
-        padding: 12px 14px;
-        background: rgba(0,0,0,0.1);
-    }
-
-    /* Forge search input */
-    .forge-search-wrap {
-        position: relative;
-        margin-bottom: 8px;
-    }
-    .forge-search-input {
-        width: 100%;
-        padding: 9px 36px 9px 12px;
+    .forge-cm-close-btn {
+        background: transparent;
         border: 1px solid var(--border);
-        background: var(--bg);
-        color: var(--text);
-        border-radius: 6px;
-        font-size: 0.9rem;
-        box-sizing: border-box;
-    }
-    .forge-search-input:focus { outline: none; border-color: #f59e0b; }
-    .forge-search-clear {
-        position: absolute;
-        right: 10px;
-        top: 50%;
-        transform: translateY(-50%);
-        background: none;
-        border: none;
         color: var(--text-muted);
+        border-radius: 4px;
+        width: 26px; height: 26px;
         cursor: pointer;
-        font-size: 1rem;
-        line-height: 1;
-        padding: 0;
-        display: none;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 14px;
     }
+    .forge-cm-close-btn:hover { color: var(--text); border-color: var(--text); }
 
-    /* Forge tag chips — selected items */
-    .forge-chips {
+    /* Active filters pill bar */
+    .forge-filters-bar {
+        padding: 6px 12px;
         display: flex;
-        flex-wrap: wrap;
         gap: 6px;
-        min-height: 32px;
-    }
-    .forge-chip {
-        display: inline-flex;
         align-items: center;
-        gap: 5px;
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: 600;
-        background: rgba(245, 158, 11, 0.12);
-        border: 1px solid rgba(245, 158, 11, 0.35);
+        border-bottom: 1px solid var(--border);
+        overflow-x: auto;
+        flex-shrink: 0;
+        min-height: 34px;
+        scrollbar-width: none;
+    }
+    .forge-filters-bar::-webkit-scrollbar { display: none; }
+    .forge-active-pill {
+        background: rgba(245,158,11,0.12);
+        border: 1px solid rgba(245,158,11,0.3);
         color: #f59e0b;
-        cursor: default;
-    }
-    .forge-chip-x {
-        cursor: pointer;
-        font-size: 0.9rem;
-        opacity: 0.7;
-        line-height: 1;
-    }
-    .forge-chip-x:hover { opacity: 1; color: #ef4444; }
-
-    /* Forge dropdown list */
-    .forge-dropdown {
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        background: var(--card);
-        max-height: 160px;
-        overflow-y: auto;
-        display: none;
-    }
-    .forge-dropdown.open { display: block; }
-    .forge-dropdown-item {
-        padding: 8px 12px;
-        font-size: 0.88rem;
-        cursor: pointer;
-        border-bottom: 1px solid rgba(255,255,255,0.04);
+        padding: 3px 8px;
+        border-radius: 20px;
+        font-size: 0.65rem;
         display: flex;
-        justify-content: space-between;
         align-items: center;
-        transition: background 0.1s;
-        color: var(--text);
-    }
-    .forge-dropdown-item:last-child { border-bottom: none; }
-    .forge-dropdown-item:hover { background: rgba(245, 158, 11, 0.08); }
-    .forge-dropdown-item.selected { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
-    .forge-dropdown-item-meta {
-        font-size: 0.72rem;
-        color: var(--text-muted);
-        max-width: 160px;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        gap: 6px;
+        font-weight: bold;
         white-space: nowrap;
     }
-    .forge-dropdown-loading {
-        padding: 12px;
-        text-align: center;
-        color: var(--text-muted);
-        font-size: 0.85rem;
+    .forge-active-pill-close { cursor: pointer; font-size: 0.8rem; opacity: 0.7; }
+    .forge-active-pill-close:hover { opacity: 1; color: #ef4444; }
+
+    /* Body: sidebar + content */
+    .forge-cm-body {
+        display: flex;
+        flex: 1;
+        min-height: 0;
     }
 
-    /* Forge vector text input */
-    .forge-vector-input {
+    /* Sidebar */
+    .forge-cm-sidebar {
+        width: 100px;
+        border-right: 1px solid var(--border);
+        padding: 8px 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        overflow-y: auto;
+        flex-shrink: 0;
+        background: rgba(0,0,0,0.1);
+    }
+    .forge-cm-sidebar-btn {
+        width: 100%;
+        padding: 8px 6px;
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        text-align: left;
+        cursor: pointer;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.72rem;
+        transition: all 0.15s;
+    }
+    .forge-cm-sidebar-btn:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+    .forge-cm-sidebar-btn.active { background: rgba(245,158,11,0.12); color: #f59e0b; }
+    .forge-cm-sidebar-btn.results-btn { color: #f59e0b; font-weight: bold; }
+
+    /* Content pane */
+    .forge-cm-content {
+        flex: 1;
+        padding: 12px;
+        overflow-y: auto;
+        position: relative;
+    }
+    .forge-tab-pane { display: none; flex-direction: column; gap: 8px; }
+    .forge-tab-pane.active { display: flex; }
+
+    /* Shared input styles for forge */
+    .ff-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px; }
+    .ff-input {
         width: 100%;
         padding: 9px 12px;
         border: 1px solid var(--border);
@@ -621,27 +515,65 @@ ob_start();
         color: var(--text);
         border-radius: 6px;
         font-size: 0.9rem;
-        font-family: monospace;
-        resize: vertical;
-        min-height: 60px;
         box-sizing: border-box;
     }
-    .forge-vector-input:focus { outline: none; border-color: #f59e0b; }
-
-    /* Forge filter mode toggle */
-    .forge-mode-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 0.85rem;
+    .ff-input:focus { outline: none; border-color: #f59e0b; }
+    .ff-dropdown {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--card);
+        max-height: 150px;
+        overflow-y: auto;
+        display: none;
     }
+    .ff-dropdown.open { display: block; }
+    .ff-dropdown-item {
+        padding: 8px 10px;
+        font-size: 0.82rem;
+        cursor: pointer;
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+        color: var(--text);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: background 0.1s;
+    }
+    .ff-dropdown-item:last-child { border-bottom: none; }
+    .ff-dropdown-item:hover { background: rgba(245,158,11,0.08); }
+    .ff-dropdown-item-meta { font-size: 0.65rem; color: var(--text-muted); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* Result grid */
+    .ff-result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .ff-result-card {
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--card);
+        overflow: hidden;
+        position: relative;
+        aspect-ratio: 1;
+        transition: border-color 0.15s;
+        cursor: pointer;
+    }
+    .ff-result-card:hover { border-color: #f59e0b; }
+    .ff-result-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .ff-result-label {
+        position: absolute; bottom: 0; left: 0; right: 0;
+        background: rgba(0,0,0,0.7); color: #fff;
+        font-size: 0.6rem; padding: 3px 4px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        pointer-events: none;
+    }
+    .ff-result-empty { grid-column: 1 / -1; text-align: center; padding: 20px 0; color: var(--text-muted); font-size: 0.82rem; }
+    .ff-result-loading { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 20px 0; color: var(--text-muted); font-size: 0.82rem; }
+
+    /* Forge mode buttons */
     .forge-mode-btn {
         padding: 6px 14px;
         border-radius: 20px;
         border: 1px solid var(--border);
         background: var(--bg);
         color: var(--text-muted);
-        font-size: 0.8rem;
+        font-size: 0.78rem;
         font-weight: 700;
         cursor: pointer;
         transition: all 0.15s;
@@ -652,94 +584,15 @@ ob_start();
         color: #f59e0b;
     }
 
-    /* Forge entity type selector */
-    .forge-entity-select {
-        width: 100%;
-        padding: 9px 12px;
-        border: 1px solid var(--border);
-        background: var(--bg);
-        color: var(--text);
-        border-radius: 6px;
-        font-size: 0.9rem;
-        box-sizing: border-box;
-    }
-    .forge-entity-select:focus { outline: none; border-color: #f59e0b; }
-
-    /* Forge pagination & results summary */
-    .forge-results-meta {
-        font-size: 0.78rem;
-        color: var(--text-muted);
-        text-align: center;
-        padding: 4px 0;
-    }
-
-    /* Forge result grid */
-    .forge-result-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-        gap: 8px;
-        max-height: 260px;
-        overflow-y: auto;
-    }
-    .forge-result-card {
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        overflow: hidden;
-        background: var(--card);
-        cursor: pointer;
-        transition: border-color 0.15s, transform 0.1s;
-        position: relative;
-    }
-    .forge-result-card:hover { border-color: #f59e0b; transform: translateY(-1px); }
-    .forge-result-card.selected { border-color: var(--highlight); box-shadow: 0 0 8px rgba(16,185,129,0.3); }
-    .forge-result-card img {
-        width: 100%;
-        aspect-ratio: 16/9;
-        object-fit: cover;
-        display: block;
-    }
-    .forge-result-card-label {
-        padding: 4px 6px;
-        font-size: 0.7rem;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        color: var(--text);
-    }
-    .forge-result-card-id {
-        padding: 0 6px 4px;
-        font-size: 0.65rem;
-        color: var(--text-muted);
-        font-family: monospace;
-    }
-    .forge-result-empty {
-        grid-column: 1 / -1;
-        text-align: center;
-        padding: 30px 0;
-        color: var(--text-muted);
-        font-size: 0.88rem;
-    }
-    .forge-result-loading {
-        grid-column: 1 / -1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-        padding: 30px 0;
-        color: var(--text-muted);
-        font-size: 0.88rem;
-    }
-
-    /* Forge action buttons row */
+    /* Sticky action row */
     .forge-action-row {
         display: flex;
         gap: 10px;
         align-items: center;
-        padding: 14px 20px;
+        padding: 12px 16px;
         border-top: 1px solid rgba(245, 158, 11, 0.15);
         background: rgba(245, 158, 11, 0.03);
-        position: sticky;
-        bottom: 0;
+        flex-shrink: 0;
     }
     .forge-apply-btn {
         flex: 1;
@@ -768,27 +621,28 @@ ob_start();
     }
     .forge-reset-btn:hover { border-color: #ef4444; color: #ef4444; background: rgba(239,68,68,0.06); }
 
-    /* Forge pagination buttons */
+    /* Forge pagination */
     .forge-pag-row {
         display: flex;
         align-items: center;
-        justify-content: center;
-        gap: 10px;
+        justify-content: space-between;
         margin-top: 8px;
     }
     .forge-pag-btn {
-        padding: 5px 14px;
+        padding: 5px 12px;
         border-radius: 5px;
         border: 1px solid var(--border);
         background: var(--bg);
         color: var(--text);
         cursor: pointer;
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         transition: all 0.15s;
     }
     .forge-pag-btn:hover:not(:disabled) { border-color: #f59e0b; color: #f59e0b; }
     .forge-pag-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 </style>
+
+
 
 <div class="sequencer-layout">
     <!-- 1. TIMELINE AREA -->
@@ -848,7 +702,6 @@ ob_start();
             <button class="p-btn" id="btnNext" onclick="changePage(1)" disabled title="Next Page">→</button>
         </div>
 
-
         <div id="loadingState" class="loading-state" style="display:none;">
             <div class="spinner"></div>
             <div style="font-size:0.9rem; color:var(--text-muted);">Scanning Database...</div>
@@ -861,7 +714,7 @@ ob_start();
     </div>
 </div>
 
-<!-- FILTER MODAL -->
+<!-- FILTER MODAL (Advanced Context Filter — unchanged) -->
 <div id="filter-modal" class="modal-overlay">
     <div class="modal-content wide">
         <span class="modal-close" onclick="$('#filter-modal').hide()">&times;</span>
@@ -911,188 +764,154 @@ ob_start();
     </div>
 </div>
 
-<!-- FORGE FILTER MODAL -->
+<!-- FORGE FILTER MODAL — tabbed sidebar evolution (from narseq) -->
 <div id="forge-filter-modal" class="modal-overlay">
     <div class="modal-content">
-       <div class="forge-modal-header">
-            <h3>⚙️ Forge Filter</h3>
-            <span class="modal-close" onclick="document.getElementById('forge-filter-modal').style.display='none'">&times;</span>
+        <div class="forge-cm-handle" onclick="document.getElementById('forge-filter-modal').style.display='none'">
+            <div class="forge-cm-handle-bar"></div>
+        </div>
+        <div class="forge-cm-header">
+            <div class="forge-cm-title">⚙️ Filter Forge</div>
+            <button class="forge-cm-close-btn" onclick="document.getElementById('forge-filter-modal').style.display='none'">✕</button>
         </div>
 
-        <div class="forge-modal-body">
+        <!-- Active filters pill bar -->
+        <div class="forge-filters-bar" id="ffActiveFilters">
+            <div style="font-size:0.7rem; color:var(--text-muted); font-style:italic;">No active filters.</div>
+        </div>
 
-            <!-- Entity Type -->
-            <div class="forge-section">
-                <div class="forge-section-head"><span class="forge-section-icon">🗂</span> Entity Type</div>
-                <div class="forge-section-body">
-                    <select id="forgeEntityType" class="forge-entity-select">
-                        <option value="sketches">Sketches</option>
-                        
-                    </select>
-                </div>
+        <div class="forge-cm-body">
+            <!-- Sidebar Tabs -->
+            <div class="forge-cm-sidebar">
+                <button class="forge-cm-sidebar-btn active" data-tab="fuzz" onclick="switchForgeTab('fuzz')">🧩 Fuzz</button>
+                <button class="forge-cm-sidebar-btn" data-tab="doc" onclick="switchForgeTab('doc')">📖 Doc</button>
+                <button class="forge-cm-sidebar-btn" data-tab="kg" onclick="switchForgeTab('kg')">🕸 KG</button>
+                <button class="forge-cm-sidebar-btn" data-tab="seq" onclick="switchForgeTab('seq')">🎞 Seq</button>
+                <button class="forge-cm-sidebar-btn" data-tab="storyboard" onclick="switchForgeTab('storyboard')">🖼 Board</button>
+                <button class="forge-cm-sidebar-btn" data-tab="map_run" onclick="switchForgeTab('map_run')">🗺️ Run</button>
+                <button class="forge-cm-sidebar-btn" data-tab="vector" onclick="switchForgeTab('vector')">🧬 Semantic</button>
+                <button class="forge-cm-sidebar-btn" data-tab="idtext" onclick="switchForgeTab('idtext')">🔢 ID/Text</button>
+                <button class="forge-cm-sidebar-btn" data-tab="mode" onclick="switchForgeTab('mode')">⚡ Mode</button>
+                <hr style="border-color:var(--border); margin:4px 0;">
+                <button class="forge-cm-sidebar-btn results-btn" data-tab="results" onclick="switchForgeTab('results')">▶ Results</button>
             </div>
 
-            <!-- Filter Mode -->
-            <div class="forge-section">
-                <div class="forge-section-head"><span class="forge-section-icon">⚡</span> Filter Combine Mode</div>
-                <div class="forge-section-body">
-                    <div class="forge-mode-row">
+            <!-- Content Panes -->
+            <div class="forge-cm-content">
+
+                <!-- FUZZ -->
+                <div class="forge-tab-pane active" id="pane-fuzz">
+                    <label class="ff-label">Fuzz Concept (promoted only)</label>
+                    <input type="text" id="ffSearch-fuzz" class="ff-input" placeholder="Search fuzz concepts…"
+                           oninput="ffDebounceSearch('fuzz', this.value)"
+                           onfocus="ffDebounceSearch('fuzz', this.value)">
+                    <div class="ff-dropdown" id="ffDrop-fuzz"></div>
+                </div>
+
+                <!-- DOC -->
+                <div class="forge-tab-pane" id="pane-doc">
+                    <label class="ff-label">Lore Document</label>
+                    <input type="text" id="ffSearch-doc" class="ff-input" placeholder="Search lore docs…"
+                           oninput="ffDebounceSearch('doc', this.value)"
+                           onfocus="ffDebounceSearch('doc', this.value)">
+                    <div class="ff-dropdown" id="ffDrop-doc"></div>
+                    <!-- Entity names within doc -->
+                    <div id="ffDocEntityWrap" style="display:none; margin-top:10px;">
+                        <label class="ff-label" style="margin-bottom:6px;">Filter by entity within doc</label>
+                        <input type="text" id="ffSearch-doc_entity" class="ff-input" placeholder="Search entities in doc…"
+                               oninput="ffDebounceSearch('doc_entity', this.value)"
+                               onfocus="ffDebounceSearch('doc_entity', this.value)">
+                        <div class="ff-dropdown" id="ffDrop-doc_entity"></div>
+                        <div id="ffDocEntityChips" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;"></div>
+                    </div>
+                </div>
+
+                <!-- KG -->
+                <div class="forge-tab-pane" id="pane-kg">
+                    <label class="ff-label">Knowledge Graph Node</label>
+                    <input type="text" id="ffSearch-kg" class="ff-input" placeholder="Search KG nodes…"
+                           oninput="ffDebounceSearch('kg', this.value)"
+                           onfocus="ffDebounceSearch('kg', this.value)">
+                    <div class="ff-dropdown" id="ffDrop-kg"></div>
+                </div>
+
+                <!-- SEQ -->
+                <div class="forge-tab-pane" id="pane-seq">
+                    <label class="ff-label">Narrative Sequence</label>
+                    <input type="text" id="ffSearch-seq" class="ff-input" placeholder="Search sequences…"
+                           oninput="ffDebounceSearch('seq', this.value)"
+                           onfocus="ffDebounceSearch('seq', this.value)">
+                    <div class="ff-dropdown" id="ffDrop-seq"></div>
+                </div>
+
+                <!-- STORYBOARD -->
+                <div class="forge-tab-pane" id="pane-storyboard">
+                    <label class="ff-label">Storyboard</label>
+                    <input type="text" id="ffSearch-storyboard" class="ff-input" placeholder="Search storyboards…"
+                           oninput="ffDebounceSearch('storyboard', this.value)"
+                           onfocus="ffDebounceSearch('storyboard', this.value)">
+                    <div class="ff-dropdown" id="ffDrop-storyboard"></div>
+                </div>
+
+                <!-- MAP RUN -->
+                <div class="forge-tab-pane" id="pane-map_run">
+                    <label class="ff-label">Map Run</label>
+                    <input type="text" id="ffSearch-map_run" class="ff-input" placeholder="Search map runs…"
+                           oninput="ffDebounceSearch('map_run', this.value)"
+                           onfocus="ffDebounceSearch('map_run', this.value)">
+                    <div class="ff-dropdown" id="ffDrop-map_run"></div>
+                </div>
+
+                <!-- VECTOR / SEMANTIC -->
+                <div class="forge-tab-pane" id="pane-vector">
+                    <label class="ff-label">Semantic / Vector Search</label>
+                    <textarea id="ffSearch-vector" class="ff-input" style="height:80px; resize:none; font-family:monospace; margin-bottom:8px;"
+                              placeholder="Describe what you're looking for semantically…"></textarea>
+                    <button class="forge-mode-btn active" style="width:100%;" onclick="ffApplyVector()">Apply Semantic Filter</button>
+                </div>
+
+                <!-- ID / TEXT -->
+                <div class="forge-tab-pane" id="pane-idtext">
+                    <label class="ff-label">Text Search</label>
+                    <input type="text" id="ffSearch-text" class="ff-input" placeholder="Search by name or frame name…" style="margin-bottom:10px;">
+
+                    <label class="ff-label" style="margin-top:2px;">Sketch ID</label>
+                    <input type="number" id="ffSearch-sketchId" class="ff-input" placeholder="e.g. 1042" min="1" style="margin-bottom:10px;">
+
+                    <label class="ff-label" style="margin-top:2px;">Frame ID</label>
+                    <input type="number" id="ffSearch-frameId" class="ff-input" placeholder="e.g. 5503" min="1" style="margin-bottom:10px;">
+
+                    <button class="forge-mode-btn active" style="width:100%;" onclick="ffApplyTextId()">Apply Text / ID Filter</button>
+                </div>
+
+                <!-- MODE -->
+                <div class="forge-tab-pane" id="pane-mode">
+                    <label class="ff-label">Filter Combine Mode</label>
+                    <div style="display:flex; gap:8px; margin-top:4px; flex-wrap:wrap;">
                         <button class="forge-mode-btn active" id="forgeModeIntersection" onclick="setForgeMode('intersection')">AND (intersection)</button>
                         <button class="forge-mode-btn" id="forgeModeUnion" onclick="setForgeMode('union')">OR (union)</button>
-                        <span style="font-size:0.75rem; color:var(--text-muted); margin-left:4px;" id="forgeModeLabel">All filters must match</span>
                     </div>
+                    <div style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;" id="forgeModeLabel">All filters must match</div>
                 </div>
-            </div>
 
-            <!-- Fuzz Candidate -->
-            <div class="forge-section">
-                <div class="forge-section-head"><span class="forge-section-icon">🔮</span> Fuzz Concept</div>
-                <div class="forge-section-body">
-                    <div class="forge-search-wrap">
-                        <input type="text" class="forge-search-input" id="forgeFuzzSearch"
-                               placeholder="Search fuzz concepts…"
-                               oninput="forgeSearchDebounced('fuzz', this.value)"
-                               onfocus="forgeSearchDebounced('fuzz', this.value)">
-                        <button class="forge-search-clear" id="forgeFuzzClear" onclick="forgeClearSearch('fuzz')">×</button>
+                <!-- RESULTS -->
+                <div class="forge-tab-pane" id="pane-results">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <span style="font-size:0.75rem; color:var(--text-muted);" id="ffResultMeta">Configure filters then tap ▶ Results.</span>
+                        <button class="forge-mode-btn" style="padding:4px 8px; font-size:0.65rem;" onclick="runForgePreview(ffPreviewPage)">↻ Refresh</button>
                     </div>
-                    <div class="forge-dropdown" id="forgeFuzzDropdown"></div>
-                    <div class="forge-chips" id="forgeFuzzChips"></div>
+                    <div class="ff-result-grid" id="ffResultGrid">
+                        <div class="ff-result-empty">Configure filters and tap Refresh.</div>
+                    </div>
+                    <div class="forge-pag-row" id="ffPagRow" style="display:none;">
+                        <button class="forge-pag-btn" id="ffPagPrev" onclick="runForgePreview(ffPreviewPage - 1)" disabled>← Prev</button>
+                        <span style="font-size:0.78rem; color:var(--text-muted);" id="ffPagLabel">Page 1</span>
+                        <button class="forge-pag-btn" id="ffPagNext" onclick="runForgePreview(ffPreviewPage + 1)" disabled>Next →</button>
+                    </div>
                 </div>
-            </div>
 
-            <!-- Lore Doc -->
-            <div class="forge-section">
-                <div class="forge-section-head"><span class="forge-section-icon">📖</span> Lore Document</div>
-                <div class="forge-section-body">
-                    <div class="forge-search-wrap">
-                        <input type="text" class="forge-search-input" id="forgeDocSearch"
-                               placeholder="Search lore docs…"
-                               oninput="forgeSearchDebounced('doc', this.value)"
-                               onfocus="forgeSearchDebounced('doc', this.value)">
-                        <button class="forge-search-clear" id="forgeDocClear" onclick="forgeClearSearch('doc')">×</button>
-                    </div>
-                    <div class="forge-dropdown" id="forgeDocDropdown"></div>
-                    <div class="forge-chips" id="forgeDocChips"></div>
-                    <!-- Entity names within doc (shown when doc is selected) -->
-                    <div id="forgeDocEntityWrap" style="display:none; margin-top:10px;">
-                        <div style="font-size:0.72rem; color:var(--text-muted); margin-bottom:6px; text-transform:uppercase; font-weight:700;">Filter by entity within doc</div>
-                        <div class="forge-search-wrap">
-                            <input type="text" class="forge-search-input" id="forgeDocEntitySearch"
-                                   placeholder="Search entities in doc…"
-                                   oninput="forgeSearchDebounced('doc_entity', this.value)"
-                                   onfocus="forgeSearchDebounced('doc_entity', this.value)">
-                            <button class="forge-search-clear" id="forgeDocEntityClear" onclick="forgeClearSearch('doc_entity')">×</button>
-                        </div>
-                        <div class="forge-dropdown" id="forgeDocEntityDropdown"></div>
-                        <div class="forge-chips" id="forgeDocEntityChips"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- KG Node -->
-            <div class="forge-section">
-                <div class="forge-section-head"><span class="forge-section-icon">🕸</span> Knowledge Graph Node</div>
-                <div class="forge-section-body">
-                    <div class="forge-search-wrap">
-                        <input type="text" class="forge-search-input" id="forgeKgSearch"
-                               placeholder="Search KG nodes…"
-                               oninput="forgeSearchDebounced('kg', this.value)"
-                               onfocus="forgeSearchDebounced('kg', this.value)">
-                        <button class="forge-search-clear" id="forgeKgClear" onclick="forgeClearSearch('kg')">×</button>
-                    </div>
-                    <div class="forge-dropdown" id="forgeKgDropdown"></div>
-                    <div class="forge-chips" id="forgeKgChips"></div>
-                </div>
-            </div>
-
-            <!-- Narrative Sequence -->
-            <div class="forge-section">
-                <div class="forge-section-head"><span class="forge-section-icon">🎞</span> Narrative Sequence</div>
-                <div class="forge-section-body">
-                    <div class="forge-search-wrap">
-                        <input type="text" class="forge-search-input" id="forgeSeqSearch"
-                               placeholder="Search sequences…"
-                               oninput="forgeSearchDebounced('seq', this.value)"
-                               onfocus="forgeSearchDebounced('seq', this.value)">
-                        <button class="forge-search-clear" id="forgeSeqClear" onclick="forgeClearSearch('seq')">×</button>
-                    </div>
-                    <div class="forge-dropdown" id="forgeSeqDropdown"></div>
-                    <div class="forge-chips" id="forgeSeqChips"></div>
-                </div>
-            </div>
-
-            <!-- Storyboard -->
-            <div class="forge-section">
-                <div class="forge-section-head"><span class="forge-section-icon">🖼</span> Storyboard</div>
-                <div class="forge-section-body">
-                    <div class="forge-search-wrap">
-                        <input type="text" class="forge-search-input" id="forgeSbSearch"
-                               placeholder="Search storyboards…"
-                               oninput="forgeSearchDebounced('storyboard', this.value)"
-                               onfocus="forgeSearchDebounced('storyboard', this.value)">
-                        <button class="forge-search-clear" id="forgeSbClear" onclick="forgeClearSearch('storyboard')">×</button>
-                    </div>
-                    <div class="forge-dropdown" id="forgeSbDropdown"></div>
-                    <div class="forge-chips" id="forgeSbChips"></div>
-                </div>
-            </div>
-
-            <!-- Vector / Semantic Search -->
-            <div class="forge-section">
-                <div class="forge-section-head"><span class="forge-section-icon">🧬</span> Semantic / Vector Search</div>
-                <div class="forge-section-body">
-                    <textarea id="forgeVectorText" class="forge-vector-input"
-                              placeholder="Describe what you're looking for semantically…"></textarea>
-                </div>
-            </div>
-
-            <!-- Text Search -->
-            <div class="forge-section">
-                <div class="forge-section-head"><span class="forge-section-icon">🔍</span> Text Search</div>
-                <div class="forge-section-body">
-                    <input type="text" id="forgeTextSearch" class="forge-search-input"
-                           placeholder="Search by name or frame name…">
-                </div>
-            </div>
-            
-            
-            
-            <!-- ID Search -->
-            <div class="forge-section">
-                <div class="forge-section-head"><span class="forge-section-icon">🔢</span> Search by ID</div>
-                <div class="forge-section-body" style="display:flex; gap:10px; flex-wrap:wrap;">
-                    <div style="flex:1; min-width:120px;">
-                        <label style="font-size:0.72rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); display:block; margin-bottom:5px;">Sketch ID</label>
-                        <input type="number" id="forgeSketchIdSearch" class="forge-search-input"
-                               placeholder="e.g. 1042" min="1" style="width:100%; box-sizing:border-box;">
-                    </div>
-                    <div style="flex:1; min-width:120px;">
-                        <label style="font-size:0.72rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); display:block; margin-bottom:5px;">Frame ID</label>
-                        <input type="number" id="forgeFrameIdSearch" class="forge-search-input"
-                               placeholder="e.g. 5503" min="1" style="width:100%; box-sizing:border-box;">
-                    </div>
-                </div>
-            </div>
-
-            <!-- Preview Results -->
-            <div class="forge-section">
-                <div class="forge-section-head"><span class="forge-section-icon">🖼</span> Preview Results
-                    <span id="forgePreviewMeta" style="font-weight:400; font-size:0.72rem; margin-left:8px; color:var(--text-muted);"></span>
-                </div>
-                <div class="forge-section-body" style="padding-bottom:8px;">
-                    <button class="forge-mode-btn" style="margin-bottom:10px;" onclick="runForgePreview(1)">▶ Preview</button>
-                    <div class="forge-result-grid" id="forgeResultGrid">
-                        <div class="forge-result-empty">Configure filters above and tap Preview.</div>
-                    </div>
-                    <div class="forge-pag-row" id="forgePagRow" style="display:none;">
-                        <button class="forge-pag-btn" id="forgePagPrev" onclick="runForgePreview(forgePreviewPage - 1)" disabled>←</button>
-                        <span id="forgePagLabel" style="font-size:0.8rem; color:var(--text-muted);"></span>
-                        <button class="forge-pag-btn" id="forgePagNext" onclick="runForgePreview(forgePreviewPage + 1)" disabled>→</button>
-                    </div>
-                </div>
-            </div>
-
-        </div><!-- /forge-modal-body -->
+            </div><!-- /forge-cm-content -->
+        </div><!-- /forge-cm-body -->
 
         <!-- Sticky action row -->
         <div class="forge-action-row">
@@ -1100,7 +919,7 @@ ob_start();
             <button class="forge-apply-btn" onclick="applyForgeFilter()">APPLY FORGE FILTER</button>
         </div>
 
-    </div>
+    </div><!-- /modal-content -->
 </div>
 
 <!-- ENTITY PREVIEW MODAL (Peek) — z-index 5000, on top of filter modal -->
@@ -1112,6 +931,9 @@ ob_start();
         </div>
     </div>
 </div>
+
+
+
 
 <!-- OTHER MODALS -->
 <div id="curation-modal" class="modal-overlay"><div class="modal-content"><span class="modal-close" onclick="$('#curation-modal').hide()">&times;</span><div id="curation-modal-body"></div></div></div>
@@ -1172,8 +994,6 @@ ob_start();
 </div>
 
 
-
-
 <script>
     // GLOBAL DATA
     let currentLibraryPage = [];
@@ -1189,26 +1009,27 @@ ob_start();
     let lastDebugLog = null; // Stores debug data from last filtered API response
 
     // ── FORGE FILTER STATE ────────────────────────────────────────────
-    let forgeState = {
+    // ffState mirrors narseq's forge state; forgeActiveParams used by loadForgeLibraryPage
+    let ffState = {
         fuzz:       { id: null, label: null },
         doc:        { id: null, label: null },
         doc_entity: [],
         kg:         { id: null, label: null },
         seq:        { id: null, label: null },
         storyboard: { id: null, label: null },
+        map_run:    { id: null, label: null },
         vectorText: '',
         textSearch: '',
+        sketchId:   '',
+        frameId:    '',
         filterMode: 'intersection',
-        entityType: 'sketches',
     };
     let forgeActiveParams = null;
-    let forgePreviewPage = 1;
-    let forgePreviewTotal = 0;
-    let forgePreviewPages = 1;
-    const forgeDebounceTimers = {};
+    let ffPreviewPage = 1;
+    let ffPreviewPages = 1;
+    const ffDebounceTimers = {};
 
     // ── CHROMA COLLECTION STATE ───────────────────────────────────────
-    // null = not in chroma mode; otherwise one of the collection constants
     let currentChromaCollection = null;
     const CHROMA_COLLECTION_MAP = {
         'ChromaSketches': 'sage_sketches_nu',
@@ -1238,32 +1059,6 @@ ob_start();
             photoSwipeLightbox.init();
         }
 
-        // Delegated handler for forge dropdown items
-        document.addEventListener('click', function(e) {
-            const item = e.target.closest('.forge-dropdown-item[data-item]');
-            if (!item) return;
-            const slot = item.dataset.slot;
-            const data = JSON.parse(item.dataset.item);
-            forgeSelectItem(slot, data);
-        });
-
-        document.addEventListener('click', function(e) {
-            // forge dropdown item with JSON data
-            const itemEl = e.target.closest('.forge-dropdown-item[data-item]');
-            if (itemEl) {
-                const slot = itemEl.dataset.slot;
-                const data = JSON.parse(itemEl.dataset.item);
-                forgeSelectItem(slot, data);
-                return;
-            }
-            // forge doc_entity dropdown item
-            const entityEl = e.target.closest('.forge-dropdown-item[data-entity-name]');
-            if (entityEl) {
-                forgeSelectDocEntity(entityEl.dataset.entityName);
-                return;
-            }
-        });
-
         // Timeline Sortable
         new Sortable(document.getElementById('timelineSortable'), {
             ...SORTABLE_TOUCH_OPTS,
@@ -1292,9 +1087,6 @@ ob_start();
         });
 
         // Context Change Listener
-        // NOTE: changing the select no longer fires an API request automatically.
-        // Use the 🔄 reset button or the filter/search controls to load results.
-        // Pagination buttons continue to fire immediately.
         document.getElementById('contextDoc').addEventListener('change', function() {
             const val = this.value;
             const isForge  = val === 'Forge';
@@ -1309,21 +1101,18 @@ ob_start();
             $('#activeFilterBadge').hide();
             currentPage = 1;
 
-            // Show/hide chroma query bar
             const bar = document.getElementById('chromaQueryBar');
             if (isChroma) {
                 currentChromaCollection = CHROMA_COLLECTION_MAP[val];
                 document.getElementById('chromaCollectionBadge').textContent = CHROMA_LABEL_MAP[val];
                 document.getElementById('chromaQueryInput').value = '';
                 bar.classList.add('visible');
-                // Do NOT auto-load; user must run a query via the chroma query bar
             } else {
                 bar.classList.remove('visible');
-                // Do NOT auto-load; user triggers load via filter modal or 🔄 button
             }
         });
         
-        // Filter Sortables
+        // Filter Sortables (Advanced Context Filter)
         new Sortable(document.getElementById('filterItems'), {
             ...SORTABLE_TOUCH_OPTS,
             group: { name: 'filter', pull: 'clone', put: false },
@@ -1342,6 +1131,13 @@ ob_start();
                 item.innerHTML = `${text} <span class="remove-x" onclick="this.parentElement.remove()">×</span>`;
             }
         });
+
+        // Close forge dropdowns when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.ff-input') && !e.target.closest('.ff-dropdown')) {
+                document.querySelectorAll('.ff-dropdown.open').forEach(dd => dd.classList.remove('open'));
+            }
+        });
     });
 
     // --- LIBRARY LOGIC ---
@@ -1350,7 +1146,6 @@ ob_start();
         document.getElementById('mainSwiper').style.opacity = '0.3';
         
         let docId = document.getElementById('contextDoc').value;
-        // Treat special non-doc option values as empty for the standard API
         if (docId === 'Forge' || docId in CHROMA_COLLECTION_MAP) docId = '';
         
         let url = `narratives_api_v11.php?action=fetch_library&page=${page}&context_id=${docId}`;
@@ -1392,8 +1187,6 @@ ob_start();
     }
 
     // --- FORGE LIBRARY LOAD ---
-    // Groups rows by entity_id so that each entity card shows all its frames,
-    // enabling the frame-switcher arrows (frame-nav-left / frame-nav-right).
     function loadForgeLibraryPage(page) {
         if (!forgeActiveParams) return;
 
@@ -1405,7 +1198,7 @@ ob_start();
         params.set('page', page);
         params.set('per_page', '50');
         params.set('include_membership', '0');
-        params.set('sort', 'entity_id'); // group sibling frames together in result set
+        params.set('sort', 'entity_id');
 
         fetch('filter_forge_api.php?' + params.toString())
             .then(r => r.json())
@@ -1414,10 +1207,7 @@ ob_start();
                     currentPage = res.meta.page;
                     totalPages  = res.meta.pages;
 
-                    // ── Group rows by entity_id ────────────────────────────────
-                    // API returns one row per frame; we want one card per entity
-                    // with all its frames collected so the switcher can cycle them.
-                    const entityMap = new Map(); // entity_id -> item
+                    const entityMap = new Map();
                     res.data.forEach(row => {
                         const eid = row.entity_id;
                         if (!entityMap.has(eid)) {
@@ -1466,7 +1256,6 @@ ob_start();
         const q = document.getElementById('chromaQueryInput').value.trim();
         if (!q) { Toast.show('Enter a semantic query first', 'warn'); return; }
 
-        // Build forge params with vector_text + chroma_collection
         const p = new URLSearchParams();
         p.set('entity_type', 'sketches');
         p.set('vector_text', q);
@@ -1771,18 +1560,17 @@ ob_start();
         $('#debug-modal').css('display', 'flex');
     };
 
-    // --- FILTER & MODAL LOGIC (Standard + Global) ---
+    // --- FILTER & MODAL LOGIC (Standard Advanced Filter) ---
     let currentActiveCat = '';
     
     function openFilterModal() {
         const docId = document.getElementById('contextDoc').value;
 
         if (docId === 'Forge') {
-            $('#forge-filter-modal').css('display', 'flex');
+            document.getElementById('forge-filter-modal').style.display = 'flex';
             return;
         }
 
-        // Chroma collection options don't have a filter modal — show a toast hint
         if (docId in CHROMA_COLLECTION_MAP) {
             Toast.show('Use the query bar below the controls to search this collection', 'info');
             return;
@@ -1807,6 +1595,8 @@ ob_start();
              });
         }
     }
+
+
     
     window.loadFilterItems = function(category, el) {
         let docId = document.getElementById('contextDoc').value;
@@ -2156,11 +1946,23 @@ ob_start();
     document.getElementById('pageInput').addEventListener("keypress", function(e) { if (e.key === "Enter") jumpToPage(this.value); });
 
     // =====================================================================
-    // FORGE FILTER LOGIC
+    // FORGE FILTER LOGIC — tabbed sidebar evolution (ported from narseq.php)
     // =====================================================================
 
+    window.switchForgeTab = function(tabId) {
+        document.querySelectorAll('.forge-cm-sidebar-btn').forEach(b => b.classList.remove('active'));
+        const activeBtn = document.querySelector(`.forge-cm-sidebar-btn[data-tab="${tabId}"]`);
+        if (activeBtn) activeBtn.classList.add('active');
+
+        document.querySelectorAll('.forge-tab-pane').forEach(p => p.classList.remove('active'));
+        const pane = document.getElementById(`pane-${tabId}`);
+        if (pane) pane.classList.add('active');
+
+        if (tabId === 'results') runForgePreview(ffPreviewPage);
+    };
+
     window.setForgeMode = function(mode) {
-        forgeState.filterMode = mode;
+        ffState.filterMode = mode;
         document.getElementById('forgeModeIntersection').classList.toggle('active', mode === 'intersection');
         document.getElementById('forgeModeUnion').classList.toggle('active', mode === 'union');
         document.getElementById('forgeModeLabel').textContent = mode === 'intersection'
@@ -2168,180 +1970,342 @@ ob_start();
             : 'Any filter may match';
     };
 
-    window.forgeSearchDebounced = function(slot, q) {
-        clearTimeout(forgeDebounceTimers[slot]);
-        forgeDebounceTimers[slot] = setTimeout(() => forgeSearchSlot(slot, q), 280);
+    window.ffDebounceSearch = function(slot, q) {
+        clearTimeout(ffDebounceTimers[slot]);
+        ffDebounceTimers[slot] = setTimeout(() => ffSearchSlot(slot, q), 280);
     };
 
-    const FORGE_SLOTS = {
-        fuzz:       { mode: 'fuzz',       dropdown: 'forgeFuzzDropdown',      clear: 'forgeFuzzClear' },
-        doc:        { mode: 'doc',        dropdown: 'forgeDocDropdown',       clear: 'forgeDocClear' },
-        doc_entity: { mode: 'doc_entity', dropdown: 'forgeDocEntityDropdown', clear: 'forgeDocEntityClear' },
-        kg:         { mode: 'kg',         dropdown: 'forgeKgDropdown',        clear: 'forgeKgClear' },
-        seq:        { mode: 'seq',        dropdown: 'forgeSeqDropdown',       clear: 'forgeSeqClear' },
-        storyboard: { mode: 'storyboard', dropdown: 'forgeSbDropdown',        clear: 'forgeSbClear' },
-    };
+    window.ffSearchSlot = function(slot, q) {
+        const ddId = 'ffDrop-' + slot;
+        const dd = document.getElementById(ddId);
+        if (!dd) return;
 
-    window.forgeSearchSlot = function(slot, q) {
-        const cfg = FORGE_SLOTS[slot];
-        if (!cfg) return;
-
-        const dd = document.getElementById(cfg.dropdown);
-        const clearBtn = document.getElementById(cfg.clear);
-        if (clearBtn) clearBtn.style.display = q ? 'block' : 'none';
-
-        dd.innerHTML = '<div class="forge-dropdown-loading">…</div>';
+        dd.innerHTML = '<div style="padding:10px; font-size:0.78rem; color:var(--text-muted);">…</div>';
         dd.classList.add('open');
 
-        let url = `filter_forge_api.php?action=list_filter_options&mode=${cfg.mode}&q=${encodeURIComponent(q)}`;
+        let url = `filter_forge_api.php?action=list_filter_options&mode=${slot}&q=${encodeURIComponent(q || '')}&entity_type=sketches`;
+
         if (slot === 'doc_entity') {
-            if (!forgeState.doc.id) { dd.innerHTML = '<div class="forge-dropdown-loading">Select a doc first</div>'; return; }
-            url += `&doc_id=${forgeState.doc.id}`;
+            if (!ffState.doc.id) {
+                dd.innerHTML = '<div style="padding:10px; font-size:0.78rem; color:var(--text-muted);">Select a doc first</div>';
+                return;
+            }
+            url += `&doc_id=${ffState.doc.id}`;
         }
-        url += `&entity_type=${document.getElementById('forgeEntityType').value}`;
 
         fetch(url)
             .then(r => r.json())
             .then(res => {
-                if (res.status !== 'success' || !res.data.length) {
-                    dd.innerHTML = '<div class="forge-dropdown-loading">No results</div>';
+                if (res.status !== 'success' || !res.data || !res.data.length) {
+                    dd.innerHTML = '<div style="padding:10px; font-size:0.78rem; color:var(--text-muted);">No results</div>';
                     return;
                 }
 
+                // doc_entity returns grouped sections
                 if (slot === 'doc_entity' && Array.isArray(res.data) && res.data[0] && res.data[0].section) {
                     let html = '';
                     res.data.forEach(sec => {
-                        html += `<div style="padding:5px 12px 3px; font-size:0.68rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); border-top:1px solid var(--border);">${escHtml(sec.section)}</div>`;
+                        html += `<div style="padding:5px 10px 3px; font-size:0.65rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); border-top:1px solid var(--border);">${escHtml(sec.section)}</div>`;
                         sec.items.forEach(name => {
-                            const alreadySel = forgeState.doc_entity.some(e => e.name === name);
-                            html += `<div class="forge-dropdown-item ${alreadySel ? 'selected' : ''}"
-                                data-entity-name="${escHtml(name)}">
+                            const alreadySel = ffState.doc_entity.some(e => e.name === name);
+                            html += `<div class="ff-dropdown-item ${alreadySel ? 'selected' : ''}"
+                                style="${alreadySel ? 'background:rgba(245,158,11,0.1); color:#f59e0b;' : ''}"
+                                data-ff-entity-name="${escHtml(name)}">
                                 <span>${escHtml(name)}</span>
-                                ${alreadySel ? '<span style="color:#f59e0b; font-size:0.75rem;">✓</span>' : ''}
+                                ${alreadySel ? '<span style="color:#f59e0b; font-size:0.72rem;">✓</span>' : ''}
                             </div>`;
                         });
                     });
                     dd.innerHTML = html;
+
+                    // Delegated click for entity items
+                    dd.querySelectorAll('[data-ff-entity-name]').forEach(el => {
+                        el.addEventListener('click', function() {
+                            ffSelectDocEntity(this.dataset.ffEntityName);
+                        });
+                    });
                     return;
                 }
 
                 let html = '';
                 res.data.forEach(item => {
-                    const safeItem = escHtml(JSON.stringify(item));
-                    html += `<div class="forge-dropdown-item" data-slot="${escHtml(slot)}" data-item="${safeItem}">
+                    html += `<div class="ff-dropdown-item" data-ff-slot="${escHtml(slot)}" data-ff-item="${escHtml(JSON.stringify(item))}">
                         <span>${escHtml(item.label)}</span>
-                        <span class="forge-dropdown-item-meta">${escHtml(item.meta || '')}</span>
+                        <span class="ff-dropdown-item-meta">${escHtml(item.meta || '')}</span>
                     </div>`;
                 });
                 dd.innerHTML = html;
+
+                dd.querySelectorAll('[data-ff-slot]').forEach(el => {
+                    el.addEventListener('click', function() {
+                        const slotName = this.dataset.ffSlot;
+                        const itemData = JSON.parse(this.dataset.ffItem);
+                        ffSelectItem(slotName, itemData);
+                    });
+                });
             })
-            .catch(() => { dd.innerHTML = '<div class="forge-dropdown-loading">Error loading</div>'; });
+            .catch(() => {
+                dd.innerHTML = '<div style="padding:10px; font-size:0.78rem; color:#ef4444;">Error loading</div>';
+            });
     };
 
-    window.forgeSelectItem = function(slot, item) {
-        forgeState[slot] = { id: item.id, label: item.label };
+    function ffSelectItem(slot, item) {
+        ffState[slot] = { id: item.id, label: item.label };
 
-        const chipsEl = document.getElementById('forge' + slot.charAt(0).toUpperCase() + slot.slice(1) + 'Chips');
-        if (chipsEl) {
-            chipsEl.innerHTML = `<div class="forge-chip">${escHtml(item.label)}<span class="forge-chip-x" onclick="forgeClearSlot('${slot}')">×</span></div>`;
-        }
+        const dd = document.getElementById('ffDrop-' + slot);
+        if (dd) dd.classList.remove('open');
 
-        const ddId = FORGE_SLOTS[slot] ? FORGE_SLOTS[slot].dropdown : null;
-        if (ddId) document.getElementById(ddId).classList.remove('open');
+        const inp = document.getElementById('ffSearch-' + slot);
+        if (inp) inp.value = '';
 
         if (slot === 'doc') {
-            document.getElementById('forgeDocEntityWrap').style.display = 'block';
+            document.getElementById('ffDocEntityWrap').style.display = 'block';
         }
-    };
 
-    window.forgeSelectDocEntity = function(name) {
-        if (!forgeState.doc_entity.some(e => e.name === name)) {
-            forgeState.doc_entity.push({ name });
+        renderForgeActivePills();
+    }
+
+    function ffSelectDocEntity(name) {
+        if (!ffState.doc_entity.some(e => e.name === name)) {
+            ffState.doc_entity.push({ name });
         }
         renderForgeDocEntityChips();
-        const inp = document.getElementById('forgeDocEntitySearch');
-        if (inp) forgeSearchSlot('doc_entity', inp.value);
-    };
+        renderForgeActivePills();
+        const inp = document.getElementById('ffSearch-doc_entity');
+        if (inp) ffSearchSlot('doc_entity', inp.value);
+    }
 
     function renderForgeDocEntityChips() {
-        const chipsEl = document.getElementById('forgeDocEntityChips');
-        if (!chipsEl) return;
-        chipsEl.innerHTML = forgeState.doc_entity.map(e =>
-            `<div class="forge-chip">${escHtml(e.name)}<span class="forge-chip-x" onclick="forgeRemoveDocEntity('${e.name.replace(/'/g,"\\'")}')">×</span></div>`
+        const el = document.getElementById('ffDocEntityChips');
+        if (!el) return;
+        el.innerHTML = ffState.doc_entity.map(e =>
+            `<span style="display:inline-flex; align-items:center; gap:4px; padding:3px 8px; border-radius:12px; font-size:0.72rem; background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.3); color:#f59e0b;">
+                ${escHtml(e.name)}
+                <span style="cursor:pointer; font-size:0.85rem; opacity:0.7;" onclick="ffRemoveDocEntity('${e.name.replace(/'/g,"\\'")}')">×</span>
+            </span>`
         ).join('');
     }
 
-    window.forgeRemoveDocEntity = function(name) {
-        forgeState.doc_entity = forgeState.doc_entity.filter(e => e.name !== name);
+    window.ffRemoveDocEntity = function(name) {
+        ffState.doc_entity = ffState.doc_entity.filter(e => e.name !== name);
         renderForgeDocEntityChips();
+        renderForgeActivePills();
     };
 
-    window.forgeClearSlot = function(slot) {
-        forgeState[slot] = { id: null, label: null };
-        const chipsEl = document.getElementById('forge' + slot.charAt(0).toUpperCase() + slot.slice(1) + 'Chips');
-        if (chipsEl) chipsEl.innerHTML = '';
-        if (slot === 'doc') {
-            forgeState.doc_entity = [];
-            document.getElementById('forgeDocEntityWrap').style.display = 'none';
-            document.getElementById('forgeDocEntityChips').innerHTML = '';
-        }
+    window.ffApplyVector = function() {
+        ffState.vectorText = document.getElementById('ffSearch-vector').value.trim();
+        renderForgeActivePills();
+        switchForgeTab('results');
     };
 
-    window.forgeClearSearch = function(slot) {
-        const inputMap = {
-            fuzz: 'forgeFuzzSearch', doc: 'forgeDocSearch',
-            doc_entity: 'forgeDocEntitySearch', kg: 'forgeKgSearch',
-            seq: 'forgeSeqSearch', storyboard: 'forgeSbSearch',
+    window.ffApplyTextId = function() {
+        ffState.textSearch = document.getElementById('ffSearch-text').value.trim();
+        ffState.sketchId   = document.getElementById('ffSearch-sketchId').value.trim();
+        ffState.frameId    = document.getElementById('ffSearch-frameId').value.trim();
+        renderForgeActivePills();
+        switchForgeTab('results');
+    };
+
+    function renderForgeActivePills() {
+        const bar = document.getElementById('ffActiveFilters');
+        bar.innerHTML = '';
+        const labels = {
+            fuzz: 'Fuzz', doc: 'Doc', kg: 'KG', seq: 'Seq',
+            storyboard: 'Board', map_run: 'Run',
+            vectorText: 'Semantic', textSearch: 'Text', sketchId: 'Sketch#', frameId: 'Frame#'
         };
-        const inp = document.getElementById(inputMap[slot]);
-        if (inp) inp.value = '';
-        const cfg = FORGE_SLOTS[slot];
-        if (cfg) {
-            const dd = document.getElementById(cfg.dropdown);
-            if (dd) dd.classList.remove('open');
-            const cl = document.getElementById(cfg.clear);
-            if (cl) cl.style.display = 'none';
+        let hasAny = false;
+
+        for (const [k, v] of Object.entries(ffState)) {
+            if (k === 'doc_entity' || k === 'filterMode') continue;
+            if (v && (typeof v === 'object' ? v.id : String(v).length > 0)) {
+                hasAny = true;
+                const display = typeof v === 'object' ? v.label : v;
+                bar.innerHTML += `<span class="forge-active-pill">${labels[k] || k}: ${escHtml(String(display))} <span class="forge-active-pill-close" onclick="ffRemoveFilter('${k}')">×</span></span>`;
+            }
         }
+        if (ffState.doc_entity.length > 0) {
+            hasAny = true;
+            bar.innerHTML += `<span class="forge-active-pill">Entities: ${ffState.doc_entity.length} <span class="forge-active-pill-close" onclick="ffClearDocEntities()">×</span></span>`;
+        }
+        if (!hasAny) {
+            bar.innerHTML = '<div style="font-size:0.7rem; color:var(--text-muted); font-style:italic;">No active filters.</div>';
+        }
+    }
+
+    window.ffRemoveFilter = function(key) {
+        const scalarKeys = ['vectorText', 'textSearch', 'sketchId', 'frameId'];
+        if (scalarKeys.includes(key)) {
+            ffState[key] = '';
+        } else {
+            ffState[key] = { id: null, label: null };
+            if (key === 'doc') {
+                ffState.doc_entity = [];
+                document.getElementById('ffDocEntityWrap').style.display = 'none';
+                renderForgeDocEntityChips();
+            }
+        }
+        renderForgeActivePills();
     };
 
-    function resetForgeStateOnly() {
-        forgeState = {
-            fuzz: { id: null, label: null },
-            doc:  { id: null, label: null },
+    window.ffClearDocEntities = function() {
+        ffState.doc_entity = [];
+        renderForgeDocEntityChips();
+        renderForgeActivePills();
+    };
+
+    function buildForgeParams() {
+        const p = new URLSearchParams();
+        p.set('entity_type', 'sketches');
+        p.set('filter_mode', ffState.filterMode);
+
+        if (ffState.fuzz.id)       p.set('fuzz_id',       ffState.fuzz.id);
+        if (ffState.doc.id)        p.set('doc_id',        ffState.doc.id);
+        if (ffState.kg.id)         p.set('kg_node_id',    ffState.kg.id);
+        if (ffState.seq.id)        p.set('seq_id',        ffState.seq.id);
+        if (ffState.storyboard.id) p.set('storyboard_id', ffState.storyboard.id);
+        if (ffState.map_run.id)    p.set('map_run_id',    ffState.map_run.id);
+
+        if (ffState.doc_entity.length === 1) {
+            p.set('doc_entity_name', ffState.doc_entity[0].name);
+        } else if (ffState.doc_entity.length > 1) {
+            ffState.doc_entity.forEach(e => p.append('doc_entity_names[]', e.name));
+        }
+
+        if (ffState.vectorText) p.set('vector_text', ffState.vectorText);
+        if (ffState.textSearch) p.set('search',      ffState.textSearch);
+        if (ffState.sketchId)   p.set('entity_id',   ffState.sketchId);
+        if (ffState.frameId)    p.set('frame_id',     ffState.frameId);
+
+        return p;
+    }
+
+    window.runForgePreview = function(page) {
+        page = Math.max(1, page || 1);
+        ffPreviewPage = page;
+
+        const params = buildForgeParams();
+        params.set('action', 'list_frames');
+        params.set('page', page);
+        params.set('per_page', '9');
+
+        const grid    = document.getElementById('ffResultGrid');
+        const pagRow  = document.getElementById('ffPagRow');
+        const metaEl  = document.getElementById('ffResultMeta');
+
+        grid.innerHTML = '<div class="ff-result-loading"><div class="preview-spinner"></div> Loading…</div>';
+        if (pagRow) pagRow.style.display = 'none';
+
+        fetch('filter_forge_api.php?' + params.toString())
+            .then(r => r.json())
+            .then(res => {
+                if (res.status !== 'success') {
+                    grid.innerHTML = `<div class="ff-result-empty">Error: ${escHtml(res.message || 'Unknown')}</div>`;
+                    return;
+                }
+
+                ffPreviewPages = res.meta.pages;
+                metaEl.textContent = `${res.meta.total} result${res.meta.total !== 1 ? 's' : ''}`;
+
+                if (!res.data.length) {
+                    grid.innerHTML = '<div class="ff-result-empty">No results for these filters.</div>';
+                    return;
+                }
+
+                grid.innerHTML = res.data.map(row =>
+                    `<div class="ff-result-card">
+                        <img src="${escHtml(row.filename)}" loading="lazy">
+                        <div class="ff-result-label">${escHtml(row.entity_name || row.frame_name || '')}</div>
+                    </div>`
+                ).join('');
+
+                if (ffPreviewPages > 1 && pagRow) {
+                    pagRow.style.display = 'flex';
+                    document.getElementById('ffPagLabel').textContent = `Page ${page} of ${ffPreviewPages}`;
+                    document.getElementById('ffPagPrev').disabled = page <= 1;
+                    document.getElementById('ffPagNext').disabled = page >= ffPreviewPages;
+                }
+            })
+            .catch(err => {
+                grid.innerHTML = `<div class="ff-result-empty">Fetch error: ${escHtml(err.message)}</div>`;
+            });
+    };
+
+    window.applyForgeFilter = function() {
+        const hasFilter = ffState.fuzz.id || ffState.doc.id || ffState.kg.id ||
+                          ffState.seq.id || ffState.storyboard.id || ffState.map_run.id ||
+                          ffState.doc_entity.length > 0 ||
+                          ffState.vectorText || ffState.textSearch ||
+                          ffState.sketchId || ffState.frameId;
+
+        if (!hasFilter) {
+            Toast.show('Set at least one filter', 'warn');
+            return;
+        }
+
+        forgeActiveParams = buildForgeParams();
+        currentCustomQuery = null;
+
+        document.getElementById('forge-filter-modal').style.display = 'none';
+
+        const summary = [];
+        if (ffState.fuzz.id)       summary.push('Fuzz: ' + ffState.fuzz.label);
+        if (ffState.doc.id)        summary.push('Doc: ' + ffState.doc.label);
+        if (ffState.kg.id)         summary.push('KG: ' + ffState.kg.label);
+        if (ffState.seq.id)        summary.push('Seq: ' + ffState.seq.label);
+        if (ffState.storyboard.id) summary.push('SB: ' + ffState.storyboard.label);
+        if (ffState.map_run.id)    summary.push('Run: ' + ffState.map_run.label);
+        if (ffState.doc_entity.length) summary.push(`Entities: ${ffState.doc_entity.length}`);
+        if (ffState.vectorText)    summary.push('Semantic');
+        if (ffState.textSearch)    summary.push('Text: ' + ffState.textSearch);
+        if (ffState.sketchId)      summary.push('Sketch#' + ffState.sketchId);
+        if (ffState.frameId)       summary.push('Frame#' + ffState.frameId);
+
+        $('#activeFilterBadge').show().text('Forge: ' + (summary.length ? summary.join(' · ') : 'active'));
+
+        currentPage = 1;
+        loadForgeLibraryPage(1);
+    };
+    
+    
+    
+       function resetForgeStateOnly() {
+        ffState = {
+            fuzz:       { id: null, label: null },
+            doc:        { id: null, label: null },
             doc_entity: [],
-            kg:   { id: null, label: null },
-            seq:  { id: null, label: null },
+            kg:         { id: null, label: null },
+            seq:        { id: null, label: null },
             storyboard: { id: null, label: null },
+            map_run:    { id: null, label: null },
             vectorText: '',
             textSearch: '',
+            sketchId:   '',
+            frameId:    '',
             filterMode: 'intersection',
-            entityType: 'sketches',
         };
-        ['forgeFuzzChips','forgeDocChips','forgeDocEntityChips','forgeKgChips','forgeSeqChips','forgeSbChips'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.innerHTML = '';
+
+        // Clear all search inputs
+        ['fuzz','doc','doc_entity','kg','seq','storyboard','map_run'].forEach(slot => {
+            const inp = document.getElementById('ffSearch-' + slot);
+            if (inp) inp.value = '';
+            const dd = document.getElementById('ffDrop-' + slot);
+            if (dd) { dd.innerHTML = ''; dd.classList.remove('open'); }
         });
-        ['forgeFuzzSearch','forgeDocSearch','forgeDocEntitySearch','forgeKgSearch','forgeSeqSearch','forgeSbSearch'].forEach(id => {
+        ['ffSearch-vector','ffSearch-text','ffSearch-sketchId','ffSearch-frameId'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
-        document.getElementById('forgeDocEntityWrap').style.display = 'none';
-        document.querySelectorAll('.forge-dropdown').forEach(dd => dd.classList.remove('open'));
+
+        document.getElementById('ffDocEntityWrap').style.display = 'none';
+        renderForgeDocEntityChips();
+        renderForgeActivePills();
         setForgeMode('intersection');
-        document.getElementById('forgeEntityType').value = 'sketches';
-        
-        
-        
-        document.getElementById('forgeVectorText').value = '';
-        document.getElementById('forgeTextSearch').value = '';
-        document.getElementById('forgeSketchIdSearch').value = '';
-        document.getElementById('forgeFrameIdSearch').value = '';
-        document.getElementById('forgeResultGrid').innerHTML = '<div class="forge-result-empty">Configure filters above and tap Preview.</div>';
-        
-        
-        
-        document.getElementById('forgePagRow').style.display = 'none';
-        document.getElementById('forgePreviewMeta').textContent = '';
+
+        document.getElementById('ffResultGrid').innerHTML = '<div class="ff-result-empty">Configure filters and tap Refresh.</div>';
+        const pagRow = document.getElementById('ffPagRow');
+        if (pagRow) pagRow.style.display = 'none';
+        document.getElementById('ffResultMeta').textContent = 'Configure filters then tap ▶ Results.';
     }
 
     window.resetForgeFilter = function() {
@@ -2351,133 +2315,6 @@ ob_start();
             $('#activeFilterBadge').hide();
         }
     };
-
-    window.runForgePreview = function(page) {
-        page = Math.max(1, page || 1);
-        forgePreviewPage = page;
-
-        const params = buildForgeParams();
-        params.set('action', 'list_frames');
-        params.set('page', page);
-        params.set('per_page', '24');
-
-        const grid = document.getElementById('forgeResultGrid');
-        const pagRow = document.getElementById('forgePagRow');
-        grid.innerHTML = '<div class="forge-result-loading"><div class="preview-spinner"></div> Loading…</div>';
-        pagRow.style.display = 'none';
-
-        fetch('filter_forge_api.php?' + params.toString())
-            .then(r => r.json())
-            .then(res => {
-                if (res.status !== 'success') {
-                    grid.innerHTML = `<div class="forge-result-empty">Error: ${escHtml(res.message || 'Unknown')}</div>`;
-                    return;
-                }
-
-                forgePreviewTotal = res.meta.total;
-                forgePreviewPages = res.meta.pages;
-
-                document.getElementById('forgePreviewMeta').textContent =
-                    `${res.meta.total} result${res.meta.total !== 1 ? 's' : ''}`;
-
-                if (!res.data.length) {
-                    grid.innerHTML = '<div class="forge-result-empty">No results for these filters.</div>';
-                    return;
-                }
-
-                grid.innerHTML = res.data.map(row =>
-                    `<div class="forge-result-card">
-                        <img src="${escHtml(row.filename)}" loading="lazy" onerror="this.style.background='#222';this.style.height='60px'">
-                        <div class="forge-result-card-label">${escHtml(row.entity_name || row.frame_name || '')}</div>
-                        <div class="forge-result-card-id">#${row.entity_id ?? row.frame_id}</div>
-                    </div>`
-                ).join('');
-
-                if (forgePreviewPages > 1) {
-                    pagRow.style.display = 'flex';
-                    document.getElementById('forgePagLabel').textContent = `Page ${page} of ${forgePreviewPages}`;
-                    document.getElementById('forgePagPrev').disabled = page <= 1;
-                    document.getElementById('forgePagNext').disabled = page >= forgePreviewPages;
-                }
-            })
-            .catch(err => {
-                grid.innerHTML = `<div class="forge-result-empty">Fetch error: ${escHtml(err.message)}</div>`;
-            });
-    };
-
-    function buildForgeParams() {
-        const p = new URLSearchParams();
-        p.set('entity_type', 'sketches');
-        p.set('filter_mode', forgeState.filterMode);
-
-        if (forgeState.fuzz.id)       p.set('fuzz_id',      forgeState.fuzz.id);
-        if (forgeState.doc.id)        p.set('doc_id',       forgeState.doc.id);
-        if (forgeState.kg.id)         p.set('kg_node_id',   forgeState.kg.id);
-        if (forgeState.seq.id)        p.set('seq_id',       forgeState.seq.id);
-        if (forgeState.storyboard.id) p.set('storyboard_id', forgeState.storyboard.id);
-
-        if (forgeState.doc_entity.length === 1) {
-            p.set('doc_entity_name', forgeState.doc_entity[0].name);
-        } else if (forgeState.doc_entity.length > 1) {
-            forgeState.doc_entity.forEach(e => p.append('doc_entity_names[]', e.name));
-        }
-
-        const vectorText = document.getElementById('forgeVectorText').value.trim();
-        if (vectorText) p.set('vector_text', vectorText);
-
-        const textSearch = document.getElementById('forgeTextSearch').value.trim();
-        if (textSearch) p.set('search', textSearch);
-
-        const sketchId = document.getElementById('forgeSketchIdSearch').value.trim();
-        if (sketchId) p.set('entity_id', sketchId);
-
-        const frameId = document.getElementById('forgeFrameIdSearch').value.trim();
-        if (frameId) p.set('frame_id', frameId);
-
-        return p;
-    }
-
-    window.applyForgeFilter = function() {
-        const params = buildForgeParams();
-
-                const hasFilter = forgeState.fuzz.id || forgeState.doc.id || forgeState.kg.id ||
-                          forgeState.seq.id || forgeState.storyboard.id ||
-                          forgeState.doc_entity.length > 0 ||
-                          document.getElementById('forgeVectorText').value.trim() ||
-                          document.getElementById('forgeTextSearch').value.trim() ||
-                          document.getElementById('forgeSketchIdSearch').value.trim() ||
-                          document.getElementById('forgeFrameIdSearch').value.trim();         
-                          
-
-        if (!hasFilter) {
-            Toast.show('Set at least one filter', 'warn');
-            return;
-        }
-
-        forgeActiveParams = params;
-        currentCustomQuery = null;
-
-        $('#forge-filter-modal').hide();
-
-        const summary = [];
-        if (forgeState.fuzz.id)       summary.push('Fuzz: ' + forgeState.fuzz.label);
-        if (forgeState.doc.id)        summary.push('Doc: ' + forgeState.doc.label);
-        if (forgeState.kg.id)         summary.push('KG: ' + forgeState.kg.label);
-        if (forgeState.seq.id)        summary.push('Seq: ' + forgeState.seq.label);
-        if (forgeState.storyboard.id) summary.push('SB: ' + forgeState.storyboard.label);
-        if (forgeState.doc_entity.length) summary.push(`Entities: ${forgeState.doc_entity.length}`);
-        
-        $('#activeFilterBadge').show().text('Forge: ' + (summary.length ? summary.join(' · ') : 'active'));
-
-        currentPage = 1;
-        loadForgeLibraryPage(1);
-    };
-
-    document.addEventListener('click', function(e) {
-        if (!e.target.closest('.forge-search-wrap') && !e.target.closest('.forge-dropdown')) {
-            document.querySelectorAll('.forge-dropdown.open').forEach(dd => dd.classList.remove('open'));
-        }
-    });
 </script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <?php echo $eruda ?? ''; ?>
@@ -2510,3 +2347,6 @@ if (!empty($_GET['sequence_id'])) {
 $content = ob_get_clean();
 $spw->renderLayout($content, $pageTitle, $spw->getProjectPath() . '/templates/curation.php');
 ?>
+    
+
+

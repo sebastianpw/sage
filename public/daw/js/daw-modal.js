@@ -628,6 +628,17 @@ function cancelBounce() {
     Toast.show('Bounce cancelled', 'info');
 }
 
+
+
+
+
+
+
+
+
+
+
+
 async function bounceProject() {
     if (!STATE.clips.length) { Toast.show('Project is empty', 'error'); return; }
 
@@ -670,16 +681,16 @@ async function bounceProject() {
     _setBounceStatus('Uploading & queuing render…');
 
     try {
-        const baseUrl = `${window.location.protocol}//${window.location.hostname}:8009/daw`;
+        const pyapiUrl = `${window.location.protocol}//${window.location.hostname}:8009`;
 
-        const res = await fetch(`${baseUrl}/bounce-async`, {
+        const res = await fetch(`${pyapiUrl}/daw/bounce-async`, {
             method: 'POST',
             body: formData
         }).then(r => r.json());
 
         if (res.status === 'queued' || res.status === 'processing') {
             _setBounceStatus('Rendering on server…');
-            _pollBounceStatus(baseUrl, res.task_id);
+            _pollBounceStatus(pyapiUrl, res.task_id);
         } else {
             _closeBounceModal();
             Toast.show('Bounce failed: ' + (res.detail || res.status), 'error');
@@ -691,14 +702,27 @@ async function bounceProject() {
     }
 }
 
-function _pollBounceStatus(baseUrl, taskId) {
+function _pollBounceStatus(pyapiUrl, taskId) {
     if (_bouncePollingInterval) clearInterval(_bouncePollingInterval);
 
     _bouncePollingInterval = setInterval(async () => {
         try {
-            const res = await fetch(`${baseUrl}/status/${taskId}`).then(r => r.json());
+            const body = new URLSearchParams({
+                api_action: 'daw_bounce_poll',
+                pyapi_url:  pyapiUrl,
+                task_id:    taskId
+            });
+            const res = await fetch('?api_action=daw_bounce_poll', {
+                method: 'POST',
+                body: body
+            }).then(r => r.json());
 
-            if (res.status === 'completed') {
+            if (res.status !== 'success') {
+                // keep polling, network might be wonky
+                return;
+            }
+
+            if (res.task_status === 'completed') {
                 clearInterval(_bouncePollingInterval);
                 _bouncePollingInterval = null;
                 _setBounceStatus('Done! Saving to database…');
@@ -719,22 +743,21 @@ function _pollBounceStatus(baseUrl, taskId) {
                 }
 
                 // Call the PHP API register endpoint
-                const body = new URLSearchParams({
-                    api_action: 'register_bounce',
-                    task_id: taskId,
+                const regBody = new URLSearchParams({
+                    api_action:  'register_bounce',
+                    task_id:     taskId,
+                    pyapi_url:   pyapiUrl,
                     entity_type: eType,
-                    entity_id: eId,
+                    entity_id:   eId,
                     name: 'DAW Mixdown ' + new Date().toLocaleTimeString()
                 });
 
-                fetch('?api_action=register_bounce', { method: 'POST', body })
+                fetch('?api_action=register_bounce', { method: 'POST', body: regBody })
                     .then(r => r.json())
                     .then(dbRes => {
                         _closeBounceModal();
                         if (dbRes.status === 'success') {
                             Toast.show(`Bounce saved to DB (Audio #${dbRes.audio_id})`, 'success');
-                            // Optional: If you wanted to do something with the file locally
-                            // window.open(dbRes.filename, '_blank');
                         } else {
                             Toast.show('DB Error: ' + (dbRes.message || 'unknown'), 'error');
                         }
@@ -743,7 +766,7 @@ function _pollBounceStatus(baseUrl, taskId) {
                         Toast.show('Network error while saving to DB', 'error');
                     });
 
-            } else if (res.status === 'failed') {
+            } else if (res.task_status === 'failed') {
                 clearInterval(_bouncePollingInterval);
                 _bouncePollingInterval = null;
                 _closeBounceModal();
@@ -755,3 +778,5 @@ function _pollBounceStatus(baseUrl, taskId) {
         }
     }, 1500);
 }
+
+

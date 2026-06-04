@@ -26,6 +26,57 @@ try {
             echo json_encode(['success' => true, 'story_id' => (int)$pdo->lastInsertId()]);
             break;
 
+        case 'delete_story':
+            $storyId = (int)($_POST['story_id'] ?? 0);
+            if (!$storyId) throw new Exception('story_id required');
+
+            $pdo->beginTransaction();
+
+            // 1. Collect all scene IDs for this story
+            $sceneStmt = $pdo->prepare("SELECT id FROM plush_scenes WHERE story_id = ?");
+            $sceneStmt->execute([$storyId]);
+            $sceneIds = $sceneStmt->fetchAll(PDO::FETCH_COLUMN);
+
+            if (!empty($sceneIds)) {
+                $inScenes = implode(',', array_fill(0, count($sceneIds), '?'));
+
+                // 2. Collect all block IDs across all scenes
+                $blockStmt = $pdo->prepare("SELECT id FROM plush_highlight_blocks WHERE scene_id IN ($inScenes)");
+                $blockStmt->execute($sceneIds);
+                $blockIds = $blockStmt->fetchAll(PDO::FETCH_COLUMN);
+
+                // 3. Delete entity references for those blocks
+                if (!empty($blockIds)) {
+                    $inBlocks = implode(',', array_fill(0, count($blockIds), '?'));
+                    $pdo->prepare("DELETE FROM plush_highlight_block_entities WHERE block_id IN ($inBlocks)")->execute($blockIds);
+                }
+
+                // 4. Delete all highlight blocks for those scenes
+                $pdo->prepare("DELETE FROM plush_highlight_blocks WHERE scene_id IN ($inScenes)")->execute($sceneIds);
+
+                // 5. Delete all highlight groups for those scenes
+                $pdo->prepare("DELETE FROM plush_highlight_groups WHERE scene_id IN ($inScenes)")->execute($sceneIds);
+
+                // 6. Delete scene date metadata
+                $pdo->prepare("DELETE FROM plush_scene_dates WHERE scene_id IN ($inScenes)")->execute($sceneIds);
+            }
+
+            // 7. Delete all scenes
+            $pdo->prepare("DELETE FROM plush_scenes WHERE story_id = ?")->execute([$storyId]);
+
+            // 8. Delete story date metadata
+            $pdo->prepare("DELETE FROM plush_story_dates WHERE story_id = ?")->execute([$storyId]);
+
+            // 9. Delete collection assignments
+            $pdo->prepare("DELETE FROM plush_collections_2_stories WHERE story_id = ?")->execute([$storyId]);
+
+            // 10. Delete the story itself
+            $pdo->prepare("DELETE FROM plush_stories WHERE id = ?")->execute([$storyId]);
+
+            $pdo->commit();
+            echo json_encode(['success' => true]);
+            break;
+
         // ── Scenes ─────────────────────────────────────────────────────────
         case 'add_scene':
             $storyId = (int)($_POST['story_id'] ?? 0);

@@ -114,7 +114,7 @@ if ($action === 'resolve_relationships') {
 // ── LIST ENTITIES (no frames, just entity rows) ───────────────────────
 if ($action === 'list_entities') {
     _listEntities($pdo, $entityType, $fuzzId, $docId, $docEntityName, $docEntityNames,
-                  $kgNodeId, $seqId, $storyboardId, $vectorText, $entityId, $search,
+                  $kgNodeId, $seqId, $storyboardId, $vectorText, $mapRunId, $entityId, $search,
                   $sort, $page, $perPage, $filterMode);
     exit;
 }
@@ -142,6 +142,7 @@ function computeForgeIntersection(
     ?int   $seqId,
     ?int   $storyboardId,
     ?string $vectorText,
+    ?int   $mapRunId,
     ?int   $entityId,
     string  $filterMode = 'intersection'
 ): ?array {
@@ -307,6 +308,15 @@ function computeForgeIntersection(
         $sets[] = $vectorIds;
     }
     
+    // ── 8. Map Run ────────────────────────────────────────────────────
+    if ($mapRunId) {
+        $stmt = $pdo->prepare(
+            "SELECT DISTINCT entity_id FROM frames
+             WHERE map_run_id = ? AND entity_type = ? AND entity_id IS NOT NULL"
+        );
+        $stmt->execute([$mapRunId, $entityType]);
+        $sets[] = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
     
     // ── Strip non-searchable sketches from every source set ───────────
     if ($entityType === 'sketches' && !empty($sets)) {
@@ -548,6 +558,7 @@ function _listFrames(
         $pdo, $entityType,
         $fuzzId, $docId, $docEntityName, $docEntityNames,
         $kgNodeId, $seqId, $storyboardId, $vectorText,
+        $mapRunId,
         $entityId, $filterMode
     );
 
@@ -560,7 +571,8 @@ function _listFrames(
         $where .= " AND e.searchable = 1";
     }
 
-    if ($mapRunId) {
+    // In intersection mode, Map Run strongly filters the frame level to ONLY that run.
+    if ($mapRunId && $filterMode === 'intersection') {
         $where .= " AND f.map_run_id = " . (int)$mapRunId;
     }
 
@@ -569,7 +581,7 @@ function _listFrames(
             // No entity passes all filters → empty result
             _respond('list_frames', [], 0, $page, 0, $entityType,
                      _buildFilterSummary($fuzzId, $docId, $docEntityName, $docEntityNames,
-                                         $kgNodeId, $seqId, $storyboardId, $vectorText, $entityId));
+                                         $kgNodeId, $seqId, $storyboardId, $vectorText, $mapRunId, $entityId));
             return;
         }
         $in     = implode(',', array_map('intval', $intersectIds));
@@ -663,7 +675,7 @@ function _listFrames(
 
     _respond('list_frames', $data, $total, $page, $pages, $entityType,
              _buildFilterSummary($fuzzId, $docId, $docEntityName, $docEntityNames,
-                                  $kgNodeId, $seqId, $storyboardId, $vectorText, $entityId));
+                                  $kgNodeId, $seqId, $storyboardId, $vectorText, $mapRunId, $entityId));
 }
 
 
@@ -681,6 +693,7 @@ function _listEntities(
     ?int    $seqId,
     ?int    $storyboardId,
     ?string $vectorText,
+    ?int    $mapRunId,
     ?int    $entityId,
     ?string $search,
     string  $sort,
@@ -696,6 +709,7 @@ function _listEntities(
         $pdo, $entityType,
         $fuzzId, $docId, $docEntityName, $docEntityNames,
         $kgNodeId, $seqId, $storyboardId, $vectorText,
+        $mapRunId,
         $entityId, $filterMode
     );
 
@@ -710,7 +724,7 @@ function _listEntities(
         if (empty($intersectIds)) {
             _respond('list_entities', [], 0, $page, 0, $entityType,
                      _buildFilterSummary($fuzzId, $docId, $docEntityName, $docEntityNames,
-                                         $kgNodeId, $seqId, $storyboardId, $vectorText, $entityId));
+                                         $kgNodeId, $seqId, $storyboardId, $vectorText, $mapRunId, $entityId));
             return;
         }
         $in     = implode(',', array_map('intval', $intersectIds));
@@ -739,7 +753,7 @@ function _listEntities(
 
     _respond('list_entities', $data, $total, $page, $pages, $entityType,
              _buildFilterSummary($fuzzId, $docId, $docEntityName, $docEntityNames,
-                                  $kgNodeId, $seqId, $storyboardId, $vectorText, $entityId));
+                                  $kgNodeId, $seqId, $storyboardId, $vectorText, $mapRunId, $entityId));
 }
 
 
@@ -874,6 +888,7 @@ function _buildFilterSummary(
     ?int    $seqId,
     ?int    $storyboardId,
     ?string $vectorText,
+    ?int    $mapRunId,
     ?int    $entityId
 ): array {
     $summary = [];
@@ -885,6 +900,7 @@ function _buildFilterSummary(
     if ($seqId)        $summary[] = ['type' => 'seq',        'id' => $seqId];
     if ($storyboardId) $summary[] = ['type' => 'storyboard', 'id' => $storyboardId];
     if ($vectorText)   $summary[] = ['type' => 'vector',     'text' => $vectorText];
+    if ($mapRunId)     $summary[] = ['type' => 'map_run',    'id' => $mapRunId];
     if ($entityId)     $summary[] = ['type' => 'entity_id',  'id' => $entityId];
     return $summary;
 }

@@ -133,22 +133,24 @@ if (isset($_POST['action'])) {
 
             $inserted  = 0;
             $skipped   = 0;
-            $sortOrder = 0;
 
             foreach ($sketchIds as $sketchId) {
                 $sortOrder = 0;
                 foreach ($charIds as $charId) {
                     try {
-                        $conn->executeStatement(
+                        // FIX: use the return value of executeStatement to detect INSERT IGNORE skips.
+                        // executeStatement returns affected row count: 1 = inserted, 0 = duplicate ignored.
+                        $affected = $conn->executeStatement(
                             "INSERT IGNORE INTO continuity_jobs
                              (sketch_id, character_id, sort_order, status, cont_gen_id, created_at, updated_at)
                              VALUES (?, ?, ?, 'pending', ?, NOW(), NOW())",
                             [$sketchId, $charId, $sortOrder, $contGenId]
                         );
-                        $affected = $conn->lastInsertId() ? 1 : 0;
-                        // INSERT IGNORE returns 0 affected rows on duplicate, not an error
-                        // Use rowCount on the statement instead
-                        $inserted++;
+                        if ($affected > 0) {
+                            $inserted++;
+                        } else {
+                            $skipped++;
+                        }
                     } catch (\Exception $e) {
                         $skipped++;
                     }
@@ -194,6 +196,9 @@ $chars        = $conn->fetchAllAssociative("SELECT id, name FROM characters ORDE
 $gens         = $conn->fetchAllAssociative("SELECT id, title FROM generator_config WHERE active = 1 ORDER BY title");
 $defaultGenId = 111;
 $initSketchId = (int)($_GET['sketch_id'] ?? 0);
+
+// Resolve the self URL once in PHP so JS can use it reliably (avoids empty-string POST targets)
+$selfUrl = htmlspecialchars($_SERVER['PHP_SELF'] ?? basename(__FILE__));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -591,6 +596,11 @@ $initSketchId = (int)($_GET['sketch_id'] ?? 0);
 </div>
 
 <script>
+// FIX: use explicit self URL resolved in PHP to avoid empty-string POST target ambiguity.
+// An empty url: '' in $.ajax / $.post can resolve incorrectly on some Android Chrome versions
+// when the page is loaded with query parameters (?sketch_id=N), stripping the path.
+const SELF_URL = '<?= $selfUrl ?>';
+
 // ── STATE ───────────────────────────────────────────────────────────────────
 let sidebarMode  = 'flat';
 let currentPage  = 1;
@@ -667,7 +677,8 @@ function changePage(d) {
 
 function loadSidebar() {
     $('#sidebarContent').css('opacity', '0.5');
-    $.post('', { action: 'fetch_sidebar', mode: sidebarMode, page: currentPage, search: searchQuery }, function(res) {
+    // FIX: post to SELF_URL instead of '' to avoid URL resolution issues
+    $.post(SELF_URL, { action: 'fetch_sidebar', mode: sidebarMode, page: currentPage, search: searchQuery }, function(res) {
         $('#sidebarContent').css('opacity', '1');
         if (!res.ok) return;
 
@@ -701,6 +712,10 @@ function loadSidebar() {
             });
         }
         $('#sidebarContent').html(html);
+    // FIX: added explicit 'json' dataType and a .fail() handler so errors surface instead of failing silently
+    }, 'json').fail(function(xhr, status, err) {
+        $('#sidebarContent').css('opacity', '1');
+        $('#sidebarContent').html('<div style="color:#f87171;padding:16px;">Sidebar load failed: ' + escapeHtml(String(err || status)) + '</div>');
     });
 }
 
@@ -708,9 +723,13 @@ function renderItemRow(item, isSelected, isActive) {
     const selClass    = isSelected ? 'selected' : '';
     const activeClass = isActive   ? 'active'   : '';
     const checked     = isSelected ? 'checked'  : '';
+    
+    // FIX: pass 'this' (the DOM element) into toggleSketchSelection and read the
+    // data-name attribute instead of injecting JSON.stringify into an inline handler 
+    // which breaks the HTML string if the name contains spaces and quotes.
     return `<div class="item-row ${selClass} ${activeClass}" data-id="${item.id}">
         <input type="checkbox" class="item-cb" data-id="${item.id}" data-name="${escapeHtml(item.name)}"
-               ${checked} onclick="event.stopPropagation(); toggleSketchSelection(${item.id}, ${JSON.stringify(item.name)}, this)">
+               ${checked} onclick="event.stopPropagation(); toggleSketchSelection(${item.id}, this)">
         <div class="item-text" onclick="loadSketchPreview(${item.id})">
             <div class="iname">${escapeHtml(item.name)}</div>
             <div class="imood">${escapeHtml(item.mood || '—')}</div>
@@ -719,8 +738,10 @@ function renderItemRow(item, isSelected, isActive) {
 }
 
 // ── SELECTION MANAGEMENT ─────────────────────────────────────────────────────
-function toggleSketchSelection(id, name, cbEl) {
+function toggleSketchSelection(id, cbEl) {
+    const name = cbEl.getAttribute('data-name') || '';
     const row = cbEl.closest('.item-row');
+    
     if (cbEl.checked) {
         selectedSketches.set(id, { id, name });
         row.classList.add('selected');
@@ -818,7 +839,8 @@ function loadSketchPreview(id) {
     $('#wkTitle').text('Loading…');
     $('#wkId').text('#' + id);
 
-    $.post('', { action: 'get_sketch', id: id }, function(res) {
+    // FIX: post to SELF_URL instead of ''
+    $.post(SELF_URL, { action: 'get_sketch', id: id }, function(res) {
         if (res.ok) {
             const s = res.data;
             $('#wkTitle').text(s.name);
@@ -848,7 +870,12 @@ function loadSketchPreview(id) {
 
             const newUrl = window.location.pathname + '?sketch_id=' + id;
             window.history.pushState({ path: newUrl }, '', newUrl);
+        } else {
+            $('#wkTitle').text('Error loading sketch');
         }
+    // FIX: explicit dataType + fail handler
+    }, 'json').fail(function() {
+        $('#wkTitle').text('Load failed');
     });
 }
 
@@ -864,31 +891,44 @@ function enqueueBatch() {
     const btn = $('#enqueueBtn');
     btn.prop('disabled', true).html('<i class="bi bi-hourglass-split"></i> Enqueueing…');
 
-    $.post('', {
-        action:        'enqueue_batch',
-        sketch_ids:    sketchIds,
-        character_ids: charIds,
-        generator_id:  genId,
-    }, function(res) {
-        btn.prop('disabled', false);
-        if (res.ok) {
-            showToast(res.message + ` (${res.enqueued} jobs inserted)`, 'success');
-            loadQueueStats();
+    // FIX: use SELF_URL instead of '' to ensure the POST goes to the right endpoint.
+    // Note: 'traditional: true' was removed because it forces arrays to 'key=val' instead of 'key[]=val'.
+    // PHP requires 'key[]=val' to recognize variables as arrays, otherwise only the last element is received!
+    $.ajax({
+        url:         SELF_URL,
+        method:      'POST',
+        dataType:    'json',
+        data: {
+            action:        'enqueue_batch',
+            sketch_ids:    sketchIds,
+            character_ids: charIds,
+            generator_id:  genId,
+        },
+        success: function(res) {
+            btn.prop('disabled', false);
+            if (res.ok) {
+                showToast(res.message + ` (${res.enqueued} jobs inserted, ${res.skipped} skipped)`, 'success');
+                loadQueueStats();
+                updateEnqueueBtn();
+            } else {
+                showToast('Error: ' + res.error, 'error');
+                updateEnqueueBtn();
+            }
+        },
+        error: function(xhr, status, err) {
+            btn.prop('disabled', false);
             updateEnqueueBtn();
-        } else {
-            showToast('Error: ' + res.error, 'error');
-            updateEnqueueBtn();
+            // FIX: surface the actual HTTP error text instead of a generic message
+            const detail = xhr.responseText ? xhr.responseText.substring(0, 200) : (err || status);
+            showToast('Server error: ' + detail, 'error');
         }
-    }, 'json').fail(function() {
-        btn.prop('disabled', false);
-        updateEnqueueBtn();
-        showToast('Server error — please try again.', 'error');
     });
 }
 
 // ── QUEUE STATS ───────────────────────────────────────────────────────────────
 function loadQueueStats() {
-    $.post('', { action: 'get_queue_stats' }, function(res) {
+    // FIX: post to SELF_URL instead of ''
+    $.post(SELF_URL, { action: 'get_queue_stats' }, function(res) {
         if (res.ok && res.stats) {
             const s = res.stats;
             $('#qTotal').text(s.total + ' total');

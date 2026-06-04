@@ -48,6 +48,10 @@ fi
 #MODEL="grok-video"
 #MODEL="grok-video-pro"
 
+
+#MODEL="ltx-2"
+
+
 MODEL="wan"
 #MODEL="wan-fast"
 

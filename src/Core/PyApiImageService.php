@@ -279,6 +279,87 @@ class PyApiImageService extends PyApiProxy
         throw new Exception("Rembg task timed out");
     }
 
+    /**
+     * Remove background from an image using LAB-space chroma key (greenscreen removal).
+     * Async: posts to /image/chromakey-async, polls /status/{task_id}.
+     * Returns raw PNG image data on success.
+     */
+    public function removeBackgroundChromakey(string $sourceImagePath, string $color = '#00FF00', float $threshold = 0.15, float $softness = 0.05): ?string
+    {
+        $baseUrl = $this->getRemBgBaseUrl();
+
+        if (!file_exists($sourceImagePath)) throw new Exception("Source image not found");
+
+        // 1. Start async chromakey task
+        $startEndpoint = $baseUrl . '/image/chromakey-async';
+        $postData = [
+            'file'      => new \CURLFile($sourceImagePath, mime_content_type($sourceImagePath), basename($sourceImagePath)),
+            'color'     => $color,
+            'threshold' => $threshold,
+            'softness'  => $softness,
+        ];
+
+        $ch = curl_init($startEndpoint);
+        curl_setopt($ch, CURLOPT_POST,           1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS,     $postData);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT,        30);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error    = curl_error($ch);
+        curl_close($ch);
+
+        if ($error || $httpCode != 200) {
+            $msg = "Failed to start chromakey task";
+            if ($response) {
+                $errJson = json_decode($response, true);
+                if (isset($errJson['detail'])) $msg .= ": " . (is_string($errJson['detail']) ? $errJson['detail'] : json_encode($errJson['detail']));
+            } else {
+                $msg .= ": HTTP $httpCode";
+            }
+            throw new Exception($msg);
+        }
+
+        $json   = json_decode($response, true);
+        $taskId = $json['task_id'] ?? null;
+        if (!$taskId) throw new Exception("No task ID returned from chromakey service");
+
+        // 2. Poll for completion (same pattern as removeBackground)
+        $maxAttempts = 60; // 120 seconds max for a single image
+        $attempt     = 0;
+
+        while ($attempt < $maxAttempts) {
+            sleep(2);
+
+            $statusEndpoint = $baseUrl . '/status/' . $taskId;
+            $ch = curl_init($statusEndpoint);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            $res         = curl_exec($ch);
+            $code        = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+            curl_close($ch);
+
+            if ($code == 200) {
+                if (strpos($contentType, 'image') !== false) {
+                    return $res; // Raw PNG bytes
+                }
+
+                $statusJson = json_decode($res, true);
+                $status     = $statusJson['status'] ?? 'UNKNOWN';
+
+                if ($status === 'FAILED') {
+                    throw new Exception("Chromakey task failed: " . ($statusJson['error'] ?? 'Unknown error'));
+                }
+            } else {
+                throw new Exception("Error polling chromakey status: HTTP $code");
+            }
+
+            $attempt++;
+        }
+
+        throw new Exception("Chromakey task timed out");
+    }
+
     // --- Convenience Methods ---
     
     public function createThumbnail(string $sourceImagePath, int $maxWidth = 200, int $maxHeight = 200): ?string
