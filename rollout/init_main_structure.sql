@@ -1279,8 +1279,12 @@ CREATE TABLE `cinemagic_series` (
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `cover_image_url` varchar(512) DEFAULT NULL,
   `template` varchar(50) DEFAULT 'default',
-  `supported_languages` varchar(255) DEFAULT 'en'
+  `supported_languages` varchar(255) DEFAULT 'en',
+  `seo_keywords` text DEFAULT NULL,
+  `seo_description` text DEFAULT NULL,
+  `sort_order` int(11) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+
 
 -- --------------------------------------------------------
 
