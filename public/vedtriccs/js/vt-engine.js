@@ -106,15 +106,11 @@ function vtApi(action, params = {}, method = 'GET') {
 }
 
 // ─── Connector Key ────────────────────────────────────────────────────────────
-// Stable key identifying the boundary between two adjacent clips on the same track.
-// Using clip IDs keeps it stable within a session; serialized state preserves url+startTime hash.
 function vtConnectorKey(clipA, clipB) {
-    // Session key (by id) — used for live UI
     return `conn_${clipA.id}_${clipB.id}`;
 }
 
 function vtConnectorKeyFromData(urlA, startA, urlB, startB) {
-    // Deterministic key from serialized data — used when loading a project file
     const h = (s) => {
         let hash = 0;
         for (let i = 0; i < s.length; i++) { hash = (hash << 5) - hash + s.charCodeAt(i); hash |= 0; }
@@ -159,7 +155,6 @@ function vtUpdateMasterLayout() {
     const empty = document.getElementById('vtEmpty');
     if (empty) empty.style.display = VT_STATE.tracks.length ? 'none' : 'flex';
 
-    // Refresh all connector pips on clips
     vtRefreshAllConnectorPips();
 }
 
@@ -331,7 +326,6 @@ function vtSerialize() {
             trimStart:     c.trimStart,
             trimEnd:       c.trimEnd,
             playbackSpeed: c.playbackSpeed,
-            // Pre-calculate exact hash for PyAPI boundary matching without floats going rogue
             stableHash:    h(String(c.url) + String(c.startTime))
         })),
         connectors: vtSerializeConnectors(),
@@ -340,7 +334,6 @@ function vtSerialize() {
 
 function vtSerializeConnectors() {
     const out = {};
-    // Build a map from session key → serialized key
     const sorted = vtGetSortedClipsPerTrack();
     for (const [trackId, clips] of Object.entries(sorted)) {
         for (let i = 0; i < clips.length - 1; i++) {
@@ -386,7 +379,6 @@ function vtDeserialize(data) {
         vtAddClipNoHistory(tid, { url: cs.url, name: cs.name, thumbnail: cs.thumbnail, duration: cs.duration }, cs.startTime, cs);
     });
 
-    // Restore connectors: map stable keys back to session keys
     if (data.connectors) {
         const sorted = vtGetSortedClipsPerTrack();
         for (const [, clips] of Object.entries(sorted)) {
@@ -407,7 +399,6 @@ function vtDeserialize(data) {
     vtUpdateMasterLayout();
 }
 
-// ─── Adjacent clip helpers ────────────────────────────────────────────────────
 function vtGetSortedClipsPerTrack() {
     const byTrack = {};
     VT_STATE.clips.forEach(c => {
@@ -420,7 +411,6 @@ function vtGetSortedClipsPerTrack() {
     return byTrack;
 }
 
-// Returns [clipA, clipB] if clip has an adjacent neighbour on right, else null
 function vtRightNeighbour(clip) {
     const sorted = (vtGetSortedClipsPerTrack()[clip.trackId] || []);
     const idx    = sorted.findIndex(c => c.id === clip.id);
@@ -428,7 +418,6 @@ function vtRightNeighbour(clip) {
     return [sorted[idx], sorted[idx + 1]];
 }
 
-// ─── Clear All ────────────────────────────────────────────────────────────────
 function vtClearAll(force = false) {
     if (!VT_STATE.tracks.length) return;
     if (!force && !confirm('Remove all tracks and clips?')) return;
@@ -457,7 +446,9 @@ function vtRemoveClipInternal(id) {
 }
 
 
-// ─── PyAPI Full Project Bounce ────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════
+// ─── NEW: FULL PROJECT BOUNCE EXPORT (PROXIED VIA PHP) ──────────────────
+// ════════════════════════════════════════════════════════════════════════
 
 let _vtBouncePollingInterval = null;
 
@@ -468,14 +459,12 @@ function vtSetBounceStatus(msg) {
 
 function vtOpenBounceModal() {
     document.getElementById('bounceBackdrop').classList.add('open');
-    const btn = document.getElementById('mbBtnBounce');
-    if (btn) btn.classList.add('active');
+    document.getElementById('mbBtnBounce')?.classList.add('active');
 }
 
 function vtCloseBounceModal() {
     document.getElementById('bounceBackdrop').classList.remove('open');
-    const btn = document.getElementById('mbBtnBounce');
-    if (btn) btn.classList.remove('active');
+    document.getElementById('mbBtnBounce')?.classList.remove('active');
 }
 
 function vtCancelBounce() {
@@ -484,136 +473,97 @@ function vtCancelBounce() {
         _vtBouncePollingInterval = null;
     }
     vtCloseBounceModal();
-    Toast.show('Bounce cancelled', 'info');
+    Toast.show('Export cancelled', 'info');
 }
 
 async function vtBounceProject() {
     if (!VT_STATE.clips.length) { Toast.show('Timeline is empty', 'warn'); return; }
 
     vtOpenBounceModal();
-    vtSetBounceStatus('Collecting video assets…');
+    vtSetBounceStatus('Submitting timeline to server…');
 
-    const state = vtSerialize();
-    const uniqueUrls = [...new Set(VT_STATE.clips.map(c => c.url).filter(Boolean))];
-    const urlToFilename = {};
-    const formData = new FormData();
-
-    for (let i = 0; i < uniqueUrls.length; i++) {
-        const url = uniqueUrls[i];
-        vtSetBounceStatus(`Fetching asset ${i + 1} of ${uniqueUrls.length}…`);
-        try {
-            const blob = await fetch(url).then(r => {
-                if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                return r.blob();
-            });
-            const ext = url.split('.').pop().split('?')[0] || 'mp4';
-            const filename = `asset_${i}.${ext}`;
-            urlToFilename[url] = filename;
-            formData.append('files', blob, filename);
-        } catch (e) {
-            vtCloseBounceModal();
-            Toast.show(`Failed to fetch: ${url}`, 'error');
-            return;
-        }
-    }
-
-    // Attach bounce filename back to serialized state
-    state.clips.forEach(c => {
-        if (c.url) c.bounce_filename = urlToFilename[c.url];
-    });
-
-    formData.append('state_json', JSON.stringify(state));
-    formData.append('canvas_w', VT_PROJECT.canvasW);
-    formData.append('canvas_h', VT_PROJECT.canvasH);
-
-    vtSetBounceStatus('Uploading & queuing render…');
+    const stateData = vtSerialize();
+    
+    const fd = new URLSearchParams();
+    fd.append('api_action', 'ved_bounce_submit');
+    fd.append('state_json', JSON.stringify(stateData));
+    fd.append('canvas_w', VT_PROJECT.canvasW);
+    fd.append('canvas_h', VT_PROJECT.canvasH);
 
     try {
-        const resUrl = await vtApi('get_pyapi_url');
-        if (resUrl.status !== 'success') throw new Error(resUrl.message);
-
-        const pyapiUrl = resUrl.url;
-
-        const res = await fetch(`${pyapiUrl}/ved/compose-async`, {
+        const res = await fetch('?api_action=ved_bounce_submit', {
             method: 'POST',
-            body: formData
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: fd
         }).then(r => r.json());
 
-        if (res.status === 'queued' || res.status === 'processing') {
+        if (res.status === 'success' && res.task_id) {
             vtSetBounceStatus('Rendering on server…');
-            vtPollBounceJob(pyapiUrl, res.task_id);
+            vtPollBounceJob(res.pyapi_url, res.task_id);
         } else {
             vtCloseBounceModal();
-            Toast.show('Bounce failed: ' + (res.detail || res.status), 'error');
+            Toast.show('Export failed: ' + (res.message || 'unknown error'), 'error');
         }
-    } catch (e) {
+    } catch(err) {
         vtCloseBounceModal();
-        Toast.show('Network or PyAPI error', 'error');
-        console.error(e);
+        Toast.show('Network error during submission', 'error');
     }
 }
 
 function vtPollBounceJob(pyapiUrl, taskId) {
     if (_vtBouncePollingInterval) clearInterval(_vtBouncePollingInterval);
-
+    
     _vtBouncePollingInterval = setInterval(async () => {
         try {
-            // PHP proxy request
+            const fd = new URLSearchParams({
+                api_action: 'ved_bounce_poll',
+                pyapi_url:  pyapiUrl,
+                task_id:    taskId
+            });
             const res = await fetch('?api_action=ved_bounce_poll', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({
-                    pyapi_url: pyapiUrl,
-                    task_id:   taskId
-                })
+                body: fd
             }).then(r => r.json());
 
-            if (res.status !== 'success') {
-                return; // Transient network error
-            }
+            if (res.status !== 'success') return; // transient network error
 
             if (res.task_status === 'completed') {
-                clearInterval(_vtBouncePollingInterval);
+                clearInterval(_vtBouncePollingInterval); 
                 _vtBouncePollingInterval = null;
                 vtSetBounceStatus('Done! Saving to database…');
-
-                // Determine project file context
+                
                 const projSel = document.getElementById('fileProjectSelect');
                 const eName = (projSel && projSel.options[projSel.selectedIndex]) ? projSel.options[projSel.selectedIndex].text : 'VED Export';
 
-                const regBody = new URLSearchParams({
-                    api_action: 'register_bounce',
-                    task_id: taskId,
-                    pyapi_url: pyapiUrl,
+                const dbBody = new URLSearchParams({
+                    api_action:  'register_bounce',
+                    task_id:     taskId,
+                    pyapi_url:   pyapiUrl,
                     animatic_id: VT_STATE.animaticId || 0,
-                    name: eName + ' ' + new Date().toLocaleTimeString(),
-                    canvas_w: VT_PROJECT.canvasW,
-                    canvas_h: VT_PROJECT.canvasH,
-                    duration_s: Math.ceil(VT_STATE.projectDuration)
+                    name:        eName + ' ' + new Date().toLocaleTimeString(),
+                    canvas_w:    VT_PROJECT.canvasW,
+                    canvas_h:    VT_PROJECT.canvasH,
+                    state_json:  JSON.stringify(vtSerialize()),
+                    duration_s:  Math.ceil(VT_STATE.projectDuration)
                 });
-
-                fetch('?api_action=register_bounce', { method: 'POST', body: regBody })
-                    .then(r => r.json())
-                    .then(dbRes => {
+                
+                fetch('?api_action=register_bounce', { method: 'POST', body: dbBody })
+                    .then(r => r.json()).then(dbRes => {
                         vtCloseBounceModal();
-                        if (dbRes.status === 'success') {
-                            Toast.show(`Bounce saved to DB (Video #${dbRes.video_id})`, 'success');
-                        } else {
-                            Toast.show('DB Error: ' + (dbRes.message || 'unknown'), 'error');
-                        }
-                    }).catch(e => {
-                        vtCloseBounceModal();
-                        Toast.show('Network error while saving to DB', 'error');
+                        if (dbRes.status === 'success') Toast.show(`Export saved as Video #${dbRes.video_id}`, 'success');
+                        else Toast.show('DB error: ' + (dbRes.message || 'unknown'), 'error');
+                    }).catch(() => { 
+                        vtCloseBounceModal(); 
+                        Toast.show('Network error saving to DB', 'error'); 
                     });
-
+                    
             } else if (res.task_status === 'failed') {
-                clearInterval(_vtBouncePollingInterval);
+                clearInterval(_vtBouncePollingInterval); 
                 _vtBouncePollingInterval = null;
                 vtCloseBounceModal();
-                Toast.show('Bounce failed: ' + (res.error || 'unknown error'), 'error');
+                Toast.show('Export failed: ' + (res.error || 'unknown'), 'error');
             }
-        } catch (e) {
-            // keep polling
-        }
-    }, 2000);
+        } catch(e) { /* keep polling */ }
+    }, 1500);
 }

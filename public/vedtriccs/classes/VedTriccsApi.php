@@ -12,7 +12,7 @@ class VedTriccsApi
         $this->pdo = $pdo;
     }
 
-public function dispatch(): void
+    public function dispatch(): void
     {
         header('Content-Type: application/json');
         $action = $_REQUEST['api_action'] ?? '';
@@ -54,6 +54,7 @@ public function dispatch(): void
                 case 'unassign_demo':            $this->unassignDemo();            break;
 
                 // ── VED-style export (full timeline via PyAPI) ─────────────────
+                case 'ved_bounce_submit':        $this->submitVedBounce();         break;
                 case 'ved_bounce_poll':          $this->pollVedBounce();           break;
                 case 'register_bounce':          $this->registerBounce();          break;
 
@@ -92,7 +93,6 @@ public function dispatch(): void
         curl_close($ch);
         
         if ($code !== 200 || !$body) {
-            // Return FULL offline list so the UI doesn't break if PyAPI times out
             echo json_encode([
                 'status' => 'success',
                 'transitions' => $this->_offlineTransitions(),
@@ -107,14 +107,11 @@ public function dispatch(): void
 
     private function _offlineTransitions(): array
     {
-        // Full MuviTriccs vocabulary fallback — used when PyAPI is slow/offline
         return [
-            // Core
             ['name' => 'cross_dissolve', 'family' => 'core', 'description' => 'Gamma-correct alpha blend A to B'],
             ['name' => 'fade_to_black', 'family' => 'core', 'description' => 'Fade A to black, reveal B from black'],
             ['name' => 'fade_to_white', 'family' => 'core', 'description' => 'Fade A to white, reveal B from white'],
             ['name' => 'luma_wipe', 'family' => 'core', 'description' => 'Brightness-driven reveal mask with noise edge'],
-            // Motion
             ['name' => 'slide_left', 'family' => 'motion', 'description' => 'A exits left, B enters right with motion blur'],
             ['name' => 'slide_right', 'family' => 'motion', 'description' => 'A exits right, B enters left with motion blur'],
             ['name' => 'slide_up', 'family' => 'motion', 'description' => 'A exits up, B enters below with motion blur'],
@@ -127,11 +124,9 @@ public function dispatch(): void
             ['name' => 'spin_ccw', 'family' => 'motion', 'description' => 'Counter-clockwise rotation with rotational blur'],
             ['name' => 'whip_pan_left', 'family' => 'motion', 'description' => 'Fast lateral blur sweep left'],
             ['name' => 'whip_pan_right', 'family' => 'motion', 'description' => 'Fast lateral blur sweep right'],
-            // Optical
             ['name' => 'motion_blur_cut', 'family' => 'optical', 'description' => 'Directional smear conceals the splice'],
             ['name' => 'radial_blur_cut', 'family' => 'optical', 'description' => 'Zoom burst at the cut point'],
             ['name' => 'defocus_cut', 'family' => 'optical', 'description' => 'Gaussian lens blur in/out transition'],
-            // Stylized
             ['name' => 'flash', 'family' => 'stylized', 'description' => 'Luminance spike at cut'],
             ['name' => 'glitch', 'family' => 'stylized', 'description' => 'RGB channel split + scanline block tears'],
             ['name' => 'rgb_split', 'family' => 'stylized', 'description' => 'Chromatic aberration dissolve, peak at cut'],
@@ -141,11 +136,8 @@ public function dispatch(): void
             ['name' => 'light_leak', 'family' => 'stylized', 'description' => 'Additive warm-light bloom sweep'],
             ['name' => 'scanline_tear', 'family' => 'stylized', 'description' => 'Horizontal block corruption + channel drift'],
             ['name' => 'vhs_dropout', 'family' => 'stylized', 'description' => 'VHS tape tracking dropout artifacts'],
-            // Flow
             ['name' => 'optical_flow_warp', 'family' => 'flow', 'description' => 'Content-aware Farneback warp morphing'],
-            // Depth
             ['name' => 'depth_parallax', 'family' => 'depth', 'description' => 'MiDaS depth map drives per-layer parallax shift'],
-            // Creative
             ['name' => 'pixel_sort', 'family' => 'creative', 'description' => 'Glitchy column/row sort reveal'],
             ['name' => 'ink_wash', 'family' => 'creative', 'description' => 'Diffusion-style organic ink bleed reveal'],
             ['name' => 'shatter', 'family' => 'creative', 'description' => 'A shatters into voronoi shards that fall/spin off'],
@@ -156,13 +148,11 @@ public function dispatch(): void
             ['name' => 'kaleidoscope', 'family' => 'creative', 'description' => 'Kaleidoscopic mirror fold collapse'],
             ['name' => 'ripple_water', 'family' => 'creative', 'description' => 'Concentric water-ripple displacement warp'],
             ['name' => 'dream_blur', 'family' => 'creative', 'description' => 'Dreamy glow bloom dissolve with hue rotation'],
-            // Epic
             ['name' => 'speed_ramp', 'family' => 'epic', 'description' => 'Time-remap freeze-burst'],
             ['name' => 'shockwave', 'family' => 'epic', 'description' => 'Radial pressure-ring expands from centre'],
             ['name' => 'strobe_cut', 'family' => 'epic', 'description' => 'Stroboscopic A/B alternation'],
             ['name' => 'motion_trail', 'family' => 'epic', 'description' => 'Luminance ghost trails of A screen-blend over B'],
             ['name' => 'glare_hit', 'family' => 'epic', 'description' => 'Full-frame directional lens-glare streak'],
-            // Movie
             ['name' => 'iris_wipe', 'family' => 'movie', 'description' => 'Circular iris opens from centre'],
             ['name' => 'venetian_blind', 'family' => 'movie', 'description' => 'Staggered horizontal strip wipe'],
             ['name' => 'cross_zoom', 'family' => 'movie', 'description' => 'A zooms in, B zooms out, collide at cut'],
@@ -173,9 +163,6 @@ public function dispatch(): void
     }
 
     // ─── Connector metadata ───────────────────────────────────────────────────
-    // A "connector" lives between two adjacent clips on the same track.
-    // Key = "{clip_a_url_hash}:{clip_b_url_hash}:{track_id}"
-    // Stored in vedtriccs_connectors, scoped to a project_file_id.
 
     private function saveConnector(): void
     {
@@ -186,7 +173,6 @@ public function dispatch(): void
             echo json_encode(['status' => 'error', 'message' => 'file_id and connector_key required']);
             return;
         }
-        // Upsert
         $check = $this->pdo->prepare("SELECT id FROM vedtriccs_connectors WHERE file_id=? AND connector_key=?");
         $check->execute([$fileId, $key]);
         $existing = $check->fetchColumn();
@@ -229,7 +215,6 @@ public function dispatch(): void
         $easing    = trim($_POST['easing']           ?? 'ease_in_out_cubic');
         $seed      = (int)($_POST['seed']            ?? 42);
 
-        // Receive specific boundaries so PyAPI can handle video cutting natively
         $trimStartA = (float)($_POST['trim_start_a'] ?? 0);
         $trimEndA   = (float)($_POST['trim_end_a']   ?? 0);
         $trimStartB = (float)($_POST['trim_start_b'] ?? 0);
@@ -249,7 +234,6 @@ public function dispatch(): void
         if (!file_exists($pathA)) { echo json_encode(['status'=>'error','message'=>"File A not found: $urlA"]); return; }
         if (!file_exists($pathB)) { echo json_encode(['status'=>'error','message'=>"File B not found: $urlB"]); return; }
 
-        // Register job row
         $this->pdo->prepare("INSERT INTO vedtriccs_render_jobs
             (file_id, connector_key, transition_name, status)
             VALUES (?,?,?,'queued')")
@@ -259,7 +243,6 @@ public function dispatch(): void
         $mimeA = function_exists('mime_content_type') ? @mime_content_type($pathA) : 'video/mp4';
         $mimeB = function_exists('mime_content_type') ? @mime_content_type($pathB) : 'video/mp4';
 
-        // Call PyAPI
         $pyUrl   = $this->getPyApiUrl();
         $ch      = curl_init("$pyUrl/muvitriccs/render");
         $postFields = [
@@ -336,7 +319,6 @@ public function dispatch(): void
         $pyState = $py['status'] ?? 'processing';
 
         if ($pyState === 'completed') {
-            // Download and register video
             $dlUrl   = "$pyUrl/muvitriccs/download/$taskId";
             $tmpFile = tempnam(sys_get_temp_dir(), 'vtriccs_') . '.mp4';
             $fh = fopen($tmpFile, 'wb');
@@ -381,7 +363,6 @@ public function dispatch(): void
         if (!is_dir($videosDir)) mkdir($videosDir, 0755, true);
         if (!is_dir($thumbsDir)) mkdir($thumbsDir, 0755, true);
 
-        // CREATE map_runs entry
         $this->pdo->prepare("INSERT INTO map_runs (entity_type, note) VALUES ('animatics', 'Generated by VedTriccs Transition')")->execute();
         $mapRunId = (int)$this->pdo->lastInsertId();
 
@@ -394,13 +375,12 @@ public function dispatch(): void
         if (!copy($tmpPath, $dest)) throw new Exception("Failed to copy video to $dest");
         chmod($dest, 0644);
 
-        // Thumbnail
         $thumbName = $basename . '.jpg';
         $thumbDest = $thumbsDir . '/' . $thumbName;
         $im        = @imagecreatetruecolor(640, 360);
         if ($im) {
-            $bg     = imagecolorallocate($im, 0, 0, 170);     // BSOD blue
-            $border = imagecolorallocate($im, 0, 0, 100);     // darker blue frame
+            $bg     = imagecolorallocate($im, 0, 0, 170);
+            $border = imagecolorallocate($im, 0, 0, 100);
             $amber  = imagecolorallocate($im, 245, 158, 11);
             $textWhite = imagecolorallocate($im, 228, 228, 240);
             $textDim   = imagecolorallocate($im, 107, 107, 138);
@@ -417,7 +397,6 @@ public function dispatch(): void
         }
         $thumbUrl = file_exists($thumbDest) ? "videos/thumbnails/$thumbName" : null;
 
-        // Duration probe
         $dur = 0;
         $raw = trim((string)shell_exec("ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 " . escapeshellarg($dest)));
         if (is_numeric($raw)) $dur = (int)round((float)$raw);
@@ -557,7 +536,6 @@ public function dispatch(): void
 
     private function listVideos(): void
     {
-        // Identical filter logic to VedApi::listVideos — supports all picker modes
         $animaticId   = (int)($_GET['animatic_id']   ?? 0);
         $nodeId       = (int)($_GET['node_id']        ?? 0);
         $seqId        = (int)($_GET['seq_id']         ?? 0);
@@ -709,20 +687,127 @@ public function dispatch(): void
     }
 
     // ─── VED-style full bounce ────────────────────────────────────────────────
-// ─── VED-style full bounce ────────────────────────────────────────────────
 
-    private function pollVedBounce(): void
+    private function submitVedBounce(): void
     {
-        $pyapiUrl = $_POST['pyapi_url'] ?? '';
-        $taskId   = $_POST['task_id'] ?? '';
+        // PHP intercepts the bounce request, reads the local files directly, 
+        // and manually streams them to PyAPI to bypass the browser network routing.
+        $stateJson = $_POST['state_json'] ?? '';
+        $canvasW   = (int)($_POST['canvas_w'] ?? 1024);
+        $canvasH   = (int)($_POST['canvas_h'] ?? 1024);
 
-        if (!$pyapiUrl || !$taskId) {
-            echo json_encode(['status' => 'error', 'message' => 'Missing pyapi_url or task_id']);
+        if (!$stateJson) {
+            echo json_encode(['status' => 'error', 'message' => 'state_json required']);
             return;
         }
 
-        // Route polling through PHP exactly like the submission
-        $url = rtrim($pyapiUrl, '/') . '/ved/status/' . $taskId;
+        $state = json_decode($stateJson, true);
+        if (!$state || empty($state['clips'])) {
+            echo json_encode(['status' => 'error', 'message' => 'Timeline is empty or invalid']);
+            return;
+        }
+
+        $uniqueUrls = [];
+        foreach ($state['clips'] as $c) {
+            if (!empty($c['url'])) {
+                $uniqueUrls[] = $c['url'];
+            }
+        }
+        $uniqueUrls = array_values(array_unique($uniqueUrls));
+
+        $urlToFilename = [];
+        $publicPathAbs = __DIR__ . '/../../';
+        $boundary = "----SAGEFormBoundary" . bin2hex(random_bytes(16));
+        $body = "";
+
+        foreach ($uniqueUrls as $i => $url) {
+            $localPath = ltrim(parse_url($url, PHP_URL_PATH), '/');
+            $absPath   = realpath($publicPathAbs . $localPath);
+
+            if (!$absPath || !file_exists($absPath)) {
+                echo json_encode(['status' => 'error', 'message' => "Asset not found on server: $localPath"]);
+                return;
+            }
+
+            $ext   = pathinfo($absPath, PATHINFO_EXTENSION) ?: 'mp4';
+            $fname = "asset_{$i}.{$ext}";
+            $urlToFilename[$url] = $fname;
+
+            $mime = function_exists('mime_content_type') ? @mime_content_type($absPath) : 'video/mp4';
+            $content = file_get_contents($absPath);
+
+            $body .= "--" . $boundary . "\r\n";
+            $body .= "Content-Disposition: form-data; name=\"files\"; filename=\"" . $fname . "\"\r\n";
+            $body .= "Content-Type: " . ($mime ?: 'application/octet-stream') . "\r\n\r\n";
+            $body .= $content . "\r\n";
+        }
+
+        foreach ($state['clips'] as &$c) {
+            if (!empty($c['url']) && isset($urlToFilename[$c['url']])) {
+                $c['bounce_filename'] = $urlToFilename[$c['url']];
+            }
+        }
+        unset($c);
+
+        $body .= "--" . $boundary . "\r\n";
+        $body .= "Content-Disposition: form-data; name=\"state_json\"\r\n\r\n";
+        $body .= json_encode($state) . "\r\n";
+
+        $body .= "--" . $boundary . "\r\n";
+        $body .= "Content-Disposition: form-data; name=\"canvas_w\"\r\n\r\n";
+        $body .= $canvasW . "\r\n";
+
+        $body .= "--" . $boundary . "\r\n";
+        $body .= "Content-Disposition: form-data; name=\"canvas_h\"\r\n\r\n";
+        $body .= $canvasH . "\r\n";
+
+        $body .= "--" . $boundary . "--\r\n";
+
+        $pyUrl = rtrim($this->getPyApiUrl(), '/');
+        $ch = curl_init("$pyUrl/ved/compose-async");
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            "Content-Type: multipart/form-data; boundary=" . $boundary,
+            "Content-Length: " . strlen($body)
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 120);
+        
+        $response = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err  = curl_error($ch);
+        curl_close($ch);
+
+        if ($code >= 400 || !$response) {
+            echo json_encode(['status' => 'error', 'message' => "PyAPI HTTP $code: $err"]);
+            return;
+        }
+
+        $res = json_decode($response, true);
+        if (!$res || empty($res['task_id'])) {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid response from PyAPI: ' . $response]);
+            return;
+        }
+
+        echo json_encode([
+            'status'    => 'success',
+            'task_id'   => $res['task_id'],
+            'pyapi_url' => $pyUrl
+        ]);
+    }
+
+    private function pollVedBounce(): void
+    {
+        $taskId   = $_POST['task_id'] ?? '';
+
+        if (!$taskId) {
+            echo json_encode(['status' => 'error', 'message' => 'Missing task_id']);
+            return;
+        }
+
+        $url = rtrim($this->getPyApiUrl(), '/') . '/ved/status/' . $taskId;
+        
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 10);
@@ -742,7 +827,6 @@ public function dispatch(): void
             return;
         }
 
-        // Return PyAPI's exact response structure to JS
         echo json_encode([
             'status' => 'success',
             'task_status' => $data['status'] ?? 'pending',
@@ -758,7 +842,7 @@ public function dispatch(): void
         $canvasW    = (int)($_POST['canvas_w'] ?? 0);
         $canvasH    = (int)($_POST['canvas_h'] ?? 0);
         $durationS  = (int)($_POST['duration_s'] ?? 0);
-        $pyapiUrl   = $_POST['pyapi_url']   ?? $this->getPyApiUrl();
+        $pyapiUrl   = $this->getPyApiUrl();
 
         if (!$taskId || !preg_match('/^[a-f0-9\-]+$/i', $taskId)) {
             echo json_encode(['status'=>'error','message'=>'Invalid task ID']); return;
@@ -853,14 +937,12 @@ public function dispatch(): void
             $this->pdo->commit();
             
             // Cleanup PyAPI Temp folder
-            if ($pyapiUrl) {
-                $cleanupUrl = rtrim($pyapiUrl, '/') . "/ved/cleanup/{$taskId}";
-                $chC = curl_init($cleanupUrl);
-                curl_setopt($chC, CURLOPT_CUSTOMREQUEST, "DELETE");
-                curl_setopt($chC, CURLOPT_RETURNTRANSFER, true);
-                curl_exec($chC);
-                curl_close($chC);
-            }
+            $cleanupUrl = rtrim($pyapiUrl, '/') . "/ved/cleanup/{$taskId}";
+            $chC = curl_init($cleanupUrl);
+            curl_setopt($chC, CURLOPT_CUSTOMREQUEST, "DELETE");
+            curl_setopt($chC, CURLOPT_RETURNTRANSFER, true);
+            curl_exec($chC);
+            curl_close($chC);
 
             echo json_encode(['status'=>'success','video_id'=>$videoId,'filename'=>"videos/$filename"]);
         } catch (Exception $e) {
@@ -869,6 +951,7 @@ public function dispatch(): void
             echo json_encode(['status'=>'error','message'=>$e->getMessage()]);
         }
     }
+
     // ─── Table bootstrap ──────────────────────────────────────────────────────
 
     private function ensureTables(): void
