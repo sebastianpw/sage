@@ -67,6 +67,7 @@ check_wake_lock() {
         return 0
     else
         echo "⚠ termux-wake-lock is not available"
+        "$SCRIPT_DIR/../chroma-server/run_chroma.sh"
         return 1
     fi
 }
