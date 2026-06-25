@@ -556,6 +556,7 @@ ob_start();
         padding: 6px 12px; border-radius: 6px; 
         text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;
         border: 1px solid rgba(255,255,255,0.1);
+        cursor: pointer;
     }
     .btn-create:hover { filter: brightness(0.9); }
 
@@ -583,7 +584,7 @@ ob_start();
 <div class="container">
     <div class="header-row">
         <div style="display:flex; align-items:center;">
-            <h2 style="margin:0;padding-left:45px; margin-right: 10px;">Docs</h2>
+            <h2 style="margin:0;padding-left:45px; margin-right: 10px;"> </h2>
             <a class="runBtn scheduler" data-id="40" title="Run TTS Scheduler" style="cursor:pointer; font-size:1.2rem; text-decoration:none;">🌀</a>
             <!-- Logs Button: Reset opacity/filter to ensure visibility in all themes -->
             <button onclick="toggleLogsModal()" title="View Logs" style="background:none; border:none; cursor:pointer; font-size:1.2rem; margin-left:10px; color: var(--text); opacity: 1; filter: none;">📓</button>
@@ -591,7 +592,8 @@ ob_start();
 
         <!-- NEW: Import button (opens modal) + existing New button -->
         <div style="display:flex; gap:8px; align-items:center;">
-            <button id="btnImportMd" class="btn-create" style="background:#0366d6;">⇪ Import</button>
+            <button id="btnImportMd" class="btn-create" style="background:#0366d6 !important;">⇪ Import</button>
+            <button id="btnExportMd" class="btn-create" style="background:#0969da !important;" onclick="openMdExportModal()">&#x1F4E4; Export</button>
             <a href="<?= $newLink ?>" class="btn-create"><span>+</span> New</a>
         </div>
     </div>
@@ -988,6 +990,372 @@ ob_start();
 </script>
 <!-- ===== END MD IMPORT MODAL ===== -->
 
+<!-- ===== MD EXPORT TREE MODAL ===== -->
+<style>
+.mde-modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.65); backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; z-index: 99999; }
+.mde-modal-bg.open { display: flex; }
+.mde-modal { width: min(780px, 96vw); max-height: 90vh; background: var(--card); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 64px rgba(0,0,0,0.45); }
+.mde-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.mde-header h3 { margin: 0; font-size: 1rem; flex: 1; display: flex; align-items: center; gap: 8px; }
+.mde-close { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1.3rem; line-height: 1; padding: 2px 6px; border-radius: 4px; transition: color 0.15s, background 0.15s; }
+.mde-close:hover { color: var(--text); background: var(--bg); }
+.mde-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; flex: 1; min-height: 0; }
+.mde-desc { font-size: 0.78rem; color: var(--text-muted); line-height: 1.5; padding: 0 2px; margin: 0; }
+.mde-picker-header { display: flex; align-items: center; gap: 8px; padding: 8px 14px 6px; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--card); }
+.mde-picker-header input { flex:1; padding:6px 10px; border:1px solid var(--border); border-radius:4px; background:var(--bg); color:var(--text); font-size:0.85rem; }
+.mde-picker-header input:focus { outline:none; border-color:var(--accent); }
+.mde-picker-select-all { background: none; border: none; color: var(--accent); font-size: 0.75rem; cursor: pointer; padding: 0; font-weight: 600; }
+.mde-picker-select-all:hover { text-decoration: underline; }
+.mde-picker-tree-wrap { flex: 1; overflow-y: auto; min-height: 200px; padding: 4px 0; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+.mde-picker-loading { padding: 20px; text-align: center; color: var(--text-muted); font-size: 0.85rem; }
+.mde-tree-node { display: flex; align-items: center; gap: 6px; padding: 5px 10px; cursor: pointer; user-select: none; transition: background 0.1s; font-size: 0.86rem; border-radius: 4px; margin: 1px 4px; }
+.mde-tree-node:hover { background: rgba(59,130,246,0.07); }
+.mde-tree-node input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; margin: 0; }
+.mde-tree-node input[type=checkbox]:indeterminate { opacity: 0.7; }
+.mde-node-toggle { width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 0.65rem; color: var(--text-muted); cursor: pointer; border-radius: 3px; transition: background 0.1s, transform 0.15s; }
+.mde-node-toggle:hover { background: rgba(59,130,246,0.12); }
+.mde-node-toggle.open { transform: rotate(90deg); }
+.mde-node-icon { font-size: 0.85rem; flex-shrink: 0; opacity: 0.75; }
+.mde-node-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mde-tree-node.is-folder > .mde-node-label { font-weight: 600; color: var(--text); }
+.mde-tree-node.is-node > .mde-node-label { color: var(--text-muted); }
+.mde-tree-children { display: none; }
+.mde-tree-children.open { display: block; }
+.mde-options-strip { display: flex; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+.mde-option-row { flex: 1; min-width: 160px; padding: 9px 12px; display: flex; align-items: center; gap: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; font-size: 0.88rem; }
+.mde-option-row label { flex: 1; cursor: pointer; }
+.mde-option-row input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); flex-shrink: 0; }
+.mde-footer { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-shrink: 0; }
+.mde-footer-left { flex: 1; font-size: 0.82rem; color: var(--text-muted); }
+</style>
+
+<div class="mde-modal-bg" id="mde-modal-bg">
+    <div class="mde-modal">
+        <div class="mde-header">
+            <h3>&#x1F4E4; Export Documents</h3>
+            <button class="mde-close" onclick="mdeCloseModal()">&#x2715;</button>
+        </div>
+        <div class="mde-body">
+            <p class="mde-desc">
+                Select documents and/or categories to export. MD Content is always included.
+            </p>
+            <div style="display:flex; flex-direction:column; flex:1; min-height:0; gap:0;">
+                <div class="mde-picker-header">
+                    <input type="text" id="mdeSearchInput" placeholder="Search docs & content..." oninput="mdeDebounceSearch()">
+                    <span id="mdeSearchSpinner" style="display:none; font-size:0.8rem; margin-left:5px;">⏳</span>
+                    <button class="mde-picker-select-all" onclick="mdePickerToggleAll()" style="margin-left:auto;">Select all</button>
+                </div>
+                <div class="mde-picker-tree-wrap" id="mde-picker-tree-wrap">
+                    <div class="mde-picker-loading">Loading tree…</div>
+                </div>
+            </div>
+            <div class="mde-options-strip">
+                <div class="mde-option-row">
+                    <input type="checkbox" id="mde-with-meta" checked>
+                    <label for="mde-with-meta">
+                        <strong>Include Meta Info</strong>
+                        <span style="color:var(--text-muted); font-size:0.78rem; display:block; margin-top:1px;">Keywords, short description, description.</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="mde-footer">
+            <span class="mde-footer-left" id="mde-picker-count"></span>
+            <button class="btn ghost" style="padding:6px 11px; border:1px solid var(--border); background:transparent; color:var(--text); border-radius:6px; cursor:pointer;" onclick="mdeCloseModal()">Cancel</button>
+            <button class="btn primary" style="padding:6px 11px; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;" id="mde-export-btn" onclick="mdeDoExport()">
+                &#x1F4E5; Export
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+let mdeTreeRaw = [];
+let mdeTreeChecked = new Set();
+let mdeSearchTimer = null;
+
+function openMdExportModal() {
+    document.getElementById('mde-modal-bg').classList.add('open');
+    mdeLoadTree();
+}
+
+function mdeCloseModal() {
+    document.getElementById('mde-modal-bg').classList.remove('open');
+    document.getElementById('mdeSearchInput').value = '';
+}
+
+function mdeLoadTree() {
+    const wrap = document.getElementById('mde-picker-tree-wrap');
+    wrap.innerHTML = '<div class="mde-picker-loading">Loading tree…</div>';
+    
+    fetch('api_md.php?action=export_tree_data')
+        .then(r => r.json())
+        .then(res => {
+            if (res.status !== 'success') {
+                wrap.innerHTML = '<div class="mde-picker-loading">Failed to load tree.</div>'; return;
+            }
+            
+            mdeTreeRaw = [];
+            // Root Uncategorized folder
+            mdeTreeRaw.push({ id: 'c_0', parent: '#', text: 'Uncategorized', type: 'folder' });
+            
+            res.categories.forEach(c => {
+                mdeTreeRaw.push({ id: 'c_' + c.id, parent: '#', text: c.name, type: 'folder' });
+            });
+            
+            res.docs.forEach(d => {
+                const catId = d.category_id ? 'c_' + d.category_id : 'c_0';
+                mdeTreeRaw.push({ id: 'd_' + d.id, parent: catId, text: d.name, type: 'node', doc_id: d.id });
+            });
+            
+            mdeTreeChecked = new Set(mdeTreeRaw.map(n => n.id));
+            mdeRenderTree(null);
+        })
+        .catch(() => { wrap.innerHTML = '<div class="mde-picker-loading">Error loading tree.</div>'; });
+}
+
+function mdeRenderTree(hits = null) {
+    const wrap = document.getElementById('mde-picker-tree-wrap');
+    const childMap = {};
+    mdeTreeRaw.forEach(n => {
+        if (!childMap[n.parent]) childMap[n.parent] = [];
+        childMap[n.parent].push(n);
+    });
+    wrap.innerHTML = mdeBuildLevel('#', childMap, 0, hits);
+    mdeUpdatePickerCount();
+}
+
+function mdeGetDescendantDocs(folderId, childMap) {
+    const docs = [];
+    const children = childMap[folderId] || [];
+    children.forEach(n => {
+        if (n.type === 'node') docs.push(n.doc_id);
+        if (n.type === 'folder') docs.push(...mdeGetDescendantDocs(n.id, childMap));
+    });
+    return docs;
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function mdeBuildLevel(parentId, childMap, depth, hits) {
+    const children = childMap[parentId] || [];
+    if (!children.length) return '';
+    const indent = depth * 14;
+    let html = '';
+    
+    children.forEach(node => {
+        const isFolder = node.type === 'folder';
+        const jsId = node.id;
+        const checked = mdeTreeChecked.has(jsId);
+        const hasKids = !!(childMap[jsId] && childMap[jsId].length);
+        const icon = isFolder ? '📁' : '📄';
+
+        let isVisible = true;
+        let labelHtml = escapeHtml(node.text);
+        let excerptHtml = '';
+
+        if (hits !== null) {
+            if (isFolder) {
+                const descendantDocs = mdeGetDescendantDocs(jsId, childMap);
+                isVisible = descendantDocs.some(dId => hits[dId]);
+            } else {
+                if (hits[node.doc_id]) {
+                    isVisible = true;
+                    labelHtml = hits[node.doc_id].name_hl; // server sends safe HTML marked up
+                    if (hits[node.doc_id].excerpt) {
+                        excerptHtml = `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px; margin-bottom:8px; margin-left:26px; padding-left:10px; border-left:2px solid var(--accent); white-space: normal;">${hits[node.doc_id].excerpt}</div>`;
+                    }
+                } else {
+                    isVisible = false;
+                }
+            }
+        }
+
+        if (!isVisible) return;
+
+        const isOpenClass = (isFolder && hasKids && hits !== null) ? 'open' : '';
+        const toggleBtn = (isFolder && hasKids)
+            ? `<span class="mde-node-toggle ${isOpenClass}" onclick="mdePickerToggleFolder('${jsId}', this)">▶</span>`
+            : `<span style="width:16px;display:inline-block;flex-shrink:0;"></span>`;
+
+        html += `
+        <div style="display:flex; flex-direction:column;">
+            <div class="mde-tree-node ${isFolder ? 'is-folder' : 'is-node'}"
+                 style="padding-left:${10 + indent}px;"
+                 data-jid="${jsId}">
+                ${toggleBtn}
+                <input type="checkbox" ${checked ? 'checked' : ''} onchange="mdePickerCheck('${jsId}', this.checked)">
+                <span class="mde-node-icon">${icon}</span>
+                <span class="mde-node-label">${labelHtml}</span>
+            </div>
+            ${excerptHtml ? `<div style="padding-left:${10 + indent + 30}px;">${excerptHtml}</div>` : ''}
+        </div>`;
+
+        if (hasKids) {
+            html += `<div class="mde-tree-children ${isOpenClass}" id="mde-kids-${jsId}">`;
+            html += mdeBuildLevel(jsId, childMap, depth + 1, hits);
+            html += `</div>`;
+        }
+    });
+    return html;
+}
+
+function mdeDebounceSearch() {
+    clearTimeout(mdeSearchTimer);
+    mdeSearchTimer = setTimeout(mdeSearch, 300);
+}
+
+function mdeSearch() {
+    const q = document.getElementById('mdeSearchInput').value.trim();
+    if (q === '') {
+        mdeRenderTree(null);
+        return;
+    }
+    
+    document.getElementById('mdeSearchSpinner').style.display = 'inline-block';
+    
+    fetch('api_md.php?action=export_search&q=' + encodeURIComponent(q))
+        .then(r => r.json())
+        .then(res => {
+            document.getElementById('mdeSearchSpinner').style.display = 'none';
+            if (res.status === 'success') {
+                const hitMap = {};
+                res.hits.forEach(h => hitMap[h.id] = h);
+                mdeRenderTree(hitMap);
+            }
+        });
+}
+
+function mdePickerToggleFolder(jsId, btn) {
+    const kids = document.getElementById('mde-kids-' + jsId);
+    if (!kids) return;
+    kids.classList.toggle('open');
+    btn.classList.toggle('open');
+}
+
+function mdePickerCheck(jsId, checked) {
+    const ids = mdePickerDescendants(jsId);
+    ids.forEach(id => {
+        if (checked) mdeTreeChecked.add(id);
+        else mdeTreeChecked.delete(id);
+    });
+    ids.forEach(id => {
+        const el = document.querySelector(`.mde-tree-node[data-jid="${id}"] input[type=checkbox]`);
+        if (el) { el.checked = checked; el.indeterminate = false; }
+    });
+    mdePickerSyncAncestors(jsId);
+    mdeUpdatePickerCount();
+}
+
+function mdePickerDescendants(jsId) {
+    const result = [jsId];
+    const queue = [jsId];
+    while (queue.length) {
+        const cur = queue.shift();
+        mdeTreeRaw.filter(n => n.parent === cur).forEach(n => {
+            result.push(n.id);
+            queue.push(n.id);
+        });
+    }
+    return result;
+}
+
+function mdePickerSyncAncestors(jsId) {
+    const node = mdeTreeRaw.find(n => n.id === jsId);
+    if (!node || !node.parent || node.parent === '#') return;
+    const parentJid = node.parent;
+    const siblings = mdeTreeRaw.filter(n => n.parent === parentJid);
+    const allChecked = siblings.every(s => mdeTreeChecked.has(s.id));
+    const noneChecked = siblings.every(s => !mdeTreeChecked.has(s.id));
+    const el = document.querySelector(`.mde-tree-node[data-jid="${parentJid}"] input[type=checkbox]`);
+    if (el) {
+        if (allChecked) {
+            el.checked = true; el.indeterminate = false;
+            mdeTreeChecked.add(parentJid);
+        } else if (noneChecked) {
+            el.checked = false; el.indeterminate = false;
+            mdeTreeChecked.delete(parentJid);
+        } else {
+            el.checked = false; el.indeterminate = true;
+            mdeTreeChecked.delete(parentJid);
+        }
+    }
+    mdePickerSyncAncestors(parentJid);
+}
+
+function mdePickerToggleAll() {
+    const allChecked = mdeTreeRaw.every(n => mdeTreeChecked.has(n.id));
+    if (allChecked) {
+        mdeTreeChecked.clear();
+    } else {
+        mdeTreeRaw.forEach(n => mdeTreeChecked.add(n.id));
+    }
+    // We pass current hits if there's a search term
+    const q = document.getElementById('mdeSearchInput').value.trim();
+    if (q === '') { mdeRenderTree(null); } else { mdeSearch(); }
+    mdeUpdatePickerCount();
+}
+
+function mdeUpdatePickerCount() {
+    const nodeCount = mdeTreeRaw.filter(n => n.type === 'node' && mdeTreeChecked.has(n.id)).length;
+    const total = mdeTreeRaw.filter(n => n.type === 'node').length;
+    const el = document.getElementById('mde-picker-count');
+    if (el) el.textContent = `${nodeCount} of ${total} documents selected`;
+}
+
+function mdeDoExport() {
+    const withMeta = document.getElementById('mde-with-meta').checked;
+    const btn = document.getElementById('mde-export-btn');
+    
+    const selectedDocs = mdeTreeRaw.filter(n => n.type === 'node' && mdeTreeChecked.has(n.id)).map(n => n.doc_id);
+    
+    if (selectedDocs.length === 0) {
+        alert('No documents selected.'); return;
+    }
+    
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Building…';
+    
+    fetch('api_md.php?action=export_docs', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ doc_ids: selectedDocs, with_meta: withMeta })
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.status === 'success') {
+            const blob = new Blob([JSON.stringify(res.snapshot, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; 
+            a.download = `md_export_${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            mdeCloseModal();
+        } else {
+            alert('Export failed: ' + res.message);
+        }
+    })
+    .catch(err => alert('Network error during export: ' + err.message))
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '&#x1F4E5; Export';
+    });
+}
+
+document.getElementById('mde-modal-bg').addEventListener('click', function(e) {
+    if (e.target === this) mdeCloseModal();
+});
+</script>
+<!-- ===== END MD EXPORT TREE MODAL ===== -->
+
 <?php
 $content = ob_get_clean();
 $spw->renderLayout($content, $pageTitle);
+
+
+
+

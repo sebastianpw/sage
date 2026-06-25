@@ -124,9 +124,32 @@ body { font-family: var(--font-body); background: var(--bg-void); color: var(--t
 .form-control:focus { border-color: var(--amber); }
 select.form-control { cursor: pointer; }
 
+/* ── Flat seasons list (original behaviour) ─────────────────────────────── */
 .assigned-season { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--bg-float); border: 1px solid var(--border); border-radius: var(--radius); transition: 0.1s; gap:10px; }
 .assigned-season:hover { border-color: var(--border-mid); background: var(--bg-hover); }
 .assigned-season-title { font-size:14px; font-weight:600; color:var(--text-bright); line-height:1.3; }
+
+/* ── Series Seasons layer ────────────────────────────────────────────────── */
+.series-season-block { background: var(--bg-float); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.series-season-hdr { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--bg-raised); }
+.series-season-hdr-title { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--amber); letter-spacing: 0.08em; text-transform: uppercase; flex: 1; }
+.series-season-hdr input.season-title-input { background: transparent; border: none; font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--amber); letter-spacing: 0.08em; text-transform: uppercase; flex: 1; outline: none; min-width: 0; }
+.series-season-hdr input.season-title-input:focus { border-bottom: 1px solid var(--amber); }
+.series-season-body { padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; min-height: 40px; }
+.season-cinemagic-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.season-cinemagic-name { font-size: 13px; color: var(--text-bright); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.season-add-row { display: flex; gap: 8px; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--border); }
+.season-empty { font-size: 12px; color: var(--text-muted); font-style: italic; padding: 4px 0; }
+
+/* toggle switch */
+.toggle-wrap { display: flex; align-items: center; gap: 10px; }
+.toggle-label { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+.toggle-switch { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider { position: absolute; inset: 0; background: var(--bg-float); border: 1px solid var(--border); border-radius: 20px; cursor: pointer; transition: 0.2s; }
+.toggle-slider:before { content: ''; position: absolute; width: 14px; height: 14px; left: 2px; top: 2px; background: var(--text-muted); border-radius: 50%; transition: 0.2s; }
+input:checked + .toggle-slider { background: var(--amber-glow); border-color: var(--amber); }
+input:checked + .toggle-slider:before { background: var(--amber); transform: translateX(16px); }
 
 .sb-picker-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 300000; display: none; align-items: flex-end; justify-content: center; }
 .sb-picker-backdrop.active { display: flex; }
@@ -138,6 +161,7 @@ select.form-control { cursor: pointer; }
 .sb-picker-header { padding: 6px 16px 10px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .sb-picker-title { font-size: 14px; font-weight: 700; color: var(--text-bright); text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; }
 .sb-picker-close { background: transparent; border: 1px solid var(--border); color: var(--text-muted); border-radius: 4px; width: 26px; height: 26px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.sb-picker-close:hover { color: var(--text-bright); border-color: var(--text-bright); }
 .sb-picker-filters { padding: 10px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
 
 .asset-picker-tabs { display: flex; gap: 4px; background: var(--bg-float); padding: 3px; border-radius: var(--radius); }
@@ -194,6 +218,7 @@ select.form-control { cursor: pointer; }
 @media (max-width: 480px) {
     .assigned-season { flex-direction: column; align-items: flex-start; }
     .assigned-season button { align-self: flex-end; }
+    .season-add-row { flex-direction: column; }
 }
 </style>
 </head>
@@ -234,6 +259,10 @@ select.form-control { cursor: pointer; }
             <button class="nav-item" data-view="sitemaps" onclick="switchView('sitemaps', this)">
                 <svg viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
                 Sitemaps
+            </button>
+            <button class="nav-item" data-view="pdf-browser" onclick="switchView('pdf-browser', this); loadGallerySeriesSelect();">
+                <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                PDF Browser
             </button>
             <button class="nav-item" onclick="openLangManager()">
                 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
@@ -288,6 +317,31 @@ select.form-control { cursor: pointer; }
                 </div>
                 <div class="card-body" id="sitemap-imports-list">
                     <div class="spinner"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PDF Browser View -->
+        <div class="view" id="view-pdf-browser">
+            <div class="card">
+                <div class="card-hdr">
+                    <div class="card-title">Magazine PDFs</div>
+                    <button class="btn-icon" onclick="loadGalleryPdfs()" title="Refresh">
+                        <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    </button>
+                </div>
+                <div class="card-body">
+                    <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin-bottom:12px;">
+                        Browse and download the latest compiled PDFs for your magazine series.
+                    </p>
+                    <div class="form-group">
+                        <select class="form-control" id="gallery-series-select" onchange="loadGalleryPdfs()">
+                            <option value="">— Select a series —</option>
+                        </select>
+                    </div>
+                    <div id="gallery-pdf-list" style="margin-top:12px;">
+                        <div style="color:var(--text-dim);font-size:12px;font-family:var(--font-mono);">Select a series above.</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -354,6 +408,30 @@ select.form-control { cursor: pointer; }
                                 <option value="default">Classic Elegance (Centered)</option>
                                 <option value="hero_backdrop">Cinematic Immersive (Backdrop)</option>
                             </select>
+                            
+                            <label class="toggle-wrap" style="margin-top:12px;" title="Render upright images full height in PDF exports">
+                                <span class="toggle-switch">
+                                    <input type="checkbox" id="series-pdf-upright">
+                                    <span class="toggle-slider"></span>
+                                </span>
+                                <span class="toggle-label">PDF: Full-Page Upright Images</span>
+                            </label>
+                            
+                            <label class="toggle-wrap" style="margin-top:6px;" title="Do not render standard text blocks below images">
+                                <span class="toggle-switch">
+                                    <input type="checkbox" id="series-pdf-disable-texts">
+                                    <span class="toggle-slider"></span>
+                                </span>
+                                <span class="toggle-label">PDF: Disable Text Blocks</span>
+                            </label>
+
+                            <label class="toggle-wrap" style="margin-top:6px;" title="Do not render Fuki/Speech bubbles on images">
+                                <span class="toggle-switch">
+                                    <input type="checkbox" id="series-pdf-disable-fuki">
+                                    <span class="toggle-slider"></span>
+                                </span>
+                                <span class="toggle-label">PDF: Disable Fuki Texts</span>
+                            </label>
                         </div>
                     </div>
                     <div class="form-row">
@@ -386,19 +464,40 @@ select.form-control { cursor: pointer; }
                 </div>
             </div>
 
+            <!-- ── Seasons / Cinemagics assignment card ─────────────────────── -->
             <div class="card" id="seasons-card" style="display:none;">
                 <div class="card-hdr">
-                    <div class="card-title">Assigned Seasons (Cinemagics)</div>
+                    <div class="card-title" id="seasons-card-title">Assigned Cinemagics</div>
+                    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                        <!-- seasons layer toggle -->
+                        <label class="toggle-wrap" title="Enable an extra Season grouping layer above Cinemagics">
+                            <span class="toggle-label">Season Grouping</span>
+                            <span class="toggle-switch">
+                                <input type="checkbox" id="has-seasons-toggle" onchange="onHasSeasonsChange()">
+                                <span class="toggle-slider"></span>
+                            </span>
+                        </label>
+                        <button class="btn-secondary" onclick="openEpisodeMetaModal()" id="btn-ep-meta" style="display:none;">Edit Episode Meta</button>
+                    </div>
                 </div>
-                <div class="card-body">
+
+                <!-- FLAT view (has_seasons = 0) -->
+                <div class="card-body" id="seasons-flat-body">
                     <div id="assigned-seasons-list" style="display:flex; flex-direction:column; gap:8px;"></div>
                     <div style="display:flex; gap:10px; align-items:center; margin-top:16px; border-top:1px solid var(--border); padding-top:16px; flex-wrap:wrap;">
                         <select class="form-control" id="unassigned-seasons" style="flex:1; min-width:200px;">
                             <option value="">— Select an unassigned Cinemagic to attach —</option>
                         </select>
-                        <button class="btn-secondary" onclick="assignSeason()">+ Add Season</button>
-                        <button class="btn-secondary" onclick="openEpisodeMetaModal()" id="btn-ep-meta" style="display:none;">Edit Episode Meta</button>
+                        <button class="btn-secondary" onclick="assignSeason()">+ Add</button>
                     </div>
+                </div>
+
+                <!-- LAYERED view (has_seasons = 1) -->
+                <div class="card-body" id="seasons-layered-body" style="display:none;">
+                    <div id="series-seasons-list" style="display:flex;flex-direction:column;gap:12px;"></div>
+                    <button class="btn-secondary" onclick="addSeriesSeason()" style="margin-top:8px;align-self:flex-start;">
+                        + Add Season
+                    </button>
                 </div>
             </div>
         </div>
@@ -467,6 +566,27 @@ select.form-control { cursor: pointer; }
 
     </main>
 </div>
+</div>
+
+<!-- Export Modal Bottom Sheet -->
+<div class="sb-picker-backdrop" id="exportModalBackdrop" onmousedown="if(event.target===this) closeExportModal()">
+    <div class="sb-picker-sheet" style="max-width:400px; margin:auto; padding-bottom: 20px;">
+        <div class="sb-picker-handle" onclick="closeExportModal()"><div class="sb-picker-handle-bar"></div></div>
+        <div class="sb-picker-header">
+            <div class="sb-picker-title">Export Series</div>
+            <button class="sb-picker-close" onclick="closeExportModal()">✕</button>
+        </div>
+        <div style="padding:20px; display:flex; flex-direction:column; gap:12px;">
+            <button class="btn-primary" onclick="triggerSeriesExport(0)" style="padding:12px; font-size:13px; justify-content:center;">
+                <svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Full Export (Includes all Images & PDFs)
+            </button>
+            <button class="btn-secondary" onclick="triggerSeriesExport(1)" style="padding:12px; font-size:13px; justify-content:center;">
+                <svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+                Lightweight Export (HTML & JS only)
+            </button>
+        </div>
+    </div>
 </div>
 
 <!-- Asset Picker Bottom Sheet -->
@@ -581,6 +701,10 @@ let selectedContainerId = null;
 let containerSearchTimer = null;
 let systemLanguages = [];
 
+// Layered seasons state
+let seriesSeasonsData    = [];   // [{id, title, sort_order, cinemagics:[...]}, ...]
+let unassignedCinemagics = [];   // cinemagics in this series but not yet in any season
+
 const pdfExport = {
     seriesId:    0,
     seriesTitle: '',
@@ -592,7 +716,6 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshCurrent();
     initLangs();
     
-    // Resume Base URL
     const savedPy = localStorage.getItem('sage_pyapi_url');
     if (savedPy) document.getElementById('pdf-pyapi-url').value = savedPy;
     document.getElementById('pdf-pyapi-url').addEventListener('change', function() {
@@ -622,7 +745,6 @@ function switchView(view, btn = null) {
         document.getElementById('sidebar').classList.remove('open');
         document.getElementById('sidebar-overlay').classList.remove('active');
     }
-    
     if (view === 'sitemaps') loadSitemapImports();
 }
 
@@ -717,10 +839,8 @@ function openSitemapImport() {
                 const jsonStr = ev.target.result;
                 const arr = JSON.parse(jsonStr);
                 if (!Array.isArray(arr)) throw new Error("JSON must be an array of URLs");
-                
                 const name = prompt("Enter a system name for these URLs (e.g. 'SAGE Node 2'):");
                 if (!name) return;
-                
                 const res = await api({ action: 'import_sitemap_json', system_name: name, urls_json: jsonStr });
                 if (res.success) {
                     toast('Sitemap imported successfully!', 'success');
@@ -742,7 +862,6 @@ async function deleteSitemapImport(id, name) {
     const res = await api({ action: 'delete_sitemap_import', id });
     if (res.success) loadSitemapImports();
 }
-
 
 // ── Languages ────────────────────────────────────────────────────────────────
 async function initLangs() {
@@ -815,7 +934,7 @@ async function openSeriesEditor(id = null, btn = null) {
     if (!btn && id) btn = document.querySelector(`.nav-item[data-id="${id}"]`);
     switchView('series-editor', btn);
 
-    const els = ['btn-preview', 'btn-export', 'btn-rollout', 'btn-delete', 'seasons-card', 'btn-pdf-export', 'btn-ep-meta'];
+    const actionEls = ['btn-preview', 'btn-export', 'btn-rollout', 'btn-delete', 'seasons-card', 'btn-pdf-export', 'btn-ep-meta'];
 
     if (!id) {
         document.getElementById('editor-title').textContent = 'New Magazine Series';
@@ -830,8 +949,12 @@ async function openSeriesEditor(id = null, btn = null) {
         document.getElementById('series-script').value     = '';
         document.getElementById('series-seo-kw').value     = '';
         document.getElementById('series-seo-desc').value   = '';
+        document.getElementById('has-seasons-toggle').checked = false;
+        document.getElementById('series-pdf-upright').checked = false;
+        document.getElementById('series-pdf-disable-texts').checked = false;
+        document.getElementById('series-pdf-disable-fuki').checked = false;
         renderLangCheckboxes('en');
-        els.forEach(e => document.getElementById(e).style.display = 'none');
+        actionEls.forEach(e => document.getElementById(e).style.display = 'none');
     } else {
         document.getElementById('editor-title').textContent = 'Edit Magazine Series';
         const data = await api({ action: 'get_series_details', id });
@@ -850,26 +973,229 @@ async function openSeriesEditor(id = null, btn = null) {
         document.getElementById('series-seo-kw').value   = s.seo_keywords || '';
         document.getElementById('series-seo-desc').value = s.seo_description || '';
 
+        const hasSeasonsLayer = parseInt(s.has_seasons || 0) === 1;
+        document.getElementById('has-seasons-toggle').checked = hasSeasonsLayer;
+        document.getElementById('series-pdf-upright').checked = parseInt(s.pdf_full_upright || 0) === 1;
+        document.getElementById('series-pdf-disable-texts').checked = parseInt(s.pdf_disable_texts || 0) === 1;
+        document.getElementById('series-pdf-disable-fuki').checked = parseInt(s.pdf_disable_fuki || 0) === 1;
+
         renderLangCheckboxes(s.supported_languages || 'en');
+        renderSeasonsArea(data, hasSeasonsLayer, s.id);
 
-        const list = document.getElementById('assigned-seasons-list');
-        list.innerHTML = data.seasons.map(ss => `
-            <div class="assigned-season">
-                <div class="assigned-season-title">#${ss.id} — ${escHtml(ss.name)}</div>
-                <button class="btn-icon" style="color:var(--red);width:36px;height:36px;" title="Remove Season"
-                        onclick="removeSeason(${s.id}, ${ss.id})">
-                    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-            </div>
-        `).join('');
-        if (!data.seasons.length)
-            list.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:10px 0;">No Cinemagics attached yet.</div>';
-
-        loadUnassignedSeasons(s.id);
-        els.forEach(e => document.getElementById(e).style.display = '');
+        actionEls.forEach(e => document.getElementById(e).style.display = '');
     }
 }
 
+// Called when the toggle changes — immediately saves + re-renders without full reload
+async function onHasSeasonsChange() {
+    const sid = document.getElementById('series-id').value;
+    if (!sid) return; // new series, not saved yet
+
+    const hasSeasonsLayer = document.getElementById('has-seasons-toggle').checked ? 1 : 0;
+
+    // Persist the flag immediately
+    const data = await api({ action: 'get_series_details', id: sid });
+    if (!data.success) return;
+
+    await saveSeries(true); // silent save to persist the toggle
+    renderSeasonsArea(data, hasSeasonsLayer === 1, parseInt(sid));
+    await reloadSeasonsData(parseInt(sid), hasSeasonsLayer === 1);
+}
+
+// Re-renders the entire seasons card area based on current mode
+function renderSeasonsArea(data, hasSeasonsLayer, seriesId) {
+    const flatBody    = document.getElementById('seasons-flat-body');
+    const layeredBody = document.getElementById('seasons-layered-body');
+    const cardTitle   = document.getElementById('seasons-card-title');
+
+    if (hasSeasonsLayer) {
+        cardTitle.textContent = 'Seasons & Cinemagics';
+        flatBody.style.display    = 'none';
+        layeredBody.style.display = '';
+
+        seriesSeasonsData    = data.series_seasons || [];
+        unassignedCinemagics = data.unseasoned_cinemagics || [];
+        renderLayeredSeasons(seriesId);
+    } else {
+        cardTitle.textContent = 'Assigned Cinemagics';
+        flatBody.style.display    = '';
+        layeredBody.style.display = 'none';
+
+        const list = document.getElementById('assigned-seasons-list');
+        const seasons = data.seasons || [];
+        list.innerHTML = seasons.map(ss => `
+            <div class="assigned-season">
+                <div class="assigned-season-title">#${ss.id} — ${escHtml(ss.name)}</div>
+                <div style="display:flex;gap:4px;">
+                    <button class="btn-icon" style="width:36px;height:36px;" title="Set Cover" onclick="openCinemagicCoverPicker(${seriesId}, ${ss.id})">
+                        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="16" height="16" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                    </button>
+                    <button class="btn-icon" style="color:var(--red);width:36px;height:36px;" title="Remove"
+                            onclick="removeSeason(${seriesId}, ${ss.id})">
+                        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+        if (!seasons.length)
+            list.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:10px 0;">No Cinemagics attached yet.</div>';
+
+        loadUnassignedSeasons(seriesId);
+    }
+}
+
+async function reloadSeasonsData(seriesId, hasSeasonsLayer) {
+    const data = await api({ action: 'get_series_details', id: seriesId });
+    if (!data.success) return;
+    renderSeasonsArea(data, hasSeasonsLayer, seriesId);
+}
+
+// ── Layered seasons rendering ──────────────────────────────────────────────────
+function renderLayeredSeasons(seriesId) {
+    const container = document.getElementById('series-seasons-list');
+
+    if (!seriesSeasonsData.length) {
+        container.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:4px 0;">No seasons yet. Add one below.</div>';
+        return;
+    }
+
+    container.innerHTML = seriesSeasonsData.map(season => `
+        <div class="series-season-block" data-season-id="${season.id}">
+            <div class="series-season-hdr">
+                <input class="season-title-input" type="text" value="${escHtml(season.title)}"
+                       onblur="saveSeasonTitle(${seriesId}, ${season.id}, this.value)"
+                       title="Click to rename season">
+                <button class="btn-icon" style="color:var(--red);width:28px;height:28px;flex-shrink:0;"
+                        onclick="deleteSeriesSeason(${seriesId}, ${season.id})" title="Delete season">
+                    <svg viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                </button>
+            </div>
+            <div class="series-season-body">
+                ${(season.cinemagics || []).length === 0
+                    ? '<div class="season-empty">No Cinemagics in this season.</div>'
+                    : (season.cinemagics || []).map(cm => `
+                        <div class="season-cinemagic-row">
+                            <span class="season-cinemagic-name">#${cm.id} — ${escHtml(cm.name)}</span>
+                            <div style="display:flex;gap:4px;">
+                                <button class="btn-icon" style="width:28px;height:28px;flex-shrink:0;" title="Set Cover" onclick="openCinemagicCoverPicker(${seriesId}, ${cm.id})">
+                                    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="16" height="16" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                                </button>
+                                <button class="btn-icon" style="color:var(--red);width:28px;height:28px;flex-shrink:0;"
+                                        onclick="removeCinemagicFromSeason(${seriesId}, ${cm.id})" title="Remove">
+                                    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')
+                }
+                <div class="season-add-row">
+                    <select class="form-control season-cm-select" style="flex:1;padding:7px 10px;">
+                        <option value="">— Add Cinemagic to this season —</option>
+                        ${buildUnassignedOptions()}
+                    </select>
+                    <button class="btn-secondary" onclick="assignCinemagicToSeason(${seriesId}, ${season.id}, this)">+ Add</button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function buildUnassignedOptions() {
+    return unassignedCinemagics.map(cm =>
+        `<option value="${cm.id}">#${cm.id} — ${escHtml(cm.name)}</option>`
+    ).join('');
+}
+
+async function addSeriesSeason() {
+    const sid = document.getElementById('series-id').value;
+    if (!sid) { toast('Save the series first', 'error'); return; }
+    const res = await api({ action: 'save_series_season', series_id: sid, title: 'New Season' });
+    if (res.success) {
+        await reloadSeasonsData(parseInt(sid), true);
+    } else toast(res.error || 'Failed', 'error');
+}
+
+async function saveSeasonTitle(seriesId, seasonId, newTitle) {
+    if (!newTitle.trim()) return;
+    await api({ action: 'save_series_season', series_id: seriesId, id: seasonId, title: newTitle.trim() });
+}
+
+async function deleteSeriesSeason(seriesId, seasonId) {
+    if (!confirm('Delete this season? Cinemagics will be detached but not deleted.')) return;
+    const res = await api({ action: 'delete_series_season', series_id: seriesId, season_id: seasonId });
+    if (res.success) {
+        toast('Season deleted', 'info');
+        await reloadSeasonsData(seriesId, true);
+    } else toast(res.error || 'Failed', 'error');
+}
+
+async function assignCinemagicToSeason(seriesId, seasonId, btn) {
+    const select = btn.previousElementSibling;
+    const cmId = parseInt(select.value);
+    if (!cmId) { toast('Select a Cinemagic first', 'error'); return; }
+    const res = await api({ action: 'assign_cinemagic_to_series_season', series_id: seriesId, cinemagic_id: cmId, season_id: seasonId });
+    if (res.success) {
+        await reloadSeasonsData(seriesId, true);
+    } else toast(res.error || 'Failed', 'error');
+}
+
+async function removeCinemagicFromSeason(seriesId, cmId) {
+    if (!confirm('Remove this Cinemagic from the series?')) return;
+    const res = await api({ action: 'remove_cinemagic_from_series_season', series_id: seriesId, cinemagic_id: cmId });
+    if (res.success) {
+        toast('Removed', 'info');
+        await reloadSeasonsData(seriesId, true);
+    } else toast(res.error || 'Failed', 'error');
+}
+
+// ── PDF Browser Logic ─────────────────────────────────────────────────────────
+
+async function loadGallerySeriesSelect() {
+    const data = await api({ action: 'get_series_list' });
+    const sel = document.getElementById('gallery-series-select');
+    if (!sel) return;
+    if (!data.success || !data.series.length) {
+        sel.innerHTML = '<option value="">— No series found —</option>';
+        return;
+    }
+    const currentVal = sel.value;
+    sel.innerHTML = '<option value="">— Select a series —</option>' +
+        data.series.map(s => `<option value="${s.id}">${escHtml(s.title)}</option>`).join('');
+    if (currentVal) sel.value = currentVal;
+}
+
+async function loadGalleryPdfs() {
+    const sid = document.getElementById('gallery-series-select').value;
+    const listEl = document.getElementById('gallery-pdf-list');
+    if (!sid) { listEl.innerHTML = '<div style="color:var(--text-dim);font-size:12px;font-family:var(--font-mono);">Select a series above.</div>'; return; }
+
+    listEl.innerHTML = '<div class="spinner"></div>';
+    const data = await api({ action: 'get_cinemagic_pdfs', series_id: sid });
+    if (!data.success || !data.pdfs.length) {
+        listEl.innerHTML = '<div style="color:var(--text-dim);font-size:12px;font-family:var(--font-mono);">No exported PDFs found for this series. Generate them first via PDF Export.</div>';
+        return;
+    }
+
+    listEl.innerHTML = data.pdfs.map(p => `
+        <div class="pdf-row" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg-float);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;flex-wrap:wrap;">
+            <span class="pdf-name" style="font-family:var(--font-mono);font-size:11px;color:var(--text-bright);flex:1;word-break:break-all;line-height:1.4;">
+                <strong style="color:var(--text-bright);">${escHtml(p.sequence_name)}</strong>
+                <span style="color:var(--amber);font-size:10px;font-weight:700;"> [${escHtml(p.lang)}]</span><br>
+                <span style="font-size:10px;color:var(--text-dim);">${escHtml(p.filename)}</span>
+            </span>
+            <span class="pdf-size" style="font-size:11px;color:var(--text-dim);flex-shrink:0;">${fmtBytes(p.size)}</span>
+            <a class="btn-primary" style="padding:5px 14px;font-size:10px;text-decoration:none;" href="api.php?action=download_pdf&path=${encodeURIComponent(p.rel_path)}" download>Download PDF</a>
+        </div>
+    `).join('');
+}
+
+function fmtBytes(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+    return (b/1048576).toFixed(1) + ' MB';
+}
+
+// ── Flat seasons (original) ────────────────────────────────────────────────────
 async function loadUnassignedSeasons(seriesId) {
     const data = await api({ action: 'get_unassigned_seasons', series_id: seriesId });
     if (!data.success) return;
@@ -878,27 +1204,35 @@ async function loadUnassignedSeasons(seriesId) {
         data.seasons.map(ss => `<option value="${ss.id}">#${ss.id} — ${escHtml(ss.name)}</option>`).join('');
 }
 
-async function saveSeries() {
+async function saveSeries(silent = false) {
     const langs = Array.from(document.querySelectorAll('.lang-cb:checked')).map(cb => cb.value).join(',');
+    const hasSeasonsLayer = document.getElementById('has-seasons-toggle').checked ? 1 : 0;
+    const pdfFullUpright  = document.getElementById('series-pdf-upright').checked ? 1 : 0;
+    const pdfDisableTexts = document.getElementById('series-pdf-disable-texts').checked ? 1 : 0;
+    const pdfDisableFuki  = document.getElementById('series-pdf-disable-fuki').checked ? 1 : 0;
     const payload = {
-        action:             'save_series',
-        id:                 document.getElementById('series-id').value,
-        title:              document.getElementById('series-title').value.trim(),
-        description:        document.getElementById('series-desc').value.trim(),
-        status:             document.getElementById('series-status').value,
-        sort_order:         document.getElementById('series-sort').value,
-        cover_image_url:    document.getElementById('series-cover').value.trim(),
-        template:           document.getElementById('series-template').value,
+        action:              'save_series',
+        id:                  document.getElementById('series-id').value,
+        title:               document.getElementById('series-title').value.trim(),
+        description:         document.getElementById('series-desc').value.trim(),
+        status:              document.getElementById('series-status').value,
+        sort_order:          document.getElementById('series-sort').value,
+        cover_image_url:     document.getElementById('series-cover').value.trim(),
+        template:            document.getElementById('series-template').value,
         supported_languages: langs,
-        asset_url_prefix:   document.getElementById('series-prefix').value.trim(),
-        landing_page_script:document.getElementById('series-script').value.trim(),
-        seo_keywords:       document.getElementById('series-seo-kw').value.trim(),
-        seo_description:    document.getElementById('series-seo-desc').value.trim(),
+        asset_url_prefix:    document.getElementById('series-prefix').value.trim(),
+        landing_page_script: document.getElementById('series-script').value.trim(),
+        seo_keywords:        document.getElementById('series-seo-kw').value.trim(),
+        seo_description:     document.getElementById('series-seo-desc').value.trim(),
+        has_seasons:         hasSeasonsLayer,
+        pdf_full_upright:    pdfFullUpright,
+        pdf_disable_texts:   pdfDisableTexts,
+        pdf_disable_fuki:    pdfDisableFuki,
     };
     if (!payload.title) return toast('Title required', 'error');
     const data = await api(payload);
     if (data.success) {
-        toast('Series saved successfully', 'success');
+        if (!silent) toast('Series saved successfully', 'success');
         refreshCurrent();
         if (!payload.id) openSeriesEditor(data.id);
     } else toast(data.error || 'Failed to save', 'error');
@@ -935,7 +1269,17 @@ function previewSeries() {
 }
 
 function exportSeries() {
-    window.location.href = `api.php?action=export_series_zip&id=${document.getElementById('series-id').value}`;
+    document.getElementById('exportModalBackdrop').classList.add('active');
+}
+
+function closeExportModal() {
+    document.getElementById('exportModalBackdrop').classList.remove('active');
+}
+
+function triggerSeriesExport(excludeAssets) {
+    const id = document.getElementById('series-id').value;
+    window.location.href = `api.php?action=export_series_zip&id=${id}&exclude_assets=${excludeAssets}`;
+    closeExportModal();
 }
 
 async function rolloutSeries() {
@@ -1075,7 +1419,6 @@ async function openPdfExportView() {
 
     document.getElementById('pdf-series-label').textContent = title;
 
-    // Language checkboxes limited to series' supported set
     document.getElementById('pdf-lang-checkboxes').innerHTML = systemLanguages
         .filter(l => langs.includes(l.code))
         .map(l => `
@@ -1183,11 +1526,9 @@ async function pollPdfJob(pyJobId) {
         }
     } catch (e) {
         console.warn('Poll error', pyJobId, e);
-        // Let it continue trying in case it was a momentary network drop
         schedulePdfPoll(pyJobId);
     }
 }
-
 
 async function refreshPdfJobs() {
     if (!pdfExport.seriesId) return;
@@ -1215,7 +1556,6 @@ async function refreshPdfJobs() {
                     : ''}
             </div>
             <span class="pdf-status-badge ${job.status}">${job.status.toUpperCase()}</span>
-            
             ${((job.status === 'processing' || job.status === 'pending') && isActive)
                 ? `<div class="spinner" style="width:16px;height:16px;margin:0;"></div>`
                 : ''}
@@ -1224,6 +1564,13 @@ async function refreshPdfJobs() {
 }
 
 // ── Asset Picker ──────────────────────────────────────────────────────────────
+let activeCmForCover = null;
+
+function openCinemagicCoverPicker(seriesId, cmId) {
+    activeCmForCover = { seriesId, cmId };
+    openAssetPickerSheet('cinemagic_cover');
+}
+
 function openAssetPickerSheet(target = 'series') {
     pickerTarget = target;
     tempSelectedAsset = null;
@@ -1345,8 +1692,22 @@ function confirmAssetSelection() {
     if (tempSelectedAsset) {
         if (pickerTarget === 'series') document.getElementById('series-cover').value = tempSelectedAsset;
         if (pickerTarget === 'episode') document.getElementById('ep-cover').value = tempSelectedAsset;
+        if (pickerTarget === 'cinemagic_cover') {
+            saveCinemagicCover(activeCmForCover.seriesId, activeCmForCover.cmId, tempSelectedAsset);
+        }
     }
     closeAssetPickerSheet();
+}
+
+async function saveCinemagicCover(seriesId, cmId, coverUrl) {
+    const res = await api({ action: 'save_cinemagic_cover', series_id: seriesId, cinemagic_id: cmId, cover_image_url: coverUrl });
+    if (res.success) {
+        toast('Cinemagic Cover saved successfully!', 'success');
+        // Silent reload of the seasons data to lock it in
+        await reloadSeasonsData(seriesId, document.getElementById('has-seasons-toggle').checked);
+    } else {
+        toast(res.error || 'Failed to save cover', 'error');
+    }
 }
 
 // ── Core API helper ───────────────────────────────────────────────────────────
@@ -1371,9 +1732,16 @@ function escHtml(s) {
     return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+
+function fmtBytes(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+    return (b/1048576).toFixed(1) + ' MB';
+}
 </script>
 
 <?php echo $eruda ?? ''; ?>
 
 </body>
 </html>
+

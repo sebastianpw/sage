@@ -14,26 +14,24 @@ use Exception;
  * Features:
  * - Schema comparison using information_schema
  * - Safe migration script generation
- * - AI-assisted validation
  * - Rollback support
+ * - GitHub rollout SQL generation (full + incremental update)
  * - Comprehensive logging
  */
 class DatabaseMigrationManager
 {
     private PDO $pdo;
     private ?FileLogger $logger;
-    private ?AIProvider $aiProvider;
     private array $migrationLog = [];
     
     // Migration types
     public const TYPE_PARALLEL_SYNC = 'parallel_sync';
     public const TYPE_VERSION_UPDATE = 'version_update';
     
-    public function __construct(PDO $pdo, ?FileLogger $logger = null, ?AIProvider $aiProvider = null)
+    public function __construct(PDO $pdo, ?FileLogger $logger = null)
     {
         $this->pdo = $pdo;
         $this->logger = $logger;
-        $this->aiProvider = $aiProvider;
     }
     
     /**
@@ -361,8 +359,10 @@ class DatabaseMigrationManager
     {
         $foreignKeys = [];
         
-        // Replace database name in CREATE TABLE
-        $createSQL = str_replace("CREATE TABLE `{$table}`", "CREATE TABLE `{$targetDb}`.`{$table}`", $createSQL);
+        // Replace database name in CREATE TABLE if targetDb is provided
+        if ($targetDb !== '') {
+            $createSQL = str_replace("CREATE TABLE `{$table}`", "CREATE TABLE `{$targetDb}`.`{$table}`", $createSQL);
+        }
         
         // Extract all CONSTRAINT lines with foreign keys
         $lines = explode("\n", $createSQL);
@@ -422,39 +422,22 @@ class DatabaseMigrationManager
     }
     
     /**
-     * Execute migration with optional AI validation
+     * Execute migration
      */
-    public function executeMigration(string $targetDb, array $statements, bool $useAI = true, bool $dryRun = false): array
+    public function executeMigration(string $targetDb, array $statements, bool $dryRun = false): array
     {
         $results = [
             'success' => true,
             'executed' => [],
             'failed' => [],
             'skipped' => [],
-            'ai_feedback' => [],
             'warnings' => []
         ];
-        
-        // AI validation if enabled
-        if ($useAI && $this->aiProvider) {
-            $results['ai_feedback'] = $this->validateWithAI($statements);
-            
-            // Check for AI warnings
-            foreach ($results['ai_feedback'] as $feedback) {
-                if (isset($feedback['risk']) && $feedback['risk'] === 'high') {
-                    $this->log('warning', 'AI flagged high-risk migration', $feedback);
-                }
-            }
-        }
         
         if ($dryRun) {
             $this->log('info', 'Dry run mode - no changes will be made');
             return $results;
         }
-        
-        // Create backup point
-        $backupInfo = $this->createBackupPoint($targetDb);
-        $this->log('info', 'Backup created', $backupInfo);
         
         // Validate foreign key constraints before execution
         $fkValidation = $this->validateForeignKeyConstraints($targetDb, $statements);
@@ -555,7 +538,7 @@ class DatabaseMigrationManager
             ]);
         }
         
-        // Ensure no active transaction before logging
+        // Ensure no active transaction before returning
         if ($transactionActive) {
             try {
                 $this->pdo->rollBack();
@@ -568,9 +551,6 @@ class DatabaseMigrationManager
         if (count($results['failed']) === 0 && count($results['executed']) > 0) {
             $results['success'] = true;
         }
-        
-        // Save migration log (always, even on failure) - uses separate connection
-        $this->saveMigrationLog($targetDb);
         
         return $results;
     }
@@ -755,147 +735,367 @@ class DatabaseMigrationManager
         return $diagnostics;
     }
     
+    // ============================================================================
+    // GITHUB ROLLOUT SQL METHODS
+    // ============================================================================
+
     /**
-     * Validate migration with AI
+     * Generate a full rollout SQL script for a database (structure only, no data).
+     * This is suitable for use as a GitHub repo structure baseline.
+     * Output is ordered: tables without FKs first, then FK constraints, then views.
      */
-    private function validateWithAI(array $statements): array
+    public function generateFullRolloutSQL(string $dbName): string
     {
-        $feedback = [];
-        
-        if (!$this->aiProvider) {
-            return $feedback;
-        }
-        
-        // Prepare SQL for AI review
-        $sqlBatch = array_map(fn($s) => $s['sql'], $statements);
-        $sqlText = implode("\n\n", $sqlBatch);
-        
-        $prompt = "Review the following database migration SQL for safety and correctness. " .
-                 "Identify any potential issues, data loss risks, or performance concerns:\n\n" .
-                 $sqlText;
-        
-        try {
-            $response = $this->aiProvider->sendPrompt(
-                AIProvider::getDefaultModel(),
-                $prompt,
-                "You are a database migration expert. Analyze SQL statements for safety and correctness."
-            );
-            
-            $feedback[] = [
-                'source' => 'ai_review',
-                'response' => $response,
-                'risk' => $this->assessRiskFromAI($response)
-            ];
-            
-        } catch (Exception $e) {
-            $this->log('warning', 'AI validation failed', ['error' => $e->getMessage()]);
-        }
-        
-        return $feedback;
-    }
-    
-    /**
-     * Create a backup point for rollback
-     */
-    private function createBackupPoint(string $dbName): array
-    {
-        $timestamp = date('Y-m-d_H-i-s');
-        $backupFile = PROJECT_ROOT . "/temp/db_backup_{$dbName}_{$timestamp}.sql";
-        
-        // Note: In production, use proper backup tools
-        $command = sprintf(
-            'sh mysqldump --single-transaction --routines --triggers %s > %s',
-            escapeshellarg($dbName),
-            escapeshellarg($backupFile)
-        );
-        
-        exec($command, $output, $returnCode);
-        
-        return [
-            'timestamp' => $timestamp,
-            'file' => $backupFile,
-            'success' => $returnCode === 0
-        ];
-    }
-    
-    /**
-     * Save migration log to database
-     */
-    private function saveMigrationLog(string $targetDb): void
-    {
-        // Create a fresh PDO connection for logging (outside any transaction)
-        try {
-            $host = $_ENV['DB_HOST'] ?? 'localhost';
-            $user = $_ENV['DB_USER'] ?? 'root';
-            $pass = $_ENV['DB_PASS'] ?? '';
-            $port = $_ENV['DB_PORT'] ?? '3306';
-            
-            // Try to use the existing PDO's connection if available
-            // to avoid socket/connection issues
-            try {
-                $logPdo = $this->pdo;
-                // Test if connection is alive
-                $logPdo->query('SELECT 1');
-            } catch (Exception $e) {
-                // Connection not usable, create fresh one
-                $dsn = "mysql:host={$host};port={$port};dbname={$targetDb};charset=utf8mb4";
-                $logPdo = new PDO($dsn, $user, $pass, [
-                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                ]);
+        $lines = [];
+        $lines[] = "-- ============================================================";
+        $lines[] = "-- Full Structure Rollout SQL";
+        $lines[] = "-- Database : {$dbName}";
+        $lines[] = "-- Generated: " . date('Y-m-d H:i:s');
+        $lines[] = "-- ============================================================";
+        $lines[] = "";
+        $lines[] = "SET FOREIGN_KEY_CHECKS = 0;";
+        $lines[] = "";
+
+        $tables = $this->getTables($dbName);
+        $allForeignKeys = []; // collected separately so FKs come after all tables
+
+        foreach ($tables as $table) {
+            $createSQL = $this->getCreateTableStatement($dbName, $table);
+            if (!$createSQL) continue;
+
+            // Strip FKs out for cleaner ordering
+            $parsed = $this->splitForeignKeysFromCreateTable($createSQL, $dbName, $table);
+
+            // Remove db-qualified name: `db`.`table` → `table`
+            $tableSQL = preg_replace("/`{$dbName}`\./", '', $parsed['create_table']);
+
+            $lines[] = "-- Table: {$table}";
+            $lines[] = "DROP TABLE IF EXISTS `{$table}`;";
+            $lines[] = $tableSQL . ";";
+            $lines[] = "";
+
+            foreach ($parsed['foreign_keys'] as $fk) {
+                $allForeignKeys[] = [
+                    'table' => $table,
+                    'fk'    => $fk,
+                ];
             }
-            
-            // Create migrations table if it doesn't exist
-            $createTable = "
-                CREATE TABLE IF NOT EXISTS `migration_history` (
-                    `id` INT AUTO_INCREMENT PRIMARY KEY,
-                    `executed_at` DATETIME NOT NULL,
-                    `migration_type` VARCHAR(50),
-                    `statements_count` INT,
-                    `success` BOOLEAN,
-                    `log_data` TEXT,
-                    INDEX `idx_executed` (`executed_at`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-            ";
-            
-            $logPdo->exec($createTable);
-            
-            // Determine success based on log entries
-            $success = true;
-            foreach ($this->migrationLog as $entry) {
-                if (isset($entry['status']) && $entry['status'] === 'failed') {
-                    $success = false;
-                    break;
+        }
+
+        // Foreign key constraints block
+        if (!empty($allForeignKeys)) {
+            $lines[] = "-- ---- Foreign Key Constraints ----";
+            foreach ($allForeignKeys as $entry) {
+                $table = $entry['table'];
+                $fk    = $entry['fk'];
+                $lines[] = "ALTER TABLE `{$table}` ADD " . $fk['definition'] . ";";
+            }
+            $lines[] = "";
+        }
+
+        // Views
+        $views = $this->getViews($dbName);
+        if (!empty($views)) {
+            $lines[] = "-- ---- Views ----";
+            foreach ($views as $view) {
+                $createViewSQL = $this->getCreateViewStatement($dbName, $view);
+                if (!$createViewSQL) continue;
+                $rebuilt = $this->rebuildCreateViewSQL($createViewSQL, $dbName, '', $view, true);
+                // Remove any remaining db qualifier
+                $rebuilt = preg_replace("/`{$dbName}`\./", '', $rebuilt);
+                $lines[] = $rebuilt;
+                $lines[] = "";
+            }
+        }
+
+        $lines[] = "SET FOREIGN_KEY_CHECKS = 1;";
+        $lines[] = "";
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Parse a rollout SQL baseline string into a set of table/view definitions.
+     * Returns ['tables' => [name => create_sql], 'views' => [name => create_sql]]
+     */
+    public function parseRolloutSQL(string $sql): array
+    {
+        $result = ['tables' => [], 'views' => []];
+
+        // Extract CREATE TABLE blocks
+        preg_match_all(
+            '/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`([^`]+)`\s*\(.*?\)\s*(?:ENGINE[^;]*)?;/is',
+            $sql,
+            $tableMatches,
+            PREG_SET_ORDER
+        );
+        foreach ($tableMatches as $m) {
+            $result['tables'][$m[1]] = $m[0];
+        }
+
+        // Extract CREATE OR REPLACE VIEW / CREATE VIEW blocks
+        preg_match_all(
+            '/CREATE\s+(?:OR\s+REPLACE\s+)?(?:ALGORITHM\s*=\s*\w+\s+)?(?:DEFINER\s*=\s*[^\s]+\s+)?(?:SQL\s+SECURITY\s+\w+\s+)?VIEW\s+`([^`]+)`\s+AS\s+SELECT[^;]+;/is',
+            $sql,
+            $viewMatches,
+            PREG_SET_ORDER
+        );
+        foreach ($viewMatches as $m) {
+            $result['views'][$m[1]] = $m[0];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Compare a baseline rollout SQL against a live database and generate
+     * an incremental UPDATE SQL that brings the baseline up to the live schema.
+     *
+     * Use-case: you have your GitHub rollout SQL, you've been developing on the
+     * live DB, and now you want to update your repo's SQL to match.
+     *
+     * Returns an array of statement objects (same shape as generateMigrationSQL)
+     * plus a 'full_sql' string ready to download.
+     */
+    public function generateUpdateRolloutSQL(string $baselineSQL, string $liveDb): array
+    {
+        $baseline = $this->parseRolloutSQL($baselineSQL);
+        $baselineTables = array_keys($baseline['tables']);
+        $baselineViews  = array_keys($baseline['views']);
+
+        $liveTables = $this->getTables($liveDb);
+        $liveViews  = $this->getViews($liveDb);
+
+        $statements = [];
+
+        // ── NEW TABLES (in live but not in baseline) ──────────────────────────
+        foreach ($liveTables as $table) {
+            if (!in_array($table, $baselineTables)) {
+                $createSQL = $this->getCreateTableStatement($liveDb, $table);
+                if (!$createSQL) continue;
+                $parsed = $this->splitForeignKeysFromCreateTable($createSQL, '', $table);
+                // Remove db qualifier
+                $tableSQL = preg_replace("/`{$liveDb}`\./", '', $parsed['create_table']);
+
+                $statements[] = [
+                    'type'       => 'CREATE_TABLE',
+                    'table'      => $table,
+                    'sql'        => "DROP TABLE IF EXISTS `{$table}`;\n" . $tableSQL . ";",
+                    'safe'       => true,
+                    'reversible' => false,
+                    'priority'   => 1,
+                ];
+
+                foreach ($parsed['foreign_keys'] as $fk) {
+                    // Add IF NOT EXISTS for MariaDB 10.6+ compatibility
+                    $safeDef = str_replace('CONSTRAINT `', 'CONSTRAINT IF NOT EXISTS `', $fk['definition']);
+                    $statements[] = [
+                        'type'             => 'ADD_FOREIGN_KEY',
+                        'table'            => $table,
+                        'constraint'       => $fk['name'],
+                        'sql'              => "ALTER TABLE `{$table}` ADD " . $safeDef . ";",
+                        'safe'             => true,
+                        'reversible'       => false,
+                        'priority'         => 5,
+                        'referenced_table' => $fk['referenced_table'],
+                    ];
                 }
             }
-            
-            // Insert migration record
-            $stmt = $logPdo->prepare("
-                INSERT INTO `migration_history` 
-                (executed_at, migration_type, statements_count, success, log_data)
-                VALUES (NOW(), ?, ?, ?, ?)
-            ");
-            
-            $stmt->execute([
-                'schema_sync',
-                count($this->migrationLog),
-                $success,
-                json_encode($this->migrationLog, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
-            ]);
-            
-            $this->log('info', 'Migration log saved', ['log_id' => $logPdo->lastInsertId()]);
-            
-        } catch (Exception $e) {
-            // Don't throw - logging failure shouldn't break the migration result
-            // Just log it if logger is available
-            if ($this->logger) {
-                $this->log('debug', 'Could not save migration log', [
-                    'error' => $e->getMessage()
-                ]);
+        }
+
+        // ── TABLES IN BASELINE BUT NOT LIVE (dropped) ─────────────────────────
+        foreach ($baselineTables as $table) {
+            if (!in_array($table, $liveTables)) {
+                $statements[] = [
+                    'type'       => 'DROP_TABLE',
+                    'table'      => $table,
+                    'sql'        => "DROP TABLE IF EXISTS `{$table}`;",
+                    'safe'       => false,
+                    'reversible' => false,
+                    'warning'    => 'Table exists in baseline but not in live DB — will be removed from rollout SQL',
+                    'priority'   => 9,
+                ];
             }
         }
+
+        // ── COLUMN / INDEX / FK DIFFS for common tables ───────────────────────
+        // We re-use compareSchemas between a virtual "baseline db" and live db.
+        // Since we cannot load baseline SQL into a real DB here, we do a
+        // structural parse approach: compare live columns against what the
+        // baseline CREATE TABLE declares.
+        foreach ($liveTables as $table) {
+            if (!in_array($table, $baselineTables)) continue; // already handled above
+
+            $baselineCreate = $baseline['tables'][$table] ?? '';
+            $liveColumns    = $this->getColumns($liveDb, $table);
+
+            // Parse column names from baseline CREATE TABLE
+            $baselineColNames = $this->parseColumnNamesFromCreateSQL($baselineCreate);
+
+            foreach ($liveColumns as $col) {
+                if (!in_array($col['COLUMN_NAME'], $baselineColNames)) {
+                    // New column in live — add to rollout
+                    $sql = $this->generateAddColumnSQLNoDb($table, $col);
+                    $statements[] = [
+                        'type'       => 'ADD_COLUMN',
+                        'table'      => $table,
+                        'column'     => $col['COLUMN_NAME'],
+                        'sql'        => $sql,
+                        'safe'       => true,
+                        'reversible' => false,
+                        'priority'   => 2,
+                    ];
+                }
+            }
+
+            // Columns in baseline but not in live (dropped)
+            $liveColNames = array_column($liveColumns, 'COLUMN_NAME');
+            foreach ($baselineColNames as $bcName) {
+                if (!in_array($bcName, $liveColNames)) {
+                    $statements[] = [
+                        'type'       => 'DROP_COLUMN',
+                        'table'      => $table,
+                        'column'     => $bcName,
+                        'sql'        => "ALTER TABLE `{$table}` DROP COLUMN IF EXISTS `{$bcName}`;",
+
+                        'safe'       => false,
+                        'reversible' => false,
+                        'warning'    => 'Column exists in baseline but not in live DB',
+                        'priority'   => 2,
+                    ];
+                }
+            }
+        }
+
+        // ── NEW VIEWS ──────────────────────────────────────────────────────────
+        foreach ($liveViews as $view) {
+            $createViewSQL = $this->getCreateViewStatement($liveDb, $view);
+            if (!$createViewSQL) continue;
+            $rebuilt = $this->rebuildCreateViewSQL($createViewSQL, $liveDb, '', $view, true);
+            $rebuilt = preg_replace("/`{$liveDb}`\./", '', $rebuilt);
+
+            if (!in_array($view, $baselineViews)) {
+                $statements[] = [
+                    'type'       => 'CREATE_VIEW',
+                    'table'      => $view,
+                    'sql'        => $rebuilt,
+                    'safe'       => true,
+                    'reversible' => false,
+                    'priority'   => 6,
+                ];
+            } else {
+                // View exists in both — check if definition changed
+                $baselineDef = $baseline['views'][$view] ?? '';
+                $norm1 = preg_replace('/\s+/', ' ', trim(preg_replace('/CREATE\s+(OR\s+REPLACE\s+)?VIEW\s+`[^`]+`\s+AS\s+/i', '', $rebuilt)));
+                $norm2 = preg_replace('/\s+/', ' ', trim(preg_replace('/CREATE\s+(OR\s+REPLACE\s+)?VIEW\s+`[^`]+`\s+AS\s+/i', '', $baselineDef)));
+                if (strcasecmp($norm1, $norm2) !== 0) {
+                    $statements[] = [
+                        'type'       => 'REPLACE_VIEW',
+                        'table'      => $view,
+                        'sql'        => $rebuilt,
+                        'safe'       => true,
+                        'reversible' => false,
+                        'priority'   => 6,
+                    ];
+                }
+            }
+        }
+
+        // Views dropped
+        foreach ($baselineViews as $view) {
+            if (!in_array($view, $liveViews)) {
+                $statements[] = [
+                    'type'       => 'DROP_VIEW',
+                    'table'      => $view,
+                    'sql'        => "DROP VIEW IF EXISTS `{$view}`;",
+                    'safe'       => true,
+                    'reversible' => false,
+                    'priority'   => 6,
+                ];
+            }
+        }
+
+        // Sort by priority
+        usort($statements, fn($a, $b) => ($a['priority'] ?? 99) <=> ($b['priority'] ?? 99));
+
+        return $statements;
     }
-    
+
+    /**
+     * Parse column names from a raw CREATE TABLE SQL string (no live DB needed)
+     */
+    private function parseColumnNamesFromCreateSQL(string $createSQL): array
+    {
+        $names = [];
+        // Match lines like:  `column_name` type ...
+        preg_match_all('/^\s*`([^`]+)`\s+\w/m', $createSQL, $matches);
+        foreach ($matches[1] as $name) {
+            $names[] = $name;
+        }
+        return $names;
+    }
+
+    /**
+     * generateAddColumnSQL without database qualifier (for rollout SQL output)
+     */
+    private function generateAddColumnSQLNoDb(string $tableName, array $column): string
+    {
+        $sql = "ALTER TABLE `{$tableName}` ADD COLUMN IF NOT EXISTS `{$column['COLUMN_NAME']}` {$column['COLUMN_TYPE']}";
+
+
+        if ($column['IS_NULLABLE'] === 'NO') {
+            $sql .= ' NOT NULL';
+        } else {
+            $sql .= ' NULL';
+        }
+
+        if ($column['COLUMN_DEFAULT'] !== null) {
+            $sql .= $this->formatDefaultValue($column['COLUMN_DEFAULT'], $column['COLUMN_TYPE']);
+        } elseif ($column['IS_NULLABLE'] === 'YES') {
+            $sql .= ' DEFAULT NULL';
+        }
+
+        if ($column['EXTRA']) {
+            $sql .= ' ' . $column['EXTRA'];
+        }
+
+        return $sql . ';';
+    }
+
+    /**
+     * Build a single downloadable SQL string from an array of update statements
+     */
+    public function renderUpdateRolloutSQL(array $statements, string $liveDb): string
+    {
+        $lines = [];
+        $lines[] = "-- ============================================================";
+        $lines[] = "-- Incremental Update Rollout SQL";
+        $lines[] = "-- Source DB : {$liveDb}";
+        $lines[] = "-- Generated : " . date('Y-m-d H:i:s');
+        $lines[] = "-- Apply this patch to your baseline rollout SQL in your repo.";
+        $lines[] = "-- ============================================================";
+        $lines[] = "";
+        $lines[] = "SET FOREIGN_KEY_CHECKS = 0;";
+        $lines[] = "START TRANSACTION;";
+        $lines[] = "";
+
+        foreach ($statements as $stmt) {
+            $lines[] = "-- [{$stmt['type']}] table/view: " . ($stmt['table'] ?? '?');
+            if (!empty($stmt['warning'])) {
+                $lines[] = "-- WARNING: {$stmt['warning']}";
+            }
+            $lines[] = $stmt['sql'];
+            $lines[] = "";
+        }
+
+        $lines[] = "COMMIT;";
+        $lines[] = "SET FOREIGN_KEY_CHECKS = 1;";
+        $lines[] = "";
+
+        return implode("\n", $lines);
+    }
+
+
     // ============================================================================
     // SCHEMA INTROSPECTION METHODS
     // ============================================================================
@@ -1103,22 +1303,28 @@ class DatabaseMigrationManager
             $selectStatement = rtrim(trim($matches[1]), ';');
             
             // Remove source database prefix to avoid pointing to the wrong database
-            $selectStatement = preg_replace("/`{$sourceDb}`\./i", '', $selectStatement);
+            if ($sourceDb !== '') {
+                $selectStatement = preg_replace("/`{$sourceDb}`\./i", '', $selectStatement);
+            }
             
             $replace = $orReplace ? 'OR REPLACE ' : '';
-            return "CREATE {$replace}VIEW `{$targetDb}`.`{$viewName}` AS {$selectStatement};";
+            $dbPrefix = $targetDb !== '' ? "`{$targetDb}`." : '';
+            return "CREATE {$replace}VIEW {$dbPrefix}`{$viewName}` AS {$selectStatement};";
         }
         
         // Fallback if the regex fails (less safe as it keeps DEFINER clauses)
         $replaceStr = $orReplace ? 'CREATE OR REPLACE' : 'CREATE';
+        $dbPrefix = $targetDb !== '' ? "`{$targetDb}`." : '';
         $statement = preg_replace(
             '/^CREATE(.*?)VIEW `[^`]+`\.`[^`]+`/i', 
-            "{$replaceStr} VIEW `{$targetDb}`.`{$viewName}`", 
+            "{$replaceStr} VIEW {$dbPrefix}`{$viewName}`", 
             $createViewStatement
         );
 
         // Remove source database prefix
-        $statement = preg_replace("/`{$sourceDb}`\./i", '', $statement);
+        if ($sourceDb !== '') {
+            $statement = preg_replace("/`{$sourceDb}`\./i", '', $statement);
+        }
 
         return rtrim($statement, ' ;') . ';';
     }
@@ -1250,17 +1456,6 @@ class DatabaseMigrationManager
             }
         }
         return false;
-    }
-    
-    private function assessRiskFromAI(string $response): string
-    {
-        $lower = strtolower($response);
-        if (strpos($lower, 'data loss') !== false || strpos($lower, 'dangerous') !== false) {
-            return 'high';
-        } elseif (strpos($lower, 'caution') !== false || strpos($lower, 'warning') !== false) {
-            return 'medium';
-        }
-        return 'low';
     }
     
     private function log(string $level, string $message, array $context = []): void

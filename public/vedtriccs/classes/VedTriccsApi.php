@@ -268,7 +268,7 @@ class VedTriccsApi
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $postFields);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 120);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 1200);
         $body    = curl_exec($ch);
         $code    = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
@@ -772,7 +772,7 @@ class VedTriccsApi
             "Content-Type: multipart/form-data; boundary=" . $boundary,
             "Content-Length: " . strlen($body)
         ]);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 120);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 1200);
         
         $response = curl_exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);

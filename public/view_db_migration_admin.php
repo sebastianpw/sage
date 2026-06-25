@@ -3,14 +3,9 @@
 require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
 
-use App\Core\DatabaseMigrationManager;
-use App\Core\AIProvider;
-
 $spw = \App\Core\SpwBase::getInstance();
 $pdo = $spw->getPDO();
 $fileLogger = $spw->getFileLogger();
-// Note: AIProvider is often part of SpwBase, but this is fine too.
-$aiProvider = new AIProvider($fileLogger);
 
 $pageTitle = "Database Migration Manager";
 ob_start();
@@ -25,7 +20,9 @@ try {
         }
     }
 } catch (Exception $e) {
-    $fileLogger->error('Failed to list databases: ' . $e->getMessage());
+    if ($fileLogger) {
+        $fileLogger->error(['Failed to list databases' => $e->getMessage()]);
+    }
 }
 
 // Current configured database
@@ -33,663 +30,578 @@ $currentDb = $spw->getDbName();
 ?>
 <link rel="stylesheet" href="/css/base.css">
 <link rel="stylesheet" href="/css/toast.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
 <style>
-    /* ----- CORE LAYOUT (Largely Unchanged) ----- */
-    .admin-wrap { max-width:1200px; margin:0 auto; padding:18px; }
-    .admin-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; border-bottom:1px solid var(--border); padding-bottom:12px; }
-    .admin-head h2 { margin:0; font-weight:600; font-size:1.15rem; color: var(--text); }
-
-    /* ----- FORM & UTILITIES (Theme-Aware) ----- */
-    /* .btn, .card, .form-control, and .badge classes are now inherited from base.css */
-    .form-label { color: var(--text); font-weight: 500; margin-bottom: 6px; }
-    .form-check { display:flex; align-items:center; gap:8px; }
-    .form-check input[type="checkbox"] { width:18px; height:18px; cursor:pointer; }
-    .grid-2 { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:12px; }
-    .small-muted { color: var(--text-muted); font-size:0.85rem; }
-
-    /* ----- CUSTOM COMPONENTS (Refactored for Theming) ----- */
-    .comparison-results { margin-top:16px; }
-    .diff-section { margin-bottom:16px; }
-
-    .diff-header {
-        display:flex;
-        justify-content:space-between;
-        align-items:center;
-        padding:8px 12px;
-        background-color: var(--bg); /* Use theme variable */
-        border: 1px solid var(--border);
-        border-radius:6px;
-        cursor:pointer;
-        transition:background-color 0.15s;
-    }
-    .diff-header:hover { background-color: rgba(var(--muted-border-rgb), 0.2); } /* Use transparent overlay for hover */
-    .diff-body {
-        padding:12px;
-        border:1px solid var(--border); /* Use theme variable */
-        border-top:none;
-        border-radius:0 0 6px 6px;
-        display:none;
-        background-color: var(--card); /* Body should be card color */
-    }
-    .diff-body.show { display:block; }
-
-    .sql-preview {
-        background-color: var(--bg); /* Use theme variable */
-        padding:12px;
-        border-radius:6px;
-        font-family:monospace;
-        font-size:0.85rem;
-        white-space:pre-wrap;
-        word-wrap:break-word;
-        max-height:400px;
-        overflow:auto;
-        border: 1px solid var(--border);
-        color: var(--text-muted);
-    }
-
-    .migration-step {
-        padding:12px;
-        border-left:3px solid var(--accent); /* Use theme variable */
-        margin-bottom:8px;
-        background-color: var(--card); /* Use theme variable */
-        border-radius:4px;
-        border: 1px solid var(--border);
-        border-left-width: 3px;
-    }
-    .migration-step.safe { border-left-color: var(--green); }
-    .migration-step.warning { border-left-color: var(--orange); }
-    .migration-step.danger { border-left-color: var(--red); }
-
-    .progress-bar {
-        height:8px;
-        background-color: var(--border); /* Use theme variable */
-        border-radius:4px;
-        overflow:hidden;
-        margin:12px 0;
-    }
-    .progress-fill {
-        height:100%;
-        background-color: var(--accent); /* Use theme variable */
-        transition:width 0.3s;
-    }
-
-    .loader-dot {
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        background-color: var(--blue-light-bg); /* Use theme variable */
-        position: relative;
-        box-shadow: inset 0 0 0 3px var(--blue-light-border); /* Use theme variable */
-        animation: loader-scale 1s infinite;
-        display:inline-block;
-        margin-right:8px;
-    }
-    @keyframes loader-scale {
-        0%, 100% { transform: scale(1); opacity: 0.6; }
-        50% { transform: scale(1.4); opacity: 1; }
-    }
-
-    /* ----- RESPONSIVE (Unchanged) ----- */
-    @media (max-width:700px) {
-      .grid-2 { grid-template-columns:1fr; }
-      .admin-head { gap:8px; }
-    }
-
-.card-header {
-    padding: 8px 0;
+/* ── BEAP Inspired Theme & Variables ── */
+:root,[data-theme="dark"]{
+    --bp-bg:#080b10;--bp-surface:#0e1319;--bp-card:#111820;--bp-border:#1c2535;
+    --bp-text:#c8d4e8;--bp-dim:#5a6a80;--bp-amber:#f5a623;--bp-teal:#3ab5c8;
+    --bp-purple:#9b72e0;--bp-green:#3ab87f;--bp-red:#f66;
 }
-.card {
-    padding: 16px;
+[data-theme="light"]{
+    --bp-bg:#f4f6fa;--bp-surface:#fff;--bp-card:#fff;--bp-border:#d0d8e8;
+    --bp-text:#1a2233;--bp-dim:#7a8aaa;--bp-amber:#c8880a;--bp-teal:#1a8090;
+    --bp-purple:#7040c0;--bp-green:#1a8060;--bp-red:#d44;
 }
+body{background:var(--bp-bg);color:var(--bp-text);font-family:'Syne',system-ui,sans-serif;margin:0;padding:0;}
+
+.bp-nav{display:flex;align-items:center;gap:10px;padding:10px 16px;background:rgba(0,0,0,.6);border-bottom:1px solid var(--bp-border);position:sticky;top:0;z-index:100;backdrop-filter:blur(6px);flex-wrap:wrap;}
+[data-theme="light"] .bp-nav{background:rgba(244,246,250,.92);}
+.bp-nav-title{font-family:'Space Mono',monospace;font-size:.85rem;font-weight:bold;color:var(--bp-purple);letter-spacing:1px;text-transform:uppercase;margin-right:auto;}
+
+.bp-btn{padding:7px 14px;border-radius:4px;border:1px solid;font-family:'Space Mono',monospace;font-size:.75rem;cursor:pointer;transition:all .15s;white-space:nowrap;background:var(--bp-card);color:var(--bp-dim);border-color:var(--bp-border);}
+.bp-btn:hover:not(:disabled){color:var(--bp-teal);border-color:var(--bp-teal);}
+.bp-btn-teal{border-color:var(--bp-teal);background:var(--bp-teal);color:#000;font-weight:bold;}
+.bp-btn-teal:hover:not(:disabled){filter:brightness(1.1);}
+.bp-btn-amber{border-color:var(--bp-amber);background:var(--bp-amber);color:#000;font-weight:bold;}
+.bp-btn-amber:hover:not(:disabled){filter:brightness(1.1);}
+.bp-btn-purple{border-color:var(--bp-purple);background:var(--bp-purple);color:#fff;font-weight:bold;}
+.bp-btn-purple:hover:not(:disabled){filter:brightness(1.1);}
+.bp-btn-sm{padding:4px 8px;font-size:.65rem;}
+.bp-btn:disabled{opacity:.45;cursor:not-allowed;}
+
+.bp-input{width:100%;box-sizing:border-box;background:var(--bp-card);color:var(--bp-text);border:1px solid var(--bp-border);border-radius:4px;padding:8px 12px;font-family:'Syne',sans-serif;font-size:.85rem;outline:none;transition:border-color .2s;}
+.bp-input:focus{border-color:var(--bp-teal);}
+
+.bp-workspace{max-width:960px;margin:0 auto;padding:24px 15px 100px;}
+
+.bp-tabs{display:flex;gap:0;border-bottom:2px solid var(--bp-border);margin-bottom:20px;}
+.bp-tab{padding:8px 16px;font-family:'Space Mono',monospace;font-size:.72rem;text-transform:uppercase;letter-spacing:1px;cursor:pointer;color:var(--bp-dim);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s;}
+.bp-tab.active{color:var(--bp-purple);border-bottom-color:var(--bp-purple);}
+.bp-tab:hover:not(.active){color:var(--bp-text);}
+.bp-tab-pane{display:none;}
+.bp-tab-pane.active{display:block;}
+
+.bp-card{background:var(--bp-surface);border:1px solid var(--bp-border);border-radius:6px;padding:14px;margin-bottom:20px;display:flex;flex-direction:column;gap:12px;}
+.bp-card-header{font-family:'Space Mono',monospace;font-size:.85rem;font-weight:bold;color:var(--bp-text);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}
+.bp-card-header-badge { font-size: 0.7rem; color: var(--bp-purple); background: rgba(155,114,224,0.15); padding: 2px 8px; border-radius: 12px; }
+
+.field-label{font-family:'Space Mono',monospace;font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--bp-dim);margin-bottom:4px;}
+
+/* ── Custom UI for Migration Tool ── */
+.diff-section { margin-bottom:12px; border:1px solid var(--bp-border); border-radius:4px; overflow:hidden;}
+.diff-header {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:8px 12px; background:var(--bp-card); cursor:pointer;
+    font-size:.85rem; font-weight:bold; transition: background 0.2s;
+}
+.diff-header:hover { background: rgba(58,181,200,.07); }
+.diff-body { padding:12px; background:var(--bp-surface); display:none; border-top:1px solid var(--bp-border); font-size:.8rem; }
+.diff-body.show { display:block; }
+
+.sql-preview {
+    background:var(--bp-bg); padding:12px; border-radius:4px; font-family:monospace; font-size:.75rem;
+    white-space:pre-wrap; word-wrap:break-word; max-height:400px; overflow:auto;
+    border: 1px solid var(--bp-border); color: var(--bp-dim); margin-top:8px;
+}
+
+.migration-step { padding:12px; border-left:3px solid var(--bp-teal); margin-bottom:8px; background:var(--bp-card); border-radius:0 4px 4px 0; border:1px solid var(--bp-border); border-left-width:3px; }
+.migration-step.safe { border-left-color: var(--bp-green); }
+.migration-step.warning { border-left-color: var(--bp-amber); }
+.migration-step.danger { border-left-color: var(--bp-red); }
+
+.bp-spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:bpspin .6s linear infinite;vertical-align:middle;margin-right:5px;}
+@keyframes bpspin{to{transform:rotate(360deg)}}
 </style>
 
-<div class="admin-wrap">
-  <div class="admin-head">
-    <h2>Database Migration Manager</h2>
-    <div style="display:flex;gap:8px;align-items:center;">
-      <a class="btn btn-secondary btn-sm" href="view_db_migration_history.php">View History</a>
-    </div>
-  </div>
-
-  <p class="small-muted">
-    Synchronize schemas between parallel database instances or apply version updates.
-    Current database: <strong><?= htmlspecialchars($currentDb) ?></strong>
-  </p>
-
-  <!-- Migration Type Selection -->
-  <div class="card">
-    <div class="card-header">Migration Configuration</div>
-    
-    <div class="form-group">
-      <label class="form-label">Migration Type:</label>
-      <select id="migrationType" class="form-control">
-        <option value="parallel_sync">Parallel Instance Sync</option>
-        <option value="version_update">Version Update (Git Tag)</option>
-      </select>
-      <p class="small-muted" style="margin-top:4px;">
-        <strong>Parallel Sync:</strong> Copy schema from one instance to another<br>
-        <strong>Version Update:</strong> Apply migrations from a specific version tag
-      </p>
-    </div>
-
-    <!-- Parallel Sync Config -->
-    <div id="parallelSyncConfig" class="grid-2">
-      <div class="form-group">
-        <label class="form-label">Source Database (Leading):</label>
-        <select id="sourceDb" class="form-control">
-          <option value="">-- Select Source --</option>
-          <?php foreach ($databases as $db): ?>
-            <option value="<?= htmlspecialchars($db) ?>" <?= $db === $currentDb ? 'selected' : '' ?>>
-              <?= htmlspecialchars($db) ?><?= $db === $currentDb ? ' (current)' : '' ?>
-            </option>
-          <?php endforeach; ?>
-        </select>
-        <p class="small-muted" style="margin-top:4px;">
-          The database with the most up-to-date schema
-        </p>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Target Database (To Update):</label>
-        <select id="targetDb" class="form-control">
-          <option value="">-- Select Target --</option>
-          <?php foreach ($databases as $db): ?>
-            <option value="<?= htmlspecialchars($db) ?>">
-              <?= htmlspecialchars($db) ?>
-            </option>
-          <?php endforeach; ?>
-        </select>
-        <p class="small-muted" style="margin-top:4px;">
-          The database to be updated
-        </p>
-      </div>
-    </div>
-
-    <!-- Version Update Config -->
-    <div id="versionUpdateConfig" style="display:none;">
-      <div class="form-group">
-        <label class="form-label">Target Database:</label>
-        <select id="versionTargetDb" class="form-control">
-          <option value="">-- Select Database --</option>
-          <?php foreach ($databases as $db): ?>
-            <option value="<?= htmlspecialchars($db) ?>">
-              <?= htmlspecialchars($db) ?>
-            </option>
-          <?php endforeach; ?>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">From Version:</label>
-        <input type="text" id="fromVersion" class="form-control" placeholder="e.g., v0.3" />
-        <p class="small-muted" style="margin-top:4px;">
-          Current version of the database
-        </p>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">To Version:</label>
-        <input type="text" id="toVersion" class="form-control" placeholder="e.g., v0.4" />
-        <p class="small-muted" style="margin-top:4px;">
-          Target version to upgrade to
-        </p>
-      </div>
-    </div>
-
-    <!-- Options -->
-    <div class="form-group" style="margin-top:16px;">
-      <div class="form-check">
-        <input type="checkbox" id="useAI" checked />
-        <label for="useAI" class="form-label" style="margin:0;">Use AI validation</label>
-      </div>
-      <p class="small-muted" style="margin-left:26px;">
-        AI will review migration SQL for safety and potential issues
-      </p>
-    </div>
-
-    <div class="form-check">
-      <input type="checkbox" id="createBackup" checked />
-      <label for="createBackup" class="form-label" style="margin:0;">Create backup before migration</label>
-    </div>
-
-    <div style="margin-top:16px; display:flex; gap:8px;">
-      <button id="btnAnalyze" class="btn btn-accent">
-        Analyze Differences
-      </button>
-      <button id="btnReset" class="btn btn-secondary">
-        Reset
-      </button>
-    </div>
-  </div>
-
-  <!-- Analysis Results -->
-  <div id="analysisResults" class="card" style="display:none;">
-    <div class="card-header">
-      Schema Comparison Results
-      <span id="analysisStats" class="badge badge-blue" style="float:right;"></span>
-    </div>
-    
-    <div id="analysisContent"></div>
-
-    <div style="margin-top:16px; display:flex; gap:8px; align-items:center;">
-      <button id="btnGenerateSql" class="btn btn-accent">
-        Generate Migration SQL
-      </button>
-      <span id="analysisWarning" class="small-muted" style="color:var(--red);"></span>
-    </div>
-  </div>
-
-  <!-- Migration Plan -->
-  <div id="migrationPlan" class="card" style="display:none;">
-    <div class="card-header">
-      Migration Plan
-      <span id="planStats" class="badge badge-blue" style="float:right;"></span>
-    </div>
-
-    <div id="aiValidation" class="notification notification-warning" style="display:none; margin-bottom:16px;">
-      <strong>AI Validation Results:</strong>
-      <div id="aiValidationContent" class="small-muted" style="margin-top:8px;"></div>
-    </div>
-
-    <div id="migrationSteps"></div>
-
-    <div style="margin-top:16px;">
-      <div class="form-check" style="margin-bottom:12px;">
-        <input type="checkbox" id="dryRun" checked />
-        <label for="dryRun" class="form-label" style="margin:0;">Dry run (preview only, don't execute)</label>
-      </div>
-
-      <div style="display:flex; gap:8px; align-items:center;">
-        <button id="btnExecute" class="btn btn-primary">
-          Execute Migration
-        </button>
-        <button id="btnDownloadSql" class="btn btn-secondary">
-          Download SQL
-        </button>
-        <div id="executionStatus" style="display:none;">
-          <div class="loader-dot"></div>
-          <span class="small-muted">Executing migration...</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Execution Results -->
-  <div id="executionResults" class="card" style="display:none;">
-    <div class="card-header">Migration Execution Results</div>
-    <div id="executionContent"></div>
-  </div>
-
+<div class="bp-nav" style="padding-left:70px;">
+    <span class="bp-nav-title">💾 Database Migration Manager</span>
 </div>
 
-<script src="js/toast.js"></script>
-<script>
-(function(){
-  // All JS is untouched as it uses IDs, which were not changed.
-  // This ensures functionality remains exactly the same.
+<div class="bp-workspace">
+    <p style="font-size:0.85rem; color:var(--bp-dim); margin-bottom: 20px;">
+        Synchronize schemas between parallel database instances or manage GitHub rollout SQL baselines.
+        Current database: <strong style="color:var(--bp-text);"><?= htmlspecialchars($currentDb) ?></strong>
+    </p>
 
-  function showToast(msg, type) {
-    if (typeof Toast !== 'undefined' && Toast && typeof Toast.show === 'function') {
-      const mapType = (type === 'danger' || type === 'error') ? 'error' : (type === 'warning' ? 'info' : (type || 'info'));
-      Toast.show(msg, mapType);
-    } else {
-      console.log('[toast]', msg);
-    }
-  }
+    <div class="bp-tabs">
+        <div class="bp-tab active" onclick="switchTab('parallel')">Parallel Sync</div>
+        <div class="bp-tab" onclick="switchTab('full')">Full Rollout SQL</div>
+        <div class="bp-tab" onclick="switchTab('update')">Update Rollout SQL</div>
+    </div>
 
-  const migrationType = document.getElementById('migrationType');
-  const parallelSyncConfig = document.getElementById('parallelSyncConfig');
-  const versionUpdateConfig = document.getElementById('versionUpdateConfig');
-  const btnAnalyze = document.getElementById('btnAnalyze');
-  const btnReset = document.getElementById('btnReset');
-  const btnGenerateSql = document.getElementById('btnGenerateSql');
-  const btnExecute = document.getElementById('btnExecute');
-  const btnDownloadSql = document.getElementById('btnDownloadSql');
-
-  let currentComparison = null;
-  let currentStatements = null;
-
-  migrationType.addEventListener('change', function() {
-    if (this.value === 'parallel_sync') {
-      parallelSyncConfig.style.display = 'grid';
-      versionUpdateConfig.style.display = 'none';
-    } else {
-      parallelSyncConfig.style.display = 'none';
-      versionUpdateConfig.style.display = 'block';
-    }
-    resetAnalysis();
-  });
-
-  btnAnalyze.addEventListener('click', function() {
-    const type = migrationType.value;
-    if (type === 'parallel_sync') {
-      const sourceDb = document.getElementById('sourceDb').value;
-      const targetDb = document.getElementById('targetDb').value;
-      if (!sourceDb || !targetDb) {
-        showToast('Please select both source and target databases', 'warning');
-        return;
-      }
-      if (sourceDb === targetDb) {
-        showToast('Source and target must be different databases', 'warning');
-        return;
-      }
-      analyzeParallelSync(sourceDb, targetDb);
-    } else {
-      const targetDb = document.getElementById('versionTargetDb').value;
-      const fromVersion = document.getElementById('fromVersion').value.trim();
-      const toVersion = document.getElementById('toVersion').value.trim();
-      if (!targetDb || !fromVersion || !toVersion) {
-        showToast('Please fill in all version update fields', 'warning');
-        return;
-      }
-      analyzeVersionUpdate(targetDb, fromVersion, toVersion);
-    }
-  });
-
-  btnReset.addEventListener('click', resetAnalysis);
-  btnGenerateSql.addEventListener('click', generateMigrationSql);
-  btnExecute.addEventListener('click', executeMigration);
-  btnDownloadSql.addEventListener('click', downloadSql);
-
-  function analyzeParallelSync(sourceDb, targetDb) {
-    btnAnalyze.disabled = true;
-    btnAnalyze.innerHTML = '<div class="loader-dot" style="margin-right:4px;"></div>Analyzing...';
-    fetch('db_migration_api.php?action=compare_schemas', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ source_db: sourceDb, target_db: targetDb })
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (data.status === 'ok') {
-        currentComparison = data;
-        displayComparisonResults(data);
-      } else {
-        showToast('Analysis failed: ' + (data.message || 'unknown error'), 'error');
-      }
-    })
-    .catch(err => { console.error(err); showToast('Network error during analysis', 'error'); })
-    .finally(() => { btnAnalyze.disabled = false; btnAnalyze.textContent = 'Analyze Differences'; });
-  }
-
-  function analyzeVersionUpdate(targetDb, fromVersion, toVersion) {
-    btnAnalyze.disabled = true;
-    btnAnalyze.innerHTML = '<div class="loader-dot" style="margin-right:4px;"></div>Analyzing...';
-    fetch('db_migration_api.php?action=version_diff', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ target_db: targetDb, from_version: fromVersion, to_version: toVersion })
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (data.status === 'ok') {
-        currentComparison = data;
-        displayComparisonResults(data);
-      } else {
-        showToast('Version analysis failed: ' + (data.message || 'unknown error'), 'error');
-      }
-    })
-    .catch(err => { console.error(err); showToast('Network error during version analysis', 'error'); })
-    .finally(() => { btnAnalyze.disabled = false; btnAnalyze.textContent = 'Analyze Differences'; });
-  }
-
-  function displayComparisonResults(data) {
-    const resultsCard = document.getElementById('analysisResults');
-    const content = document.getElementById('analysisContent');
-    const stats = document.getElementById('analysisStats');
-    const warning = document.getElementById('analysisWarning');
-    resultsCard.style.display = 'block';
-    const diffs = data.differences || {};
-    const totalChanges = (diffs.missing_tables?.length || 0) + 
-                         (diffs.missing_columns?.length || 0) + 
-                         (diffs.column_changes?.length || 0) + 
-                         (diffs.missing_indexes?.length || 0) + 
-                         (diffs.missing_constraints?.length || 0) +
-                         (diffs.missing_views?.length || 0) +
-                         (diffs.altered_views?.length || 0);
-
-    stats.textContent = totalChanges + ' changes detected';
-    if (totalChanges === 0) {
-      content.innerHTML = '<p class="small-muted">No schema differences found. Databases are in sync.</p>';
-      warning.textContent = '';
-      btnGenerateSql.disabled = true;
-      return;
-    }
-    btnGenerateSql.disabled = false;
-    warning.textContent = '';
-    let html = '';
-    if (diffs.missing_tables && diffs.missing_tables.length > 0) {
-      html += createDiffSection('Missing Tables', diffs.missing_tables.length, 'red', diffs.missing_tables.map(t => `<div>• ${escapeHtml(t)}</div>`).join(''));
-    }
-    if (diffs.missing_views && diffs.missing_views.length > 0) {
-        html += createDiffSection('Missing Views', diffs.missing_views.length, 'green', diffs.missing_views.map(v => `<div>• ${escapeHtml(v)}</div>`).join(''));
-    }
-    if (diffs.altered_views && diffs.altered_views.length > 0) {
-        html += createDiffSection('Altered Views', diffs.altered_views.length, 'gray', diffs.altered_views.map(v => `<div>• <strong>${escapeHtml(v.view)}</strong>: Definition has changed</div>`).join(''));
-    }
-    if (diffs.missing_columns && diffs.missing_columns.length > 0) {
-      html += createDiffSection('Missing Columns', diffs.missing_columns.length, 'gray', diffs.missing_columns.map(c => `<div>• <strong>${escapeHtml(c.table)}</strong>: ${escapeHtml(c.column.COLUMN_NAME)} (${escapeHtml(c.column.COLUMN_TYPE)})</div>`).join(''));
-    }
-    if (diffs.column_changes && diffs.column_changes.length > 0) {
-      html += createDiffSection('Modified Columns', diffs.column_changes.length, 'gray', diffs.column_changes.map(c => `<div>• <strong>${escapeHtml(c.table)}.${escapeHtml(c.column)}</strong>: Type change detected</div>`).join(''));
-    }
-    if (diffs.missing_indexes && diffs.missing_indexes.length > 0) {
-      html += createDiffSection('Missing Indexes', diffs.missing_indexes.length, 'blue', diffs.missing_indexes.map(i => `<div>• <strong>${escapeHtml(i.table)}</strong>: ${escapeHtml(i.index.Key_name)}</div>`).join(''));
-    }
-    if (diffs.missing_constraints && diffs.missing_constraints.length > 0) {
-      html += createDiffSection('Missing Foreign Keys', diffs.missing_constraints.length, 'blue', diffs.missing_constraints.map(fk => `<div>• <strong>${escapeHtml(fk.table)}</strong>: ${escapeHtml(fk.constraint.CONSTRAINT_NAME)}</div>`).join(''));
-    }
-    content.innerHTML = html;
-    document.querySelectorAll('.diff-header').forEach(header => {
-      header.addEventListener('click', function() { this.nextElementSibling.classList.toggle('show'); });
-    });
-  }
-
-  function createDiffSection(title, count, type, content) {
-    return `
-      <div class="diff-section">
-        <div class="diff-header">
-          <span><strong>${escapeHtml(title)}</strong> <span class="badge badge-${type}">${count}</span></span>
-          <span>▼</span>
+    <!-- ==================== PARALLEL SYNC ==================== -->
+    <div class="bp-tab-pane active" id="pane-parallel">
+        <div class="bp-card">
+            <div class="bp-card-header">Select Databases</div>
+            <div style="display:flex; gap:16px; flex-wrap:wrap;">
+                <div style="flex:1; min-width:200px;">
+                    <div class="field-label">Source (Leading)</div>
+                    <select id="sourceDb" class="bp-input">
+                        <option value="">-- Select Source --</option>
+                        <?php foreach ($databases as $db): ?>
+                            <option value="<?= htmlspecialchars($db) ?>" <?= $db === $currentDb ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($db) ?><?= $db === $currentDb ? ' (current)' : '' ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div style="flex:1; min-width:200px;">
+                    <div class="field-label">Target (To Update)</div>
+                    <select id="targetDb" class="bp-input">
+                        <option value="">-- Select Target --</option>
+                        <?php foreach ($databases as $db): ?>
+                            <option value="<?= htmlspecialchars($db) ?>">
+                                <?= htmlspecialchars($db) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+            <div style="margin-top:8px;">
+                <button id="btnAnalyze" class="bp-btn bp-btn-teal" onclick="analyzeParallelSync()">Analyze Differences</button>
+                <button class="bp-btn" onclick="resetParallel()">Reset</button>
+            </div>
         </div>
-        <div class="diff-body">${content}</div>
-      </div>
-    `;
-  }
 
-  function generateMigrationSql() {
-    if (!currentComparison) return;
-    btnGenerateSql.disabled = true;
-    btnGenerateSql.innerHTML = '<div class="loader-dot" style="margin-right:4px;"></div>Generating...';
-    const useAI = document.getElementById('useAI').checked;
-    fetch('db_migration_api.php?action=generate_migration', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ comparison: currentComparison, use_ai: useAI })
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (data.status === 'ok') {
-        currentStatements = data.statements;
-        displayMigrationPlan(data);
-      } else {
-        showToast('Failed to generate migration: ' + (data.message || 'unknown error'), 'error');
-      }
-    })
-    .catch(err => { console.error(err); showToast('Network error generating migration', 'error'); })
-    .finally(() => { btnGenerateSql.disabled = false; btnGenerateSql.textContent = 'Generate Migration SQL'; });
-  }
+        <div id="parallelResults" class="bp-card" style="display:none;">
+            <div class="bp-card-header">
+                Comparison Results
+                <span id="analysisStats" class="bp-card-header-badge"></span>
+            </div>
+            <div id="analysisContent"></div>
+            <div style="margin-top:12px;">
+                <button id="btnGenerateSql" class="bp-btn bp-btn-purple" onclick="generateMigrationSql()">Generate Migration SQL</button>
+            </div>
+        </div>
 
-  function displayMigrationPlan(data) {
-    const planCard = document.getElementById('migrationPlan');
-    const stepsDiv = document.getElementById('migrationSteps');
-    const statsSpan = document.getElementById('planStats');
-    const aiValidation = document.getElementById('aiValidation');
-    const aiContent = document.getElementById('aiValidationContent');
-    planCard.style.display = 'block';
-    const statements = data.statements || [];
-    statsSpan.textContent = statements.length + ' statements';
-    if (data.ai_feedback && data.ai_feedback.length > 0) {
-      aiValidation.style.display = 'block';
-      aiContent.innerHTML = data.ai_feedback.map(f =>
-        `<div style="margin-bottom:8px;">
-          <span class="badge badge-${f.risk === 'high' ? 'red' : f.risk === 'medium' ? 'gray' : 'blue'}">
-            ${escapeHtml(f.risk || 'info')} risk
-          </span>
-          <div style="margin-top:4px;">${escapeHtml(f.response || '').substring(0, 500)}...</div>
-        </div>`
-      ).join('');
-    } else {
-      aiValidation.style.display = 'none';
-    }
-    let html = '';
-    statements.forEach((stmt, idx) => {
-      const safeClass = stmt.safe ? 'safe' : stmt.warning ? 'warning' : 'danger';
-      html += `
-        <div class="migration-step ${safeClass}">
-          <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-            <strong>${idx + 1}. ${escapeHtml(stmt.type)}</strong>
-            <span class="badge badge-${stmt.safe ? 'green' : 'gray'}">
-              ${stmt.safe ? 'Safe' : 'Caution'}
-            </span>
-          </div>
-          <div class="small-muted" style="margin-bottom:8px;">
-            Table: <strong>${escapeHtml(stmt.table || 'N/A')}</strong>
-            ${stmt.column ? ' | Column: <strong>' + escapeHtml(stmt.column) + '</strong>' : ''}
-            ${stmt.warning ? ' | ⚠️ ' + escapeHtml(stmt.warning) : ''}
-          </div>
-          <div class="sql-preview">${escapeHtml(stmt.sql)}</div>
-          ${stmt.reversible ? '<div class="small-muted" style="margin-top:4px;">✓ Reversible</div>' : ''}
-        </div>`;
-    });
-    stepsDiv.innerHTML = html || '<p class="small-muted">No migration steps generated.</p>';
-    planCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
+        <div id="migrationPlan" class="bp-card" style="display:none;">
+            <div class="bp-card-header">
+                Migration Plan
+                <span id="planStats" class="bp-card-header-badge"></span>
+            </div>
+            <div id="migrationSteps"></div>
+            
+            <div style="margin-top:12px; display:flex; gap:12px; align-items:center;">
+                <label style="font-size:0.85rem; display:flex; align-items:center; gap:6px; cursor:pointer;">
+                    <input type="checkbox" id="dryRun" checked style="accent-color:var(--bp-purple); width:16px; height:16px;">
+                    Dry run (preview only, don't execute)
+                </label>
+            </div>
+            
+            <div style="margin-top:12px; display:flex; gap:8px;">
+                <button id="btnExecute" class="bp-btn bp-btn-amber" onclick="executeMigration()">Execute Migration</button>
+                <button id="btnDownloadSql" class="bp-btn" onclick="downloadParallelSql()"><i class="bi bi-download"></i> Download SQL</button>
+            </div>
+        </div>
 
-  function executeMigration() {
-    if (!currentStatements || currentStatements.length === 0) {
-      showToast('No migration plan to execute', 'warning');
-      return;
-    }
-    const dryRun = document.getElementById('dryRun').checked;
-    const createBackup = document.getElementById('createBackup').checked;
-    if (!dryRun && !confirm('This will modify the target database. Continue?')) { return; }
-    btnExecute.disabled = true;
-    document.getElementById('executionStatus').style.display = 'flex';
-    fetch('db_migration_api.php?action=execute_migration', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ statements: currentStatements, dry_run: dryRun, create_backup: createBackup, target_db: currentComparison.target_db })
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (data.status === 'ok') {
-        displayExecutionResults(data);
-        showToast(dryRun ? 'Dry run completed - no changes made' : 'Migration executed successfully', dryRun ? 'info' : 'success');
-      } else {
-        showToast('Migration execution failed: ' + (data.message || 'unknown error'), 'error');
-      }
-    })
-    .catch(err => { console.error(err); showToast('Network error during migration', 'error'); })
-    .finally(() => { btnExecute.disabled = false; document.getElementById('executionStatus').style.display = 'none'; });
-  }
+        <div id="executionResults" class="bp-card" style="display:none;">
+            <div class="bp-card-header">Execution Results</div>
+            <div id="executionContent"></div>
+        </div>
+    </div>
 
-  function displayExecutionResults(data) {
-    const resultsCard = document.getElementById('executionResults');
-    const content = document.getElementById('executionContent');
-    resultsCard.style.display = 'block';
-    const results = data.results || {};
-    const executed = results.executed || [];
-    const failed = results.failed || [];
-    const dryRun = document.getElementById('dryRun').checked;
-    let html = `
-      <div style="margin-bottom:16px;">
-        <span class="badge badge-${results.success ? 'green' : 'red'}">
-          ${results.success ? '✓ Success' : '✗ Failed'}
-        </span>
-        ${dryRun ? '<span class="badge badge-blue" style="margin-left:8px;">Dry Run</span>' : ''}
-      </div>
-      <div style="margin-bottom:16px;">
-        <strong>Executed:</strong> ${executed.length} statements<br>
-        <strong>Failed:</strong> ${failed.length} statements
-      </div>`;
-    if (executed.length > 0) {
-      html += '<div class="diff-section"><div class="diff-header"><strong>Executed Statements</strong> <span class="badge badge-green">' + executed.length + '</span></div>';
-      html += '<div class="diff-body show">';
-      executed.forEach(ex => {
-        html += `<div class="migration-step safe" style="margin-bottom:8px;">
-          <strong>${escapeHtml(ex.statement.type)}</strong>
-          <div class="sql-preview" style="margin-top:4px;">${escapeHtml(ex.statement.sql)}</div>
-        </div>`;
-      });
-      html += '</div></div>';
-    }
-    if (failed.length > 0) {
-      html += '<div class="diff-section"><div class="diff-header"><strong>Failed Statements</strong> <span class="badge badge-red">' + failed.length + '</span></div>';
-      html += '<div class="diff-body show">';
-      failed.forEach(fail => {
-        html += `<div class="migration-step danger" style="margin-bottom:8px;">
-          <strong>${escapeHtml(fail.statement.type)}</strong>
-          <div class="small-muted" style="color:var(--red); margin:4px 0;">Error: ${escapeHtml(fail.error)}</div>
-          <div class="sql-preview" style="margin-top:4px;">${escapeHtml(fail.statement.sql)}</div>
-        </div>`;
-      });
-      html += '</div></div>';
-    }
-    if (data.backup_info) {
-      html += `<div class="notification notification-success" style="margin-top:16px;">
-        <strong>Backup Created:</strong><br>
-        <span class="small-muted">${escapeHtml(data.backup_info.file || 'N/A')}</span>
-      </div>`;
-    }
-    content.innerHTML = html;
-    resultsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
+    <!-- ==================== FULL ROLLOUT SQL ==================== -->
+    <div class="bp-tab-pane" id="pane-full">
+        <div class="bp-card">
+            <div class="bp-card-header">Generate Baseline SQL</div>
+            <p style="font-size:0.8rem; color:var(--bp-dim); margin-top:0;">Generate a complete database structure SQL script suitable for an initial GitHub rollout. Data is omitted.</p>
+            <div>
+                <div class="field-label">Target Database</div>
+                <select id="fullRolloutDb" class="bp-input" style="max-width:300px;">
+                    <option value="">-- Select Database --</option>
+                    <?php foreach ($databases as $db): ?>
+                        <option value="<?= htmlspecialchars($db) ?>" <?= $db === $currentDb ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($db) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div style="margin-top:12px;">
+                <button id="btnGenFull" class="bp-btn bp-btn-teal" onclick="generateFullRollout()">Generate Full SQL</button>
+            </div>
+        </div>
 
-  function downloadSql() {
-    if (!currentStatements || currentStatements.length === 0) {
-      showToast('No SQL to download', 'warning');
-      return;
-    }
-    const sqlText = currentStatements.map((stmt, idx) => {
-      return `-- Statement ${idx + 1}: ${stmt.type}\n-- Table: ${stmt.table || 'N/A'}\n` +
-             (stmt.warning ? `-- WARNING: ${stmt.warning}\n` : '') + `${stmt.sql}\n\n` +
-             (stmt.rollback ? `-- Rollback:\n-- ${stmt.rollback}\n\n` : '');
-    }).join('');
-    const blob = new Blob([sqlText], { type: 'text/plain;charset=utf-8' });
+        <div id="fullRolloutResults" class="bp-card" style="display:none;">
+            <div class="bp-card-header">Generated SQL</div>
+            <textarea id="fullRolloutText" class="bp-input" style="height:350px; font-family:monospace; font-size:0.75rem; white-space:pre; resize:vertical;" readonly></textarea>
+            <div style="margin-top:12px;">
+                <button class="bp-btn bp-btn-purple" onclick="downloadFullRollout()"><i class="bi bi-download"></i> Download SQL File</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==================== UPDATE ROLLOUT SQL ==================== -->
+    <div class="bp-tab-pane" id="pane-update">
+        <div class="bp-card">
+            <div class="bp-card-header">Incremental Update SQL</div>
+            <p style="font-size:0.8rem; color:var(--bp-dim); margin-top:0;">Compare your staging database (baseline) against a live database (new changes) to generate an incremental patch.</p>
+            
+            <div style="display:flex; gap:16px; flex-wrap:wrap;">
+                <div style="flex:1; min-width:200px;">
+                    <div class="field-label">Source Database (Live / New changes)</div>
+                    <select id="updateLiveDb" class="bp-input">
+                        <option value="">-- Select Source Database --</option>
+                        <?php foreach ($databases as $db): ?>
+                            <option value="<?= htmlspecialchars($db) ?>" <?= $db === $currentDb ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($db) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div style="flex:1; min-width:200px;">
+                    <div class="field-label">Target Database (Staging / Baseline)</div>
+                    <select id="updateBaselineDb" class="bp-input">
+                        <option value="">-- Select Target Database --</option>
+                        <?php foreach ($databases as $db): ?>
+                            <option value="<?= htmlspecialchars($db) ?>">
+                                <?= htmlspecialchars($db) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+            
+            <div style="margin-top:12px;">
+                <button id="btnGenUpdate" class="bp-btn bp-btn-teal" onclick="generateUpdateRollout()">Compare & Generate Update</button>
+            </div>
+        </div>
+
+        <div id="updateRolloutResults" class="bp-card" style="display:none;">
+            <div class="bp-card-header">Update SQL Generated</div>
+            <textarea id="updateRolloutText" class="bp-input" style="height:350px; font-family:monospace; font-size:0.75rem; white-space:pre; resize:vertical;" readonly></textarea>
+            <div style="margin-top:12px;">
+                <button class="bp-btn bp-btn-purple" onclick="downloadUpdateRollout()"><i class="bi bi-download"></i> Download Update SQL</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="/js/toast.js"></script>
+<script>
+// ── TAB SWITCHING ────────────────────────────────────────────────────────
+function switchTab(tab) {
+    document.querySelectorAll('.bp-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.bp-tab-pane').forEach(p => p.classList.remove('active'));
+    
+    const tabHeaders = document.querySelectorAll('.bp-tab');
+    if (tab === 'parallel') tabHeaders[0].classList.add('active');
+    else if (tab === 'full') tabHeaders[1].classList.add('active');
+    else if (tab === 'update') tabHeaders[2].classList.add('active');
+
+    document.getElementById('pane-' + tab).classList.add('active');
+}
+
+// ── UTILITIES ────────────────────────────────────────────────────────────
+function downloadBlob(text, filename) {
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
-    const sourceDb = document.getElementById('sourceDb').value || 'unknown';
-    const targetDb = document.getElementById('targetDb').value || 'unknown';
-    a.download = `migration_${sourceDb}_to_${targetDb}_${timestamp}.sql`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast('SQL file downloaded', 'success');
-  }
+}
 
-  function resetAnalysis() {
+function esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
+// ── PARALLEL SYNC LOGIC ──────────────────────────────────────────────────
+let currentComparison = null;
+let currentStatements = null;
+
+function resetParallel() {
     currentComparison = null;
     currentStatements = null;
-    document.getElementById('analysisResults').style.display = 'none';
+    document.getElementById('parallelResults').style.display = 'none';
     document.getElementById('migrationPlan').style.display = 'none';
     document.getElementById('executionResults').style.display = 'none';
-    btnGenerateSql.disabled = true;
-  }
+}
 
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
+function analyzeParallelSync() {
+    const sourceDb = document.getElementById('sourceDb').value;
+    const targetDb = document.getElementById('targetDb').value;
+    if (!sourceDb || !targetDb) return Toast.show('Select both source and target databases', 'warn');
+    if (sourceDb === targetDb) return Toast.show('Source and target must differ', 'warn');
 
-})();
+    const btn = document.getElementById('btnAnalyze');
+    const origHTML = btn.innerHTML;
+    btn.innerHTML = '<span class="bp-spinner"></span>Analyzing...';
+    btn.disabled = true;
+
+    fetch('db_migration_api.php?action=compare_schemas', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ source_db: sourceDb, target_db: targetDb })
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.innerHTML = origHTML;
+        btn.disabled = false;
+        if (data.status === 'ok') {
+            currentComparison = data;
+            displayComparisonResults(data);
+        } else {
+            Toast.show('Analysis failed: ' + (data.message || 'Error'), 'error');
+        }
+    })
+    .catch(err => {
+        btn.innerHTML = origHTML; btn.disabled = false;
+        Toast.show('Network error during analysis', 'error');
+    });
+}
+
+function displayComparisonResults(data) {
+    document.getElementById('parallelResults').style.display = 'flex';
+    document.getElementById('migrationPlan').style.display = 'none';
+    document.getElementById('executionResults').style.display = 'none';
+    
+    const diffs = data.differences || {};
+    const total = (diffs.missing_tables?.length||0) + (diffs.missing_views?.length||0) + 
+                  (diffs.altered_views?.length||0) + (diffs.missing_columns?.length||0) + 
+                  (diffs.column_changes?.length||0) + (diffs.missing_indexes?.length||0) + 
+                  (diffs.missing_constraints?.length||0);
+    
+    document.getElementById('analysisStats').textContent = total + ' changes';
+    const content = document.getElementById('analysisContent');
+    
+    if (total === 0) {
+        content.innerHTML = '<div style="color:var(--bp-dim); font-size:0.85rem;">Databases are completely in sync!</div>';
+        document.getElementById('btnGenerateSql').style.display = 'none';
+        return;
+    }
+    
+    document.getElementById('btnGenerateSql').style.display = '';
+
+    let html = '';
+    if (diffs.missing_tables?.length > 0) html += makeDiffSec('Missing Tables', diffs.missing_tables.length, diffs.missing_tables.map(t => `<div>• ${esc(t)}</div>`).join(''));
+    if (diffs.missing_views?.length > 0) html += makeDiffSec('Missing Views', diffs.missing_views.length, diffs.missing_views.map(v => `<div>• ${esc(v)}</div>`).join(''));
+    if (diffs.altered_views?.length > 0) html += makeDiffSec('Altered Views', diffs.altered_views.length, diffs.altered_views.map(v => `<div>• ${esc(v.view)}</div>`).join(''));
+    if (diffs.missing_columns?.length > 0) html += makeDiffSec('Missing Columns', diffs.missing_columns.length, diffs.missing_columns.map(c => `<div>• ${esc(c.table)}: ${esc(c.column.COLUMN_NAME)} (${esc(c.column.COLUMN_TYPE)})</div>`).join(''));
+    if (diffs.column_changes?.length > 0) html += makeDiffSec('Modified Columns', diffs.column_changes.length, diffs.column_changes.map(c => `<div>• ${esc(c.table)}.${esc(c.column)}</div>`).join(''));
+    if (diffs.missing_indexes?.length > 0) html += makeDiffSec('Missing Indexes', diffs.missing_indexes.length, diffs.missing_indexes.map(i => `<div>• ${esc(i.table)}: ${esc(i.index.Key_name)}</div>`).join(''));
+    if (diffs.missing_constraints?.length > 0) html += makeDiffSec('Missing Foreign Keys', diffs.missing_constraints.length, diffs.missing_constraints.map(fk => `<div>• ${esc(fk.table)}: ${esc(fk.constraint.CONSTRAINT_NAME)}</div>`).join(''));
+
+    content.innerHTML = html;
+}
+
+function makeDiffSec(title, count, inner) {
+    return `
+      <div class="diff-section">
+        <div class="diff-header" onclick="this.nextElementSibling.classList.toggle('show')">
+          <span>${esc(title)} <span class="bp-card-header-badge" style="margin-left:8px;">${count}</span></span>
+          <span style="color:var(--bp-dim);">▼</span>
+        </div>
+        <div class="diff-body">${inner}</div>
+      </div>
+    `;
+}
+
+function generateMigrationSql() {
+    if (!currentComparison) return;
+    const btn = document.getElementById('btnGenerateSql');
+    const origHTML = btn.innerHTML;
+    btn.innerHTML = '<span class="bp-spinner"></span>Generating...';
+    btn.disabled = true;
+
+    fetch('db_migration_api.php?action=generate_migration', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ comparison: currentComparison })
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.innerHTML = origHTML; btn.disabled = false;
+        if (data.status === 'ok') {
+            currentStatements = data.statements;
+            displayMigrationPlan();
+            document.getElementById('migrationPlan').scrollIntoView({ behavior: 'smooth' });
+        } else {
+            Toast.show('Failed: ' + (data.message || 'Error'), 'error');
+        }
+    })
+    .catch(err => { btn.innerHTML = origHTML; btn.disabled = false; Toast.show('Network error', 'error'); });
+}
+
+function displayMigrationPlan() {
+    const plan = document.getElementById('migrationPlan');
+    plan.style.display = 'flex';
+    document.getElementById('planStats').textContent = currentStatements.length + ' steps';
+    
+    let html = '';
+    currentStatements.forEach((stmt, idx) => {
+        const cls = stmt.safe ? 'safe' : (stmt.warning ? 'warning' : 'danger');
+        html += `
+        <div class="migration-step ${cls}">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <strong style="font-size:0.85rem;">${idx+1}. ${esc(stmt.type)}</strong>
+                <span class="bp-card-header-badge" style="background:${stmt.safe?'rgba(58,184,127,0.15)':'rgba(245,166,35,0.15)'}; color:${stmt.safe?'var(--bp-green)':'var(--bp-amber)'};">${stmt.safe?'Safe':'Caution'}</span>
+            </div>
+            <div style="font-size:0.75rem; color:var(--bp-dim); margin:4px 0;">Table: <strong style="color:var(--bp-text);">${esc(stmt.table||'N/A')}</strong></div>
+            ${stmt.warning ? `<div style="font-size:0.75rem; color:var(--bp-amber); margin-bottom:4px;">⚠️ ${esc(stmt.warning)}</div>` : ''}
+            <div class="sql-preview">${esc(stmt.sql)}</div>
+        </div>`;
+    });
+    document.getElementById('migrationSteps').innerHTML = html;
+}
+
+function executeMigration() {
+    if (!currentStatements || currentStatements.length === 0) return;
+    const dryRun = document.getElementById('dryRun').checked;
+    if (!dryRun && !confirm('This will modify the target database. Are you absolutely sure?')) return;
+    
+    const btn = document.getElementById('btnExecute');
+    const origHTML = btn.innerHTML;
+    btn.innerHTML = '<span class="bp-spinner"></span>Executing...';
+    btn.disabled = true;
+
+    fetch('db_migration_api.php?action=execute_migration', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ 
+            statements: currentStatements, 
+            dry_run: dryRun, 
+            target_db: currentComparison.target_db 
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.innerHTML = origHTML; btn.disabled = false;
+        if (data.status === 'ok') {
+            displayExecutionResults(data, dryRun);
+            Toast.show(dryRun ? 'Dry run finished safely' : 'Migration executed successfully', dryRun ? 'info' : 'success');
+        } else {
+            Toast.show('Execution failed: ' + (data.message || 'Error'), 'error');
+        }
+    })
+    .catch(err => { btn.innerHTML = origHTML; btn.disabled = false; Toast.show('Network error', 'error'); });
+}
+
+function displayExecutionResults(data, dryRun) {
+    const card = document.getElementById('executionResults');
+    card.style.display = 'flex';
+    const r = data.results || {};
+    const ex = r.executed || [];
+    const fa = r.failed || [];
+    
+    let html = `<div style="display:flex; gap:12px; font-size:0.85rem; margin-bottom:12px; align-items:center;">
+        <span class="bp-card-header-badge" style="background:${r.success?'rgba(58,184,127,0.15)':'rgba(246,102,102,0.15)'}; color:${r.success?'var(--bp-green)':'var(--bp-red)'}; font-size:0.8rem; padding:4px 10px;">${r.success?'✓ Success':'✗ Failed'}</span>
+        ${dryRun ? `<span class="bp-card-header-badge" style="background:rgba(58,181,200,0.15); color:var(--bp-teal); font-size:0.8rem; padding:4px 10px;">Dry Run Mode</span>` : ''}
+        <span style="color:var(--bp-dim);">${ex.length} executed, ${fa.length} failed.</span>
+    </div>`;
+    
+    if (fa.length > 0) {
+        html += makeDiffSec('Failed Statements', fa.length, fa.map(f => `
+            <div class="migration-step danger">
+                <strong>${esc(f.statement.type)}</strong>
+                <div style="color:var(--bp-red); margin:4px 0; font-size:0.75rem;">${esc(f.error)}</div>
+                <div class="sql-preview">${esc(f.statement.sql)}</div>
+            </div>`).join(''));
+    }
+    document.getElementById('executionContent').innerHTML = html;
+    card.scrollIntoView({ behavior: 'smooth' });
+}
+
+function downloadParallelSql() {
+    if (!currentStatements || !currentStatements.length) return;
+    const txt = currentStatements.map(s => `-- ${s.type} on ${s.table||'?'}\n${s.sql}\n`).join('\n');
+    downloadBlob(txt, `migration_${currentComparison.source_db}_to_${currentComparison.target_db}.sql`);
+}
+
+// ── FULL ROLLOUT SQL LOGIC ───────────────────────────────────────────────
+let currentFullSql = '';
+
+function generateFullRollout() {
+    const db = document.getElementById('fullRolloutDb').value;
+    if (!db) return Toast.show('Select a database first', 'warn');
+    
+    const btn = document.getElementById('btnGenFull');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<span class="bp-spinner"></span>Generating...';
+    btn.disabled = true;
+
+    fetch('db_migration_api.php?action=generate_full_rollout_sql', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ db_name: db })
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.innerHTML = orig; btn.disabled = false;
+        if (data.status === 'ok') {
+            currentFullSql = data.sql;
+            document.getElementById('fullRolloutText').value = currentFullSql;
+            document.getElementById('fullRolloutResults').style.display = 'flex';
+            Toast.show('Full SQL generated successfully', 'success');
+        } else {
+            Toast.show('Error: ' + data.message, 'error');
+        }
+    })
+    .catch(() => { btn.innerHTML = orig; btn.disabled = false; Toast.show('Network error', 'error'); });
+}
+
+function downloadFullRollout() {
+    const db = document.getElementById('fullRolloutDb').value;
+    if (currentFullSql) downloadBlob(currentFullSql, `full_rollout_${db}.sql`);
+}
+
+// ── UPDATE ROLLOUT SQL LOGIC ─────────────────────────────────────────────
+let currentUpdateSql = '';
+
+function generateUpdateRollout() {
+    const liveDb = document.getElementById('updateLiveDb').value;
+    const baselineDb = document.getElementById('updateBaselineDb').value;
+    
+    if (!liveDb || !baselineDb) return Toast.show('Source and Target databases are required', 'warn');
+    if (liveDb === baselineDb) return Toast.show('Source and Target must be different', 'warn');
+    
+    const btn = document.getElementById('btnGenUpdate');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<span class="bp-spinner"></span>Reading Baseline...';
+    btn.disabled = true;
+
+    // Step 1: Generate Full SQL for the baseline (Staging) DB
+    fetch('db_migration_api.php?action=generate_full_rollout_sql', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ db_name: baselineDb })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status !== 'ok') throw new Error(data.message || 'Failed to read baseline DB');
+        
+        btn.innerHTML = '<span class="bp-spinner"></span>Comparing...';
+        
+        // Step 2: Pass that generated baseline to compare against the Live DB
+        return fetch('db_migration_api.php?action=generate_update_rollout_sql', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ live_db: liveDb, baseline_sql: data.sql })
+        }).then(r => r.json());
+    })
+    .then(data => {
+        btn.innerHTML = orig; btn.disabled = false;
+        if (data.status === 'ok') {
+            currentUpdateSql = data.full_sql;
+            document.getElementById('updateRolloutText').value = currentUpdateSql;
+            document.getElementById('updateRolloutResults').style.display = 'flex';
+            Toast.show('Update SQL generated successfully', 'success');
+        } else {
+            Toast.show('Error: ' + data.message, 'error');
+        }
+    })
+    .catch(err => { 
+        btn.innerHTML = orig; btn.disabled = false; 
+        Toast.show(err.message || 'Network error', 'error'); 
+    });
+}
+
+
+function downloadUpdateRollout() {
+    const liveDb = document.getElementById('updateLiveDb').value;
+    if (currentUpdateSql) downloadBlob(currentUpdateSql, `update_rollout_${liveDb}.sql`);
+}
+
 </script>
 <?php
 //require_once "forge_tool.php";
 $content = ob_get_clean();
-$spw->renderLayout($content.$eruda, $pageTitle);
+$spw->renderLayout($content, $pageTitle);
 ?>

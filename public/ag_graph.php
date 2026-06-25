@@ -212,7 +212,7 @@ iframe.frame-viewer { width: 100%; height: 100%; border: none; }
                 </div>
                 <div class="panel-content">
                     <button class="btn btn-primary btn-block" id="btn-layout"><i class="bi bi-play-fill"></i> Run ForceAtlas2</button>
-                    <button class="btn btn-ghost btn-block" id="btn-reset"><i class="bi bi-arrows-collapse"></i> Reset Camera</button>
+                    <button class="btn btn-ghost btn-block" id="btn-reset" onclick="resetGraphCamera()"><i class="bi bi-arrows-collapse"></i> Reset Camera</button>
 
                     <div style="margin-top:10px;">
                         <input type="search" id="graph-search"
@@ -447,12 +447,15 @@ function openNodePanel(nodeId) {
 // ═══════════════════════════════════════════════
 let visualSwiper = null;
 
-function fetchVisuals(docId, cat, name) {
+function fetchVisuals(docId, name) {
     const container = document.getElementById('mVisuals');
     const wrapper = document.getElementById('sketchWrapper');
     container.style.display = 'none';
     wrapper.innerHTML = '';
     
+    // Per SAGE Architecture: KG nodes and AG nodes map to visuals by exact name match 
+    // against the KG canonical source (sketch_lore_history.entity_name -> ag_nodes.name matches).
+    // The ag_api.php uses doc_id context to narrow down the lore history.
     $.post('ag_api.php', {
         action: 'fetch_visuals',
         doc_id: docId,
@@ -483,7 +486,6 @@ function fetchVisuals(docId, cat, name) {
             });
             wrapper.innerHTML = slides;
             
-            // Set flex before init so swiper can compute width safely
             container.style.display = 'flex';
 
             if (visualSwiper) {
@@ -613,9 +615,8 @@ function openDetailsModal(nodeId, addToHistory = true) {
     document.getElementById('modalDetails').style.display = 'flex';
     document.getElementById('details-body').scrollTop = 0;
 
-    fetchVisuals(currentDocId, attrs.node_type, attrs.label);
+    fetchVisuals(currentDocId, attrs.label);
 
-    // Uses ag_api.php with doc_id context
     $.get(`ag_api.php?action=get_node&doc_id=${currentDocId}&id=${nodeId}`, res => {
         if (!res.ok) { textContent.innerHTML = '<div class="details-empty">Failed to load node.</div>'; return; }
         const md = (res.node && res.node.content) ? res.node.content.trim() : '';
@@ -676,7 +677,8 @@ function detailsBuildConnections(nodeId) {
         });
         wrap.appendChild(list);
     }
-    makeSection('Outgoing', incoming);
+    
+    makeSection('Outgoing', outgoing);
     makeSection('Incoming', incoming);
     return wrap;
 }
@@ -727,6 +729,16 @@ function toast(msg, type = 'success') {
 // ═══════════════════════════════════════════════
 // GRAPH INIT
 // ═══════════════════════════════════════════════
+
+function resetGraphCamera() {
+    if(!renderer) return;
+    renderer.getCamera().animatedReset({ duration: 300 });
+    setTimeout(() => {
+        const cam = renderer.getCamera();
+        //cam.animatedZoom({ ratio: cam.ratio * 0.5, duration: 300 });
+    }, 320);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     makeDraggable('controls-panel');
     makeDraggable('node-panel');
@@ -736,7 +748,7 @@ document.addEventListener('DOMContentLoaded', () => {
     dbNodes.forEach(n => {
         graph.addNode(n.id.toString(), {
             x: Math.random() * 100, y: Math.random() * 100,
-            size: 4, label: n.name,
+            size: 8, label: n.name,
             color: typeColors[n.node_type] || typeColors['default'],
             node_type: n.node_type || 'note',
             doc_id: n.doc_id || null
@@ -752,19 +764,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Size nodes by degree
     graph.forEachNode(node => {
-        graph.setNodeAttribute(node, 'size', 4 + Math.sqrt(graph.degree(node)) * 1.5);
+        graph.setNodeAttribute(node, 'size', 4 + Math.sqrt(graph.degree(node)) * 2);
     });
+    
     document.getElementById('stat-nodes').textContent = graph.order;
     document.getElementById('stat-edges').textContent = graph.size;
 
+    // Free up JS memory 
+    dbNodes.length = 0;
+    dbEdges.length = 0;
+
     const container = document.getElementById('graph-container');
     renderer = new Sigma(graph, container, {
-        renderEdgeLabels:  true,
+        renderEdgeLabels:  graph.size <= 150,
         defaultEdgeType:   "arrow",
         allowInvalidContainer: true,
+        labelRenderedSizeThreshold: 2, 
         labelColor:      { color: getLabelColor() },
         edgeLabelColor:  { color: getLabelColor() },
-        edgeLabelSize:   7
+        edgeLabelSize:   7,
+        pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5)
     });
 
     new MutationObserver(() => {
@@ -791,12 +810,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     fa2Btn.addEventListener('click', toggleLayout);
     toggleLayout();
-    setTimeout(() => { if (isLayoutRunning) toggleLayout(); }, 2500);
-
-    document.getElementById('btn-reset').addEventListener('click', () => renderer.getCamera().animatedReset({ duration: 500 }));
+    
+    setTimeout(() => { 
+        if (isLayoutRunning) toggleLayout(); 
+        resetGraphCamera();
+    }, 2500);
 
     // ── Node drag (tap vs drag detection) ──
-    let dragNode = null, dragStartX = 0, dragStartY = 0;
+    let dragNode = null, dragStartX = 0, dragStartY = 0, dragFrame = null;
     const DRAG_THRESHOLD = 6;
 
     renderer.on("downNode", e => {
@@ -807,26 +828,35 @@ document.addEventListener('DOMContentLoaded', () => {
         renderer.getCamera().disable();
     });
 
-    renderer.getMouseCaptor().on("mousemovebody", e => {
-        if (!dragNode) return;
-        const pos = renderer.viewportToGraph(e);
-        graph.setNodeAttribute(dragNode, "x", pos.x);
-        graph.setNodeAttribute(dragNode, "y", pos.y);
-        e.preventSigmaDefault(); e.original.preventDefault(); e.original.stopPropagation();
-    });
-
     container.addEventListener('touchmove', e => {
         if (!dragNode) return;
+        e.preventDefault();
         const rect  = container.getBoundingClientRect();
         const touch = e.touches[0];
-        const pos   = renderer.viewportToGraph({ x: touch.clientX - rect.left, y: touch.clientY - rect.top });
-        graph.setNodeAttribute(dragNode, "x", pos.x);
-        graph.setNodeAttribute(dragNode, "y", pos.y);
-        e.preventDefault();
+        if (dragFrame) cancelAnimationFrame(dragFrame);
+        dragFrame = requestAnimationFrame(() => {
+            const pos = renderer.viewportToGraph({ x: touch.clientX - rect.left, y: touch.clientY - rect.top });
+            graph.setNodeAttribute(dragNode, "x", pos.x);
+            graph.setNodeAttribute(dragNode, "y", pos.y);
+            dragFrame = null;
+        });
     }, { passive: false });
+
+    renderer.getMouseCaptor().on("mousemovebody", e => {
+        if (!dragNode) return;
+        e.preventSigmaDefault(); e.original.preventDefault(); e.original.stopPropagation();
+        if (dragFrame) cancelAnimationFrame(dragFrame);
+        dragFrame = requestAnimationFrame(() => {
+            const pos = renderer.viewportToGraph(e);
+            graph.setNodeAttribute(dragNode, "x", pos.x);
+            graph.setNodeAttribute(dragNode, "y", pos.y);
+            dragFrame = null;
+        });
+    });
 
     function releaseNode(e) {
         if (!dragNode) return;
+        if (dragFrame) { cancelAnimationFrame(dragFrame); dragFrame = null; }
         let endX = (e.changedTouches && e.changedTouches.length) ? e.changedTouches[0].clientX : (e.clientX || dragStartX);
         let endY = (e.changedTouches && e.changedTouches.length) ? e.changedTouches[0].clientY : (e.clientY || dragStartY);
         const dist = Math.sqrt(Math.pow(endX - dragStartX, 2) + Math.pow(endY - dragStartY, 2));
@@ -837,7 +867,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('mouseup', releaseNode);
     window.addEventListener('touchend', releaseNode);
 
-    renderer.on("clickNode", ({ node }) => { if (!selectedNode || selectedNode !== node) openNodePanel(node); });
     renderer.on("clickStage", () => { selectedNode = null; document.getElementById('node-panel').style.display = 'none'; renderer.refresh(); });
     renderer.on('enterNode', ({ node }) => { hoveredNode = node; renderer.refresh(); });
     renderer.on('leaveNode', ()         => { hoveredNode = null; renderer.refresh(); });

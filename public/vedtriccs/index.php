@@ -277,6 +277,7 @@ window.VT_TRACK_HEAD_W     = 160;
                             <button class="picker-mode-btn" id="picker-mode-seq"       onclick="vtSwitchPickerMode('seq')" title="Sequences"><i class="bi bi-collection-play"></i></button>
                             <button class="picker-mode-btn" id="picker-mode-fuzz"      onclick="vtSwitchPickerMode('fuzz')" title="Concepts"><i class="bi bi-puzzle"></i></button>
                             <button class="picker-mode-btn" id="picker-mode-storyboard" onclick="vtSwitchPickerMode('storyboard')" title="Storyboards"><i class="bi bi-images"></i></button>
+                            <button class="picker-mode-btn" id="picker-mode-popcorn"   onclick="vtSwitchPickerMode('popcorn')" title="Popcorn Pots"><i class="bi bi-collection-fill" style="color:var(--amber);"></i></button>
                         </div>
                         <button class="picker-tree-clear" id="picker-tree-clear" style="display:none;" onclick="vtClearPickerFilter()">All</button>
                     </div>
@@ -329,6 +330,20 @@ window.VT_TRACK_HEAD_W     = 160;
                             <button class="pg-btn" id="picker-storyboard-next"><i class="bi bi-chevron-right"></i></button>
                         </div>
                     </div>
+
+                    <div class="picker-tab-panel" id="picker-popcorn-panel">
+                        <div class="picker-search-wrap">
+                            <input type="search" id="picker-popcorn-search" class="picker-search-input" placeholder="Search pots…">
+                        </div>
+                        <div id="picker-popcorn-list" class="picker-list-scroll"></div>
+                        <div class="picker-pagination" id="picker-popcorn-pg" style="display:none;">
+                            <button class="pg-btn" id="picker-popcorn-prev"><i class="bi bi-chevron-left"></i></button>
+                            <input type="number" class="pg-input" id="picker-popcorn-page-input" value="1" min="1">
+                            <span class="pg-of" id="picker-popcorn-pg-of">/ 1</span>
+                            <button class="pg-btn" id="picker-popcorn-next"><i class="bi bi-chevron-right"></i></button>
+                        </div>
+                    </div>
+
                 </div>
 
                 <div class="picker-videos-panel">

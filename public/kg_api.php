@@ -56,8 +56,7 @@ if ($action === 'fetch_visuals') {
     if ($historyRow) {
         $sketchId = $historyRow['sketch_id'];
 
-        // --- AG node detection via sketch_lore_history (same as FrameDetails) ---
-        // Get all history rows for this sketch, newest first
+        // --- AG node detection via sketch_lore_history ---
         $histStmt = $pdo->prepare("
             SELECT slh.doc_id, slh.entity_type, slh.entity_name
             FROM sketch_lore_history slh
@@ -71,21 +70,17 @@ if ($action === 'fetch_visuals') {
         $loreEntityName = null;
 
         foreach ($histRows as $row) {
-            // Lore-derived rows have plural entity_type (e.g. 'characters', 'locations')
             if ($loreDocId === null && substr($row['entity_type'], -1) === 's') {
                 $loreDocId = (int)$row['doc_id'];
                 $loreEntityName = $row['entity_name'];
             }
-            // Stop once we have a lore candidate
             if ($loreDocId !== null) break;
         }
 
-        // Validate doc_id exists and is active
         if ($loreDocId) {
             $docCheck = $pdo->prepare("SELECT id FROM documentations WHERE id = ? AND is_active = 1 LIMIT 1");
             $docCheck->execute([$loreDocId]);
             if ($docCheck->fetch()) {
-                // Look up AG node by doc_id and entity name
                 $agStmt = $pdo->prepare("
                     SELECT id FROM ag_nodes
                     WHERE doc_id = ? AND LOWER(name) = LOWER(?) AND status = 'active'
@@ -95,7 +90,6 @@ if ($action === 'fetch_visuals') {
                 $agNodeId = (int)($agStmt->fetchColumn() ?: 0);
             }
         }
-        // --- end AG detection ---
 
         $sqlFrames = "
             SELECT f.id, f.filename
@@ -168,7 +162,7 @@ if ($action === 'fetch_visuals') {
     }
 
     // -------------------------------------------------------
-    // MOVE NODE (drag & drop)
+    // MOVE NODE
     // -------------------------------------------------------
     if ($action === 'move_node') {
         $id       = $input['id'] ?? '';
@@ -211,9 +205,7 @@ if ($action === 'fetch_visuals') {
     if ($action === 'delete_category') {
         $id = (int)($input['id'] ?? 0);
         if (!$id) kg_json(false,[], 'Missing id');
-        // move orphaned nodes to uncategorized
         $pdo->prepare("UPDATE kg_nodes SET category_id=NULL WHERE category_id=?")->execute([$id]);
-        // move orphaned subcategories to root
         $pdo->prepare("UPDATE kg_categories SET parent_id=NULL WHERE parent_id=?")->execute([$id]);
         $pdo->prepare("DELETE FROM kg_categories WHERE id=?")->execute([$id]);
         kg_json(true);
@@ -243,11 +235,9 @@ if ($action === 'fetch_visuals') {
         $node = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$node) kg_json(false,[], 'Node not found');
 
-        // Outgoing: edges this node owns
         $outgoing = $pdo->prepare("SELECT *, 'outgoing' AS direction FROM kg_node_items WHERE node_id=? ORDER BY sort_order ASC");
         $outgoing->execute([$id]);
 
-        // Incoming: edges from other nodes that point to this node
         $incoming = $pdo->prepare("
             SELECT kni.*, 'incoming' AS direction, kn.name AS source_node_name, kn.node_type AS source_node_type
             FROM kg_node_items kni
@@ -301,7 +291,7 @@ if ($action === 'fetch_visuals') {
     }
 
     // -------------------------------------------------------
-    // RENAME NODE (quick rename from tree)
+    // RENAME NODE
     // -------------------------------------------------------
     if ($action === 'rename_node') {
         $id   = (int)($input['id'] ?? 0);
@@ -360,6 +350,25 @@ if ($action === 'fetch_visuals') {
     }
 
     // -------------------------------------------------------
+    // SAVE GRAPH LAYOUT
+    // -------------------------------------------------------
+    if ($action === 'save_layout') {
+        $positions = $input['positions'] ?? [];
+        if (!is_array($positions) || empty($positions)) {
+            kg_json(false, [], 'No positions provided');
+        }
+
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare("INSERT INTO kg_node_coordinates (node_id, x, y) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE x=VALUES(x), y=VALUES(y)");
+        foreach ($positions as $pos) {
+            $stmt->execute([(int)$pos['id'], (float)$pos['x'], (float)$pos['y']]);
+        }
+        $pdo->commit();
+        
+        kg_json(true);
+    }
+
+    // -------------------------------------------------------
     // SEARCH
     // -------------------------------------------------------
     if ($action === 'search') {
@@ -370,8 +379,7 @@ if ($action === 'fetch_visuals') {
     }
 
     // -------------------------------------------------------
-    // EXPORT SNAPSHOT (full graph, columnar, no content)
-    // with_edges=0 to strip edges from output
+    // EXPORT SNAPSHOT
     // -------------------------------------------------------
     if ($action === 'export_snapshot') {
         $withEdges = !isset($_GET['with_edges']) || (int)$_GET['with_edges'] !== 0;
@@ -393,9 +401,7 @@ if ($action === 'fetch_visuals') {
                 $c['parent_id'] ? (int)$c['parent_id'] : null,
                 $c['name'],
                 (int)$c['sort_order'],
-                $c['child_category_ids']
-                    ? array_map('intval', explode(',', $c['child_category_ids']))
-                    :[],
+                $c['child_category_ids'] ? array_map('intval', explode(',', $c['child_category_ids'])) :[],
             ];
         }
 
@@ -468,13 +474,11 @@ if ($action === 'fetch_visuals') {
                 'generated_at'           => date('c'),
                 'schema_tables'          => ['kg_categories','kg_nodes','kg_node_items'],
                 'columnar_format'        => true,
-                'columnar_note'          => 'Each section has a "fields" array (column names, declared once) and a "rows" array (value arrays in matching order). No key repetition per row.',
                 'total_categories'       => count($catRows),
                 'total_nodes'            => $totalNodes,
                 'total_edges'            => count($edgeRows),
                 'with_edges'             => $withEdges,
                 'content_status_summary' => $byStatus,
-                'note'                   => 'Content text excluded. Use content_chars/content_status to identify gaps. All IDs match live DB — paste to Claude to regenerate SQL.',
             ],
             'categories' =>['fields' => $catFields, 'rows' => $catRows],
             'nodes'      =>['fields' => $nodeFields, 'rows' => $nodeRows],
@@ -485,7 +489,205 @@ if ($action === 'fetch_visuals') {
     }
 
     // -------------------------------------------------------
-    // SEMANTIC QUERY  — Phase 1 of the context assembler
+    // EDGE CANDIDATE PACK
+    // -------------------------------------------------------
+    if ($action === 'edge_candidate_pack') {
+        $nodeId      = (int)($input['node_id'] ?? 0);
+        $nResults    = min(max((int)($input['n_results'] ?? 12), 1), 20);
+        $maxExcerpt  = min(max((int)($input['max_excerpt'] ?? 120), 40), 240);
+
+        if (!$nodeId) {
+            kg_json(false, [], 'Missing node_id');
+        }
+
+        $nodeStmt = $pdo->prepare("
+            SELECT
+                n.id,
+                n.name,
+                n.node_type,
+                COALESCE(n.content, '') AS content,
+                COALESCE(n.description, '') AS description,
+                COALESCE(n.keywords, '') AS keywords,
+                CHAR_LENGTH(COALESCE(n.content, '')) AS content_chars,
+                c.name AS category_name
+            FROM kg_nodes n
+            LEFT JOIN kg_categories c ON c.id = n.category_id
+            WHERE n.id = ? AND n.status = 'active'
+            LIMIT 1
+        ");
+        $nodeStmt->execute([$nodeId]);
+        $focal = $nodeStmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$focal) {
+            kg_json(false, [], 'Node not found or inactive');
+        }
+
+        $focalText = trim(
+            $focal['name'] . "\n\n" .
+            $focal['description'] . "\n\n" .
+            $focal['keywords'] . "\n\n" .
+            mb_substr($focal['content'], 0, 4000)
+        );
+
+        if ($focalText === '') {
+            kg_json(false, [], 'Focal node has no usable text');
+        }
+
+        $pyapiEchoScript = dirname(__DIR__) . '/bash/pyapi_echo.sh';
+        $pyapiUrl = rtrim(trim(shell_exec('sh ' . escapeshellarg($pyapiEchoScript))) ?: 'http://127.0.0.1:8009', '/');
+
+        $collections = [
+            ['name' => 'sage_kg_nodes_content', 'weight' => 1.0, 'n' => $nResults],
+            ['name' => 'sage_kg_nodes_meta',    'weight' => 0.6, 'n' => (int)ceil($nResults * 0.6)],
+        ];
+
+        $scoreMap = [];
+
+        foreach ($collections as $coll) {
+            $payload = json_encode([
+                'text'       => $focalText,
+                'collection'  => $coll['name'],
+                'n_results'   => $coll['n'],
+                'modality'    => 'text',
+            ]);
+
+            $ch = curl_init($pyapiUrl . '/chroma/query_json');
+            curl_setopt_array($ch, [
+                CURLOPT_POST           => true,
+                CURLOPT_POSTFIELDS     => $payload,
+                CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 20,
+            ]);
+
+            $resp     = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($resp === false || $httpCode !== 200) {
+                continue;
+            }
+
+            $data = json_decode($resp, true);
+            if (empty($data['result'])) {
+                continue;
+            }
+
+            $result    = $data['result'];
+            $ids       = $result['ids'][0] ?? [];
+            $distances = $result['distances'][0] ?? [];
+            $metas     = $result['metadatas'][0] ?? [];
+            $docs      = $result['documents'][0] ?? [];
+
+            foreach ($ids as $i => $chromaId) {
+                $candNodeId = (int)($metas[$i]['node_id'] ?? 0);
+                if (!$candNodeId || $candNodeId === $nodeId) {
+                    continue;
+                }
+
+                $distance   = (float)($distances[$i] ?? 1.0);
+                $similarity = max(0.0, 1.0 - ($distance / 2.0));
+                $weighted   = $similarity * $coll['weight'];
+
+                $excerpt = trim(preg_replace('/\s+/u', ' ', strip_tags((string)($docs[$i] ?? ''))));
+                if ($excerpt !== '' && mb_strlen($excerpt) > $maxExcerpt) {
+                    $excerpt = mb_substr($excerpt, 0, $maxExcerpt - 1) . '…';
+                }
+
+                if (!isset($scoreMap[$candNodeId]) || $weighted > $scoreMap[$candNodeId]['score']) {
+                    $scoreMap[$candNodeId] = [
+                        'score'   => $weighted,
+                        'meta'    => $metas[$i],
+                        'excerpt' => $excerpt,
+                        'source'  => $coll['name'],
+                    ];
+                }
+            }
+        }
+
+        if (empty($scoreMap)) {
+            kg_json(true, [
+                'focal_node' => [
+                    'id'            => (int)$focal['id'],
+                    'name'          => $focal['name'],
+                    'node_type'     => $focal['node_type'],
+                    'category_name' => $focal['category_name'] ?? '',
+                    'content_chars' => (int)$focal['content_chars'],
+                ],
+                'hits' => [],
+                'total' => 0,
+            ]);
+        }
+
+        uasort($scoreMap, fn($a, $b) => $b['score'] <=> $a['score']);
+
+        $nodeIds = array_keys($scoreMap);
+        $placeholders = implode(',', array_fill(0, count($nodeIds), '?'));
+
+        $stmt = $pdo->prepare("
+            SELECT
+                n.id,
+                n.name,
+                n.node_type,
+                n.keywords,
+                c.name AS category_name,
+                CHAR_LENGTH(COALESCE(n.content, '')) AS content_chars
+            FROM kg_nodes n
+            LEFT JOIN kg_categories c ON c.id = n.category_id
+            WHERE n.id IN ($placeholders)
+              AND n.status = 'active'
+        ");
+        $stmt->execute($nodeIds);
+
+        $dbRows = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $dbRows[(int)$r['id']] = $r;
+        }
+
+        $hits = [];
+        foreach ($scoreMap as $candNodeId => $entry) {
+            $db = $dbRows[$candNodeId] ?? null;
+            if (!$db) {
+                continue;
+            }
+
+            $chars = (int)$db['content_chars'];
+            $contentStatus = match (true) {
+                $chars === 0  => 'empty',
+                $chars < 200  => 'stub',
+                $chars < 600  => 'partial',
+                default       => 'filled',
+            };
+
+            $hits[] = [
+                'node_id'        => $candNodeId,
+                'score'          => round($entry['score'], 4),
+                'name'           => $db['name'],
+                'node_type'      => $db['node_type'],
+                'category_name'  => $db['category_name'] ?? '',
+                'keywords'       => $db['keywords'] ?? '',
+                'content_status' => $contentStatus,
+                'content_chars'  => $chars,
+                'excerpt'        => $entry['excerpt'],
+                'source'         => $entry['source'],
+            ];
+        }
+
+        kg_json(true, [
+            'focal_node' => [
+                'id'            => (int)$focal['id'],
+                'name'          => $focal['name'],
+                'node_type'     => $focal['node_type'],
+                'category_name' => $focal['category_name'] ?? '',
+                'content_chars' => (int)$focal['content_chars'],
+            ],
+            'hits'  => $hits,
+            'total' => count($hits),
+        ]);
+    }
+
+    // -------------------------------------------------------
+    // SEMANTIC QUERY  
     // -------------------------------------------------------
     if ($action === 'semantic_query') {
         $query    = trim($input['query'] ?? '');
@@ -603,8 +805,7 @@ if ($action === 'fetch_visuals') {
     }
 
     // -------------------------------------------------------
-    // FOCUSED SNAPSHOT  — Phase 2 of the context assembler
-    // with_edges (bool, default true): include kg_node_items rows
+    // FOCUSED SNAPSHOT
     // -------------------------------------------------------
     if ($action === 'focused_snapshot') {
         $nodeIds     = $input['node_ids']     ??[];
@@ -728,14 +929,10 @@ if ($action === 'fetch_visuals') {
                 'with_content'           => $withContent,
                 'with_edges'             => $withEdges,
                 'columnar_format'        => true,
-                'columnar_note'          => 'fields declared once; rows are positional value arrays.',
                 'total_categories'       => count($catRows),
                 'total_nodes'            => count($nodeRows),
                 'total_edges'            => count($edgeRows),
                 'content_status_summary' => $byStatus,
-                'note'                   => $withContent
-                    ? 'Full markdown content included for all selected nodes.'
-                    : 'Content text excluded. Use content_chars/content_status to identify gaps.',
             ],
             'categories' =>['fields' => $catFields, 'rows' => $catRows],
             'nodes'      =>['fields' => $nodeFields, 'rows' => $nodeRows],
@@ -745,11 +942,8 @@ if ($action === 'fetch_visuals') {
         kg_json(true, ['snapshot' => $snapshot]);
     }
     
-    
     // -------------------------------------------------------
     // GET FUZZ CANDIDATE FOR KG NODE
-    // Returns the promoted fuzz_candidates entry linked to a
-    // kg_node by fuzz_candidates.kg_node_id (status = 'promoted').
     // -------------------------------------------------------
     if ($action === 'get_fuzz_candidate_for_node') {
         $nodeId = (int)($input['node_id'] ?? $_GET['node_id'] ?? 0);
@@ -772,9 +966,6 @@ if ($action === 'fetch_visuals') {
             kg_json(true, ['candidate' => null]);
         }
     }
-    
-    
-    
 
     kg_json(false,[], 'Unknown action: ' . $action);
 
@@ -796,3 +987,4 @@ function kg_node_icon(string $type): string {
     };
 }
 ?>
+

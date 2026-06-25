@@ -76,9 +76,13 @@ class AIProvider
     private const POLLINATIONS_MODELS = [
         
         'nova-fast',
+        'claude-fable-5',
         'claude-large',
         'claude-opus-4.7',
         'gemini-large',
+        
+        'gpt-5.5',
+        'gpt-5.4-mini',
         
         'openai-large',
         'openai-reasoning',
@@ -94,6 +98,11 @@ class AIProvider
         
        
         'claude',
+        
+        
+        'glm',
+        
+        
         'deepseek',
         
     ];

@@ -17,7 +17,7 @@ $publicPathAbs = $spw->getPublicPath();
 $action = $_POST['action'] ?? ($_GET['action'] ?? '');
 
 // Download actions skip JSON header
-$downloadActions = ['download_zip', 'download_cover', 'compose_cover_download'];
+$downloadActions = ['download_zip', 'download_cover', 'compose_cover_download', 'download_pdf'];
 
 if (!in_array($action, $downloadActions)) {
     header('Content-Type: application/json; charset=utf-8');
@@ -176,6 +176,22 @@ try {
             $abs = $publicPathAbs . '/' . $relPath;
             if (!file_exists($abs)) { http_response_code(404); die('Not found'); }
             header('Content-Type: image/jpeg');
+            header('Content-Disposition: attachment; filename="' . basename($abs) . '"');
+            header('Content-Length: ' . filesize($abs));
+            readfile($abs);
+            break;
+
+        case 'download_pdf':
+            $relPath = ltrim(str_replace('..', '', $_GET['path'] ?? ''), '/');
+            // Safe bounds: Only allow downloading from the allowed PDF directories
+            if (!str_starts_with($relPath, 'media/magazines/') && !str_starts_with($relPath, 'media/webtoon/pdf_inbox/')) { 
+                http_response_code(403); die('Forbidden'); 
+            }
+            $abs = $publicPathAbs . '/' . $relPath;
+            if (!file_exists($abs) || !str_ends_with(strtolower($abs), '.pdf')) { 
+                http_response_code(404); die('Not found'); 
+            }
+            header('Content-Type: application/pdf');
             header('Content-Disposition: attachment; filename="' . basename($abs) . '"');
             header('Content-Length: ' . filesize($abs));
             readfile($abs);

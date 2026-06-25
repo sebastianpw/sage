@@ -30,7 +30,6 @@ function resolveFrameThumb(array $row, int $frameId = 0): string {
 
 // ── Sequence List View (if no ID is provided) ─────────────────────────────────
 if (!$seqId) {
-    $seqs = $pdo->query("SELECT id, name, created_at, sequence_data FROM narrative_sequences ORDER BY id DESC LIMIT 300")->fetchAll(PDO::FETCH_ASSOC);
     ob_start();
     ?>
     <link rel="stylesheet" href="/css/base.css">
@@ -61,36 +60,83 @@ if (!$seqId) {
     .pl-btn-secondary:hover { border-color:var(--pl-teal); color:var(--pl-teal); }
     .pl-btn-primary { border-color:var(--pl-teal); background:var(--pl-teal); color:#000; font-weight:bold; }
     .pl-btn-primary:hover { filter:brightness(1.1); }
+    
+    .new-seq-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 20px;
+        background: var(--pl-teal);
+        color: #000;
+        font-family: 'Space Mono', monospace;
+        font-size: 0.8rem;
+        font-weight: bold;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: filter 0.15s;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .new-seq-btn:hover { filter: brightness(1.12); }
+
+    /* Autocomplete dropdown styling */
+    .ff-dropdown { border: 1px solid var(--pl-border); border-radius: 4px; background: var(--pl-card); max-height: 240px; overflow-y: auto; display: none; position: absolute; z-index: 100; width: 100%; left: 0; box-shadow: 0 4px 15px rgba(0,0,0,0.3); overscroll-behavior: contain; touch-action: pan-y; }
+    .ff-dropdown.open { display: block; }
+    .ff-dropdown-item { padding: 8px 10px; font-size: 0.75rem; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.03); color: var(--pl-text); display: flex; justify-content: space-between; align-items:center; }
+    .ff-dropdown-item:hover { background: rgba(58,181,200,0.1); color: var(--pl-teal); }
     </style>
 
-    <div style="max-width:700px;margin:60px auto;padding:20px;">
-        <h2 style="font-family:'Space Mono',monospace;color:var(--pl-teal);">✂️ Sequence Split & Copy Tool</h2>
-        <p style="color:var(--pl-text-dim);font-size:.85rem;">Select a narrative sequence to split or copy:</p>
-
-        <div style="display:flex;flex-direction:column;gap:8px;margin-top:20px;">
-        <?php foreach ($seqs as $s): ?>
-            <div style="display:flex;align-items:center;background:var(--pl-card);border:1px solid var(--pl-border);border-radius:6px;overflow:hidden;transition:border-color .2s;"
-                 onmouseover="this.style.borderColor='var(--pl-teal)'" onmouseout="this.style.borderColor='var(--pl-border)'">
-                <a href="?id=<?= $s['id'] ?>"
-                   style="display:flex;justify-content:space-between;align-items:center;flex:1;padding:12px 14px;text-decoration:none;color:var(--pl-text);font-family:'Space Mono',monospace;font-size:.85rem;">
-                    <?php $sktCount = count(json_decode($s['sequence_data'] ?? '[]', true) ?: []); ?>
-                    <span>
-                        #<?= $s['id'] ?> 
-                        <span style="color:var(--pl-teal);opacity:0.8;margin:0 6px;">[<?= $sktCount ?> skts]</span> 
-                        <?= htmlspecialchars($s['name']) ?>
-                    </span>
-                    <span style="color:var(--pl-text-dim);"><?= date('Y-m-d', strtotime($s['created_at'])) ?></span>
-                </a>
-                <button
-                    onclick="openCopyModal(<?= $s['id'] ?>, '<?= htmlspecialchars(addslashes($s['name'])) ?>')"
-                    title="Copy this sequence"
-                    style="background:transparent;border:none;border-left:1px solid var(--pl-border);padding:0 16px;height:100%;cursor:pointer;color:var(--pl-text-dim);font-size:1rem;display:flex;align-items:center;align-self:stretch;transition:color .2s,background .2s;"
-                    onmouseover="this.style.color='var(--pl-teal)';this.style.background='rgba(58,181,200,0.07)'"
-                    onmouseout="this.style.color='var(--pl-text-dim)';this.style.background='transparent'">
-                    <i class="bi bi-files"></i>
-                </button>
+    <div style="max-width:800px;margin:60px auto;padding:20px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
+            <h2 style="font-family:'Space Mono',monospace;color:var(--pl-teal); margin:0;">✂️ Sequence Split & Copy Tool</h2>
+            <button class="new-seq-btn" onclick="openNewModal()">＋ New Sequence</button>
+        </div>
+        
+        <!-- Filters & Pagination Bar -->
+        <div style="display:flex; gap:12px; margin-bottom: 20px; align-items:center; flex-wrap:wrap; background:var(--pl-surface); padding:12px; border:1px solid var(--pl-border); border-radius:6px;">
+            <div style="position:relative; flex:1; min-width: 200px;">
+                <input type="text" id="mainSeqSearch" class="su-input" placeholder="Search sequences... (type for quick jump)" oninput="debounceMainSearch(this.value)" autocomplete="off">
+                <div id="mainSeqDrop" class="ff-dropdown" style="top:40px;"></div>
             </div>
-        <?php endforeach; ?>
+            <div style="flex:1; min-width: 150px; max-width: 200px;">
+                <select id="mainSeqCat" class="su-input" onchange="goToMainPage(1)">
+                    <option value="">All Categories</option>
+                </select>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; margin-left:auto;">
+                <button class="pl-btn pl-btn-secondary" onclick="changeMainPage(-1)">« Prev</button>
+                <div style="font-size:0.8rem; color:var(--pl-text-dim); display:flex; align-items:center; gap:6px;">
+                    <input type="number" id="mainPageInput" class="su-input" style="width:50px; text-align:center; padding:4px;" value="1" min="1" onchange="goToMainPage(this.value)"> 
+                    <span id="mainTotalPages">of 1</span>
+                </div>
+                <button class="pl-btn pl-btn-secondary" onclick="changeMainPage(1)">Next »</button>
+            </div>
+        </div>
+
+        <div id="mainSeqListContainer" style="display:flex;flex-direction:column;gap:8px;margin-top:20px;">
+            <div style="text-align:center; padding:20px; color:var(--pl-text-dim); font-size:0.85rem;">Loading sequences...</div>
+        </div>
+    </div>
+
+    <!-- New Sequence Modal -->
+    <div id="newModal" class="su-modal-backdrop" onmousedown="if(event.target===this)closeNewModal()">
+        <div class="su-modal-box">
+            <div class="su-modal-header">
+                <div class="su-modal-title" style="color:var(--pl-teal);">＋ New Sequence</div>
+                <button onclick="closeNewModal()" class="su-modal-close">✕</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <div>
+                    <label style="display:block;font-family:'Space Mono',monospace;font-size:.7rem;color:var(--pl-text-dim);margin-bottom:5px;text-transform:uppercase;letter-spacing:1px;">Sequence Name</label>
+                    <input type="text" id="newSeqName" class="su-input" placeholder="e.g. Act 1 — The Awakening"
+                           onkeydown="if(event.key==='Enter') submitNew()">
+                </div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">
+                <button onclick="closeNewModal()" class="pl-btn pl-btn-secondary">Cancel</button>
+                <button onclick="submitNew()" class="pl-btn pl-btn-teal">Create & Open</button>
+            </div>
         </div>
     </div>
 
@@ -114,10 +160,162 @@ if (!$seqId) {
             </div>
         </div>
     </div>
+    
+    <!-- Edit Modal -->
+    <div id="editModal" class="su-modal-backdrop" onmousedown="if(event.target===this)closeEditModal()">
+        <div class="su-modal-box">
+            <div class="su-modal-header">
+                <div class="su-modal-title" style="color:var(--pl-teal);"><i class="bi bi-pencil"></i> Edit Sequence</div>
+                <button onclick="closeEditModal()" class="su-modal-close">✕</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <input type="hidden" id="editSeqId">
+                <div>
+                    <label style="display:block;font-family:'Space Mono',monospace;font-size:.7rem;color:var(--pl-text-dim);margin-bottom:5px;text-transform:uppercase;letter-spacing:1px;">Sequence Name</label>
+                    <input type="text" id="editSeqName" class="su-input" onkeydown="if(event.key==='Enter') submitEdit()">
+                </div>
+                <div>
+                    <label style="display:block;font-family:'Space Mono',monospace;font-size:.7rem;color:var(--pl-text-dim);margin-bottom:5px;text-transform:uppercase;letter-spacing:1px;">Category</label>
+                    <select id="editSeqCat" class="su-input">
+                        <option value="0">No Category</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">
+                <button onclick="closeEditModal()" class="pl-btn pl-btn-secondary">Cancel</button>
+                <button onclick="submitEdit()" class="pl-btn pl-btn-teal">Save Changes</button>
+            </div>
+        </div>
+    </div>
 
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="/js/toast.js"></script>
     <script>
+    
+    // --- MAIN LIST LOGIC ---
+    let curMainPage = 1;
+    let totalMainPages = 1;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadMainCategories();
+        loadMainSequences();
+    });
+
+    function loadMainCategories() {
+        fetch('narseq_api.php?action=get_sequence_categories')
+            .then(r=>r.json()).then(res => {
+                if(res.success && res.data && res.data.length > 0) {
+                    const sel = document.getElementById('mainSeqCat');
+                    res.data.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c.id;
+                        opt.textContent = c.name;
+                        sel.appendChild(opt);
+                    });
+                }
+            }).catch(e=>console.log('Categories not initialized or unavailable'));
+    }
+
+    function goToMainPage(p) {
+        p = parseInt(p);
+        if(isNaN(p) || p < 1) p = 1;
+        if(p > totalMainPages) p = totalMainPages;
+        curMainPage = p;
+        document.getElementById('mainPageInput').value = p;
+        loadMainSequences();
+    }
+
+    function changeMainPage(delta) {
+        goToMainPage(curMainPage + delta);
+    }
+
+    function loadMainSequences() {
+        const search = document.getElementById('mainSeqSearch').value.trim();
+        const catId = document.getElementById('mainSeqCat').value;
+        const url = `narseq_api.php?action=get_sequences_list&page=${curMainPage}&search=${encodeURIComponent(search)}&category_id=${catId}`;
+        
+        const cont = document.getElementById('mainSeqListContainer');
+        cont.innerHTML = '<div style="text-align:center; padding:20px; color:var(--pl-text-dim); font-size:0.85rem;">Loading...</div>';
+
+        fetch(url).then(r=>r.json()).then(res => {
+            if(res.success) {
+                totalMainPages = res.meta.total_pages;
+                document.getElementById('mainTotalPages').textContent = 'of ' + totalMainPages;
+                document.getElementById('mainPageInput').value = res.meta.page;
+                curMainPage = res.meta.page;
+
+                if(!res.data.length) {
+                    cont.innerHTML = '<div style="text-align:center; padding:20px; color:var(--pl-text-dim); font-size:0.85rem;">No sequences found.</div>';
+                    return;
+                }
+
+                cont.innerHTML = res.data.map(s => {
+                    const safeName = s.name.replace(/"/g, '&quot;').replace(/'/g, "\\'");
+                    return `<div style="display:flex;align-items:center;background:var(--pl-card);border:1px solid var(--pl-border);border-radius:6px;overflow:hidden;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--pl-teal)'" onmouseout="this.style.borderColor='var(--pl-border)'">
+                        <a href="?id=${s.id}" style="display:flex;justify-content:space-between;align-items:center;flex:1;padding:12px 14px;text-decoration:none;color:var(--pl-text);font-family:'Space Mono',monospace;font-size:.85rem;">
+                            <span>
+                                #${s.id} 
+                                <span style="color:var(--pl-teal);opacity:0.8;margin:0 6px;">[${s.skt_count} skts]</span> 
+                                ${s.name}
+                            </span>
+                            <span style="color:var(--pl-text-dim);">${s.created_at}</span>
+                        </a>
+                        <div style="display:flex; border-left:1px solid var(--pl-border); align-self:stretch;">
+                            <button onclick="openEditModal(${s.id}, '${safeName}', ${s.category_id || 0})" title="Edit" style="background:transparent;border:none;border-right:1px solid var(--pl-border);padding:0 12px;cursor:pointer;color:var(--pl-text-dim);font-size:.9rem;transition:all .2s;" onmouseover="this.style.color='var(--pl-teal)';this.style.background='rgba(58,181,200,0.07)'" onmouseout="this.style.color='var(--pl-text-dim)';this.style.background='transparent'"><i class="bi bi-pencil"></i></button>
+                            <button onclick="openCopyModal(${s.id}, '${safeName}')" title="Copy" style="background:transparent;border:none;border-right:1px solid var(--pl-border);padding:0 12px;cursor:pointer;color:var(--pl-text-dim);font-size:.9rem;transition:all .2s;" onmouseover="this.style.color='var(--pl-teal)';this.style.background='rgba(58,181,200,0.07)'" onmouseout="this.style.color='var(--pl-text-dim)';this.style.background='transparent'"><i class="bi bi-files"></i></button>
+                            <button onclick="deleteSequence(${s.id})" title="Delete" style="background:transparent;border:none;padding:0 12px;cursor:pointer;color:var(--pl-text-dim);font-size:.9rem;transition:all .2s;" onmouseover="this.style.color='#ff4444';this.style.background='rgba(255,68,68,0.07)'" onmouseout="this.style.color='var(--pl-text-dim)';this.style.background='transparent'"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </div>`;
+                }).join('');
+            } else {
+                cont.innerHTML = `<div style="text-align:center; padding:20px; color:#ff4444; font-size:0.85rem;">Error: ${res.message}</div>`;
+            }
+        });
+    }
+
+    let mainSearchTimer;
+    function debounceMainSearch(val) {
+        clearTimeout(mainSearchTimer);
+        const drop = document.getElementById('mainSeqDrop');
+        
+        mainSearchTimer = setTimeout(() => {
+            // Instantly update the list based on search filter
+            curMainPage = 1;
+            loadMainSequences();
+
+            // Populate the proposal dropdown for quick jumping
+            if(!val.trim()) {
+                drop.classList.remove('open');
+                return;
+            }
+            drop.innerHTML = '<div style="padding:8px 10px; font-size:0.75rem; color:var(--pl-text-dim);">Searching proposals...</div>';
+            drop.classList.add('open');
+
+            fetch('narseq_api.php?action=search_sequences&q=' + encodeURIComponent(val))
+                .then(r=>r.json()).then(res => {
+                    if(res.status !== 'success' || !res.data || !res.data.length) {
+                        drop.innerHTML = '<div style="padding:8px 10px; font-size:0.75rem; color:var(--pl-text-dim);">No quick proposals</div>';
+                        return;
+                    }
+                    drop.innerHTML = res.data.map(item => {
+                        return `<a href="?id=${item.id}" class="ff-dropdown-item" style="text-decoration:none; display:flex;">
+                            <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;">${item.label}</span>
+                            <span style="font-size:0.65rem; color:var(--pl-text-dim); margin-left:8px;">Jump to #${item.id}</span>
+                        </a>`;
+                    }).join('');
+                });
+        }, 350);
+    }
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', e => {
+        const drop = document.getElementById('mainSeqDrop');
+        if(drop && !e.target.closest('#mainSeqSearch') && !e.target.closest('#mainSeqDrop')) {
+            drop.classList.remove('open');
+        }
+    });
+
+    // --- MODALS ---
     function openCopyModal(id, currentName) {
         document.getElementById('copySeqId').value = id;
         document.getElementById('copySeqName').value = currentName + ' copy';
@@ -141,6 +339,101 @@ if (!$seqId) {
             .then(r=>r.json()).then(res => {
                 if (res.success) window.location.href = '?id=' + res.new_sequence_id;
                 else Toast.show(res.message || 'Copy failed', 'error');
+            });
+    }
+    
+   function openNewModal() {
+        document.getElementById('newSeqName').value = '';
+        document.getElementById('newModal').classList.add('active');
+        setTimeout(() => document.getElementById('newSeqName').focus(), 50);
+    }
+    function closeNewModal() {
+        document.getElementById('newModal').classList.remove('active');
+    }
+    function submitNew() {
+        const name = document.getElementById('newSeqName').value.trim();
+        if (!name) return Toast.show('Name required', 'warn');
+
+        const fd = new URLSearchParams();
+        fd.append('action', 'create_sequence');
+        fd.append('name', name);
+
+        fetch('narseq_api.php', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) window.location.href = '?id=' + res.new_sequence_id;
+                else Toast.show(res.message || 'Create failed', 'error');
+            });
+    }
+
+    // --- EDIT & DELETE LOGIC ---
+    function openEditModal(id, name, catId) {
+        document.getElementById('editSeqId').value = id;
+        document.getElementById('editSeqName').value = name;
+        
+        // Clone categories from the main filter select
+        const editCatSelect = document.getElementById('editSeqCat');
+        editCatSelect.innerHTML = '<option value="0">No Category</option>';
+        const mainOpts = document.querySelectorAll('#mainSeqCat option');
+        mainOpts.forEach(opt => {
+            if(opt.value !== '') {
+                const newOpt = document.createElement('option');
+                newOpt.value = opt.value;
+                newOpt.textContent = opt.textContent;
+                editCatSelect.appendChild(newOpt);
+            }
+        });
+        editCatSelect.value = catId || 0;
+
+        document.getElementById('editModal').classList.add('active');
+        setTimeout(() => document.getElementById('editSeqName').focus(), 50);
+    }
+
+    function closeEditModal() {
+        document.getElementById('editModal').classList.remove('active');
+    }
+
+    function submitEdit() {
+        const id = document.getElementById('editSeqId').value;
+        const name = document.getElementById('editSeqName').value.trim();
+        const catId = document.getElementById('editSeqCat').value;
+
+        if(!name) return Toast.show('Name required', 'warn');
+
+        const fd = new URLSearchParams();
+        fd.append('action', 'edit_sequence');
+        fd.append('sequence_id', id);
+        fd.append('name', name);
+        fd.append('category_id', catId);
+
+        fetch('narseq_api.php', { method: 'POST', body: fd })
+            .then(r=>r.json()).then(res => {
+                if (res.success) {
+                    Toast.show('Sequence updated', 'success');
+                    closeEditModal();
+                    loadMainSequences();
+                } else {
+                    Toast.show(res.message || 'Update failed', 'error');
+                }
+            });
+    }
+
+    function deleteSequence(id) {
+        if(!confirm('Are you sure you want to delete this narrative sequence? This action cannot be undone.')) return;
+        
+        const fd = new URLSearchParams();
+        fd.append('action', 'delete_sequence');
+        fd.append('sequence_id', id);
+
+        fetch('narseq_api.php', { method: 'POST', body: fd })
+            .then(r=>r.json()).then(res => {
+                if (res.success) {
+                    Toast.show('Sequence deleted', 'success');
+                    // Reload current page. If page is now empty, it will naturally show "No sequences found"
+                    loadMainSequences();
+                } else {
+                    Toast.show(res.message || 'Delete failed', 'error');
+                }
             });
     }
     </script>
@@ -266,7 +559,6 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
 
 .pl-nav { display:flex; align-items:center; gap:10px; padding:10px 16px; background:rgba(0,0,0,.6); border-bottom:1px solid var(--pl-border); position:sticky; top:0; z-index:100; backdrop-filter:blur(6px); }
 [data-theme="light"] .pl-nav { background:rgba(244,246,250,.92); }
-.pl-nav-title { font-family:'Space Mono',monospace; font-size:.8rem; color:var(--pl-text); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .pl-nav-btn { font-family:'Space Mono',monospace; font-size:.7rem; padding:6px 12px; border:1px solid var(--pl-border); border-radius:4px; color:var(--pl-text-dim); text-decoration:none; transition:all .2s; background:var(--pl-surface); cursor:pointer; }
 .pl-nav-btn:hover { color:var(--pl-teal); border-color:var(--pl-teal); }
 
@@ -290,7 +582,7 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
 .scene-block:hover .drag-handle { opacity:1; }
 .drag-handle:active { cursor:grabbing; color:var(--pl-teal); background:rgba(58,181,200,0.05); }
 
-/* Remove Button */
+/* Remove Button & Mass Checkbox */
 .item-remove-btn {
     position: absolute; top: 8px; right: 8px; width: 30px; height: 30px;
     border-radius: 4px; background: rgba(0,0,0,0.1); color: var(--pl-text-dim);
@@ -304,6 +596,14 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
     background: rgba(255, 68, 68, 0.1); color: #ff4444 !important; 
     border-color: rgba(255, 68, 68, 0.3); opacity: 1; 
 }
+.item-mass-checkbox {
+    display: none; position: absolute; top: 8px; right: 8px; width: 30px; height: 30px;
+    z-index: 10; align-items: center; justify-content: center;
+    background: var(--pl-card); border-radius: 4px; border: 1px solid var(--pl-border);
+}
+.item-mass-checkbox input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--pl-teal); margin: 0; }
+.mass-mode-active .item-remove-btn { display: none !important; }
+.mass-mode-active .item-mass-checkbox { display: flex !important; }
 
 .sketch-flex { display: flex; gap: 15px; align-items: center; }
 
@@ -397,10 +697,12 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
 .forge-tab-pane.active { display: flex; }
 
 .ff-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--pl-text-dim); letter-spacing: 1px; }
-.ff-dropdown { border: 1px solid var(--pl-border); border-radius: 4px; background: var(--pl-card); max-height: 140px; overflow-y: auto; display: none; }
+
+/* Enhanced scrolling for modal dropdown lists */
+.ff-dropdown { border: 1px solid var(--pl-border); border-radius: 4px; background: var(--pl-card); max-height: 140px; overflow-y: auto; display: none; position: absolute; z-index: 100; width: calc(100% - 40px); left: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); overscroll-behavior: contain; touch-action: pan-y; }
 .ff-dropdown.open { display: block; }
 .ff-dropdown-item { padding: 8px 10px; font-size: 0.75rem; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.03); color: var(--pl-text); display: flex; justify-content: space-between; align-items:center; }
-.ff-dropdown-item:hover { background: rgba(58,181,200,0.1); }
+.ff-dropdown-item:hover { background: rgba(58,181,200,0.1); color: var(--pl-teal); }
 
 /* Grid for results */
 .ff-result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
@@ -429,15 +731,83 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
 
 /* Ensure PhotoSwipe Lightbox pops over the 300,000 z-index modal */
 .pswp { z-index: 400000 !important; }
+
+    /* Empty sequence drop zone */
+    #emptyDropZone {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        min-height: 200px;
+        width: 100%;
+        box-sizing: border-box;
+        border: 2px dashed rgba(58, 181, 200, 0.35);
+        border-radius: 6px;
+        background: var(--pl-card);
+        color: var(--pl-text-dim);
+        font-family: 'Space Mono', monospace;
+        font-size: 0.78rem;
+        text-align: center;
+        padding: 40px 20px;
+        margin: 10px 0 20px;
+        box-shadow: 0 4px 15px rgba(0,0,0,.2);
+        transition: border-color 0.15s, background 0.15s, color 0.15s, padding 0.15s;
+        pointer-events: auto;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+    #emptyDropZone .dz-icon {
+        font-size: 2.4rem;
+        line-height: 1;
+        margin-bottom: 4px;
+    }
+    #emptyDropZone .dz-title {
+        font-size: 0.85rem;
+        font-weight: bold;
+        color: var(--pl-teal);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    #emptyDropZone .dz-hint {
+        font-size: 0.7rem;
+        opacity: 0.6;
+        line-height: 1.5;
+    }
+    /* Matches .seq-item-wrap.drag-over-top / drag-over-bottom border style */
+    #emptyDropZone.drag-over {
+        border-style: solid;
+        border-color: var(--pl-teal);
+        border-width: 2px;
+        background: rgba(58, 181, 200, 0.07);
+        padding-top: 44px;   /* mimics the padding-top bump on drag-over-top */
+        color: var(--pl-teal);
+    }
+    #emptyDropZone.drag-over .dz-title {
+        color: var(--pl-teal);
+    }
+
 </style>
 
-<div class="pl-nav">
-    <a href="narseq.php" class="pl-nav-link">&#9664; Sequences</a>
-    <span class="pl-nav-title"><i class="bi bi-scissors"></i> Split Sequence: <?= htmlspecialchars($seq['name']) ?></span>
-    <button class="pl-nav-btn" onclick="openForgeModal()" style="margin-left:auto; margin-right:10px; background:var(--pl-teal); color:#000; border-color:var(--pl-teal); font-weight:bold;">
-        <i class="bi bi-funnel"></i> Forge Add
+<div class="pl-nav" style="padding-left: 70px;">
+    <!-- Back Link (Visible in Default Mode) -->
+    <a href="narseq.php" class="pl-nav-btn default-mode-el" style="margin-right:10px;">&#9664; Seq</a>
+
+    <!-- Mass Action Buttons (Hidden by default) -->
+    <button class="pl-nav-btn mass-action-btn" style="display:none; margin-right:5px;" onclick="massCheckAll()">All</button>
+    <button class="pl-nav-btn mass-action-btn" style="display:none; color:#ff4444; border-color:rgba(255,68,68,0.3); margin-right:5px;" onclick="massDelete()">Del</button>
+    <button class="pl-nav-btn mass-action-btn" style="display:none; margin-right:auto;" onclick="openMassCopyModal()">Copy</button>
+    
+    <!-- Mass Toggle -->
+    <button class="pl-nav-btn" id="massToggleBtn" onclick="toggleMassMode()" style="margin-left:auto; margin-right:10px;">
+        Mass
     </button>
-    <button class="pl-nav-link" onclick="exportSequence(event)" title="Export JSON">
+    <!-- Add Button -->
+    <button class="pl-nav-btn" onclick="openForgeModal()" style="margin-right:10px; background:var(--pl-teal); color:#000; border-color:var(--pl-teal); font-weight:bold;">
+        <i class="bi bi-funnel"></i> Add
+    </button>
+    <!-- JSON Export -->
+    <button class="pl-nav-btn" onclick="exportSequence(event)" title="Export JSON">
         <i class="bi bi-download"></i> JSON
     </button>
 </div>
@@ -448,7 +818,11 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
     </div>
 
     <?php if (empty($itemIds)): ?>
-        <div id="emptyListMsg" style="text-align:center;color:var(--pl-text-dim);padding:40px;font-style:italic;">This sequence is empty.</div>
+        <div id="emptyDropZone">
+            <div class="dz-icon">🎞</div>
+            <div class="dz-title">Drop Frame Here</div>
+            <div class="dz-hint">Open Add above,<br>find a frame and drag it onto this zone.</div>
+        </div>
     <?php endif; ?>
 
     <div id="sequenceList" class="editor-pswp-gallery">
@@ -475,6 +849,7 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
         <div class="seq-item-wrap" data-idx="<?= $idx ?>">
             <div class="scene-block">
                 <div class="item-remove-btn" title="Remove from sequence" onclick="removeSequenceItem(this)"><i class="bi bi-x"></i></div>
+                <div class="item-mass-checkbox" title="Select item"><input type="checkbox" class="mass-check" value="<?= $idx ?>"></div>
                 <div class="drag-handle" title="Drag to reorder"><i class="bi bi-grip-vertical"></i></div>
                 <div class="sketch-flex">
                     <div style="display:flex; flex-direction:column; align-items:center; flex-shrink:0;">
@@ -544,6 +919,37 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
     </div>
 </div>
 
+<!-- Mass Copy Modal -->
+<div id="massCopyModal" class="su-modal-backdrop" onmousedown="if(event.target===this)closeMassCopyModal()">
+    <div class="su-modal-box" style="max-width:500px;">
+        <div class="su-modal-header">
+            <div class="su-modal-title"><i class="bi bi-files"></i> Mass Copy / Move</div>
+            <button onclick="closeMassCopyModal()" class="su-modal-close">✕</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px; position:relative;">
+            <input type="hidden" id="mcTargetSeqId">
+            <div>
+                <label style="display:block;font-family:'Space Mono',monospace;font-size:.7rem;color:var(--pl-text-dim);margin-bottom:5px;text-transform:uppercase;letter-spacing:1px;">Target Narrative Sequence</label>
+                <input type="text" id="mcSearchSeq" class="su-input" placeholder="Type to search sequences..." oninput="mcDebounceSearch(this.value)" autocomplete="off">
+                <div class="ff-dropdown" id="mcDropSeq" style="top: 55px;"></div>
+            </div>
+            <div>
+                <label style="display:block;font-family:'Space Mono',monospace;font-size:.7rem;color:var(--pl-text-dim);margin-bottom:5px;text-transform:uppercase;letter-spacing:1px;">Insert after item position (0 = top)</label>
+                <input type="number" id="mcOffset" class="su-input" value="0" min="0">
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+                <input type="checkbox" id="mcIsMove" style="width:16px; height:16px; cursor:pointer;">
+                <label for="mcIsMove" style="font-size:0.85rem; color:var(--pl-text); cursor:pointer;">Move items instead of copy</label>
+            </div>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:24px; flex-wrap:wrap;">
+            <button onclick="closeMassCopyModal()" class="pl-btn pl-btn-secondary">Cancel</button>
+            <button onclick="submitMassCopy()" class="pl-btn pl-btn-primary">Apply Action</button>
+        </div>
+    </div>
+</div>
+
+
 <!-- FORGE MODAL (Enhanimaticism Style) -->
 <div class="compose-modal-backdrop" id="ffBackdrop" onmousedown="if(event.target===this)closeForgeModal()">
     <div class="compose-modal" id="ffModal">
@@ -596,7 +1002,7 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
                 <!-- SEQ -->
                 <div class="forge-tab-pane" id="pane-seq">
                     <label class="ff-label">Narrative Sequence</label>
-                    <input type="text" id="ffSearch-seq" class="su-input" placeholder="Search sequences..." oninput="ffDebounceSearch('seq', this.value)">
+                    <input type="text" id="ffSearch-seq" class="su-input" placeholder="Search sequences..." onfocus="ffDebounceSearch('seq', this.value)" oninput="ffDebounceSearch('seq', this.value)">
                     <div class="ff-dropdown" id="ffDrop-seq"></div>
                 </div>
                 <!-- STORYBOARD -->
@@ -608,7 +1014,7 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
                 <!-- MAP RUN -->
                 <div class="forge-tab-pane" id="pane-map_run">
                     <label class="ff-label">Map Run</label>
-                    <input type="text" id="ffSearch-map_run" class="su-input" placeholder="Search map runs..." oninput="ffDebounceSearch('map_run', this.value)">
+                    <input type="text" id="ffSearch-map_run" class="su-input" placeholder="Search map runs..." onfocus="ffDebounceSearch('map_run', this.value)" oninput="ffDebounceSearch('map_run', this.value)">
                     <div class="ff-dropdown" id="ffDrop-map_run"></div>
                 </div>
                 <!-- VECTOR -->
@@ -807,6 +1213,43 @@ document.addEventListener('DOMContentLoaded', () => {
     const container = document.getElementById('sequenceList');
     if (!container) return;
 
+    // ── Empty drop zone wiring ──────────────────────────────
+    const emptyZone = document.getElementById('emptyDropZone');
+
+    function refreshEmptyZone() {
+        if (!emptyZone) return;
+        const hasItems = container.querySelectorAll('.seq-item-wrap').length > 0;
+        emptyZone.style.display = hasItems ? 'none' : 'flex';
+    }
+
+    // Keep in sync after every insert / remove
+    const _origInsert = window.insertForgeItemToSequence;
+    // (refreshEmptyZone is also called inside renderInsertedItem — see below)
+
+    if (emptyZone) {
+        // Pointer drag — highlight when forge clone is hovering over the zone
+        emptyZone.addEventListener('pointerenter', () => {
+            emptyZone.classList.add('drag-over');
+        });
+        emptyZone.addEventListener('pointerleave', () => {
+            emptyZone.classList.remove('drag-over');
+        });
+    }
+
+    // ── Patch renderInsertedItem to hide the zone after first drop ──
+    // Find the existing renderInsertedItem function and add ONE line at its end.
+    // The cleanest way without rewriting it: wrap it.
+    const _origRender = window.renderInsertedItem;
+    window.renderInsertedItem = function(res, insertIndex) {
+        _origRender(res, insertIndex);
+        refreshEmptyZone();
+    };
+
+    // Also call refreshEmptyZone once on load to handle sequences that start empty
+    refreshEmptyZone();
+
+    // ── END empty drop zone wiring ──────────────────────────────────
+
     let dragSrc = null;
 
     container.addEventListener('dragstart', e => {
@@ -903,7 +1346,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Prevent scroll on mobile while dragging anything
         if (pointerClone || pointerForgeClone) e.preventDefault();
 
-        // Moving sequence items
+        // Moving sequence items (reorder)
         if (pointerClone && pointerDragSrc) {
             pointerClone.style.top = (e.clientY - pointerOffsetY) + 'px';
             container.querySelectorAll('.seq-item-wrap').forEach(w => w.classList.remove('drag-over-top', 'drag-over-bottom'));
@@ -914,38 +1357,58 @@ document.addEventListener('DOMContentLoaded', () => {
                 wrap.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom');
             }
         }
-        
-        // Moving Forge results from closed modal into sequence
+
+        // Moving Forge results
         if (pointerForgeClone && pointerForgeDragSrc) {
             pointerForgeClone.style.left = (e.clientX - forgeOffsetX) + 'px';
-            pointerForgeClone.style.top = (e.clientY - forgeOffsetY) + 'px';
-            
+            pointerForgeClone.style.top  = (e.clientY - forgeOffsetY) + 'px';
+
             container.querySelectorAll('.seq-item-wrap').forEach(w => w.classList.remove('drag-over-top', 'drag-over-bottom'));
             container.classList.remove('drag-over-container');
-            
-            pointerForgeClone.style.display = 'none'; // hide briefly for accurate elementFromPoint
-            const target = document.elementFromPoint(e.clientX, e.clientY);
-            pointerForgeClone.style.display = 'block';
 
-            const wrap = target ? target.closest('.seq-item-wrap') : null;
-            const isInsideContainer = target ? target.closest('#sequenceList') : null;
-            
-            if (wrap && wrap.parentNode === container) {
-                const rect = wrap.getBoundingClientRect();
-                wrap.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom');
-            } else if (isInsideContainer) {
+            const emptyZone = document.getElementById('emptyDropZone');
+
+            // Use getBoundingClientRect for reliable hit-testing on Android
+            const seqRect = container.getBoundingClientRect();
+            const inSeq   = e.clientX >= seqRect.left && e.clientX <= seqRect.right &&
+                            e.clientY >= seqRect.top  && e.clientY <= seqRect.bottom;
+
+            // Check empty drop zone hit
+            if (emptyZone && emptyZone.style.display !== 'none') {
+                const zRect = emptyZone.getBoundingClientRect();
+                const onZone = e.clientX >= zRect.left && e.clientX <= zRect.right &&
+                               e.clientY >= zRect.top  && e.clientY <= zRect.bottom;
+                emptyZone.classList.toggle('drag-over', onZone);
+            }
+
+            // Check existing seq-item-wrap hit via getBoundingClientRect
+            const wraps = Array.from(container.querySelectorAll('.seq-item-wrap'));
+            let hitWrap = null;
+            for (const w of wraps) {
+                const r = w.getBoundingClientRect();
+                if (e.clientX >= r.left && e.clientX <= r.right &&
+                    e.clientY >= r.top  && e.clientY <= r.bottom) {
+                    hitWrap = w; break;
+                }
+            }
+
+            if (hitWrap) {
+                const rect = hitWrap.getBoundingClientRect();
+                hitWrap.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom');
+            } else if (inSeq && wraps.length > 0) {
                 container.classList.add('drag-over-container');
             }
         }
     }, { passive: false });
 
     document.addEventListener('pointerup', e => {
-        // Drop Sequence Item
+
+        // ── Drop Sequence Item (reorder) ─────────────────────────────
         if (pointerDragSrc) {
             if (pointerClone) { pointerClone.remove(); pointerClone = null; }
             pointerDragSrc.classList.remove('dragging');
             container.querySelectorAll('.seq-item-wrap').forEach(w => w.classList.remove('drag-over-top', 'drag-over-bottom'));
-            
+
             const target = document.elementFromPoint(e.clientX, e.clientY);
             const wrap = target ? target.closest('.seq-item-wrap') : null;
             if (wrap && wrap !== pointerDragSrc && wrap.parentNode === container) {
@@ -959,31 +1422,57 @@ document.addEventListener('DOMContentLoaded', () => {
             persistSortOrder();
             pointerDragSrc = null;
         }
-        
-        // Drop Forge Item
+
+        // ── Drop Forge Item ──────────────────────────────────────────
         if (pointerForgeDragSrc) {
             const card = pointerForgeDragSrc;
             pointerForgeDragSrc = null;
             if (pointerForgeClone) { pointerForgeClone.remove(); pointerForgeClone = null; }
-            
+
             container.querySelectorAll('.seq-item-wrap').forEach(w => w.classList.remove('drag-over-top', 'drag-over-bottom'));
             container.classList.remove('drag-over-container');
-            
-            const target = document.elementFromPoint(e.clientX, e.clientY);
-            const wrap = target ? target.closest('.seq-item-wrap') : null;
-            const isInsideContainer = target ? target.closest('#sequenceList') : null;
-            
-            if (isInsideContainer || wrap) {
-                let insertIndex = -1;
-                if (wrap && wrap.parentNode === container) {
-                    const rect = wrap.getBoundingClientRect();
-                    const wraps = Array.from(container.querySelectorAll('.seq-item-wrap'));
-                    if (e.clientY < rect.top + rect.height / 2) {
-                        insertIndex = wraps.indexOf(wrap);
-                    } else {
-                        insertIndex = wraps.indexOf(wrap) + 1;
-                    }
+
+            const emptyZone = document.getElementById('emptyDropZone');
+            if (emptyZone) emptyZone.classList.remove('drag-over');
+
+            // --- Hit detection via getBoundingClientRect (works on Android Chrome) ---
+            let insertIndex = -1;
+            let didLand = false;
+
+            // 1. Check existing seq-item-wrap elements
+            const wraps = Array.from(container.querySelectorAll('.seq-item-wrap'));
+            for (let i = 0; i < wraps.length; i++) {
+                const r = wraps[i].getBoundingClientRect();
+                if (e.clientX >= r.left && e.clientX <= r.right &&
+                    e.clientY >= r.top  && e.clientY <= r.bottom) {
+                    const rect = wraps[i].getBoundingClientRect();
+                    insertIndex = (e.clientY < rect.top + rect.height / 2) ? i : i + 1;
+                    didLand = true;
+                    break;
                 }
+            }
+
+            // 2. Check empty drop zone
+            if (!didLand && emptyZone && emptyZone.style.display !== 'none') {
+                const zRect = emptyZone.getBoundingClientRect();
+                if (e.clientX >= zRect.left && e.clientX <= zRect.right &&
+                    e.clientY >= zRect.top  && e.clientY <= zRect.bottom) {
+                    insertIndex = -1; // append
+                    didLand = true;
+                }
+            }
+
+            // 3. Fallback: anywhere inside the sequence container counts
+            if (!didLand) {
+                const seqRect = container.getBoundingClientRect();
+                if (e.clientX >= seqRect.left && e.clientX <= seqRect.right &&
+                    e.clientY >= seqRect.top  && e.clientY <= seqRect.bottom) {
+                    insertIndex = -1;
+                    didLand = true;
+                }
+            }
+
+            if (didLand) {
                 insertForgeItemToSequence(card.dataset.sketchId, card.dataset.frameId, insertIndex);
             }
         }
@@ -1062,6 +1551,7 @@ function renderInsertedItem(res, insertIndex) {
     wrap.innerHTML = `
         <div class="scene-block">
             <div class="item-remove-btn" title="Remove from sequence" onclick="removeSequenceItem(this)"><i class="bi bi-x"></i></div>
+            <div class="item-mass-checkbox" title="Select item"><input type="checkbox" class="mass-check" value=""></div>
             <div class="drag-handle" title="Drag to reorder"><i class="bi bi-grip-vertical"></i></div>
             <div class="sketch-flex">
                 <div style="display:flex; flex-direction:column; align-items:center; flex-shrink:0;">
@@ -1106,6 +1596,8 @@ function reindexSequenceVisuals() {
         w.dataset.idx = i;
         const numLabel = w.querySelector('.sketch-id-num');
         if (numLabel) numLabel.textContent = String(i + 1).padStart(2, '0');
+        const massCb = w.querySelector('.mass-check');
+        if (massCb) massCb.value = i;
     });
 }
 
@@ -1157,10 +1649,140 @@ function removeSequenceItem(btn) {
         });
 }
 
+// ── Mass Edit Logic ──────────────────────────────────────────────────────────
+
+let isMassMode = false;
+let isMassAllChecked = false;
+
+function toggleMassMode() {
+    isMassMode = !isMassMode;
+    const seqList = document.getElementById('sequenceList');
+    if (seqList) seqList.classList.toggle('mass-mode-active', isMassMode);
+    
+    document.querySelectorAll('.mass-action-btn').forEach(b => b.style.display = isMassMode ? 'block' : 'none');
+    document.querySelectorAll('.default-mode-el').forEach(b => b.style.display = isMassMode ? 'none' : '');
+    
+    const toggleBtn = document.getElementById('massToggleBtn');
+    if (isMassMode) {
+        toggleBtn.classList.add('pl-btn-primary');
+    } else {
+        toggleBtn.classList.remove('pl-btn-primary');
+        document.querySelectorAll('.mass-check').forEach(cb => cb.checked = false);
+        isMassAllChecked = false;
+    }
+}
+
+function massCheckAll() {
+    isMassAllChecked = !isMassAllChecked;
+    document.querySelectorAll('.mass-check').forEach(cb => cb.checked = isMassAllChecked);
+}
+
+function massDelete() {
+    const checked = Array.from(document.querySelectorAll('.mass-check:checked')).map(cb => cb.value);
+    if (!checked.length) return Toast.show('No items selected', 'warn');
+    if (!confirm(`Remove ${checked.length} items from sequence?`)) return;
+
+    const fd = new URLSearchParams();
+    fd.append('action', 'mass_remove_sequence_items');
+    fd.append('sequence_id', SEQ_ID);
+    fd.append('indices', JSON.stringify(checked));
+
+    fetch('narseq_api.php', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                Toast.show(`Removed ${checked.length} items.`, 'success');
+                setTimeout(() => window.location.reload(), 500);
+            } else {
+                Toast.show(res.message || 'Remove failed', 'error');
+            }
+        }).catch(err => Toast.show('Network error', 'error'));
+}
+
+let mcDebounceTimer;
+function mcDebounceSearch(q) {
+    clearTimeout(mcDebounceTimer);
+    const dd = document.getElementById('mcDropSeq');
+    if (!q) { dd.classList.remove('open'); return; }
+    
+    mcDebounceTimer = setTimeout(() => {
+        dd.innerHTML = '<div style="padding:8px 10px; font-size:0.75rem; color:var(--pl-text-dim);">Searching...</div>';
+        dd.classList.add('open');
+        fetch('narseq_api.php?action=search_sequences&q=' + encodeURIComponent(q))
+            .then(r => r.json())
+            .then(res => {
+                if (res.status !== 'success' || !res.data || !res.data.length) {
+                    dd.innerHTML = '<div style="padding:8px 10px; font-size:0.75rem; color:var(--pl-text-dim);">No results</div>';
+                    return;
+                }
+                dd.innerHTML = res.data.map(item => {
+                    const safeName = item.label.replace(/"/g, '&quot;');
+                    return `<div class="ff-dropdown-item" onclick="mcSelectSeq(${item.id}, '${safeName}')">
+                        <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.label}</span>
+                        <span style="font-size:0.65rem; color:var(--pl-text-dim); margin-left:8px;">#${item.id}</span>
+                    </div>`;
+                }).join('');
+            });
+    }, 300);
+}
+
+function mcSelectSeq(id, name) {
+    document.getElementById('mcTargetSeqId').value = id;
+    document.getElementById('mcSearchSeq').value = name;
+    document.getElementById('mcDropSeq').classList.remove('open');
+}
+
+function openMassCopyModal() {
+    const checked = document.querySelectorAll('.mass-check:checked');
+    if (!checked.length) return Toast.show('No items selected', 'warn');
+    document.getElementById('mcTargetSeqId').value = '';
+    document.getElementById('mcSearchSeq').value = '';
+    document.getElementById('mcOffset').value = '0';
+    document.getElementById('mcIsMove').checked = false;
+    document.getElementById('massCopyModal').classList.add('active');
+    setTimeout(() => document.getElementById('mcSearchSeq').focus(), 50);
+}
+
+function closeMassCopyModal() {
+    document.getElementById('massCopyModal').classList.remove('active');
+}
+
+function submitMassCopy() {
+    const targetId = document.getElementById('mcTargetSeqId').value;
+    if (!targetId) return Toast.show('Please select a target sequence', 'warn');
+    
+    const offset = document.getElementById('mcOffset').value;
+    const isMove = document.getElementById('mcIsMove').checked;
+    const checked = Array.from(document.querySelectorAll('.mass-check:checked')).map(cb => cb.value);
+
+    const fd = new URLSearchParams();
+    fd.append('action', 'mass_copy_sequence_items');
+    fd.append('source_id', SEQ_ID);
+    fd.append('target_id', targetId);
+    fd.append('indices', JSON.stringify(checked));
+    fd.append('offset', offset);
+    fd.append('is_move', isMove ? '1' : '0');
+
+    fetch('narseq_api.php', { method: 'POST', body: fd })
+        .then(r => r.json()).then(res => {
+            if (res.success) {
+                Toast.show(isMove ? 'Items moved successfully.' : 'Items copied successfully.', 'success');
+                if (isMove || targetId == SEQ_ID) {
+                    setTimeout(() => window.location.reload(), 500);
+                } else {
+                    closeMassCopyModal();
+                    toggleMassMode(); // Turn off and clear selection
+                }
+            } else {
+                Toast.show(res.message || 'Operation failed', 'error');
+            }
+        }).catch(err => Toast.show('Network error', 'error'));
+}
+
 // ── Forge Filter Enhanimaticism Logic ──────────────────────────────────────────
 let ffState = {
-    fuzz: null, doc: null, kg: null, seq: null, storyboard: null, map_run: null,
-    vectorText: '', textSearch: '', sketchId: '', frameId: ''
+    fuzz: [], doc: null, kg: null, seq: null, storyboard: null, map_run: null,
+    vectorText: '', textSearch: [], sketchId: '', frameId: ''
 };
 let ffCurrentPage = 1;
 let ffTotalPages = 1;
@@ -1190,15 +1812,12 @@ function ffDebounceSearch(slot, q) {
     clearTimeout(ffDebounceTimer);
     ffDebounceTimer = setTimeout(() => {
         const dd = document.getElementById(`ffDrop-${slot}`);
-        if (!q && slot !== 'storyboard') { dd.classList.remove('open'); return; }
-        dd.innerHTML = '<div class="forge-dropdown-loading">Searching...</div>';
+        if (!q && !['storyboard', 'map_run', 'seq'].includes(slot)) { dd.classList.remove('open'); return; }
+        
+        dd.innerHTML = '<div class="forge-dropdown-loading" style="padding:8px 10px; font-size:0.75rem; color:var(--pl-text-dim);">Searching...</div>';
         dd.classList.add('open');
         
-        let url = `filter_forge_api.php?action=list_filter_options&mode=${slot}&q=${encodeURIComponent(q || '')}&entity_type=sketches`;
-        
-        if (slot === 'storyboard') {
-            url = `narseq_api.php?action=list_storyboards&q=${encodeURIComponent(q || '')}`;
-        }
+        let url = `narseq_filter_forge_api.php?action=list_filter_options&mode=${slot}&q=${encodeURIComponent(q || '')}&entity_type=sketches`;
         
         fetch(url)
             .then(r => r.json())
@@ -1223,7 +1842,14 @@ function ffDebounceSearch(slot, q) {
 }
 
 function ffSelectItem(slot, item) {
-    ffState[slot] = item;
+    if (slot === 'fuzz') {
+        if (!ffState.fuzz.some(f => f.id === item.id)) {
+            ffState.fuzz.push(item);
+        }
+    } else {
+        ffState[slot] = item;
+    }
+    
     document.getElementById(`ffSearch-${slot}`).value = '';
     document.getElementById(`ffDrop-${slot}`).classList.remove('open');
     renderActiveFilters();
@@ -1237,17 +1863,29 @@ function ffApplyVector() {
 }
 
 function ffApplyTextId() {
-    ffState.textSearch = document.getElementById('ffSearch-text').value.trim();
+    const txt = document.getElementById('ffSearch-text').value.trim();
+    if (txt && !ffState.textSearch.includes(txt)) {
+        ffState.textSearch.push(txt);
+    }
+    document.getElementById('ffSearch-text').value = '';
+    
     ffState.sketchId = document.getElementById('ffSearch-sketchId').value.trim();
     ffState.frameId = document.getElementById('ffSearch-frameId').value.trim();
+    
     renderActiveFilters();
     switchForgeTab('results');
 }
 
-function removeFfFilter(key) {
-    if (['vectorText', 'textSearch', 'sketchId', 'frameId'].includes(key)) {
+function removeFfFilter(key, index = null) {
+    if (key === 'fuzz' || key === 'textSearch') {
+        if (index !== null) {
+            ffState[key].splice(index, 1);
+        } else {
+            ffState[key] = [];
+        }
+    } else if (['vectorText', 'sketchId', 'frameId'].includes(key)) {
         ffState[key] = '';
-        const el = document.getElementById(`ffSearch-${key.replace('Text','-text').replace('Search','-text').replace('vectorText','-vector').replace('sketchId','-sketchId').replace('frameId','-frameId')}`);
+        const el = document.getElementById(`ffSearch-${key.replace('vectorText','-vector').replace('sketchId','-sketchId').replace('frameId','-frameId')}`);
         if (el) el.value = '';
     } else {
         ffState[key] = null;
@@ -1266,7 +1904,13 @@ function renderActiveFilters() {
     
     let hasAny = false;
     for (const [k, v] of Object.entries(ffState)) {
-        if (v && (typeof v === 'object' ? v.id : v.toString().length > 0)) {
+        if (Array.isArray(v)) {
+            v.forEach((item, idx) => {
+                hasAny = true;
+                const display = (k === 'textSearch') ? item : item.label;
+                bar.innerHTML += `<div class="forge-pill">${labels[k]}: ${display} <span class="forge-pill-close" onclick="removeFfFilter('${k}', ${idx})">×</span></div>`;
+            });
+        } else if (v && (typeof v === 'object' ? v.id : v.toString().length > 0)) {
             hasAny = true;
             const display = typeof v === 'object' ? v.label : v;
             bar.innerHTML += `<div class="forge-pill">${labels[k]}: ${display} <span class="forge-pill-close" onclick="removeFfFilter('${k}')">×</span></div>`;
@@ -1287,20 +1931,21 @@ function runForgeSearch(page) {
     p.set('page', page);
 
     let hasFilter = false;
-    let useNarseqApi = false;
 
-    if (ffState.fuzz) { p.set('fuzz_id', ffState.fuzz.id); hasFilter = true; }
+    if (ffState.fuzz.length > 0) { 
+        ffState.fuzz.forEach(f => p.append('fuzz_id[]', f.id)); 
+        hasFilter = true; 
+    }
+    if (ffState.textSearch.length > 0) { 
+        ffState.textSearch.forEach(t => p.append('search[]', t)); 
+        hasFilter = true; 
+    }
     if (ffState.doc) { p.set('doc_id', ffState.doc.id); hasFilter = true; }
     if (ffState.kg) { p.set('kg_node_id', ffState.kg.id); hasFilter = true; }
     if (ffState.seq) { p.set('seq_id', ffState.seq.id); hasFilter = true; }
-    if (ffState.storyboard) { 
-        p.set('storyboard_id', ffState.storyboard.id); 
-        hasFilter = true; 
-        useNarseqApi = true; // Route exactly mapped storyboard logic through local narseq API
-    }
+    if (ffState.storyboard) { p.set('storyboard_id', ffState.storyboard.id); hasFilter = true; }
     if (ffState.map_run) { p.set('map_run_id', ffState.map_run.id); hasFilter = true; }
     if (ffState.vectorText) { p.set('vector_text', ffState.vectorText); hasFilter = true; }
-    if (ffState.textSearch) { p.set('search', ffState.textSearch); hasFilter = true; }
     if (ffState.sketchId) { p.set('entity_id', ffState.sketchId); hasFilter = true; }
     if (ffState.frameId) { p.set('frame_id', ffState.frameId); hasFilter = true; }
 
@@ -1310,10 +1955,6 @@ function runForgeSearch(page) {
         p.set('sort_by', 'id');
         p.set('sort_order', 'desc');
     }
-    
-    if (useNarseqApi) {
-        p.set('action', 'list_storyboard_frames');
-    }
 
     const grid = document.getElementById('ffResultGrid');
     
@@ -1321,7 +1962,7 @@ function runForgeSearch(page) {
     document.getElementById('ffPagination').style.display = 'none';
     document.getElementById('ffResultMeta').textContent = 'Searching...';
 
-    const endpoint = useNarseqApi ? 'narseq_api.php?' : 'filter_forge_api.php?';
+    const endpoint = 'narseq_filter_forge_api.php?';
 
     fetch(endpoint + p.toString())
         .then(async r => {
@@ -1341,7 +1982,7 @@ function runForgeSearch(page) {
             }
             
             ffTotalPages = res.meta.pages;
-            document.getElementById('ffResultMeta').textContent = `Found ${res.meta.total} matches.`;
+            document.getElementById('ffResultMeta').textContent = `Found ${res.meta.total} sketches.`;
             
             if (!res.data.length) {
                 grid.innerHTML = '<div class="forge-result-empty">No results found.</div>';

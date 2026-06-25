@@ -435,7 +435,16 @@ HTML;
         // ── Published magazine series + Highlights ──────────────────────────────────────
         $magazineCardsHtml = '';
         
-try {
+        
+        
+        
+        
+        
+        
+        
+        
+       
+        try {
             // 1. HIGHLIGHTS
             $hlStmt = $this->pdo->prepare("SELECT * FROM content_hub_posts WHERE post_type = 'magazine_highlight' AND status = 'published' ORDER BY sort_order DESC, scheduled_at DESC, created_at DESC LIMIT 5");
             $hlStmt->execute();
@@ -447,33 +456,42 @@ try {
                 $media = json_decode($hl['media_items'], true) ?: [];
                 $seqId = (int)($media['sequence_id'] ?? 0);
                 $seriesId = (int)($media['series_id'] ?? 0);
-                $assetPrefix = $hl['asset_url_prefix'] ?? '';
 
-                // Fetch series title to construct the exact slug CinemagicHub uses (e.g. p-r3sh0r75)
+                // Fetch series title and LIVE prefix to construct the exact slug and base URL
                 $seriesTitle = '';
+                $liveSeriesPrefix = '';
                 if ($seriesId) {
-                    $stStmt = $this->pdo->prepare("SELECT title FROM cinemagic_series WHERE id = ?");
+                    $stStmt = $this->pdo->prepare("SELECT title, asset_url_prefix FROM cinemagic_series WHERE id = ?");
                     $stStmt->execute([$seriesId]);
-                    $seriesTitle = $stStmt->fetchColumn() ?: '';
+                    $sRow = $stStmt->fetch(\PDO::FETCH_ASSOC);
+                    if ($sRow) {
+                        $seriesTitle = $sRow['title'];
+                        $liveSeriesPrefix = $sRow['asset_url_prefix'] ?? '';
+                    }
                 }
                 $seriesSlug = preg_replace('/[^a-z0-9]+/', '-', strtolower($seriesTitle)) ?: 'series_' . $seriesId;
                 $repoAssetPath = 'cinemagic_hub/' . $seriesSlug . '/assets';
 
                 $suffix = $langCode === 'en' ? '' : '_' . $langCode;
                 
-                // Reverted back to the flattened HTML structure for the link
+                // Prioritize the live series prefix over the static one stored in the highlight post
+                $assetPrefix = ($liveSeriesPrefix !== '') ? $liveSeriesPrefix : ($hl['asset_url_prefix'] ?? '');
+                
+                // REVERTED HREF: Point to the flat HTML structure
                 $href = $isPreview
                     ? '../cinemagic_hub/api.php?action=preview_episode&series_id=' . $seriesId . '&seq_id=' . $seqId . '&lang=' . $langCode
                     : 'ep_' . $seqId . $suffix . '.html';
 
+                // CORRECTED COVER: Properly handle Absolute URLs, Prefixes, and structural ../ relative paths
                 if ($cover) {
-                    if ($isPreview) {
+                    if (preg_match('/^https?:\/\//i', $cover)) {
+                        // Do not alter absolute external URLs
+                    } else if ($isPreview) {
                         $cover = str_starts_with($cover, '/') ? $cover : '/' . $cover;
                     } else {
-                        // EXACT MATCH TO CinemagicHubManager::resolveImageUrl logic (Confirmed Working)
                         if ($assetPrefix !== '') {
                             $cover = rtrim($assetPrefix, '/') . '/' . $repoAssetPath . '/' . basename($cover);
-                        } else if (!preg_match('/^https?:\/\//i', $cover)) {
+                        } else {
                             $cover = '../' . $repoAssetPath . '/' . basename($cover);
                         }
                     }
@@ -509,17 +527,19 @@ HTML;
                 $status  = $series['status'] ?? 'draft';
                 $seriesSlug = preg_replace('/[^a-z0-9]+/', '-', strtolower($series['title'] ?? '')) ?: 'series_' . $sid;
 
-                // EXACT MATCH TO CinemagicHubManager Cover Logic (Confirmed Working)
+                // CORRECTED COVER: Respect Absolute URLs
                 $cover = $series['cover_image_url'] ?? '';
                 if ($cover) {
-                    if ($isPreview) {
+                    if (preg_match('/^https?:\/\//i', $cover)) {
+                        // Do not alter absolute external URLs
+                    } else if ($isPreview) {
                         $cover = str_starts_with($cover, '/') ? $cover : '/' . $cover;
                     } else {
                         $urlPrefix = $series['asset_url_prefix'] ?? '';
                         $repoAssetPath = 'cinemagic_hub/' . $seriesSlug . '/assets';
                         if ($urlPrefix !== '') {
                             $cover = rtrim($urlPrefix, '/') . '/' . $repoAssetPath . '/' . basename($cover);
-                        } else if (!preg_match('/^https?:\/\//i', $cover)) {
+                        } else {
                             $cover = '../' . $repoAssetPath . '/' . basename($cover);
                         }
                     }
@@ -529,12 +549,15 @@ HTML;
                 $seasonCount  = 0;
                 $episodeCount = 0;
                 try {
+                    $hasSeasonsLayer = (int)($series['has_seasons'] ?? 0) === 1;
+                    $seasonFilter = $hasSeasonsLayer ? " AND sc.season_id IS NOT NULL " : "";
+
                     $countStmt = $this->pdo->prepare(
                         "SELECT COUNT(DISTINCT sc.cinemagic_id) AS season_count,
                                 COUNT(DISTINCT cs.sequence_id)  AS episode_count
                          FROM cinemagic_series_2_cinemagics sc
                          LEFT JOIN cinemagics_2_sequences cs ON cs.cinemagic_id = sc.cinemagic_id
-                         WHERE sc.series_id = ?"
+                         WHERE sc.series_id = ? {$seasonFilter}"
                     );
                     $countStmt->execute([$sid]);
                     $counts = $countStmt->fetch(\PDO::FETCH_ASSOC);
@@ -573,7 +596,7 @@ HTML;
                 
                 $suffix = $langCode === 'en' ? '' : '_' . $langCode;
                 
-                // Reverted back to the flattened HTML structure for the link
+                // REVERTED HREF: Point to the flat HTML structure
                 $href = $isPreview
                     ? '../cinemagic_hub/api.php?action=preview_series&id=' . $sid . '&lang=' . $langCode
                     : $scriptName . $suffix . '.html';
@@ -596,6 +619,22 @@ HTML;
 HTML;
             }
         } catch (\Throwable $e) {}
+
+        
+        
+        
+        
+
+
+        
+        
+        
+        
+        
+        
+        
+        
+        
         
         
         

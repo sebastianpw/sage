@@ -4,14 +4,12 @@ require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
 
 use App\Core\DatabaseMigrationManager;
-use App\Core\AIProvider;
 
 header('Content-Type: application/json');
 
 $spw = \App\Core\SpwBase::getInstance();
 $pdo = $spw->getPDO();
 $fileLogger = $spw->getFileLogger();
-$aiProvider = new AIProvider($fileLogger);
 
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
@@ -32,9 +30,13 @@ try {
         case 'execute_migration':
             handleExecuteMigration();
             break;
-            
-        case 'get_migration_history':
-            handleGetMigrationHistory();
+
+        case 'generate_full_rollout_sql':
+            handleGenerateFullRolloutSQL();
+            break;
+
+        case 'generate_update_rollout_sql':
+            handleGenerateUpdateRolloutSQL();
             break;
             
         default:
@@ -54,7 +56,7 @@ try {
 }
 
 function handleCompareSchemas() {
-    global $pdo, $fileLogger, $aiProvider;
+    global $pdo, $fileLogger;
     
     $input = json_decode(file_get_contents('php://input'), true);
     $sourceDb = $input['source_db'] ?? '';
@@ -64,7 +66,7 @@ function handleCompareSchemas() {
         throw new Exception('Source and target databases are required');
     }
     
-    $migrationManager = new DatabaseMigrationManager($pdo, $fileLogger, $aiProvider);
+    $migrationManager = new DatabaseMigrationManager($pdo, $fileLogger);
     $differences = $migrationManager->compareSchemas($sourceDb, $targetDb);
     
     echo json_encode([
@@ -77,7 +79,7 @@ function handleCompareSchemas() {
 }
 
 function handleVersionDiff() {
-    global $pdo, $fileLogger, $aiProvider, $projectPath;
+    global $pdo, $fileLogger, $projectPath;
     
     $input = json_decode(file_get_contents('php://input'), true);
     $targetDb = $input['target_db'] ?? '';
@@ -123,11 +125,10 @@ function handleVersionDiff() {
 }
 
 function handleGenerateMigration() {
-    global $pdo, $fileLogger, $aiProvider;
+    global $pdo, $fileLogger;
     
     $input = json_decode(file_get_contents('php://input'), true);
     $comparison = $input['comparison'] ?? null;
-    $useAI = $input['use_ai'] ?? false;
     
     if (!$comparison) {
         throw new Exception('Comparison data is required');
@@ -139,49 +140,31 @@ function handleGenerateMigration() {
     
     // Handle version update migrations
     if (isset($differences['version_migrations'])) {
-        $statements = $differences['version_migrations'];
-        $aiFeedback = [];
-        
-        if ($useAI) {
-            $migrationManager = new DatabaseMigrationManager($pdo, $fileLogger, $aiProvider);
-            // We need to make validateWithAI accessible or call it through execution
-            $aiFeedback = []; // Placeholder - can be enhanced
-        }
-        
         echo json_encode([
             'status' => 'ok',
-            'statements' => $statements,
-            'ai_feedback' => $aiFeedback,
+            'statements' => $differences['version_migrations'],
             'timestamp' => date('Y-m-d H:i:s')
         ]);
         return;
     }
     
     // Handle parallel sync migrations
-    $migrationManager = new DatabaseMigrationManager($pdo, $fileLogger, $aiProvider);
+    $migrationManager = new DatabaseMigrationManager($pdo, $fileLogger);
     $statements = $migrationManager->generateMigrationSQL($sourceDb, $targetDb, $differences);
-    
-    $aiFeedback = [];
-    if ($useAI && !empty($statements)) {
-        // Call AI validation
-        $aiFeedback = callAIValidation($statements);
-    }
     
     echo json_encode([
         'status' => 'ok',
         'statements' => $statements,
-        'ai_feedback' => $aiFeedback,
         'timestamp' => date('Y-m-d H:i:s')
     ]);
 }
 
 function handleExecuteMigration() {
-    global $pdo, $fileLogger, $aiProvider, $spw;
+    global $pdo, $fileLogger, $spw;
     
     $input = json_decode(file_get_contents('php://input'), true);
     $statements = $input['statements'] ?? [];
     $dryRun = $input['dry_run'] ?? true;
-    $createBackup = $input['create_backup'] ?? true;
     $targetDb = $input['target_db'] ?? '';
     
     if (empty($statements)) {
@@ -195,54 +178,72 @@ function handleExecuteMigration() {
     // Switch to target database PDO connection
     $targetPdo = $spw->getPDOForDatabase($targetDb);
     
-    $migrationManager = new DatabaseMigrationManager($targetPdo, $fileLogger, $aiProvider);
-    $results = $migrationManager->executeMigration($targetDb, $statements, false, $dryRun);
-    
-    $backupInfo = null;
-    if ($createBackup && !$dryRun && $results['success']) {
-        // Backup was already created in executeMigration
-        $backupInfo = [
-            'created' => true,
-            'file' => '/tmp/db_backup_' . $targetDb . '_' . date('Y-m-d_H-i-s') . '.sql'
-        ];
-    }
+    $migrationManager = new DatabaseMigrationManager($targetPdo, $fileLogger);
+    $results = $migrationManager->executeMigration($targetDb, $statements, $dryRun);
     
     echo json_encode([
         'status' => 'ok',
         'results' => $results,
-        'backup_info' => $backupInfo,
         'timestamp' => date('Y-m-d H:i:s')
     ]);
 }
 
-function handleGetMigrationHistory() {
-    global $pdo, $spw;
-    
-    $targetDb = $_GET['database'] ?? $spw->getDbName();
-    
-    try {
-        $stmt = $pdo->prepare("
-            SELECT * FROM `{$targetDb}`.`migration_history`
-            ORDER BY executed_at DESC
-            LIMIT 50
-        ");
-        $stmt->execute();
-        $history = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        echo json_encode([
-            'status' => 'ok',
-            'database' => $targetDb,
-            'history' => $history
-        ]);
-    } catch (Exception $e) {
-        // Table might not exist yet
-        echo json_encode([
-            'status' => 'ok',
-            'database' => $targetDb,
-            'history' => [],
-            'message' => 'No migration history found'
-        ]);
+function handleGenerateFullRolloutSQL() {
+    global $pdo, $fileLogger;
+
+    $input = json_decode(file_get_contents('php://input'), true);
+    $dbName = $input['db_name'] ?? '';
+
+    if (empty($dbName)) {
+        throw new Exception('Database name is required');
     }
+
+    $mgr = new DatabaseMigrationManager($pdo, $fileLogger);
+    $sql = $mgr->generateFullRolloutSQL($dbName);
+
+    // Count tables/views for stats
+    $lineCount  = substr_count($sql, "\n");
+    $tableCount = substr_count($sql, '-- Table:');
+    $viewCount  = substr_count($sql, 'CREATE OR REPLACE VIEW');
+
+    echo json_encode([
+        'status'      => 'ok',
+        'db_name'     => $dbName,
+        'sql'         => $sql,
+        'stats'       => [
+            'tables'     => $tableCount,
+            'views'      => $viewCount,
+            'line_count' => $lineCount,
+        ],
+        'timestamp'   => date('Y-m-d H:i:s'),
+    ]);
+}
+
+function handleGenerateUpdateRolloutSQL() {
+    global $pdo, $fileLogger;
+
+    $input = json_decode(file_get_contents('php://input'), true);
+    $liveDb      = $input['live_db']      ?? '';
+    $baselineSQL = $input['baseline_sql'] ?? '';
+
+    if (empty($liveDb)) {
+        throw new Exception('Live database name is required');
+    }
+    if (empty(trim($baselineSQL))) {
+        throw new Exception('Baseline SQL is required');
+    }
+
+    $mgr        = new DatabaseMigrationManager($pdo, $fileLogger);
+    $statements = $mgr->generateUpdateRolloutSQL($baselineSQL, $liveDb);
+    $fullSQL    = $mgr->renderUpdateRolloutSQL($statements, $liveDb);
+
+    echo json_encode([
+        'status'     => 'ok',
+        'live_db'    => $liveDb,
+        'statements' => $statements,
+        'full_sql'   => $fullSQL,
+        'timestamp'  => date('Y-m-d H:i:s'),
+    ]);
 }
 
 // ============================================================================
@@ -384,65 +385,4 @@ function splitSqlStatements(string $sql): array {
     }
     
     return $statements;
-}
-
-function callAIValidation(array $statements): array {
-    global $aiProvider;
-    
-    $feedback = [];
-    
-    if (!$aiProvider) {
-        return $feedback;
-    }
-    
-    // Prepare SQL for AI review
-    $sqlBatch = array_map(fn($s) => $s['sql'], array_slice($statements, 0, 10)); // Limit to first 10 for token limits
-    $sqlText = implode("\n\n", $sqlBatch);
-    
-    if (count($statements) > 10) {
-        $sqlText .= "\n\n-- ... and " . (count($statements) - 10) . " more statements";
-    }
-    
-    $prompt = "Review the following database migration SQL for safety and correctness. " .
-             "Identify any potential issues, data loss risks, or performance concerns. " .
-             "Provide a brief risk assessment:\n\n" . $sqlText;
-    
-    try {
-        $response = $aiProvider->sendPrompt(
-            AIProvider::getDefaultModel(),
-            $prompt,
-            "You are a database migration expert. Analyze SQL statements for safety and correctness. Be concise."
-        );
-        
-        // Assess risk based on keywords
-        $risk = 'low';
-        $lowerResponse = strtolower($response);
-        
-        if (strpos($lowerResponse, 'data loss') !== false || 
-            strpos($lowerResponse, 'dangerous') !== false ||
-            strpos($lowerResponse, 'irreversible') !== false) {
-            $risk = 'high';
-        } elseif (strpos($lowerResponse, 'caution') !== false || 
-                  strpos($lowerResponse, 'warning') !== false ||
-                  strpos($lowerResponse, 'careful') !== false) {
-            $risk = 'medium';
-        }
-        
-        $feedback[] = [
-            'source' => 'ai_review',
-            'model' => AIProvider::getDefaultModel(),
-            'response' => $response,
-            'risk' => $risk,
-            'timestamp' => date('Y-m-d H:i:s')
-        ];
-        
-    } catch (Exception $e) {
-        $feedback[] = [
-            'source' => 'ai_review',
-            'error' => $e->getMessage(),
-            'risk' => 'unknown'
-        ];
-    }
-    
-    return $feedback;
 }

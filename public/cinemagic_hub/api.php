@@ -15,7 +15,7 @@ $spw = \App\Core\SpwBase::getInstance();
 $publicPathAbs = $spw->getPublicPath();
 
 $action = $_POST['action'] ?? ($_GET['action'] ?? '');
-$previewActions = ['preview_series', 'preview_episode', 'serve_image', 'download_local_sitemap_json', 'download_global_sitemap_xml'];
+$previewActions = ['preview_series', 'preview_episode', 'serve_image', 'download_local_sitemap_json', 'download_global_sitemap_xml', 'download_pdf'];
 
 if ($action !== 'export_series_zip' && !in_array($action, $previewActions)) {
     header('Content-Type: application/json');
@@ -26,10 +26,13 @@ try {
 
     if ($action === 'export_series_zip') {
         $id = (int)($_REQUEST['id'] ?? 0);
-        $zipPath = $hub->exportSeriesZip($id, $publicPathAbs);
+        $excludeAssets = (isset($_REQUEST['exclude_assets']) && $_REQUEST['exclude_assets'] === '1');
+        
+        $zipPath = $hub->exportSeriesZip($id, $publicPathAbs, $excludeAssets);
         if ($zipPath && file_exists($zipPath)) {
+            $filename = 'magazine_series_' . $id . ($excludeAssets ? '_light' : '') . '.zip';
             header('Content-Type: application/zip');
-            header('Content-Disposition: attachment; filename="magazine_series_' . $id . '.zip"');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
             header('Content-Length: ' . filesize($zipPath));
             readfile($zipPath);
             unlink($zipPath);
@@ -56,6 +59,22 @@ try {
         header('Content-Type: application/xml');
         header('Content-Disposition: attachment; filename="sitemap.xml"');
         echo $xml;
+        exit;
+    }
+    
+    if ($action === 'download_pdf') {
+        $relPath = ltrim(str_replace('..', '', $_GET['path'] ?? ''), '/');
+        if (!str_starts_with($relPath, 'media/magazines/')) { 
+            http_response_code(403); die('Forbidden'); 
+        }
+        $abs = $publicPathAbs . '/' . $relPath;
+        if (!file_exists($abs) || !str_ends_with(strtolower($abs), '.pdf')) { 
+            http_response_code(404); die('Not found'); 
+        }
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: attachment; filename="' . basename($abs) . '"');
+        header('Content-Length: ' . filesize($abs));
+        readfile($abs);
         exit;
     }
 
@@ -103,7 +122,7 @@ try {
 
     switch ($action) {
         
-       case 'get_series_episodes':
+        case 'get_series_episodes':
             $seriesId = (int)($_POST['series_id'] ?? 0);
             $stmt = $pdo->prepare("
                 SELECT ns.id, ns.name, c.name as season_name, sc.cinemagic_id
@@ -181,6 +200,41 @@ try {
             echo json_encode($hub->removeSeason((int)$_POST['series_id'], (int)$_POST['cinemagic_id']));
             break;
 
+        // ── Series Seasons layer ──────────────────────────────────────────────────
+
+        case 'get_series_seasons':
+            echo json_encode($hub->getSeriesSeasons((int)$_POST['series_id']));
+            break;
+
+        case 'save_series_season':
+            echo json_encode($hub->saveSeriesSeason((int)$_POST['series_id'], $_POST));
+            break;
+
+        case 'delete_series_season':
+            echo json_encode($hub->deleteSeriesSeason((int)$_POST['series_id'], (int)$_POST['season_id']));
+            break;
+
+        case 'assign_cinemagic_to_series_season':
+            echo json_encode($hub->assignCinemagicToSeriesSeason(
+                (int)$_POST['series_id'],
+                (int)$_POST['cinemagic_id'],
+                (int)$_POST['season_id']
+            ));
+            break;
+
+        case 'remove_cinemagic_from_series_season':
+            echo json_encode($hub->removeCinemagicFromSeriesSeason(
+                (int)$_POST['series_id'],
+                (int)$_POST['cinemagic_id']
+            ));
+            break;
+
+        case 'save_cinemagic_cover':
+            echo json_encode($hub->saveCinemagicCover((int)$_POST['series_id'], (int)$_POST['cinemagic_id'], $_POST['cover_image_url'] ?? ''));
+            break;
+
+        // ── Episode meta ──────────────────────────────────────────────────────────
+
         case 'get_episode_meta':
             echo json_encode(['success' => true, 'meta' => $hub->getEpisodeMeta((int)$_POST['cinemagic_id'], (int)$_POST['sequence_id'])]);
             break;
@@ -230,6 +284,15 @@ try {
         case 'delete_language':
             echo json_encode($hub->deleteSystemLanguage($_POST['code'] ?? ''));
             break;
+            
+        case 'get_cinemagic_pdfs':
+            $seriesId = (int)($_POST['series_id'] ?? 0);
+            if (!$seriesId) {
+                echo json_encode(['success' => false, 'error' => 'series_id required']);
+                break;
+            }
+            echo json_encode($hub->getCinemagicPdfsForSeries($seriesId));
+            break;
 
         case 'submit_pdf_export_job':
             $seriesId = (int)($_POST['series_id'] ?? 0);
@@ -246,10 +309,6 @@ try {
             echo json_encode($hub->submitPdfJobToPyAPI($seriesId, $seqId, $langsArr, $pyapiUrl, $publicPathAbs));
             break;
 
-            
-            
-            
-            
         case 'poll_pyapi_job':
             $jobDbId  = (int)($_POST['job_db_id'] ?? 0);
             $pyJobId  = $_POST['pyapi_job_id'] ?? '';
@@ -260,7 +319,6 @@ try {
                 break;
             }
 
-            // Route polling through PHP exactly like the submission
             $url = rtrim($pyapiUrl, '/') . '/magazine-pdf/status/' . $pyJobId;
             $ch = curl_init($url);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -284,33 +342,18 @@ try {
             $status = $data['status'] ?? 'pending';
             $errMsg = $data['error_message'] ?? null;
 
-            // Sync DB
             $stmt = $pdo->prepare(
                 "UPDATE magazine_pdf_jobs SET status = :status, error_message = :err WHERE id = :id"
             );
-            $stmt->execute([
-                ':status' => $status,
-                ':err'    => $errMsg,
-                ':id'     => $jobDbId
-            ]);
+            $stmt->execute([':status' => $status, ':err' => $errMsg, ':id' => $jobDbId]);
 
-            // Auto-fetch if done
             if ($status === 'done') {
                 $hub->fetchAndStorePdfJob($jobDbId, $pyJobId, $pyapiUrl, $publicPathAbs);
             }
 
-            echo json_encode([
-                'success' => true, 
-                'status' => $status, 
-                'error_message' => $errMsg
-            ]);
+            echo json_encode(['success' => true, 'status' => $status, 'error_message' => $errMsg]);
             break;
 
-
-
-            
-            
-            
         case 'update_pdf_job_status':
             $jobDbId  = (int)($_POST['job_db_id'] ?? 0);
             $status   = $_POST['status'] ?? '';
@@ -324,9 +367,7 @@ try {
             }
             $errMsg = $_POST['error_message'] ?? null;
             $stmt = $pdo->prepare(
-                "UPDATE magazine_pdf_jobs
-                    SET status = :status, error_message = :err
-                  WHERE id = :id"
+                "UPDATE magazine_pdf_jobs SET status = :status, error_message = :err WHERE id = :id"
             );
             $stmt->bindValue(':status', $status,  \PDO::PARAM_STR);
             $stmt->bindValue(':err',    $errMsg,  $errMsg === null ? \PDO::PARAM_NULL : \PDO::PARAM_STR);
@@ -362,10 +403,5 @@ try {
     if ($action === 'export_series_zip' || in_array($action, $previewActions)) die($e->getMessage());
     echo json_encode(['success' => false, 'error' => $e->getMessage()]);
 }
-
-
-
-
-
 
 

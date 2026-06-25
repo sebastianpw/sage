@@ -86,10 +86,10 @@ body{font-family:var(--font-body);background:var(--bg-void);color:var(--text-bod
 .btn-icon{width:32px;height:32px;border-radius:var(--radius);background:transparent;border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);transition:all 0.15s;}
 .btn-icon:hover{background:var(--bg-hover);color:var(--text-bright);border-color:var(--border-mid);}
 .btn-icon svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.5;}
-.btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 16px;background:var(--amber);color:#000;font-family:var(--font-mono);font-size:11px;font-weight:700;text-transform:uppercase;border:none;border-radius:var(--radius);cursor:pointer;transition:0.15s;white-space:nowrap;}
+.btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 16px;background:var(--amber);color:#000;font-family:var(--font-mono);font-size:11px;font-weight:700;text-transform:uppercase;border:none;border-radius:var(--radius);cursor:pointer;transition:0.15s;white-space:nowrap;text-decoration:none;}
 .btn-primary:hover{background:#fbbf24;transform:translateY(-1px);}
 .btn-primary:disabled{opacity:0.5;pointer-events:none;}
-.btn-secondary{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 14px;background:var(--bg-raised);color:var(--text-body);font-family:var(--font-mono);font-size:11px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:0.15s;white-space:nowrap;}
+.btn-secondary{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 14px;background:var(--bg-raised);color:var(--text-body);font-family:var(--font-mono);font-size:11px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:0.15s;white-space:nowrap;text-decoration:none;}
 .btn-secondary:hover{border-color:var(--border-mid);color:var(--text-bright);background:var(--bg-hover);}
 .btn-danger{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:6px 12px;background:transparent;color:var(--red);font-family:var(--font-mono);font-size:11px;border:1px solid var(--red);border-radius:var(--radius);cursor:pointer;transition:0.15s;}
 .btn-danger:hover{background:rgba(239,68,68,0.1);}
@@ -162,7 +162,7 @@ select.form-control{cursor:pointer;}
 /* ── PDF Inbox list ─────────────────────────────────────────────── */
 .pdf-row{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg-float);border:1px solid var(--border);border-radius:var(--radius);flex-wrap:wrap;}
 .pdf-row + .pdf-row{margin-top:6px;}
-.pdf-name{font-family:var(--font-mono);font-size:11px;color:var(--text-bright);flex:1;word-break:break-all;}
+.pdf-name{font-family:var(--font-mono);font-size:11px;color:var(--text-bright);flex:1;word-break:break-all;line-height: 1.4;}
 .pdf-size{font-size:11px;color:var(--text-dim);flex-shrink:0;}
 
 /* ── Jobs list ─────────────────────────────────────────────────── */
@@ -458,6 +458,30 @@ select.form-control{cursor:pointer;}
 
         <!-- ── Gallery View ──────────────────────────────────────────────── -->
         <div class="view" id="view-gallery">
+
+            <!-- ── Magazine PDFs Browser ─────────────────────────────────── -->
+            <div class="card">
+                <div class="card-hdr">
+                    <div class="card-title">Magazine PDFs</div>
+                    <button class="btn-icon" onclick="loadGalleryPdfs()" title="Refresh">
+                        <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    </button>
+                </div>
+                <div class="card-body">
+                    <p style="font-size:12px;color:var(--text-muted);line-height:1.6;margin-bottom:12px;">
+                        Browse and download the latest compiled PDFs for your magazine series.
+                    </p>
+                    <div class="form-group">
+                        <select class="form-control" id="gallery-series-select" onchange="loadGalleryPdfs()">
+                            <option value="">— Select a series —</option>
+                        </select>
+                    </div>
+                    <div id="gallery-pdf-list" style="margin-top:4px;">
+                        <div style="color:var(--text-dim);font-size:12px;font-family:var(--font-mono);">Select a series above.</div>
+                    </div>
+                </div>
+            </div>
+
             <div class="card">
                 <div class="card-hdr">
                     <div class="card-title">Saved Covers</div>
@@ -1029,10 +1053,13 @@ async function saveCover(downloadOnly) {
 
 async function loadSeriesSelectForPdf() {
     const data = await api({ action: 'get_series_list' });
-    const sel = document.getElementById('cm-series-select');
+    const sel1 = document.getElementById('cm-series-select');
+    const sel2 = document.getElementById('gallery-series-select');
     if (!data.success || !data.series.length) return;
-    sel.innerHTML = '<option value="">— Select a series —</option>' +
+    const opts = '<option value="">— Select a series —</option>' +
         data.series.map(s => `<option value="${s.id}">${esc(s.title)}</option>`).join('');
+    if (sel1) sel1.innerHTML = opts;
+    if (sel2) sel2.innerHTML = opts;
 }
 
 async function loadCinemagicPdfs() {
@@ -1053,12 +1080,38 @@ async function loadCinemagicPdfs() {
         <div class="pdf-row">
             <span class="pdf-name">
                 <strong style="color:var(--text-bright);">${esc(p.sequence_name)}</strong>
-                <span style="color:var(--text-dim);font-size:10px;"> [${esc(p.lang)}]</span><br>
+                <span style="color:var(--amber);font-size:10px;font-weight:700;"> [${esc(p.lang)}]</span><br>
                 <span style="font-size:10px;color:var(--text-dim);">${esc(p.filename)}</span>
             </span>
             <span class="pdf-size">${fmtBytes(p.size)}</span>
+            <a class="btn-primary" style="padding:5px 10px;font-size:10px;text-decoration:none;" href="api.php?action=download_pdf&path=${encodeURIComponent(p.rel_path)}" download>Download</a>
             <button class="btn-secondary" style="padding:5px 10px;font-size:10px;"
                     onclick="splitCinemagicPdf('${esc(p.rel_path)}')">Split</button>
+        </div>
+    `).join('');
+}
+
+async function loadGalleryPdfs() {
+    const sid = document.getElementById('gallery-series-select').value;
+    const listEl = document.getElementById('gallery-pdf-list');
+    if (!sid) { listEl.innerHTML = '<div style="color:var(--text-dim);font-size:12px;font-family:var(--font-mono);">Select a series above.</div>'; return; }
+
+    listEl.innerHTML = '<div class="spinner"></div>';
+    const data = await api({ action: 'get_cinemagic_pdfs', series_id: sid });
+    if (!data.success || !data.pdfs.length) {
+        listEl.innerHTML = '<div style="color:var(--text-dim);font-size:12px;font-family:var(--font-mono);">No exported PDFs found for this series.</div>';
+        return;
+    }
+
+    listEl.innerHTML = data.pdfs.map(p => `
+        <div class="pdf-row">
+            <span class="pdf-name">
+                <strong style="color:var(--text-bright);">${esc(p.sequence_name)}</strong>
+                <span style="color:var(--amber);font-size:10px;font-weight:700;"> [${esc(p.lang)}]</span><br>
+                <span style="font-size:10px;color:var(--text-dim);">${esc(p.filename)}</span>
+            </span>
+            <span class="pdf-size">${fmtBytes(p.size)}</span>
+            <a class="btn-primary" style="padding:5px 14px;font-size:10px;text-decoration:none;" href="api.php?action=download_pdf&path=${encodeURIComponent(p.rel_path)}" download>Download PDF</a>
         </div>
     `).join('');
 }
@@ -1174,6 +1227,7 @@ async function refreshPdfInbox() {
         <div class="pdf-row">
             <span class="pdf-name">${esc(p.filename)}</span>
             <span class="pdf-size">${fmtBytes(p.size)}</span>
+            <a class="btn-primary" style="padding:5px 10px;font-size:10px;text-decoration:none;" href="api.php?action=download_pdf&path=${encodeURIComponent(p.rel_path)}" download>Download</a>
             <button class="btn-secondary" style="padding:5px 10px;font-size:10px;" onclick="splitInboxPdf('${esc(p.rel_path)}')">Split</button>
         </div>
     `).join('');

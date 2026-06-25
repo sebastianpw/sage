@@ -66,6 +66,55 @@ try {
 
         $input = json_decode(file_get_contents('php://input'), true);
 
+        // --- EXPORT DOCS ---
+        if ($action === 'export_docs') {
+            $docIds = $input['doc_ids'] ?? [];
+            $withMeta = !empty($input['with_meta']);
+            
+            if (empty($docIds)) {
+                jsonResponse('error', 'No documents selected');
+            }
+            
+            $placeholders = implode(',', array_fill(0, count($docIds), '?'));
+            $stmt = $pdo->prepare("
+                SELECT d.*, c.name as category_name 
+                FROM documentations d 
+                LEFT JOIN documentation_categories c ON d.category_id = c.id 
+                WHERE d.id IN ($placeholders) AND d.is_active = 1
+            ");
+            $stmt->execute($docIds);
+            $docs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            $exportData = [];
+            foreach ($docs as $doc) {
+                $item = [
+                    'id' => (int)$doc['id'],
+                    'name' => $doc['name'],
+                    'category' => $doc['category_name'] ?: 'Uncategorized',
+                    'content' => $doc['content']
+                ];
+                if ($withMeta) {
+                    $item['description'] = $doc['description'];
+                    $item['desc_short'] = $doc['desc_short'];
+                    $item['keywords'] = $doc['keywords'];
+                    $item['target_collection'] = $doc['target_collection'];
+                }
+                $exportData[] = $item;
+            }
+            
+            $snapshot = [
+                'export_meta' => [
+                    'generated_at' => date('c'),
+                    'export_type' => 'md_documents',
+                    'total_documents' => count($exportData),
+                    'with_meta' => $withMeta
+                ],
+                'documents' => $exportData
+            ];
+            
+            jsonResponse('success', 'Export built', ['snapshot' => $snapshot]);
+        }
+
         // 1. SAVE DOCUMENT
         if ($action === 'save') {
             $id = $input['id'] ?? null;
@@ -138,6 +187,48 @@ try {
     } 
     elseif ($method === 'GET') {
         
+        // --- EXPORT TREE DATA ---
+        if ($action === 'export_tree_data') {
+            $cats = $pdo->query("SELECT id, name FROM documentation_categories ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+            $docs = $pdo->query("SELECT id, name, category_id FROM documentations WHERE is_active = 1 ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+            jsonResponse('success', 'Tree data', ['categories' => $cats, 'docs' => $docs]);
+        }
+
+        // --- EXPORT AJAX SEARCH ---
+        if ($action === 'export_search') {
+            $q = trim($_GET['q'] ?? '');
+            if ($q === '') jsonResponse('success', '', ['hits' => []]);
+            
+            $term = '%' . $q . '%';
+            $stmt = $pdo->prepare("SELECT id, name, content FROM documentations WHERE is_active = 1 AND (name LIKE ? OR content LIKE ?)");
+            $stmt->execute([$term, $term]);
+            $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            $hits = [];
+            foreach ($results as $r) {
+                $nameHit = htmlspecialchars($r['name']);
+                $nameHit = preg_replace("/(" . preg_quote($q, '/') . ")/i", "<mark style='background:rgba(245,158,11,0.4); color:inherit; border-radius:2px; padding:0 2px;'>$1</mark>", $nameHit);
+                
+                $excerpt = '';
+                $snippet = strip_tags($r['content'] ?? '');
+                $pos = stripos($snippet, $q);
+                if ($pos !== false) {
+                    $start = max(0, $pos - 40);
+                    $snippetSub = mb_substr($snippet, $start, 100);
+                    $snippetSub = htmlspecialchars($snippetSub);
+                    $snippetSub = preg_replace("/(" . preg_quote($q, '/') . ")/i", "<mark style='background:rgba(245,158,11,0.4); color:inherit; border-radius:2px; padding:0 2px;'>$1</mark>", $snippetSub);
+                    $excerpt = '...' . $snippetSub . '...';
+                }
+                
+                $hits[] = [
+                    'id' => (int)$r['id'],
+                    'name_hl' => $nameHit,
+                    'excerpt' => $excerpt
+                ];
+            }
+            jsonResponse('success', 'Search results', ['hits' => $hits]);
+        }
+
         // 5. GET DOCUMENT
         if ($action === 'get' && isset($_GET['id'])) {
             // Now selecting target_collection (NAME) instead of target_collection_id

@@ -101,7 +101,7 @@ body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,
     justify-content: space-between;
     cursor: move;
     user-select: none;
-    touch-action: none; /* Prevents viewport scrolling on drag */
+    touch-action: none;
 }
 .panel-header h3 { margin: 0; font-size: 0.9rem; pointer-events: none; }
 .collapse-btn {
@@ -234,7 +234,7 @@ body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,
     color: var(--text-muted); font-size: 0.85rem;
 }
 
-/* Tree rows — identical to export modal style */
+/* Tree rows */
 .kgf-tree-node {
     display: flex; align-items: center; gap: 6px;
     padding: 5px 10px; cursor: pointer; user-select: none;
@@ -290,7 +290,6 @@ body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,
                 <button class="btn btn-primary btn-block" id="btn-layout"><i class="bi bi-play-fill"></i> Run ForceAtlas2</button>
                 <button class="btn btn-ghost btn-block" id="btn-reset"><i class="bi bi-arrows-collapse"></i> Reset Camera</button>
                 <button class="btn btn-ghost btn-block" onclick="showModal('modalNode')"><i class="bi bi-plus-circle"></i> Add Node</button>
-                <!-- ── FILTER BUTTON ── -->
                 <button class="btn btn-ghost btn-block" id="btn-filter" onclick="openFilterModal()"><i class="bi bi-funnel"></i> Filter Nodes</button>
                 
                 <div style="margin-top:10px;">
@@ -320,7 +319,6 @@ body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,
                 <div style="margin-top:10px; padding-top:10px; border-top: 1px solid var(--border);">
                     <div class="stat">Nodes: <strong id="stat-nodes">0</strong></div>
                     <div class="stat">Edges: <strong id="stat-edges">0</strong></div>
-                    <!-- ── FILTER STATUS ── -->
                     <div class="stat" id="stat-filter" style="display:none; color:var(--orange);">
                         <i class="bi bi-funnel-fill"></i> Filter active
                     </div>
@@ -564,7 +562,7 @@ function updateSizes() {
     graph.forEachNode((node, attrs) => {
         const degree = graph.degree(node);
         // Emphasize dense nodes mathematically
-        graph.setNodeAttribute(node, 'size', 4 + Math.sqrt(degree) * 1.5);
+        graph.setNodeAttribute(node, 'size', 4 + Math.sqrt(degree) * 2);
     });
     document.getElementById('stat-nodes').textContent = graph.order;
     document.getElementById('stat-edges').textContent = graph.size;
@@ -986,7 +984,7 @@ document.addEventListener('DOMContentLoaded', () => {
         graph.addNode(n.id.toString(), {
             x: Math.random() * 100,
             y: Math.random() * 100,
-            size: 4,
+            size: 8,
             label: n.name,
             color: typeColors[n.node_type] || typeColors['default'],
             node_type: n.node_type || 'note'
@@ -1007,18 +1005,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     updateSizes();
     
+    // Clear heavy JSON arrays to free memory for WebGL
+    dbNodes.length = 0;
+    dbEdges.length = 0;
+
     const container = document.getElementById('graph-container');
     
     // Helper to determine the correct text color based on the current theme
     const getLabelColor = () => document.documentElement.getAttribute('data-theme') === 'dark' ? '#c9d1d9' : '#24292f';
 
     renderer = new Sigma(graph, container, {
-        renderEdgeLabels: true,
+        renderEdgeLabels: graph.size <= 150,
         defaultEdgeType: "arrow",
         allowInvalidContainer: true,
+        labelRenderedSizeThreshold: 2, 
         labelColor: { color: getLabelColor() },
         edgeLabelColor: { color: getLabelColor() },
-        edgeLabelSize: 7
+        edgeLabelSize: 7,
+        pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5)
     });
 
     // Listen for theme toggles to update the canvas text live
@@ -1028,9 +1032,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderer.refresh();
     }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
-    // ── FIX 1: Correct UMD global for graphology-layout-forceatlas2 ──
     const fa2 = graphologyLibrary.layoutForceAtlas2;
-
     const fa2Btn = document.getElementById('btn-layout');
     
     function toggleLayout() {
@@ -1058,59 +1060,77 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     fa2Btn.addEventListener('click', toggleLayout);
 
-    // Initial Layout Run for 2.5 Seconds
+    // Initial Layout Run for 2.5 Seconds, followed by auto-zoom
     toggleLayout();
-    setTimeout(() => { if (isLayoutRunning) toggleLayout(); }, 2500);
+    setTimeout(() => { 
+        if (isLayoutRunning) toggleLayout(); 
+        resetGraphCamera();
+    }, 2500);
 
-    // ── FIX 2: Reset Camera ──
-    document.getElementById('btn-reset').addEventListener('click', () => {
+    function resetGraphCamera() {
+        if(!renderer) return;
         renderer.getCamera().animatedReset({ duration: 500 });
-    });
+        setTimeout(() => {
+            const cam = renderer.getCamera();
+            //cam.animatedZoom({ ratio: cam.ratio * 0.5, duration: 300 });
+        }, 520);
+    }
+    document.getElementById('btn-reset').addEventListener('click', resetGraphCamera);
 
-    // ── FIX 3: Node interaction ──
+    // ── Drag & Tap (Mobile-friendly threshold) ──
     let dragNode = null;
     let dragStartX = 0;
     let dragStartY = 0;
+    let dragFrame = null;
     const DRAG_THRESHOLD = 6;
 
     renderer.on("downNode", (e) => {
         dragNode = e.node;
-        const nativeEvent = e.event && e.event.original ? e.event.original : (e.event || {});
-        if (nativeEvent.touches && nativeEvent.touches.length) {
-            dragStartX = nativeEvent.touches[0].clientX;
-            dragStartY = nativeEvent.touches[0].clientY;
+        const ne = e.event && e.event.original ? e.event.original : (e.event || {});
+        if (ne.touches && ne.touches.length) {
+            dragStartX = ne.touches[0].clientX;
+            dragStartY = ne.touches[0].clientY;
         } else {
-            dragStartX = nativeEvent.clientX || 0;
-            dragStartY = nativeEvent.clientY || 0;
+            dragStartX = ne.clientX || 0;
+            dragStartY = ne.clientY || 0;
         }
         renderer.getCamera().disable();
     });
 
     renderer.getMouseCaptor().on("mousemovebody", (e) => {
         if (!dragNode) return;
-        const pos = renderer.viewportToGraph(e);
-        graph.setNodeAttribute(dragNode, "x", pos.x);
-        graph.setNodeAttribute(dragNode, "y", pos.y);
         e.preventSigmaDefault();
         e.original.preventDefault();
         e.original.stopPropagation();
+        if (dragFrame) cancelAnimationFrame(dragFrame);
+        dragFrame = requestAnimationFrame(() => {
+            const pos = renderer.viewportToGraph(e);
+            graph.setNodeAttribute(dragNode, "x", pos.x);
+            graph.setNodeAttribute(dragNode, "y", pos.y);
+            dragFrame = null;
+        });
     });
 
     container.addEventListener('touchmove', (e) => {
         if (!dragNode) return;
+        e.preventDefault();
         const rect = container.getBoundingClientRect();
         const touch = e.touches[0];
-        const pos = renderer.viewportToGraph({
-            x: touch.clientX - rect.left,
-            y: touch.clientY - rect.top
+        if (dragFrame) cancelAnimationFrame(dragFrame);
+        dragFrame = requestAnimationFrame(() => {
+            const pos = renderer.viewportToGraph({
+                x: touch.clientX - rect.left,
+                y: touch.clientY - rect.top
+            });
+            graph.setNodeAttribute(dragNode, "x", pos.x);
+            graph.setNodeAttribute(dragNode, "y", pos.y);
+            dragFrame = null;
         });
-        graph.setNodeAttribute(dragNode, "x", pos.x);
-        graph.setNodeAttribute(dragNode, "y", pos.y);
-        e.preventDefault();
     }, { passive: false });
 
     function releaseNode(e) {
         if (!dragNode) return;
+        if (dragFrame) { cancelAnimationFrame(dragFrame); dragFrame = null; }
 
         let endX = 0, endY = 0;
         if (e.changedTouches && e.changedTouches.length) {
@@ -1134,12 +1154,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     window.addEventListener('mouseup', releaseNode);
     window.addEventListener('touchend', releaseNode);
-
-    renderer.on("clickNode", ({ node }) => {
-        if (!selectedNode || selectedNode !== node) {
-            openNodePanel(node);
-        }
-    });
 
     renderer.on("clickStage", () => {
         selectedNode = null;
@@ -1169,7 +1183,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 res.zIndex = 0;
             } else {
                 res.zIndex = 2;
-                res.size = (data.size || 4) * 1.4;
+                res.size = (data.size || 8) * 1.4;
             }
             return res;
         }
@@ -1331,7 +1345,6 @@ function openDetailsModal(nodeId, addToHistory = true) {
         detailsHistPos = detailsHistory.length - 1;
     }
     detailsUpdateNavButtons();
-
     openNodePanel(nodeId);
 
     const attrs = graph.getNodeAttributes(nodeId);
@@ -1535,12 +1548,13 @@ function createNode() {
             graph.addNode(id, {
                 x: centerPos.x,
                 y: centerPos.y,
-                size: 4,
+                size: 8,
                 label: name,
                 color: typeColors[type] || typeColors['default'],
                 node_type: type
             });
             updateSizes();
+            renderer.refresh();
             toast('Node created');
         } else {
             toast('Error: ' + res.error, 'error');
@@ -1585,6 +1599,7 @@ function createEdge() {
                 color: getMutedColor()
             });
             updateSizes();
+            renderer.refresh();
             toast('Link added');
         } else {
             toast('Error: ' + res.error, 'error');

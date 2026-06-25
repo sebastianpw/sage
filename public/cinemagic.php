@@ -1,8 +1,7 @@
 <?php
 // public/cinematic.php
 // Cinematic story presentation — dynamic rendering.
-// Adds unobtrusive sticky episode/chapter nav bar and a language picker
-// when this sequence belongs to a multi-sequence / multi-lingual Cinemagic.
+// Incorporates Fuki absolute positioning text overlay integration.
 
 require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
@@ -61,7 +60,6 @@ $currentEpisodeIdx = 0;
 $availableLangs    = ['en'];
 
 try {
-    // Find the first cinemagic this sequence belongs to
     $stmtCM = $pdo->prepare(
         "SELECT c.id, c.name, s.supported_languages
          FROM cinemagics c
@@ -80,7 +78,6 @@ try {
         $availableLangs = array_filter(array_map('trim', explode(',', $langsRaw)));
         if (!in_array('en', $availableLangs)) array_unshift($availableLangs, 'en');
 
-        // Fetch all episodes in this cinemagic ordered by sort_order
         $stmtEp = $pdo->prepare(
             "SELECT ns.id, ns.name, cs.sort_order, cs.chapter_label
              FROM narrative_sequences ns
@@ -113,7 +110,6 @@ foreach ($itemIds as $idx => $item) {
 }
 $pureSketchIds = array_values(array_unique($pureSketchIds));
 
-// Load sketches
 $sketchesData = [];
 if (!empty($pureSketchIds)) {
     $inClause = implode(',', array_fill(0, count($pureSketchIds), '?'));
@@ -124,7 +120,6 @@ if (!empty($pureSketchIds)) {
     }
 }
 
-// Load pinned frames
 $selectedFrameMap = [];
 $activeFrameIds   = array_values(array_unique(array_filter($selectedFrameIds)));
 if (!empty($activeFrameIds)) {
@@ -137,7 +132,6 @@ if (!empty($activeFrameIds)) {
     }
 }
 
-// Fallback frames
 $sketchIdsNeedingLatestFrame = [];
 foreach ($itemIds as $idx => $item) {
     $sid = is_array($item) ? (int)($item['sketch_id'] ?? 0) : (int)$item;
@@ -165,7 +159,7 @@ if (!empty($sketchIdsNeedingLatestFrame)) {
     }
 }
 
-// Load overlay texts (Fallback to EN if chosen lang is empty)
+// Load overlay texts
 $overlayTexts = [];
 $overlayTextsLang = [];
 if (!empty($pureSketchIds)) {
@@ -179,6 +173,37 @@ if (!empty($pureSketchIds)) {
             } else {
                 $overlayTextsLang[(int)$row['sketch_id']][$row['display_order']] = $row['text_content'];
             }
+        }
+    } catch (PDOException $e) {}
+}
+
+// Load Fuki Texts (Absolute positioning overlays)
+$fukiTexts = [];
+if (!empty($pureSketchIds)) {
+    $inClause = implode(',', array_fill(0, count($pureSketchIds), '?'));
+    try {
+        $stmtFuki = $pdo->prepare("SELECT * FROM fuki_texts WHERE sketch_id IN ($inClause) AND language_code IN ('en', ?) ORDER BY id ASC");
+        $stmtFuki->execute([...$pureSketchIds, $langCode]);
+        $fukiRaw = $stmtFuki->fetchAll(PDO::FETCH_ASSOC);
+        
+        $fukiMap = [];
+        foreach ($fukiRaw as $r) {
+            if ($r['language_code'] === 'en') {
+                $fukiMap[$r['sketch_id']][$r['element_uid']] = $r;
+            }
+        }
+        if ($langCode !== 'en') {
+            foreach ($fukiRaw as $r) {
+                if ($r['language_code'] === $langCode) {
+                    $fukiMap[$r['sketch_id']][$r['element_uid']] = array_merge(
+                        $fukiMap[$r['sketch_id']][$r['element_uid']] ?? [], 
+                        $r
+                    );
+                }
+            }
+        }
+        foreach ($fukiMap as $skId => $uidMap) {
+            $fukiTexts[$skId] = array_values($uidMap);
         }
     } catch (PDOException $e) {}
 }
@@ -215,10 +240,14 @@ foreach ($itemIds as $idx => $item) {
         if (!empty(trim($desc))) $overrideTexts = [trim($desc)];
     }
 
-    $frames[] = ['id' => $sid, 'thumb' => $activeThumb, 'overlay_texts' => $overrideTexts];
+    $frames[] = [
+        'id'            => $sid, 
+        'thumb'         => $activeThumb, 
+        'overlay_texts' => $overrideTexts,
+        'fuki_texts'    => $fukiTexts[$sid] ?? []
+    ];
 }
 
-// Prev / Next episode links
 $prevEp = ($currentEpisodeIdx > 0) ? $cinemagicEpisodes[$currentEpisodeIdx - 1] : null;
 $nextEp = ($currentEpisodeIdx < count($cinemagicEpisodes) - 1) ? $cinemagicEpisodes[$currentEpisodeIdx + 1] : null;
 ?>
@@ -231,7 +260,7 @@ $nextEp = ($currentEpisodeIdx < count($cinemagicEpisodes) - 1) ? $cinemagicEpiso
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Permanent+Marker&family=Oswald:wght@600;700&family=Cinzel:wght@400;600&family=Space+Mono:wght@400;700&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
 
     <style>
         :root {
@@ -343,8 +372,15 @@ $nextEp = ($currentEpisodeIdx < count($cinemagicEpisodes) - 1) ? $cinemagicEpiso
 
     <?php foreach ($frames as $index => $f): ?>
         <div class="panel" id="panel-<?= $index ?>">
-            <?php if (!empty($f['thumb'])): ?>
-                <img src="<?= htmlspecialchars($f['thumb']) ?>" class="panel-img observe-me" loading="lazy" alt="Frame <?= $index + 1 ?>">
+            <?php if (!empty($f['thumb'])): 
+                $fukiJson = htmlspecialchars(json_encode($f['fuki_texts'] ?? []), ENT_QUOTES, 'UTF-8');
+            ?>
+                <div class="panel-img-wrapper" style="position:relative; width:100%; display:flex; justify-content:center;">
+                    <div style="position:relative; width:100%; max-width:600px;">
+                        <img src="<?= htmlspecialchars($f['thumb']) ?>" class="panel-img observe-me" loading="lazy" alt="Frame <?= $index + 1 ?>" data-fuki="<?= $fukiJson ?>" onload="if(typeof renderFuki === 'function') renderFuki(this);">
+                        <div class="fuki-layer" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></div>
+                    </div>
+                </div>
             <?php endif; ?>
             <?php if (!empty($f['overlay_texts'])): ?>
                 <div class="text-blocks">
@@ -427,7 +463,57 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     <?php endif; ?>
 });
+
+function renderFuki(imgEl) {
+    try {
+        const fukiData = JSON.parse(imgEl.getAttribute('data-fuki') || '[]');
+        if (!fukiData.length) return;
+        const layer = imgEl.nextElementSibling;
+        if (!layer || !layer.classList.contains('fuki-layer')) return;
+        const natW = imgEl.naturalWidth || imgEl.getAttribute('width');
+        if (!natW) return;
+        const scale = imgEl.clientWidth / natW;
+        layer.innerHTML = '';
+        fukiData.forEach(ft => {
+            const div = document.createElement('div');
+            div.style.position = 'absolute';
+            div.style.left = (ft.x * scale) + 'px';
+            div.style.top = (ft.y * scale) + 'px';
+            div.style.width = (ft.width * scale) + 'px';
+            div.style.transform = `rotate(${ft.rotation}deg)`;
+            div.style.transformOrigin = 'top left';
+            div.style.color = ft.fill_color;
+            div.style.textAlign = ft.text_align;
+            div.style.fontFamily = `"${ft.font_family}", sans-serif`;
+            div.style.fontSize = (ft.font_size * scale) + 'px';
+            div.style.fontWeight = ft.is_bold == 1 ? 'bold' : 'normal';
+            div.style.fontStyle = ft.is_italic == 1 ? 'italic' : 'normal';
+            div.style.textDecoration = ft.is_underline == 1 ? 'underline' : 'none';
+            div.style.lineHeight = '1.2';
+            div.style.whiteSpace = 'pre-wrap';
+            div.style.wordWrap = 'break-word';
+            
+            // --- FIX: Re-enable pointer events and text selection for the text itself ---
+            div.style.pointerEvents = 'auto';
+            div.style.userSelect = 'text';
+            div.style.webkitUserSelect = 'text';
+            
+            div.innerText = ft.text_content;
+            layer.appendChild(div);
+        });
+    } catch(e) { console.error('Fuki render error', e); }
+}
+window.addEventListener('resize', () => {
+    document.querySelectorAll('.panel-img[data-fuki]').forEach(img => {
+        if (img.complete && img.naturalWidth > 0) renderFuki(img);
+    });
+});
 </script>
 
 </body>
 </html>
+
+
+
+
+

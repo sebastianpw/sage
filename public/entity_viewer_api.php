@@ -263,6 +263,6 @@ function getFramesSql($where, $join = '') {
     LEFT JOIN interactions intr ON ms.interaction_id = intr.id
     LEFT JOIN sketch_analysis sa ON s.id = sa.sketch_id
     WHERE $where
-    ORDER BY f.id ASC
+    ORDER BY f.id DESC
 SQL;
 }

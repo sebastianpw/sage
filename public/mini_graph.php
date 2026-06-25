@@ -692,7 +692,7 @@ dbNodes.forEach(n => {
     graph.addNode(n.id.toString(), {
         x: n.x !== undefined ? n.x : Math.random() * 100,
         y: n.y !== undefined ? n.y : Math.random() * 100,
-        size: isFocal ? 10 : 4,
+        size: isFocal ? 16 : 8,
         label: n.name,
         color: isFocal ? '#f59e0b' : (TYPE_COLORS[n.node_type] || TYPE_COLORS.default),
         node_type: n.node_type || 'note',
@@ -718,7 +718,7 @@ dbEdges.forEach(e => {
 graph.forEachNode(node => {
     const isFocal = graph.getNodeAttribute(node, 'is_focal');
     const deg = graph.degree(node);
-    graph.setNodeAttribute(node, 'size', isFocal ? 12 : (4 + Math.sqrt(deg) * 1.5));
+    graph.setNodeAttribute(node, 'size', isFocal ? 16 : (8 + Math.sqrt(deg) * 2));
 });
 
 document.getElementById('stat-nodes').textContent = graph.order;
@@ -736,6 +736,7 @@ renderer = new Sigma(graph, container, {
     renderEdgeLabels: graph.size <= 150, 
     defaultEdgeType: 'arrow',
     allowInvalidContainer: true,
+    labelRenderedSizeThreshold: 2, // Always show labels
     labelColor:     { color: getLabelColor() },
     edgeLabelColor: { color: getLabelColor() },
     edgeLabelSize:  7,
@@ -820,15 +821,26 @@ function toggleLayout() {
 
 btnLyt.addEventListener('click', toggleLayout);
 
+function resetGraphCamera() {
+    renderer.getCamera().animatedReset({ duration: 300 });
+    setTimeout(() => {
+        const cam = renderer.getCamera();
+        //cam.animatedZoom({ ratio: cam.ratio * 0.5, duration: 300 });
+    }, 320);
+}
+
 // Only auto-trigger client-side loop if Python failed to precompute
 if (!hasPrecomputed) {
     toggleLayout();
-    setTimeout(() => { if (isRunning) toggleLayout(); }, 2000);
+    setTimeout(() => { 
+        if (isRunning) toggleLayout(); 
+        resetGraphCamera();
+    }, 2000);
+} else {
+    setTimeout(resetGraphCamera, 100);
 }
 
-document.getElementById('btnReset').addEventListener('click', () => {
-    renderer.getCamera().animatedReset({ duration: 400 });
-});
+document.getElementById('btnReset').addEventListener('click', resetGraphCamera);
 
 // ── Hops selector ─────────────────────────────────────────────────────────────
 document.getElementById('hopsSelect').addEventListener('change', function() {
@@ -837,10 +849,9 @@ document.getElementById('hopsSelect').addEventListener('change', function() {
     window.location.search = params.toString();
 });
 
-// ── Drag (with rAF throttling optimization) ──────────────────────────────────
+// ── Drag & Tap (with rAF throttling optimization) ────────────────────────────
 let dragNode = null, dragStartX = 0, dragStartY = 0;
 let dragFrame = null;
-const DRAG_THRESHOLD = 6;
 
 renderer.on('downNode', e => {
     dragNode = e.node;
@@ -867,9 +878,8 @@ renderer.getMouseCaptor().on('mousemovebody', e => {
 
 container.addEventListener('touchmove', e => {
     if (!dragNode) return;
-    e.preventDefault(); // Must be called synchronously to stop scrolling
+    e.preventDefault(); 
     
-    // Capture touch position synchronously
     const rect  = container.getBoundingClientRect();
     const touch = e.touches[0];
     const clientX = touch.clientX;
@@ -892,15 +902,20 @@ function releaseNode(e) {
     }
     const endX = e.changedTouches ? e.changedTouches[0].clientX : (e.clientX || dragStartX);
     const endY = e.changedTouches ? e.changedTouches[0].clientY : (e.clientY || dragStartY);
+    
+    // mathematical distance check to differentiate between a pan/drag and a tap
     const dist = Math.sqrt(Math.pow(endX - dragStartX, 2) + Math.pow(endY - dragStartY, 2));
-    if (dist < DRAG_THRESHOLD) openNodePanel(dragNode);
+    if (dist < 6) { 
+        openNodePanel(dragNode);
+    }
+    
     renderer.getCamera().enable();
     dragNode = null;
 }
+
 window.addEventListener('mouseup', releaseNode);
 window.addEventListener('touchend', releaseNode);
 
-renderer.on('clickNode', ({ node }) => openNodePanel(node));
 renderer.on('clickStage', () => closeNodePanel());
 renderer.on('enterNode', ({ node }) => { hoveredNode = node; renderer.refresh(); });
 renderer.on('leaveNode', ()         => { hoveredNode = null; renderer.refresh(); });

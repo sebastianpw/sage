@@ -42,6 +42,143 @@ try {
             echo json_encode(['status' => 'success', 'data' => $res]);
             break;
 
+        case 'search_sequences':
+            $q = trim($_GET['q'] ?? '');
+            $sql = "SELECT id, name FROM narrative_sequences";
+            $params = [];
+            if ($q !== '') {
+                $sql .= " WHERE name LIKE ? OR id = ?";
+                $params[] = "%$q%";
+                $params[] = (int)$q;
+            }
+            $sql .= " ORDER BY id DESC LIMIT 20";
+            
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $res = [];
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $res[] = [
+                    'id' => $row['id'],
+                    'label' => $row['name'] ?: 'Untitled Sequence'
+                ];
+            }
+            echo json_encode(['status' => 'success', 'data' => $res]);
+            break;
+
+        case 'get_sequence_categories':
+            try {
+                $stmt = $pdo->query("SELECT id, name FROM narrative_sequence_categories ORDER BY name ASC");
+                $cats = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                echo json_encode(['success' => true, 'data' => $cats]);
+            } catch (Exception $e) {
+                // Table might not exist yet; gracefully fallback
+                echo json_encode(['success' => true, 'data' => []]);
+            }
+            break;
+            
+            
+            
+case 'edit_sequence':
+            $id = (int)($_POST['sequence_id'] ?? 0);
+            $name = trim($_POST['name'] ?? '');
+            $catId = (int)($_POST['category_id'] ?? 0);
+            
+            if (!$id || !$name) throw new Exception('Sequence ID and Name are required.');
+            
+            $catVal = $catId > 0 ? $catId : null;
+            $hasCat = false;
+            try { $pdo->query("SELECT category_id FROM narrative_sequences LIMIT 1"); $hasCat = true; } catch (Exception $e) {}
+
+            if ($hasCat) {
+                $upd = $pdo->prepare("UPDATE narrative_sequences SET name = ?, category_id = ? WHERE id = ?");
+                $upd->execute([$name, $catVal, $id]);
+            } else {
+                $upd = $pdo->prepare("UPDATE narrative_sequences SET name = ? WHERE id = ?");
+                $upd->execute([$name, $id]);
+            }
+
+            echo json_encode(['success' => true]);
+            break;
+
+        case 'delete_sequence':
+            $id = (int)($_POST['sequence_id'] ?? 0);
+            if (!$id) throw new Exception('Invalid sequence ID.');
+            
+            $pdo->prepare("DELETE FROM narrative_sequences WHERE id = ?")->execute([$id]);
+            echo json_encode(['success' => true]);
+            break;
+
+            
+
+        case 'get_sequences_list':
+            $page = max(1, (int)($_GET['page'] ?? 1));
+            $perPage = 30;
+            $search = trim($_GET['search'] ?? '');
+            $categoryId = (int)($_GET['category_id'] ?? 0);
+
+            $where = ["1=1"];
+            $params = [];
+
+            if ($search !== '') {
+                $where[] = "(name LIKE ? OR id = ?)";
+                $params[] = "%$search%";
+                $params[] = (int)$search;
+            }
+
+            // Defensively check for category_id existence
+            $hasCat = false;
+            try {
+                $pdo->query("SELECT category_id FROM narrative_sequences LIMIT 1");
+                $hasCat = true;
+            } catch (Exception $e) { }
+
+            if ($hasCat && $categoryId > 0) {
+                $where[] = "category_id = ?";
+                $params[] = $categoryId;
+            }
+
+            $whereSql = implode(' AND ', $where);
+
+            
+            try {
+                $countStmt = $pdo->prepare("SELECT COUNT(*) FROM narrative_sequences WHERE $whereSql");
+                $countStmt->execute($params);
+                $total = (int)$countStmt->fetchColumn();
+
+                $offset = ($page - 1) * $perPage;
+                
+                // Fetch category_id if the column exists
+                $catCol = $hasCat ? ", category_id" : "";
+                $stmt = $pdo->prepare("SELECT id, name, created_at, sequence_data $catCol FROM narrative_sequences WHERE $whereSql ORDER BY id DESC LIMIT $perPage OFFSET $offset");
+                $stmt->execute($params);
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                $data = [];
+                foreach ($rows as $row) {
+                    $sData = json_decode($row['sequence_data'] ?? '[]', true) ?: [];
+                    $data[] = [
+                        'id' => $row['id'],
+                        'name' => $row['name'] ?: 'Untitled Sequence',
+                        'created_at' => date('Y-m-d', strtotime($row['created_at'])),
+                        'skt_count' => count($sData),
+                        'category_id' => $hasCat ? (int)($row['category_id'] ?? 0) : 0
+                    ];
+                }
+
+                echo json_encode([
+                    'success' => true,
+                    'data' => $data,
+                    'meta' => [
+                        'total' => $total,
+                        'page' => $page,
+                        'total_pages' => max(1, ceil($total / $perPage))
+                    ]
+                ]);
+            } catch (Exception $e) {
+                echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+            }
+            break;
+
         case 'list_storyboard_frames':
             $sbId = (int)($_GET['storyboard_id'] ?? 0);
             $page = (int)($_GET['page'] ?? 1);
@@ -132,14 +269,17 @@ try {
 
             if (!$seq) throw new Exception('Original sequence not found.');
 
-            // Insert new sequence
-            $ins = $pdo->prepare("INSERT INTO narrative_sequences (name, description, sequence_data, linked_doc_id) VALUES (?, ?, ?, ?)");
-            $ins->execute([
-                $newName,
-                $seq['description'],
-                $seq['sequence_data'],
-                $seq['linked_doc_id']
-            ]);
+            // Insert new sequence (now checking if category_id exists to copy it)
+            $hasCat = false;
+            try { $pdo->query("SELECT category_id FROM narrative_sequences LIMIT 1"); $hasCat = true; } catch (Exception $e) {}
+
+            if ($hasCat) {
+                $ins = $pdo->prepare("INSERT INTO narrative_sequences (name, description, sequence_data, linked_doc_id, category_id) VALUES (?, ?, ?, ?, ?)");
+                $ins->execute([$newName, $seq['description'], $seq['sequence_data'], $seq['linked_doc_id'], $seq['category_id']]);
+            } else {
+                $ins = $pdo->prepare("INSERT INTO narrative_sequences (name, description, sequence_data, linked_doc_id) VALUES (?, ?, ?, ?)");
+                $ins->execute([$newName, $seq['description'], $seq['sequence_data'], $seq['linked_doc_id']]);
+            }
             $newId = (int)$pdo->lastInsertId();
 
             // Copy sequence_overlay_texts if any
@@ -190,13 +330,16 @@ try {
             $upd->execute([json_encode($part1, JSON_UNESCAPED_UNICODE), $sequenceId]);
 
             // Insert new sequence for Part 2
-            $ins = $pdo->prepare("INSERT INTO narrative_sequences (name, description, sequence_data, linked_doc_id) VALUES (?, ?, ?, ?)");
-            $ins->execute([
-                $newName,
-                $seq['description'],
-                json_encode($part2, JSON_UNESCAPED_UNICODE),
-                $seq['linked_doc_id']
-            ]);
+            $hasCat = false;
+            try { $pdo->query("SELECT category_id FROM narrative_sequences LIMIT 1"); $hasCat = true; } catch (Exception $e) {}
+
+            if ($hasCat) {
+                $ins = $pdo->prepare("INSERT INTO narrative_sequences (name, description, sequence_data, linked_doc_id, category_id) VALUES (?, ?, ?, ?, ?)");
+                $ins->execute([$newName, $seq['description'], json_encode($part2, JSON_UNESCAPED_UNICODE), $seq['linked_doc_id'], $seq['category_id']]);
+            } else {
+                $ins = $pdo->prepare("INSERT INTO narrative_sequences (name, description, sequence_data, linked_doc_id) VALUES (?, ?, ?, ?)");
+                $ins->execute([$newName, $seq['description'], json_encode($part2, JSON_UNESCAPED_UNICODE), $seq['linked_doc_id']]);
+            }
             $newId = (int)$pdo->lastInsertId();
 
             // Copy sequence_overlay_texts to the new sequence
@@ -253,6 +396,19 @@ try {
             
             $pdo->commit();
             echo json_encode(['success' => true]);
+            break;
+            
+        case 'create_sequence':
+            $name = trim($_POST['name'] ?? '');
+            if (!$name) throw new Exception('Name is required.');
+
+            $ins = $pdo->prepare(
+                "INSERT INTO narrative_sequences (name, sequence_data) VALUES (?, '[]')"
+            );
+            $ins->execute([$name]);
+            $newId = (int)$pdo->lastInsertId();
+
+            echo json_encode(['success' => true, 'new_sequence_id' => $newId]);
             break;
 
         case 'update_item_frame':
@@ -409,6 +565,108 @@ try {
             echo json_encode(['success' => true]);
             break;
 
+        case 'mass_remove_sequence_items':
+            $sequenceId = (int)($_POST['sequence_id'] ?? 0);
+            $indices = json_decode($_POST['indices'] ?? '[]', true) ?: [];
+            
+            if (!$sequenceId || empty($indices)) {
+                throw new Exception('Invalid parameters for mass removal.');
+            }
+            
+            $pdo->beginTransaction();
+            $stmt = $pdo->prepare("SELECT sequence_data FROM narrative_sequences WHERE id = ? FOR UPDATE");
+            $stmt->execute([$sequenceId]);
+            $json = $stmt->fetchColumn();
+            
+            if (!$json) throw new Exception('Sequence not found.');
+            
+            $data = json_decode($json, true) ?: [];
+            
+            // Remove from array backwards to prevent index shifting while deleting
+            rsort($indices);
+            foreach ($indices as $idx) {
+                $idx = (int)$idx;
+                if (isset($data[$idx])) {
+                    array_splice($data, $idx, 1);
+                }
+            }
+            
+            $upd = $pdo->prepare("UPDATE narrative_sequences SET sequence_data = ? WHERE id = ?");
+            $upd->execute([json_encode($data, JSON_UNESCAPED_UNICODE), $sequenceId]);
+            
+            $pdo->commit();
+            echo json_encode(['success' => true]);
+            break;
+
+        case 'mass_copy_sequence_items':
+            $sourceId = (int)($_POST['source_id'] ?? 0);
+            $targetId = (int)($_POST['target_id'] ?? 0);
+            $offset   = (int)($_POST['offset'] ?? 0);
+            $isMove   = (int)($_POST['is_move'] ?? 0);
+            $indices  = json_decode($_POST['indices'] ?? '[]', true) ?: [];
+
+            if (!$sourceId || !$targetId || empty($indices)) {
+                throw new Exception('Invalid parameters for mass copy/move.');
+            }
+
+            $pdo->beginTransaction();
+            
+            // Fetch Source
+            $stmt = $pdo->prepare("SELECT sequence_data FROM narrative_sequences WHERE id = ? FOR UPDATE");
+            $stmt->execute([$sourceId]);
+            $srcJson = $stmt->fetchColumn();
+            if (!$srcJson) throw new Exception('Source sequence not found.');
+            $srcData = json_decode($srcJson, true) ?: [];
+
+            // Extract selected items
+            $copiedItems = [];
+            foreach ($indices as $idx) {
+                $idx = (int)$idx;
+                if (isset($srcData[$idx])) {
+                    $copiedItems[] = $srcData[$idx];
+                }
+            }
+
+            if ($sourceId === $targetId) {
+                // Modify a single array
+                if ($isMove) {
+                    rsort($indices);
+                    foreach ($indices as $idx) {
+                        array_splice($srcData, (int)$idx, 1);
+                    }
+                }
+                array_splice($srcData, $offset, 0, $copiedItems);
+                
+                $upd = $pdo->prepare("UPDATE narrative_sequences SET sequence_data = ? WHERE id = ?");
+                $upd->execute([json_encode($srcData, JSON_UNESCAPED_UNICODE), $sourceId]);
+            } else {
+                // Fetch Target
+                $stmtTarget = $pdo->prepare("SELECT sequence_data FROM narrative_sequences WHERE id = ? FOR UPDATE");
+                $stmtTarget->execute([$targetId]);
+                $tgtJson = $stmtTarget->fetchColumn();
+                if (!$tgtJson) throw new Exception('Target sequence not found.');
+                $tgtData = json_decode($tgtJson, true) ?: [];
+                
+                // Inject
+                array_splice($tgtData, $offset, 0, $copiedItems);
+                $updTgt = $pdo->prepare("UPDATE narrative_sequences SET sequence_data = ? WHERE id = ?");
+                $updTgt->execute([json_encode($tgtData, JSON_UNESCAPED_UNICODE), $targetId]);
+                
+                // Handle deletion from source if it's a "move"
+                if ($isMove) {
+                    rsort($indices);
+                    foreach ($indices as $idx) {
+                        array_splice($srcData, (int)$idx, 1);
+                    }
+                    $updSrc = $pdo->prepare("UPDATE narrative_sequences SET sequence_data = ? WHERE id = ?");
+                    $updSrc->execute([json_encode($srcData, JSON_UNESCAPED_UNICODE), $sourceId]);
+                }
+            }
+
+            $pdo->commit();
+            echo json_encode(['success' => true]);
+            break;
+
         case 'export_sequence':
             $sequenceId = (int)($_POST['sequence_id'] ?? 0);
             if (!$sequenceId) throw new Exception('Sequence ID required.');
@@ -482,3 +740,4 @@ try {
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => $e->getMessage()]);
 }
+

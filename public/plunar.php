@@ -250,6 +250,164 @@ if ($action) {
                 echo json_encode(['success' => true, 'new_sequence_id' => $newSeqId]);
                 break;
 
+            // ── Direction 3: Sequence ➔ Existing PLUSH (Analysis Phase) ────────────────
+            case 'analyze_sync_seq_to_plush':
+                $seqId = (int)($input['sequence_id'] ?? 0);
+                $storyId = (int)($input['story_id'] ?? 0);
+                if (!$seqId || !$storyId) throw new Exception('Sequence ID and Story ID required.');
+
+                $stmt = $pdo->prepare("SELECT sequence_data FROM narrative_sequences WHERE id = ?");
+                $stmt->execute([$seqId]);
+                $seqData = json_decode($stmt->fetchColumn() ?: '[]', true) ?: [];
+
+                $seqSketchIds = [];
+                foreach ($seqData as $item) {
+                    $sid = is_array($item) ? (int)($item['sketch_id'] ?? 0) : (int)$item;
+                    if ($sid > 0) $seqSketchIds[] = $sid;
+                }
+                $seqSketchIds = array_values(array_unique($seqSketchIds));
+
+                $sketchesData = [];
+                if (!empty($seqSketchIds)) {
+                    $in = implode(',', array_fill(0, count($seqSketchIds), '?'));
+                    $skStmt = $pdo->prepare("SELECT id, name, description FROM sketches WHERE id IN ($in)");
+                    $skStmt->execute($seqSketchIds);
+                    foreach ($skStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                        $sketchesData[(int)$row['id']] = $row;
+                    }
+
+                    $ovStmt = $pdo->prepare("SELECT sketch_id, text_content FROM sketch_overlay_texts WHERE language_code = 'en' AND sketch_id IN ($in) ORDER BY display_order ASC");
+                    $ovStmt->execute($seqSketchIds);
+                    foreach ($ovStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                        $sid = (int)$row['sketch_id'];
+                        if (!isset($sketchesData[$sid]['overlays'])) $sketchesData[$sid]['overlays'] = [];
+                        $sketchesData[$sid]['overlays'][] = $row['text_content'];
+                    }
+                }
+
+                // Fetch mapping from PLUSH (Blocks mapped to sketches)
+                $plushStmt = $pdo->prepare("
+                    SELECT b.id as block_id, b.text_content, e.entity_id as sketch_id
+                    FROM plush_highlight_blocks b
+                    JOIN plush_highlight_block_entities e ON e.block_id = b.id AND e.entity_type = 'sketches'
+                    JOIN plush_scenes sc ON sc.id = b.scene_id
+                    WHERE sc.story_id = ? AND b.language_code = 'en'
+                ");
+                $plushStmt->execute([$storyId]);
+                $plushMap = [];
+                foreach ($plushStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                    $sid = (int)$row['sketch_id'];
+                    // Keep the first block we find for a given sketch
+                    if (!isset($plushMap[$sid])) {
+                        $plushMap[$sid] = $row;
+                    }
+                }
+
+                $conflicts = [];
+                foreach ($seqSketchIds as $sid) {
+                    $sk = $sketchesData[$sid] ?? null;
+                    if (!$sk) continue;
+
+                    $overlays = $sk['overlays'] ?? [];
+                    $seqText = empty($overlays) ? ($sk['description'] ?? '') : implode("\n\n", $overlays);
+                    
+                    if (isset($plushMap[$sid])) {
+                        $plushText = $plushMap[$sid]['text_content'];
+                        // Normalize newlines for comparison
+                        $nSeqText = str_replace("\r\n", "\n", trim($seqText));
+                        $nPlushText = str_replace("\r\n", "\n", trim($plushText));
+
+                        if ($nSeqText !== $nPlushText) {
+                            $conflicts[] = [
+                                'sketch_id' => $sid,
+                                'sketch_name' => $sk['name'],
+                                'status' => 'modified',
+                                'sequence_text' => $seqText,
+                                'plush_text' => $plushText,
+                                'plush_block_id' => $plushMap[$sid]['block_id']
+                            ];
+                        }
+                    } else {
+                        $conflicts[] = [
+                            'sketch_id' => $sid,
+                            'sketch_name' => $sk['name'],
+                            'status' => 'new',
+                            'sequence_text' => $seqText,
+                            'plush_text' => null,
+                            'plush_block_id' => null
+                        ];
+                    }
+                }
+
+                echo json_encode(['success' => true, 'conflicts' => $conflicts]);
+                break;
+
+            // ── Direction 3: Sequence ➔ Existing PLUSH (Execute Phase) ──────────────────
+            case 'execute_sync_seq_to_plush':
+                $storyId = (int)($input['story_id'] ?? 0);
+                $updates = $input['updates'] ?? [];
+                if (!$storyId || empty($updates)) throw new Exception('Story ID and updates required.');
+
+                $pdo->beginTransaction();
+
+                // If there are 'new' blocks, append to the last scene/group available.
+                $lastSceneId = null;
+                $lastGroupId = 0;
+                
+                $scStmt = $pdo->prepare("SELECT id FROM plush_scenes WHERE story_id = ? ORDER BY scene_order DESC, id DESC LIMIT 1");
+                $scStmt->execute([$storyId]);
+                $lastSceneId = $scStmt->fetchColumn();
+
+                if (!$lastSceneId) {
+                    // Create a scene if none exist
+                    $pdo->prepare("INSERT INTO plush_scenes (story_id, title, scene_order) VALUES (?, 'Scene 1', 0)")->execute([$storyId]);
+                    $lastSceneId = (int)$pdo->lastInsertId();
+                }
+
+                $bIns = $pdo->prepare("INSERT INTO plush_highlight_blocks (scene_id, group_id, text_content, display_order) VALUES (?, ?, ?, ?)");
+                $eIns = $pdo->prepare("INSERT INTO plush_highlight_block_entities (block_id, entity_type, entity_id, entity_label) VALUES (?, 'sketches', ?, ?)");
+                $bUpd = $pdo->prepare("UPDATE plush_highlight_blocks SET text_content = ? WHERE id = ?");
+
+                // Fetch names for new sketches
+                $newSketchIds = [];
+                foreach ($updates as $u) {
+                    if ($u['status'] === 'new') $newSketchIds[] = (int)$u['sketch_id'];
+                }
+                $skNames = [];
+                if (!empty($newSketchIds)) {
+                    $in = implode(',', array_fill(0, count($newSketchIds), '?'));
+                    $nmStmt = $pdo->prepare("SELECT id, name FROM sketches WHERE id IN ($in)");
+                    $nmStmt->execute($newSketchIds);
+                    foreach ($nmStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                        $skNames[(int)$row['id']] = $row['name'];
+                    }
+                }
+
+                $dispOrdStmt = $pdo->prepare("SELECT COALESCE(MAX(display_order), -1) FROM plush_highlight_blocks WHERE scene_id = ? AND group_id = ? AND language_code = 'en'");
+
+                foreach ($updates as $u) {
+                    $sid = (int)($u['sketch_id'] ?? 0);
+                    $status = $u['status'] ?? '';
+                    $text = $u['text'] ?? '';
+
+                    if ($status === 'modified' && !empty($u['plush_block_id'])) {
+                        $bUpd->execute([$text, (int)$u['plush_block_id']]);
+                    } elseif ($status === 'new' && $sid > 0) {
+                        $dispOrdStmt->execute([$lastSceneId, $lastGroupId]);
+                        $dOrder = (int)$dispOrdStmt->fetchColumn() + 1;
+
+                        $bIns->execute([$lastSceneId, $lastGroupId, $text, $dOrder]);
+                        $blockId = (int)$pdo->lastInsertId();
+
+                        $sName = $skNames[$sid] ?? 'Unknown Sketch';
+                        $eIns->execute([$blockId, $sid, $sName]);
+                    }
+                }
+
+                $pdo->commit();
+                echo json_encode(['success' => true]);
+                break;
+
             default:
                 throw new Exception("Unknown action.");
         }
@@ -300,7 +458,7 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', san
 [data-theme="light"] .pl-nav { background:rgba(244,246,250,.92); }
 .pl-nav-title { font-family:'Space Mono',monospace; font-size:.85rem; color:var(--pl-purple); flex:1; }
 
-.workspace { max-width:1000px; margin:40px auto; padding:0 20px; display:grid; grid-template-columns:1fr 1fr; gap:30px; }
+.workspace { max-width:1200px; margin:40px auto; padding:0 20px; display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:30px; }
 @media(max-width:768px) { .workspace { grid-template-columns:1fr; } }
 
 .bridge-card { background:var(--pl-card); border:1px solid var(--pl-border); border-radius:8px; padding:25px; box-shadow:0 8px 30px rgba(0,0,0,.3); display:flex; flex-direction:column; }
@@ -315,7 +473,7 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', san
 .su-input:focus { border-color:var(--pl-purple); }
 
 .ac-wrap { position:relative; margin-bottom:20px; }
-.ac-dropdown { position:absolute; top:100%; left:0; right:0; z-index:10; background:var(--pl-card); border:1px solid var(--pl-border); border-top:none; border-radius:0 0 4px 4px; max-height:200px; overflow-y:auto; display:none; box-shadow:0 4px 12px rgba(0,0,0,.5); }
+.ac-dropdown { position:absolute; top:100%; left:0; right:0; z-index:10; background:var(--pl-card); border:1px solid var(--pl-border); border-top:none; border-radius:0 0 4px 4px; max-height:300px; overflow-y:auto; display:none; box-shadow:0 4px 12px rgba(0,0,0,.5); }
 .ac-item { padding:10px 12px; font-size:.85rem; cursor:pointer; transition:background .1s; border-bottom:1px solid var(--pl-border); }
 .ac-item:hover { background:rgba(167,139,250,.1); color:var(--pl-purple); }
 .ac-item:last-child { border-bottom:none; }
@@ -335,7 +493,7 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', san
 /* Modals */
 .su-modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.8); z-index:300000; display:none; align-items:center; justify-content:center; backdrop-filter:blur(3px); }
 .su-modal-backdrop.active { display:flex; }
-.su-modal-box { width:100%; max-width:700px; max-height:85vh; background:var(--pl-surface); border:1px solid var(--pl-border); border-radius:8px; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,.5); margin:16px; }
+.su-modal-box { width:100%; max-width:800px; max-height:85vh; background:var(--pl-surface); border:1px solid var(--pl-border); border-radius:8px; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,.5); margin:16px; }
 .su-modal-header { display:flex; justify-content:space-between; align-items:center; padding:15px 20px; border-bottom:1px solid var(--pl-border); background:var(--pl-card); flex-shrink:0; border-radius:8px 8px 0 0; }
 .su-modal-title { font-size:1rem; font-weight:bold; font-family:'Space Mono',monospace; color:var(--pl-amber); text-transform:uppercase; letter-spacing:1px; }
 .su-modal-close { background:transparent; border:none; color:var(--pl-text-dim); cursor:pointer; font-size:1.2rem; }
@@ -362,7 +520,7 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', san
         <div class="card-desc">Convert a Narrative Sequence into a new PLUSH Story, generating highlight blocks from existing overlay texts.</div>
         
         <div class="ac-wrap" id="wrapSeq">
-            <input type="text" id="searchSeq" class="su-input" placeholder="Search Narrative Sequences..." oninput="PlunarApp.search('sequences', this.value)">
+            <input type="text" id="searchSeq" class="su-input" placeholder="Search Narrative Sequences..." onfocus="PlunarApp.search('sequences', this.value)" oninput="PlunarApp.search('sequences', this.value)">
             <div id="acSeq" class="ac-dropdown"></div>
         </div>
 
@@ -382,7 +540,7 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', san
         <div class="card-desc">Convert a PLUSH Story into a Narrative Sequence, flattening chronological sketch references and transferring texts.</div>
         
         <div class="ac-wrap" id="wrapPlush">
-            <input type="text" id="searchPlush" class="su-input" placeholder="Search PLUSH Stories..." oninput="PlunarApp.search('plush', this.value)">
+            <input type="text" id="searchPlush" class="su-input" placeholder="Search PLUSH Stories..." onfocus="PlunarApp.search('plush', this.value)" oninput="PlunarApp.search('plush', this.value)">
             <div id="acPlush" class="ac-dropdown"></div>
         </div>
 
@@ -395,11 +553,41 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', san
             <button id="btnDir2" class="pl-btn dir2-btn" onclick="PlunarApp.analyzePlush()" disabled>Migrate to Sequence</button>
         </div>
     </div>
+
+    <!-- Direction 3: Seq -> Existing PLUSH (Sync) -->
+    <div class="bridge-card">
+        <h3 class="card-title dir3" style="color:var(--pl-purple);"><i class="bi bi-arrow-repeat"></i> Update PLUSH</h3>
+        <div class="card-desc">Sync an existing PLUSH Story with updates from a Narrative Sequence.</div>
+        
+        <div class="ac-wrap" id="wrapSeqSync">
+            <input type="text" id="searchSeqSync" class="su-input" placeholder="Search Narrative Sequence..." onfocus="PlunarApp.search('sequences', this.value, 'sync')" oninput="PlunarApp.search('sequences', this.value, 'sync')">
+            <div id="acSeqSync" class="ac-dropdown"></div>
+        </div>
+
+        <div id="selectedSeqSync" class="selected-chip">
+            <span id="lblSeqSync"></span>
+            <button onclick="PlunarApp.clearSelection('seqSync')">✕</button>
+        </div>
+
+        <div class="ac-wrap" id="wrapPlushSync">
+            <input type="text" id="searchPlushSync" class="su-input" placeholder="Search PLUSH Story..." onfocus="PlunarApp.search('plush', this.value, 'sync')" oninput="PlunarApp.search('plush', this.value, 'sync')">
+            <div id="acPlushSync" class="ac-dropdown"></div>
+        </div>
+
+        <div id="selectedPlushSync" class="selected-chip">
+            <span id="lblPlushSync"></span>
+            <button onclick="PlunarApp.clearSelection('plushSync')">✕</button>
+        </div>
+
+        <div style="margin-top:auto;">
+            <button id="btnDir3" class="pl-btn dir3-btn" style="background:var(--pl-purple); color:#fff;" onclick="PlunarApp.analyzeSync()" disabled>Analyze Changes</button>
+        </div>
+    </div>
 </div>
 
-<!-- Conflict Modal -->
+<!-- Conflict Modal (PLUSH -> Seq) -->
 <div id="conflictModal" class="su-modal-backdrop" onmousedown="if(event.target===this) document.getElementById('conflictModal').classList.remove('active')">
-    <div class="su-modal-box">
+    <div class="su-modal-box" style="max-width:700px;">
         <div class="su-modal-header">
             <div class="su-modal-title"><i class="bi bi-exclamation-triangle"></i> Text Collisions Detected</div>
             <button onclick="document.getElementById('conflictModal').classList.remove('active')" class="su-modal-close">✕</button>
@@ -423,6 +611,32 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', san
     </div>
 </div>
 
+<!-- Sync Modal (Seq -> PLUSH) -->
+<div id="syncModal" class="su-modal-backdrop" onmousedown="if(event.target===this) document.getElementById('syncModal').classList.remove('active')">
+    <div class="su-modal-box">
+        <div class="su-modal-header">
+            <div class="su-modal-title" style="color:var(--pl-purple);"><i class="bi bi-arrow-repeat"></i> Sync Changes to PLUSH</div>
+            <button onclick="document.getElementById('syncModal').classList.remove('active')" class="su-modal-close">✕</button>
+        </div>
+        
+        <div style="padding:15px 20px 0; font-size:0.85rem; color:var(--pl-text-dim);">
+            Review the updates from the Narrative Sequence. Select the items you want to apply to the PLUSH story.
+            <div style="margin-top:10px;">
+                <label class="su-check-label" style="color:var(--pl-text);">
+                    <input type="checkbox" id="checkAllSync" onchange="PlunarApp.toggleAllSync(this.checked)"> Select All Updates
+                </label>
+            </div>
+        </div>
+
+        <div class="conflict-list" id="syncList"></div>
+
+        <div style="padding:15px 20px; border-top:1px solid var(--pl-border); background:var(--pl-card); display:flex; justify-content:flex-end; gap:10px; border-radius:0 0 8px 8px;">
+            <button onclick="document.getElementById('syncModal').classList.remove('active')" style="padding:10px 15px; border-radius:6px; border:1px solid var(--pl-border); background:transparent; color:var(--pl-text); cursor:pointer;">Cancel</button>
+            <button onclick="PlunarApp.executeSync()" style="padding:10px 20px; border-radius:6px; border:none; background:var(--pl-purple); color:#fff; font-weight:bold; cursor:pointer;">Apply Selected</button>
+        </div>
+    </div>
+</div>
+
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="/js/toast.js"></script>
 <script>
@@ -430,23 +644,38 @@ const PlunarApp = (() => {
     let timers = {};
     let state = {
         seq: { id: null, name: '' },
-        plush: { id: null, name: '' }
+        plush: { id: null, name: '' },
+        seqSync: { id: null, name: '' },
+        plushSync: { id: null, name: '' }
     };
+    let syncData = [];
 
-    function search(type, q) {
-        clearTimeout(timers[type]);
-        const ac = document.getElementById(type === 'sequences' ? 'acSeq' : 'acPlush');
-        if (!q.trim()) { ac.style.display = 'none'; return; }
+    function search(type, q, context = 'default') {
+        const timerKey = type + context;
+        clearTimeout(timers[timerKey]);
         
-        timers[type] = setTimeout(() => {
+        let acId = '';
+        if (context === 'sync') {
+            acId = type === 'sequences' ? 'acSeqSync' : 'acPlushSync';
+        } else {
+            acId = type === 'sequences' ? 'acSeq' : 'acPlush';
+        }
+        
+        const ac = document.getElementById(acId);
+        
+        timers[timerKey] = setTimeout(() => {
             fetch('plunar.php', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ action: 'search_' + type, q })
+                body: JSON.stringify({ action: 'search_' + type, q: q.trim() })
             }).then(r=>r.json()).then(res => {
                 if (res.success) {
-                    if (!res.results.length) { ac.style.display = 'none'; return; }
+                    if (!res.results.length) { 
+                        ac.innerHTML = '<div style="padding:10px; color:var(--pl-text-dim); font-size:0.85rem; text-align:center;">No results found.</div>';
+                        ac.style.display = 'block'; 
+                        return; 
+                    }
                     ac.innerHTML = res.results.map(r => `
-                        <div class="ac-item" onclick="PlunarApp.select('${type}', ${r.id}, '${r.name.replace(/'/g, "\\'")}')">
+                        <div class="ac-item" onclick="PlunarApp.select('${type}', ${r.id}, '${r.name.replace(/'/g, "\\'")}', '${context}')">
                             <span style="color:var(--pl-text-dim); font-family:monospace; margin-right:6px;">#${r.id}</span>
                             ${r.name}
                         </div>
@@ -454,35 +683,67 @@ const PlunarApp = (() => {
                     ac.style.display = 'block';
                 }
             });
-        }, 250);
+        }, 150);
     }
 
-    function select(type, id, name) {
+    function select(type, id, name, context = 'default') {
         const isSeq = type === 'sequences';
-        const key = isSeq ? 'seq' : 'plush';
+        let key, wrapId, acId, selectedId, lblId, color;
+
+        if (context === 'sync') {
+            key = isSeq ? 'seqSync' : 'plushSync';
+            wrapId = isSeq ? 'wrapSeqSync' : 'wrapPlushSync';
+            acId = isSeq ? 'acSeqSync' : 'acPlushSync';
+            selectedId = isSeq ? 'selectedSeqSync' : 'selectedPlushSync';
+            lblId = isSeq ? 'lblSeqSync' : 'lblPlushSync';
+            color = 'var(--pl-purple)';
+        } else {
+            key = isSeq ? 'seq' : 'plush';
+            wrapId = isSeq ? 'wrapSeq' : 'wrapPlush';
+            acId = isSeq ? 'acSeq' : 'acPlush';
+            selectedId = isSeq ? 'selectedSeq' : 'selectedPlush';
+            lblId = isSeq ? 'lblSeq' : 'lblPlush';
+            color = isSeq ? 'var(--pl-teal)' : 'var(--pl-amber)';
+        }
         
         state[key] = { id, name };
         
-        document.getElementById(isSeq ? 'wrapSeq' : 'wrapPlush').style.display = 'none';
-        document.getElementById(isSeq ? 'acSeq' : 'acPlush').style.display = 'none';
+        document.getElementById(wrapId).style.display = 'none';
+        document.getElementById(acId).style.display = 'none';
         
-        const chip = document.getElementById(isSeq ? 'selectedSeq' : 'selectedPlush');
-        document.getElementById(isSeq ? 'lblSeq' : 'lblPlush').innerHTML = `<span style="color:var(--pl-${isSeq?'teal':'amber'}); margin-right:8px;">#${id}</span> ${name}`;
+        const chip = document.getElementById(selectedId);
+        document.getElementById(lblId).innerHTML = `<span style="color:${color}; margin-right:8px;">#${id}</span> ${name}`;
         chip.classList.add('active');
 
-        document.getElementById(isSeq ? 'btnDir1' : 'btnDir2').disabled = false;
+        if (context === 'sync') {
+            document.getElementById('btnDir3').disabled = !(state.seqSync.id && state.plushSync.id);
+        } else {
+            document.getElementById(isSeq ? 'btnDir1' : 'btnDir2').disabled = false;
+        }
     }
 
     function clearSelection(key) {
         state[key] = { id: null, name: '' };
         
-        const isSeq = key === 'seq';
-        document.getElementById(isSeq ? 'selectedSeq' : 'selectedPlush').classList.remove('active');
-        document.getElementById(isSeq ? 'wrapSeq' : 'wrapPlush').style.display = 'block';
-        const inp = document.getElementById(isSeq ? 'searchSeq' : 'searchPlush');
-        inp.value = ''; inp.focus();
+        let wrapId, selectedId, searchId;
+        if (key === 'seqSync' || key === 'plushSync') {
+            const isSeq = key === 'seqSync';
+            wrapId = isSeq ? 'wrapSeqSync' : 'wrapPlushSync';
+            selectedId = isSeq ? 'selectedSeqSync' : 'selectedPlushSync';
+            searchId = isSeq ? 'searchSeqSync' : 'searchPlushSync';
+            document.getElementById('btnDir3').disabled = true;
+        } else {
+            const isSeq = key === 'seq';
+            wrapId = isSeq ? 'wrapSeq' : 'wrapPlush';
+            selectedId = isSeq ? 'selectedSeq' : 'selectedPlush';
+            searchId = isSeq ? 'searchSeq' : 'searchPlush';
+            document.getElementById(isSeq ? 'btnDir1' : 'btnDir2').disabled = true;
+        }
         
-        document.getElementById(isSeq ? 'btnDir1' : 'btnDir2').disabled = true;
+        document.getElementById(selectedId).classList.remove('active');
+        document.getElementById(wrapId).style.display = 'block';
+        const inp = document.getElementById(searchId);
+        inp.value = ''; inp.focus();
     }
 
     function migrateToPlush() {
@@ -528,13 +789,36 @@ const PlunarApp = (() => {
         });
     }
 
+    function analyzeSync() {
+        if (!state.seqSync.id || !state.plushSync.id) return;
+        const btn = document.getElementById('btnDir3');
+        const orig = btn.innerHTML;
+        btn.innerHTML = 'Analyzing...'; btn.disabled = true;
+
+        fetch('plunar.php', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ action: 'analyze_sync_seq_to_plush', sequence_id: state.seqSync.id, story_id: state.plushSync.id })
+        }).then(r=>r.json()).then(res => {
+            btn.innerHTML = orig; btn.disabled = false;
+            if (res.success) {
+                if (res.conflicts && res.conflicts.length > 0) {
+                    showSyncModal(res.conflicts);
+                } else {
+                    Toast.show('No changes found. PLUSH is up to date.', 'info');
+                }
+            } else {
+                Toast.show(res.message || 'Error', 'error');
+            }
+        });
+    }
+
     function showConflicts(conflicts) {
         document.getElementById('checkAllConflicts').checked = false;
         const list = document.getElementById('conflictList');
         list.innerHTML = conflicts.map(c => `
             <div class="conflict-item">
                 <div class="conflict-header">
-                    <span>#${c.sketch_id} — ${c.sketch_name}</span>
+                    <span>#${c.sketch_id} — ${escHtml(c.sketch_name)}</span>
                     <label class="su-check-label">
                         <input type="checkbox" class="conflict-cb" value="${c.sketch_id}"> Overwrite
                     </label>
@@ -554,8 +838,41 @@ const PlunarApp = (() => {
         document.getElementById('conflictModal').classList.add('active');
     }
 
+    function showSyncModal(conflicts) {
+        syncData = conflicts;
+        document.getElementById('checkAllSync').checked = false;
+        const list = document.getElementById('syncList');
+        list.innerHTML = conflicts.map((c, i) => `
+            <div class="conflict-item">
+                <div class="conflict-header">
+                    <span>#${c.sketch_id} — ${escHtml(c.sketch_name)} <span style="margin-left:10px; padding:2px 6px; border-radius:4px; font-size:0.6rem; background:${c.status==='new'?'var(--pl-teal)':'var(--pl-amber)'}; color:#000;">${c.status.toUpperCase()}</span></span>
+                    <label class="su-check-label">
+                        <input type="checkbox" class="sync-cb" value="${i}"> Apply
+                    </label>
+                </div>
+                <div class="conflict-text-grid">
+                    ${c.status === 'modified' ? `
+                    <div>
+                        <div class="conflict-title">Existing PLUSH Text</div>
+                        <div class="conflict-text-box">${escHtml(c.plush_text)}</div>
+                    </div>
+                    ` : ''}
+                    <div ${c.status === 'new' ? 'style="grid-column: 1 / -1;"' : ''}>
+                        <div class="conflict-title" style="color:var(--pl-purple);">New Sequence Text</div>
+                        <div class="conflict-text-box">${escHtml(c.sequence_text)}</div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        document.getElementById('syncModal').classList.add('active');
+    }
+
     function toggleAllConflicts(checked) {
         document.querySelectorAll('.conflict-cb').forEach(cb => cb.checked = checked);
+    }
+
+    function toggleAllSync(checked) {
+        document.querySelectorAll('.sync-cb').forEach(cb => cb.checked = checked);
     }
 
     function executePlushMigration(forceOverwriteIds = null) {
@@ -588,11 +905,56 @@ const PlunarApp = (() => {
         });
     }
 
+    function executeSync() {
+        const selectedIndices = Array.from(document.querySelectorAll('.sync-cb:checked')).map(cb => parseInt(cb.value));
+        if (selectedIndices.length === 0) {
+            Toast.show('No updates selected.', 'warn');
+            return;
+        }
+
+        const updatesToApply = selectedIndices.map(i => {
+            const c = syncData[i];
+            return {
+                sketch_id: c.sketch_id,
+                status: c.status,
+                text: c.sequence_text,
+                plush_block_id: c.plush_block_id
+            };
+        });
+
+        document.getElementById('syncModal').classList.remove('active');
+        
+        const btn = document.getElementById('btnDir3');
+        const orig = btn.innerHTML;
+        btn.innerHTML = 'Applying...'; btn.disabled = true;
+
+        fetch('plunar.php', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                action: 'execute_sync_seq_to_plush', 
+                story_id: state.plushSync.id,
+                updates: updatesToApply
+            })
+        }).then(r=>r.json()).then(res => {
+            if (res.success) {
+                Toast.show('PLUSH story updated successfully!', 'success');
+                setTimeout(() => window.location.href = `plush.php?id=${state.plushSync.id}`, 1000);
+            } else {
+                Toast.show(res.message || 'Error', 'error');
+                btn.innerHTML = orig; btn.disabled = false;
+            }
+        });
+    }
+
     function escHtml(s) {
         return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
-    return { search, select, clearSelection, migrateToPlush, analyzePlush, toggleAllConflicts, executePlushMigration };
+    return { 
+        search, select, clearSelection, 
+        migrateToPlush, analyzePlush, toggleAllConflicts, executePlushMigration,
+        analyzeSync, toggleAllSync, executeSync
+    };
 })();
 
 // Hide AC on outside click

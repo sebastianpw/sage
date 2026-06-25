@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // RAPID IMPORT FORGE — MD Importer for Rapid Showcase
 // Forge design system port of rapid_import.php.
-// All import logic preserved exactly.
+// All import logic preserved exactly. Added Semi-Auto Split importer mode.
 // ─────────────────────────────────────────────────────────────────────────────
 require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
@@ -20,7 +20,51 @@ $instructionContent = file_exists($instructionFile)
     ? file_get_contents($instructionFile)
     : "{\n  \"error\": \"rapid.json not found in public directory.\"\n}";
 
-// ── AJAX HANDLER (preserved exactly from rapid_import.php) ───────────────────
+// ── AJAX HANDLER: SEMI-AUTO COMMIT ───────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'semi_auto_commit') {
+    header('Content-Type: application/json');
+    $category = trim($_POST['category'] ?? 'MANUAL_IMPORT');
+    $blocksRaw = $_POST['blocks'] ?? '[]';
+    $blocks = json_decode($blocksRaw, true);
+    
+    if (!is_array($blocks)) {
+        echo json_encode(['ok' => false, 'error' => 'Invalid blocks payload']);
+        exit;
+    }
+
+    $stats = ['inserted' => 0, 'errors' => 0, 'log' => []];
+    $fallbackGenId = '446437576e785bbf3d188624dd9794eb'; // Desc Gen fallback
+    $refPrefix = strtoupper(substr(preg_replace('/[^a-zA-Z0-9]/', '', $category), 0, 3));
+    if (!$refPrefix) $refPrefix = 'IMP';
+
+    foreach ($blocks as $idx => $text) {
+        $cleanText = trim($text);
+        if (!$cleanText) continue;
+
+        $refCode = $refPrefix . '-' . str_pad($idx + 1, 2, '0', STR_PAD_LEFT) . '-' . rand(100, 999);
+        
+        try {
+            $ins = $conn->prepare("INSERT INTO rapid_showcase (reference_code, title, category, description_prompt, generator_config_id, is_generated, created_at) VALUES (?, ?, ?, ?, ?, 0, NOW())");
+            $ins->bindValue(1, $refCode);
+            $ins->bindValue(2, 'Semi-Auto Seed');
+            $ins->bindValue(3, $category);
+            $ins->bindValue(4, $cleanText);
+            $ins->bindValue(5, $fallbackGenId);
+            $ins->executeStatement();
+
+            $stats['inserted']++;
+            $stats['log'][] = "[NEW] $refCode ($category)";
+        } catch (Exception $ex) {
+            $stats['errors']++;
+            $stats['log'][] = "[ERR] $refCode: " . $ex->getMessage();
+        }
+    }
+
+    echo json_encode(['ok' => true, 'stats' => $stats]);
+    exit;
+}
+
+// ── AJAX HANDLER: STRICT AUTO IMPORT (preserved exactly) ─────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['md_file'])) {
     header('Content-Type: application/json');
 
@@ -193,11 +237,12 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 
 /* ── SIDEBAR (nav only) ── */
 .forge-sidebar { grid-area:sidebar; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; padding:16px 12px; gap:6px; }
-.nav-item { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:var(--radius); border:1px solid transparent; cursor:pointer; text-decoration:none; color:var(--text-dim); font-family:var(--mono); font-size:0.8rem; transition:all 0.15s; }
+.nav-item { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:var(--radius); border:1px solid transparent; cursor:pointer; text-decoration:none; color:var(--text-dim); font-family:var(--mono); font-size:0.8rem; transition:all 0.15s; background:transparent; width:100%; text-align:left; }
 .nav-item:hover { background:var(--card); border-color:var(--border); color:var(--text); }
 .nav-item.active { background:var(--amber-dim); border-color:var(--amber); color:var(--amber); }
 .nav-item i { font-size:14px; flex-shrink:0; }
 .nav-divider { height:1px; background:var(--border); margin:8px 0; }
+.nav-section-title { padding:0 12px; font-family:var(--mono); font-size:0.65rem; color:var(--text-dim); margin-top:8px; margin-bottom:4px; text-transform:uppercase; letter-spacing:1px; }
 
 /* ── MAIN ── */
 .forge-main { grid-area:main; display:flex; flex-direction:column; overflow:hidden; background:var(--bg); }
@@ -206,25 +251,18 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 .forge-workspace { flex:1; display:flex; flex-direction:column; overflow:hidden; }
 .workspace-body { flex:1; display:grid; grid-template-columns:1fr 340px; overflow:hidden; }
 
-/* Drop panel */
-.drop-panel { padding:28px; overflow-y:auto; border-right:1px solid var(--border); display:flex; flex-direction:column; gap:20px; }
+/* Left Panels */
 .panel-label { font-family:var(--mono); font-size:0.65rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:2px; margin-bottom:14px; display:flex; align-items:center; gap:6px; }
 .panel-label::after { content:''; flex:1; height:1px; background:var(--border); }
 
-/* Upload zone */
-.upload-zone {
-    border:2px dashed var(--border-glow); border-radius:var(--radius-lg); padding:40px 20px;
-    text-align:center; background:var(--card); cursor:pointer; transition:all 0.2s;
-    display:flex; flex-direction:column; align-items:center; gap:12px;
-}
-.upload-zone:hover, .upload-zone.dragover {
-    border-color:var(--amber); background:var(--amber-dim);
-}
+/* Strict Mode */
+.strict-panel { padding:28px; overflow-y:auto; border-right:1px solid var(--border); display:flex; flex-direction:column; gap:20px; }
+.upload-zone { border:2px dashed var(--border-glow); border-radius:var(--radius-lg); padding:40px 20px; text-align:center; background:var(--card); cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:12px; }
+.upload-zone:hover, .upload-zone.dragover { border-color:var(--amber); background:var(--amber-dim); }
 .upload-zone-icon { font-size:36px; opacity:0.5; }
 .upload-zone-title { font-family:var(--mono); font-size:0.85rem; color:var(--text-bright); }
 .upload-zone-sub   { font-family:var(--mono); font-size:0.72rem; color:var(--text-dim); }
 
-/* Stats row */
 .stats-row { display:flex; gap:10px; flex-wrap:wrap; }
 .stat-card { flex:1; min-width:80px; background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:10px 14px; }
 .stat-card-label { font-family:var(--mono); font-size:0.63rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
@@ -232,8 +270,25 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 .stat-new  { color:var(--green); }
 .stat-err  { color:var(--red); }
 
-/* Instructions JSON box */
-.json-box { flex:1; overflow:auto; font-family:var(--mono); font-size:0.72rem; padding:14px; background:#050a05; color:#4ade80; border:1px solid var(--border); border-radius:var(--radius); white-space:pre-wrap; word-break:break-all; }
+/* Semi-Auto Mode */
+.semi-panel { padding:28px; overflow-y:auto; border-right:1px solid var(--border); display:none; flex-direction:column; gap:20px; }
+.form-input { width:100%; padding:9px 12px; background:var(--card); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:var(--mono); font-size:0.8rem; transition:border-color 0.15s; }
+.form-input:focus { outline:none; border-color:var(--amber); }
+.form-textarea { width:100%; min-height:180px; padding:12px; background:var(--card); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:var(--mono); font-size:0.8rem; resize:vertical; line-height:1.6; }
+.form-textarea:focus { outline:none; border-color:var(--amber); }
+
+/* Semi-Auto Editor Blocks */
+.semi-block { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:12px; position:relative; transition:border-color 0.2s; }
+.semi-block:focus-within { border-color:var(--amber); }
+.semi-textarea-block { width:100%; min-height:70px; background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:10px; font-family:var(--mono); font-size:0.75rem; color:var(--text); resize:vertical; line-height:1.5; }
+.semi-textarea-block:focus { outline:none; border-color:var(--amber); }
+.semi-del-btn { position:absolute; top:8px; right:8px; width:26px; height:26px; border:1px solid transparent; border-radius:4px; background:var(--surface); color:var(--red); display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:0.5; transition:all 0.15s; }
+.semi-del-btn:hover { opacity:1; border-color:var(--red); background:rgba(240,80,96,0.1); }
+.semi-bridge { display:flex; align-items:center; gap:8px; opacity:0.3; transition:opacity 0.2s; margin:2px 0; }
+.semi-bridge:hover { opacity:1; }
+.semi-bridge-line { flex:1; height:1px; background:var(--border); }
+.semi-btn { background:transparent; border:1px dashed var(--border); border-radius:12px; padding:4px 10px; font-family:var(--mono); font-size:0.65rem; color:var(--text-dim); cursor:pointer; display:flex; gap:6px; align-items:center; transition:all 0.15s; white-space:nowrap; }
+.semi-btn:hover { border-color:var(--amber); color:var(--amber); background:rgba(245,166,35,0.05); }
 
 /* Right: log panel */
 .log-panel { display:flex; flex-direction:column; overflow:hidden; background:var(--bg); }
@@ -242,11 +297,12 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 .log-console { flex:1; overflow-y:auto; padding:14px; font-family:var(--mono); font-size:0.75rem; line-height:1.6; color:#4ade80; background:#050a05; white-space:pre-wrap; word-break:break-word; }
 .log-console .ts { opacity:0.45; }
 
-/* Action bar */
+/* Action bars */
 .action-bar { padding:14px 20px; border-top:1px solid var(--border); border-right:1px solid var(--border); background:var(--surface); display:flex; gap:8px; align-items:center; flex-shrink:0; }
-.btn-forge-primary { padding:10px 20px; background:var(--amber); color:#000; border:none; border-radius:var(--radius); cursor:pointer; font-family:var(--mono); font-size:0.8rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; transition:all 0.15s; }
-.btn-forge-primary:hover { filter:brightness(1.1); }
-.btn-forge-secondary { padding:10px 16px; background:transparent; color:var(--text-dim); border:1px solid var(--border); border-radius:var(--radius); cursor:pointer; font-family:var(--mono); font-size:0.78rem; transition:all 0.15s; }
+.btn-forge-primary { padding:10px 20px; background:var(--amber); color:#000; border:none; border-radius:var(--radius); cursor:pointer; font-family:var(--mono); font-size:0.8rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; transition:all 0.15s; display:flex; gap:8px; align-items:center; }
+.btn-forge-primary:hover:not(:disabled) { filter:brightness(1.1); }
+.btn-forge-primary:disabled { opacity:0.5; cursor:not-allowed; }
+.btn-forge-secondary { padding:10px 16px; background:transparent; color:var(--text-dim); border:1px solid var(--border); border-radius:var(--radius); cursor:pointer; font-family:var(--mono); font-size:0.78rem; transition:all 0.15s; display:flex; gap:8px; align-items:center; }
 .btn-forge-secondary:hover { border-color:var(--border-glow); color:var(--text); }
 
 /* ── Instruction modal ── */
@@ -258,6 +314,7 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 .forge-modal-close { width:28px; height:28px; border-radius:4px; border:1px solid var(--border); background:transparent; color:var(--text-dim); cursor:pointer; transition:all 0.15s; display:flex; align-items:center; justify-content:center; font-size:14px; }
 .forge-modal-close:hover { border-color:var(--red); color:var(--red); background:var(--red-dim); }
 .forge-modal-body { padding:20px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:14px; }
+.json-box { flex:1; overflow:auto; font-family:var(--mono); font-size:0.72rem; padding:14px; background:#050a05; color:#4ade80; border:1px solid var(--border); border-radius:var(--radius); white-space:pre-wrap; word-break:break-all; }
 
 /* ── TOAST ── */
 .forge-toast-container { position:fixed; bottom:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
@@ -274,6 +331,8 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
     .forge-layout { grid-template-columns:1fr; grid-template-rows:52px auto 1fr; grid-template-areas:"header""sidebar""main"; }
     .forge-sidebar { border-right:none; border-bottom:1px solid var(--border); flex-direction:row; flex-wrap:wrap; padding:10px; height:auto; }
     .nav-divider { display:none; }
+    .nav-section-title { display:none; }
+    .nav-item { width:auto; flex:1; justify-content:center; }
     .workspace-body { grid-template-columns:1fr; grid-template-rows:auto 220px; }
     .log-panel { border-top:1px solid var(--border); }
     .action-bar { border-right:none; }
@@ -299,11 +358,18 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 
     <!-- ── SIDEBAR ── -->
     <aside class="forge-sidebar">
-        <a href="rapid_forge.php"       class="nav-item"><i class="bi bi-rocket-takeoff"></i> Generator</a>
-        <a href="rapid_import_forge.php" class="nav-item active"><i class="bi bi-download"></i> Importer</a>
-        <a href="rapid_config_forge.php" class="nav-item"><i class="bi bi-gear"></i> Config</a>
+        <a href="rapid_forge.php" class="nav-item"><i class="bi bi-rocket-takeoff"></i> Generator</a>
         <div class="nav-divider"></div>
-        <button class="nav-item" onclick="ImportForge.openInstructionsModal()" style="border:none; background:none; text-align:left; width:100%;">
+        <div class="nav-section-title">Import Modes</div>
+        <button class="nav-item active" id="navStrict" onclick="ImportForge.switchMode('strict')">
+            <i class="bi bi-filetype-md"></i> Auto Import (Strict)
+        </button>
+        <button class="nav-item" id="navSemi" onclick="ImportForge.switchMode('semi')">
+            <i class="bi bi-scissors"></i> Semi-Auto Split
+        </button>
+        <div class="nav-divider"></div>
+        <a href="rapid_config_forge.php" class="nav-item"><i class="bi bi-gear"></i> Config</a>
+        <button class="nav-item" onclick="ImportForge.openInstructionsModal()">
             <i class="bi bi-robot"></i> AI Instructions
         </button>
     </aside>
@@ -313,15 +379,13 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
         <div class="forge-workspace">
             <div class="workspace-body">
 
-                <!-- ── DROP PANEL ── -->
-                <div class="drop-panel">
+                <!-- ── LEFT PANEL (STRICT) ── -->
+                <div class="strict-panel" id="viewStrict">
                     <div>
-                        <div class="panel-label">Import Scenarios</div>
+                        <div class="panel-label">Strict Auto Import</div>
                         <div style="font-family:var(--mono); font-size:0.75rem; color:var(--text-dim); margin-bottom:16px; line-height:1.6;">
-                            Drag &amp; drop a Markdown file to parse scenarios into <code style="color:var(--amber);">rapid_showcase</code>.
-                            Always creates new entries — no overwrites.
+                            Drag &amp; drop a well-structured Markdown file to automatically parse and ingest scenarios.
                         </div>
-
                         <form id="uploadForm">
                             <input type="file" id="fileInput" name="md_file" accept=".md,.txt" style="display:none">
                             <div class="upload-zone" id="dropZone">
@@ -344,7 +408,33 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
                     </div>
                 </div>
 
-                <!-- ── LOG PANEL ── -->
+                <!-- ── LEFT PANEL (SEMI-AUTO) ── -->
+                <div class="semi-panel" id="viewSemi">
+                    <!-- Setup Phase -->
+                    <div id="semiSetupUI">
+                        <div class="panel-label">Semi-Auto Split Setup</div>
+                        <div style="font-family:var(--mono); font-size:0.75rem; color:var(--text-dim); margin-bottom:16px; line-height:1.6;">
+                            Paste raw, unstructured text. It will be split automatically at every empty line (double line-break).
+                        </div>
+                        <div style="margin-bottom:14px;">
+                            <input type="text" id="semiCategory" class="form-input" placeholder="Target Category Name (e.g., NEW-SCENE-CAT)" autocomplete="off">
+                        </div>
+                        <div>
+                            <textarea id="semiRawText" class="form-textarea" placeholder="Paste your raw generative text here..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Builder Phase -->
+                    <div id="semiBuilderUI" style="display:none;">
+                        <div class="panel-label" style="display:flex; justify-content:space-between; align-items:center;">
+                            <span>Review & Edit Splits</span>
+                            <span id="semiBlockCountBadge" style="color:var(--amber); font-weight:bold;">0 Blocks</span>
+                        </div>
+                        <div id="semiBlocksContainer" style="display:flex; flex-direction:column;"></div>
+                    </div>
+                </div>
+
+                <!-- ── LOG PANEL (SHARED) ── -->
                 <div class="log-panel">
                     <div class="log-panel-header">
                         <span class="log-panel-title">Import Log</span>
@@ -355,7 +445,8 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 
             </div><!-- /workspace-body -->
 
-            <div class="action-bar">
+            <!-- ── ACTION BARS ── -->
+            <div class="action-bar" id="actionBarStrict">
                 <button class="btn-forge-primary" onclick="document.getElementById('fileInput').click()">
                     <i class="bi bi-folder2-open"></i> Browse File
                 </button>
@@ -363,10 +454,29 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
                     <i class="bi bi-robot"></i> AI Instructions
                 </button>
             </div>
+
+            <div class="action-bar" id="actionBarSemiSetup" style="display:none;">
+                <button class="btn-forge-primary" onclick="SemiAuto.parse()">
+                    <i class="bi bi-scissors"></i> Prepare Splits
+                </button>
+                <button class="btn-forge-secondary" onclick="document.getElementById('semiRawText').value=''">
+                    Clear Text
+                </button>
+            </div>
+
+            <div class="action-bar" id="actionBarSemiBuilder" style="display:none;">
+                <button class="btn-forge-primary" onclick="SemiAuto.commit()" id="btnCommitSemi">
+                    <i class="bi bi-database-add"></i> Commit Seeds
+                </button>
+                <button class="btn-forge-secondary" onclick="SemiAuto.resetToSetup()">
+                    <i class="bi bi-arrow-counterclockwise"></i> Reset / Back
+                </button>
+            </div>
+
         </div>
     </main>
 
-</div><!-- /forge-layout -->
+</div>
 
 <!-- ── INSTRUCTIONS MODAL ── -->
 <div class="forge-modal-overlay" id="instructionsModal">
@@ -377,7 +487,7 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
         </div>
         <div class="forge-modal-body">
             <div style="font-family:var(--mono); font-size:0.75rem; color:var(--text-dim); line-height:1.6;">
-                Copy the JSON below and provide it to an LLM (ChatGPT, Claude, etc.) to generate perfectly formatted Markdown files for this importer.
+                Copy the JSON below and provide it to an LLM (ChatGPT, Claude, etc.) to generate perfectly formatted Markdown files for the Strict Importer.
             </div>
             <pre class="json-box" id="jsonInstruction"><?php echo htmlspecialchars($instructionContent); ?></pre>
             <div style="display:flex; justify-content:flex-end;">
@@ -392,35 +502,221 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 <div class="forge-toast-container" id="toastContainer"></div>
 
 <script>
-const ImportForge = (() => {
-    'use strict';
+// ── UTILITIES & LOGGING ───────────────────────────────────────────────────────
+function toast(msg, type = 'info', duration = 3500) {
+    const el = document.createElement('div');
+    el.className = `forge-toast ${type}`;
+    const icons = { success:'✓', error:'✕', info:'◆' };
+    el.innerHTML = `<span style="font-size:12px;">${icons[type]||'◆'}</span> ${msg}`;
+    el.onclick = () => dismiss(el);
+    document.getElementById('toastContainer').appendChild(el);
+    function dismiss(e) { e.classList.add('out'); setTimeout(()=>e.remove(),300); }
+    setTimeout(()=>dismiss(el), duration);
+}
 
-    function toast(msg, type = 'info', duration = 3500) {
-        const el = document.createElement('div');
-        el.className = `forge-toast ${type}`;
-        const icons = { success:'✓', error:'✕', info:'◆' };
-        el.innerHTML = `<span style="font-size:12px;">${icons[type]||'◆'}</span> ${msg}`;
-        el.onclick = () => dismiss(el);
-        document.getElementById('toastContainer').appendChild(el);
-        function dismiss(e) { e.classList.add('out'); setTimeout(()=>e.remove(),300); }
-        setTimeout(()=>dismiss(el), duration);
+function logToConsole(msg) {
+    const c   = document.getElementById('importLog');
+    const now = new Date().toLocaleTimeString([], {hour12:false});
+    c.innerHTML += `\n<span class="ts">[${now}]</span> ${msg}`;
+    c.scrollTop = c.scrollHeight;
+}
+
+function esc(str) {
+    if (str == null) return '';
+    const d = document.createElement('div'); d.textContent = String(str); return d.innerHTML;
+}
+
+// ── SEMI-AUTO MODULE ─────────────────────────────────────────────────────────
+const SemiAuto = (() => {
+    let _blocks = [];
+
+    function parse() {
+        const cat = document.getElementById('semiCategory').value.trim();
+        const raw = document.getElementById('semiRawText').value.trim();
+        
+        if (!cat) { toast('Please provide a Target Category name.', 'error'); return; }
+        if (!raw) { toast('No text to parse.', 'error'); return; }
+
+        // Split by 2 or more linebreaks
+        const rawBlocks = raw.split(/\n\s*\n/);
+        _blocks = rawBlocks.map(b => b.trim()).filter(b => b.length > 0);
+
+        if (_blocks.length === 0) {
+            toast('No valid blocks found after splitting.', 'warn');
+            return;
+        }
+
+        logToConsole(`✂️ Parsed ${raw.length} chars into ${_blocks.length} blocks.`);
+        
+        document.getElementById('semiSetupUI').style.display = 'none';
+        document.getElementById('semiBuilderUI').style.display = 'block';
+        
+        ImportForge.updateActionBars('semi_builder');
+        render();
     }
 
-    function log(msg) {
-        const c   = document.getElementById('importLog');
-        const now = new Date().toLocaleTimeString([], {hour12:false});
-        c.innerHTML += `\n<span class="ts">[${now}]</span> ${msg}`;
-        c.scrollTop = c.scrollHeight;
+    function render() {
+        const container = document.getElementById('semiBlocksContainer');
+        document.getElementById('semiBlockCountBadge').textContent = `${_blocks.length} Blocks`;
+        
+        if (_blocks.length === 0) {
+            container.innerHTML = '<div style="color:var(--text-dim); text-align:center; padding:20px;">No blocks left.</div>';
+            return;
+        }
+
+        let html = '';
+        for (let i = 0; i < _blocks.length; i++) {
+            // Bridge BEFORE block (if it's the very first)
+            if (i === 0) {
+                html += createBridge(0, false);
+            }
+
+            // The Block
+            html += `
+            <div class="semi-block">
+                <button class="semi-del-btn" onclick="SemiAuto.deleteBlock(${i})" title="Delete Block"><i class="bi bi-trash"></i></button>
+                <textarea class="semi-textarea-block" oninput="SemiAuto.updateText(${i}, this.value)">${esc(_blocks[i])}</textarea>
+            </div>
+            `;
+
+            // Bridge AFTER block
+            html += createBridge(i + 1, true);
+        }
+
+        container.innerHTML = html;
+        
+        // Auto-resize textareas
+        container.querySelectorAll('textarea').forEach(ta => {
+            ta.style.height = 'auto';
+            ta.style.height = ta.scrollHeight + 'px';
+        });
+    }
+
+    function createBridge(index, canMergeWithPrev) {
+        let mergeBtn = '';
+        if (canMergeWithPrev && index > 0 && index < _blocks.length) {
+            mergeBtn = `<button class="semi-btn" onclick="SemiAuto.mergeUp(${index})"><i class="bi bi-arrows-collapse"></i> Merge Up</button>`;
+        }
+        return `
+        <div class="semi-bridge">
+            <div class="semi-bridge-line"></div>
+            <button class="semi-btn" onclick="SemiAuto.addBlock(${index})"><i class="bi bi-plus-lg"></i> Add Block</button>
+            ${mergeBtn}
+            <div class="semi-bridge-line"></div>
+        </div>
+        `;
+    }
+
+    function updateText(index, val) {
+        if (_blocks[index] !== undefined) _blocks[index] = val;
+    }
+
+    function addBlock(index) {
+        _blocks.splice(index, 0, '');
+        render();
+    }
+
+    function deleteBlock(index) {
+        if (!confirm('Remove this block?')) return;
+        _blocks.splice(index, 1);
+        render();
+    }
+
+    function mergeUp(index) {
+        if (index <= 0 || index >= _blocks.length) return;
+        const prev = _blocks[index - 1].trim();
+        const curr = _blocks[index].trim();
+        _blocks[index - 1] = prev + '\n\n' + curr;
+        _blocks.splice(index, 1);
+        render();
+    }
+
+    function resetToSetup() {
+        if (!confirm('Go back to setup? Any manual edits will be lost.')) return;
+        _blocks = [];
+        document.getElementById('semiSetupUI').style.display = 'block';
+        document.getElementById('semiBuilderUI').style.display = 'none';
+        ImportForge.updateActionBars('semi_setup');
+    }
+
+    async function commit() {
+        const cat = document.getElementById('semiCategory').value.trim();
+        if (!cat) { toast('Category name missing.', 'error'); return; }
+
+        const finalBlocks = _blocks.map(b => b.trim()).filter(b => b.length > 0);
+        if (finalBlocks.length === 0) { toast('No blocks to commit.', 'error'); return; }
+
+        const btn = document.getElementById('btnCommitSemi');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Committing...';
+
+        const fd = new FormData();
+        fd.append('action', 'semi_auto_commit');
+        fd.append('category', cat);
+        fd.append('blocks', JSON.stringify(finalBlocks));
+
+        try {
+            const res = await fetch('', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (data.ok) {
+                logToConsole(`<strong>Semi-Auto Results:</strong> ${data.stats.inserted} new, ${data.stats.errors} errors.`);
+                data.stats.log.forEach(line => logToConsole(line));
+                toast(`Committed ${data.stats.inserted} blocks`, 'success');
+                
+                // Clear and reset
+                document.getElementById('semiRawText').value = '';
+                document.getElementById('semiCategory').value = '';
+                _blocks = [];
+                document.getElementById('semiSetupUI').style.display = 'block';
+                document.getElementById('semiBuilderUI').style.display = 'none';
+                ImportForge.updateActionBars('semi_setup');
+
+            } else {
+                toast(data.error, 'error');
+                logToConsole(`<span style="color:var(--red)">Commit Error: ${data.error}</span>`);
+            }
+        } catch(e) {
+            toast(e.message, 'error');
+            logToConsole(`<span style="color:var(--red)">System Error: ${e.message}</span>`);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-database-add"></i> Commit Seeds';
+        }
+    }
+
+    return { parse, render, updateText, addBlock, deleteBlock, mergeUp, resetToSetup, commit };
+})();
+
+// ── STRICT IMPORT MODULE ──────────────────────────────────────────────────────
+const ImportForge = (() => {
+    let _currentMode = 'strict'; // 'strict' or 'semi'
+
+    function switchMode(mode) {
+        _currentMode = mode;
+        document.getElementById('navStrict').classList.toggle('active', mode === 'strict');
+        document.getElementById('navSemi').classList.toggle('active', mode === 'semi');
+
+        if (mode === 'strict') {
+            document.getElementById('viewStrict').style.display = 'flex';
+            document.getElementById('viewSemi').style.display   = 'none';
+            updateActionBars('strict');
+        } else {
+            document.getElementById('viewStrict').style.display = 'none';
+            document.getElementById('viewSemi').style.display   = 'flex';
+            const inBuilder = document.getElementById('semiBuilderUI').style.display === 'block';
+            updateActionBars(inBuilder ? 'semi_builder' : 'semi_setup');
+        }
+    }
+
+    function updateActionBars(state) {
+        document.getElementById('actionBarStrict').style.display = (state === 'strict') ? 'flex' : 'none';
+        document.getElementById('actionBarSemiSetup').style.display = (state === 'semi_setup') ? 'flex' : 'none';
+        document.getElementById('actionBarSemiBuilder').style.display = (state === 'semi_builder') ? 'flex' : 'none';
     }
 
     // ── Instructions modal ────────────────────────────────────────────────────
-
-    function openInstructionsModal() {
-        document.getElementById('instructionsModal').classList.add('open');
-    }
-    function closeInstructionsModal() {
-        document.getElementById('instructionsModal').classList.remove('open');
-    }
+    function openInstructionsModal() { document.getElementById('instructionsModal').classList.add('open'); }
+    function closeInstructionsModal() { document.getElementById('instructionsModal').classList.remove('open'); }
     function copyInstruction() {
         const text = document.getElementById('jsonInstruction').textContent;
         const btn  = document.getElementById('btnCopyInstruction');
@@ -432,8 +728,7 @@ const ImportForge = (() => {
         });
     }
 
-    // ── Upload (preserved exactly from rapid_import.php) ─────────────────────
-
+    // ── Strict Upload Logic ───────────────────────────────────────────────────
     async function handleUpload(file) {
         const dropZone = document.getElementById('dropZone');
         dropZone.innerHTML = `
@@ -441,7 +736,7 @@ const ImportForge = (() => {
             <div class="upload-zone-title">Processing…</div>`;
 
         document.getElementById('statsRow').style.display = 'none';
-        log(`📄 Uploading: ${file.name}`);
+        logToConsole(`📄 Uploading: ${file.name}`);
 
         const formData = new FormData();
         formData.append('md_file', file);
@@ -460,22 +755,22 @@ const ImportForge = (() => {
                 document.getElementById('countNew').textContent = data.stats.inserted;
                 document.getElementById('countErr').textContent = data.stats.errors;
 
-                log(`<strong>Results:</strong> ${data.stats.inserted} new, ${data.stats.errors} errors.`);
-                log('─────────────────────────────');
-                data.stats.log.forEach(line => log(line));
+                logToConsole(`<strong>Strict Auto Results:</strong> ${data.stats.inserted} new, ${data.stats.errors} errors.`);
+                logToConsole('─────────────────────────────');
+                data.stats.log.forEach(line => logToConsole(line));
                 toast(`Imported ${data.stats.inserted} scenarios`, 'success');
             } else {
                 dropZone.innerHTML = `
                     <div class="upload-zone-icon" style="color:var(--red);"><i class="bi bi-exclamation-triangle"></i></div>
                     <div class="upload-zone-title">Upload Error</div>`;
-                log(`<span style="color:var(--red)">Error: ${data.error}</span>`);
+                logToConsole(`<span style="color:var(--red)">Error: ${data.error}</span>`);
                 toast(data.error, 'error');
             }
         } catch(e) {
             dropZone.innerHTML = `
                 <div class="upload-zone-icon" style="color:var(--red);"><i class="bi bi-x-circle"></i></div>
                 <div class="upload-zone-title">System Error</div>`;
-            log(`<span style="color:var(--red)">System Error: ${e.message}</span>`);
+            logToConsole(`<span style="color:var(--red)">System Error: ${e.message}</span>`);
             toast(e.message, 'error');
         }
     }
@@ -501,7 +796,6 @@ const ImportForge = (() => {
             if (fileInput.files.length) handleUpload(fileInput.files[0]);
         });
 
-        // Close modal on overlay click
         document.getElementById('instructionsModal').addEventListener('click', e => {
             if (e.target === document.getElementById('instructionsModal')) closeInstructionsModal();
         });
@@ -509,9 +803,10 @@ const ImportForge = (() => {
 
     function init() {
         bindEvents();
+        switchMode('strict'); // Default state
     }
 
-    return { init, openInstructionsModal, closeInstructionsModal, copyInstruction };
+    return { init, switchMode, updateActionBars, openInstructionsModal, closeInstructionsModal, copyInstruction };
 })();
 
 document.addEventListener('DOMContentLoaded', () => ImportForge.init());

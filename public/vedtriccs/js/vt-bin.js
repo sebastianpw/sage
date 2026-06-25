@@ -1,5 +1,5 @@
 // public/vedtriccs/js/vt-bin.js
-// Asset Bin — VedTriccs Edition (full five-tab picker)
+// Asset Bin — VedTriccs Edition (full six-tab picker)
 
 'use strict';
 
@@ -9,13 +9,16 @@ let vtPickerNodeId  = null, vtPickerNodeName   = '';
 let vtPickerSeqId   = null, vtPickerSeqName    = '';
 let vtPickerFuzzId  = null, vtPickerFuzzName   = '';
 let vtPickerSbId    = null, vtPickerSbName     = '';
+let vtPickerPotId   = null, vtPickerPotName    = '';
 let vtPickerFuzzTotalPages = 1;
 let vtPickerSbTotalPages   = 1;
+let vtPickerPotTotalPages  = 1;
 let vtPickerTreeInited    = false;
 let vtPickerSeqsLoaded    = false;
 let vtPickerFuzzLoaded    = false, vtPickerFuzzPage = 1, vtPickerFuzzSearch = '';
 let vtPickerSbLoaded      = false, vtPickerSbPage   = 1, vtPickerSbSearch   = '';
-let vtFuzzDebounce = null, vtSbDebounce = null;
+let vtPickerPotLoaded     = false, vtPickerPotPage  = 1, vtPickerPotSearch  = '';
+let vtFuzzDebounce = null, vtSbDebounce = null, vtPotDebounce = null;
 
 // ─── Open / Close ─────────────────────────────────────────────────────────────
 function vtOpenBin() {
@@ -60,27 +63,32 @@ function vtSwitchPickerMode(mode) {
 
     if (mode === 'tree') {
         document.getElementById('picker-tree-panel-inner').classList.add('active');
-        vtPickerSeqId = null; vtPickerFuzzId = null; vtPickerSbId = null; VT_STATE.animaticId = null;
+        vtPickerSeqId = null; vtPickerFuzzId = null; vtPickerSbId = null; vtPickerPotId = null; VT_STATE.animaticId = null;
         vtSetPickerActiveLabel(vtPickerNodeId ? `🌳 ${vtPickerNodeName}` : '');
         if (!vtPickerTreeInited) vtInitPickerTree();
     } else if (mode === 'seq') {
         document.getElementById('picker-seq-panel').classList.add('active');
-        vtPickerNodeId = null; vtPickerFuzzId = null; vtPickerSbId = null; VT_STATE.animaticId = null;
+        vtPickerNodeId = null; vtPickerFuzzId = null; vtPickerSbId = null; vtPickerPotId = null; VT_STATE.animaticId = null;
         vtSetPickerActiveLabel(vtPickerSeqId ? `🎬 ${vtPickerSeqName}` : '');
         if (!vtPickerSeqsLoaded) vtLoadPickerSequences();
     } else if (mode === 'fuzz') {
         document.getElementById('picker-fuzz-panel').classList.add('active');
-        vtPickerNodeId = null; vtPickerSeqId = null; vtPickerSbId = null; VT_STATE.animaticId = null;
+        vtPickerNodeId = null; vtPickerSeqId = null; vtPickerSbId = null; vtPickerPotId = null; VT_STATE.animaticId = null;
         vtSetPickerActiveLabel(vtPickerFuzzId ? `🧩 ${vtPickerFuzzName}` : '');
         if (!vtPickerFuzzLoaded) vtLoadPickerFuzz(1);
     } else if (mode === 'storyboard') {
         document.getElementById('picker-storyboard-panel').classList.add('active');
-        vtPickerNodeId = null; vtPickerSeqId = null; vtPickerFuzzId = null; VT_STATE.animaticId = null;
+        vtPickerNodeId = null; vtPickerSeqId = null; vtPickerFuzzId = null; vtPickerPotId = null; VT_STATE.animaticId = null;
         vtSetPickerActiveLabel(vtPickerSbId ? `🖼️ ${vtPickerSbName}` : '');
         if (!vtPickerSbLoaded) vtLoadPickerStoryboards(1);
+    } else if (mode === 'popcorn') {
+        document.getElementById('picker-popcorn-panel').classList.add('active');
+        vtPickerNodeId = null; vtPickerSeqId = null; vtPickerFuzzId = null; vtPickerSbId = null; VT_STATE.animaticId = null;
+        vtSetPickerActiveLabel(vtPickerPotId ? `🍿 ${vtPickerPotName}` : '');
+        if (!vtPickerPotLoaded) vtLoadPickerPots(1);
     } else { // animatic
         document.getElementById('picker-animatic-panel').classList.add('active');
-        vtPickerNodeId = null; vtPickerSeqId = null; vtPickerFuzzId = null; vtPickerSbId = null;
+        vtPickerNodeId = null; vtPickerSeqId = null; vtPickerFuzzId = null; vtPickerSbId = null; vtPickerPotId = null;
         vtSetPickerActiveLabel(VT_STATE.animaticId ? `🎞️ ${VT_STATE.animaticName || '#'+VT_STATE.animaticId}` : '');
         vtLoadAbPage();
     }
@@ -105,6 +113,9 @@ function vtClearPickerFilter() {
         vtPickerFuzzId = null; vtPickerFuzzName = '';
     } else if (vtPickerMode === 'storyboard') {
         vtPickerSbId = null; vtPickerSbName = '';
+    } else if (vtPickerMode === 'popcorn') {
+        vtPickerPotId = null; vtPickerPotName = '';
+        vtLoadPickerPots(vtPickerPotPage);
     } else {
         VT_STATE.animaticId = null; VT_STATE.animaticName = '';
         vtUpdateAnimaticLabel();
@@ -301,6 +312,58 @@ function vtGotoSbPage(n) {
     vtLoadPickerStoryboards(n);
 }
 
+// ─── Popcorn Pots ─────────────────────────────────────────────────────────────
+function vtLoadPickerPots(page) {
+    vtPickerPotLoaded = true; vtPickerPotPage = page || 1;
+    const list = document.getElementById('picker-popcorn-list');
+    list.innerHTML = '<div style="padding:10px;text-align:center;color:var(--text-dim);">Loading…</div>';
+
+    const params = new URLSearchParams({
+        action: 'list_pots',
+        page:   vtPickerPotPage,
+        search: vtPickerPotSearch,
+    });
+    fetch('/popkorn_api.php?' + params.toString())
+        .then(r => r.json())
+        .then(res => {
+            if (res.status !== 'success' || !res.data?.length) {
+                list.innerHTML = '<div style="padding:10px;text-align:center;color:var(--text-dim);">No pots found.</div>';
+                document.getElementById('picker-popcorn-pg').style.display = 'none';
+                return;
+            }
+            vtPickerPotTotalPages = res.total_pages || 1;
+            document.getElementById('picker-popcorn-page-input').value  = vtPickerPotPage;
+            document.getElementById('picker-popcorn-pg-of').textContent = `/ ${vtPickerPotTotalPages}`;
+            document.getElementById('picker-popcorn-pg').style.display  = vtPickerPotTotalPages > 1 ? 'flex' : 'none';
+            list.innerHTML = res.data.map(pot =>
+                `<div class="picker-item ${pot.id == vtPickerPotId ? 'active' : ''}" onclick="vtSelectPickerPot(${pot.id}, '${vtEsc(pot.name)}')">
+                    <div class="picker-item-id">🍿 #${pot.id}</div>
+                    <div class="picker-item-name">${vtEsc(pot.name)}</div>
+                    <div class="picker-item-desc">${pot.video_count} video${pot.video_count != 1 ? 's' : ''}</div>
+                 </div>`
+            ).join('');
+        })
+        .catch(() => {
+            list.innerHTML = '<div style="padding:10px;text-align:center;color:var(--red);">Error loading pots.</div>';
+        });
+}
+
+function vtSelectPickerPot(id, name) {
+    vtPickerPotId = id; vtPickerPotName = name;
+    vtSetPickerActiveLabel(`🍿 ${name}`);
+    vtLoadPickerPots(vtPickerPotPage);
+    if (window.innerWidth < 768) vtClosePickerTree();
+    VT_STATE.binPage = 1; vtLoadBinPage();
+    Toast.show('Pot: ' + name, 'success');
+}
+
+function vtGotoPotPage(n) {
+    n = parseInt(n);
+    if (isNaN(n) || n < 1) n = 1;
+    if (n > vtPickerPotTotalPages) n = vtPickerPotTotalPages;
+    vtLoadPickerPots(n);
+}
+
 // ─── Videos / Right Panel ─────────────────────────────────────────────────────
 function vtDebouncedBinSearch() {
     clearTimeout(VT_STATE.binDebounce);
@@ -323,6 +386,28 @@ function vtLoadBinPage() {
     const loading = document.getElementById('picker-loading');
     const empty   = document.getElementById('picker-empty');
     list.innerHTML = ''; loading.style.display = 'block'; empty.style.display = 'none';
+
+    // Popcorn pots use the popkorn_api directly, bypassing vtApi
+    if (vtPickerMode === 'popcorn' && vtPickerPotId) {
+        fetch('/popkorn_api.php?action=get_pot_videos&pot_id=' + vtPickerPotId)
+            .then(r => r.json())
+            .then(res => {
+                loading.style.display = 'none';
+                if (res.status !== 'success' || !res.data?.length) {
+                    empty.style.display = 'block';
+                    document.getElementById('binPagination').style.display = 'none';
+                    return;
+                }
+                // Pot videos come back flat — no server-side pagination needed
+                // (pots are typically small collections)
+                VT_STATE.binData       = res.data;
+                VT_STATE.binTotalPages = 1;
+                vtRenderBinList();
+                vtUpdateBinPagination();
+            })
+            .catch(() => { loading.style.display = 'none'; empty.style.display = 'block'; });
+        return;
+    }
 
     const params = { page: VT_STATE.binPage, q: VT_STATE.binSearch };
     if (vtPickerMode === 'animatic'   && VT_STATE.animaticId) params.animatic_id    = VT_STATE.animaticId;
@@ -424,6 +509,15 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('picker-storyboard-prev')?.addEventListener('click', () => vtLoadPickerStoryboards(vtPickerSbPage - 1));
     document.getElementById('picker-storyboard-next')?.addEventListener('click', () => vtLoadPickerStoryboards(vtPickerSbPage + 1));
     document.getElementById('picker-storyboard-page-input')?.addEventListener('change', function() { vtGotoSbPage(this.value); });
+
+    // Popcorn pots search + pagination
+    document.getElementById('picker-popcorn-search')?.addEventListener('input', function() {
+        clearTimeout(vtPotDebounce);
+        vtPotDebounce = setTimeout(() => { vtPickerPotSearch = this.value.trim(); vtLoadPickerPots(1); }, 300);
+    });
+    document.getElementById('picker-popcorn-prev')?.addEventListener('click', () => vtLoadPickerPots(vtPickerPotPage - 1));
+    document.getElementById('picker-popcorn-next')?.addEventListener('click', () => vtLoadPickerPots(vtPickerPotPage + 1));
+    document.getElementById('picker-popcorn-page-input')?.addEventListener('change', function() { vtGotoPotPage(this.value); });
 
     // Animatic + bin pagination inputs
     document.getElementById('abPageInput')?.addEventListener('change', function() { vtGotoAbPage(this.value); });

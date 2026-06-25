@@ -3,8 +3,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // RAPID CONFIG FORGE — Configuration for Rapid Showcase
 // Forge design system port of rapid_config.php.
-// Sidebar = category list with progress. Main panel = category editor.
-// All AJAX logic preserved exactly.
+// Sidebar = category list with progress. Main panel = category editor & seed builder.
 // ─────────────────────────────────────────────────────────────────────────────
 require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
@@ -15,9 +14,92 @@ $userId = $_SESSION['user_id'] ?? null;
 
 if (!$userId) { header('Location: /login.php'); exit; }
 
-// ── AJAX ACTION HANDLER (preserved exactly from rapid_config.php) ─────────────
+// ── AJAX ACTION HANDLER ───────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json');
+
+    if ($_POST['action'] === 'create_category') {
+        $category = trim($_POST['category'] ?? '');
+        if (empty($category)) {
+            echo json_encode(['ok' => false, 'error' => 'Category name required']);
+            exit;
+        }
+        try {
+            $configId = '446437576e785bbf3d188624dd9794eb'; // Fallback
+            $stmt = $conn->prepare("INSERT INTO rapid_showcase (reference_code, title, category, description_prompt, generator_config_id, is_generated, created_at) VALUES (?, ?, ?, ?, ?, 0, NOW())");
+            $refPrefix = strtoupper(substr(preg_replace('/[^a-zA-Z0-9]/', '', $category), 0, 3));
+            if (!$refPrefix) $refPrefix = 'NEW';
+            $stmt->bindValue(1, $refPrefix . '-01');
+            $stmt->bindValue(2, 'New Scenario');
+            $stmt->bindValue(3, $category);
+            $stmt->bindValue(4, '');
+            $stmt->bindValue(5, $configId);
+            $stmt->executeStatement();
+            
+            echo json_encode(['ok' => true]);
+        } catch (Exception $e) {
+            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    if ($_POST['action'] === 'add_item') {
+        $category = trim($_POST['category'] ?? '');
+        if (empty($category)) {
+            echo json_encode(['ok' => false, 'error' => 'Category required']);
+            exit;
+        }
+        try {
+            $stmt = $conn->prepare("SELECT generator_config_id FROM rapid_showcase WHERE category = ? LIMIT 1");
+            $stmt->bindValue(1, $category);
+            $configId = $stmt->executeQuery()->fetchOne() ?: '446437576e785bbf3d188624dd9794eb';
+
+            $ins = $conn->prepare("INSERT INTO rapid_showcase (reference_code, title, category, description_prompt, generator_config_id, is_generated, created_at) VALUES (?, ?, ?, ?, ?, 0, NOW())");
+            $ins->bindValue(1, 'NEW-' . rand(100, 999));
+            $ins->bindValue(2, 'New Scenario');
+            $ins->bindValue(3, $category);
+            $ins->bindValue(4, '');
+            $ins->bindValue(5, $configId);
+            $ins->executeStatement();
+            
+            echo json_encode(['ok' => true, 'id' => $conn->lastInsertId()]);
+        } catch (Exception $e) {
+            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    if ($_POST['action'] === 'update_item') {
+        $id = (int)($_POST['id'] ?? 0);
+        $ref = $_POST['reference_code'] ?? '';
+        $title = $_POST['title'] ?? '';
+        $desc = $_POST['description_prompt'] ?? '';
+        try {
+            $u = $conn->prepare("UPDATE rapid_showcase SET reference_code=?, title=?, description_prompt=? WHERE id=?");
+            $u->bindValue(1, $ref);
+            $u->bindValue(2, $title);
+            $u->bindValue(3, $desc);
+            $u->bindValue(4, $id);
+            $u->executeStatement();
+            echo json_encode(['ok' => true]);
+        } catch (Exception $e) {
+            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    if ($_POST['action'] === 'delete_item') {
+        $id = (int)($_POST['id'] ?? 0);
+        try {
+            $u = $conn->prepare("DELETE FROM rapid_showcase WHERE id=?");
+            $u->bindValue(1, $id);
+            $u->executeStatement();
+            echo json_encode(['ok' => true]);
+        } catch (Exception $e) {
+            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
 
     if ($_POST['action'] === 'update_category') {
         $category   = $_POST['category']     ?? '';
@@ -55,7 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'get_category_items') {
         $category = $_POST['category'] ?? '';
         try {
-            $stmt  = $conn->prepare("SELECT reference_code, title, description_prompt, is_generated FROM rapid_showcase WHERE category = ? ORDER BY id ASC");
+            $stmt  = $conn->prepare("SELECT id, reference_code, title, description_prompt, is_generated FROM rapid_showcase WHERE category = ? ORDER BY id ASC");
             $stmt->bindValue(1, $category);
             $items = $stmt->executeQuery()->fetchAllAssociative();
             echo json_encode(['ok' => true, 'items' => $items]);
@@ -66,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 }
 
-// ── FETCH DATA (preserved exactly from rapid_config.php) ─────────────────────
+// ── FETCH DATA ───────────────────────────────────────────────────────────────
 $genStmt = $conn->prepare("SELECT id, config_id, title FROM generator_config WHERE (user_id = ? OR is_public = 1) AND active = 1 ORDER BY title ASC");
 $genStmt->bindValue(1, $userId);
 $generators = $genStmt->executeQuery()->fetchAllAssociative();
@@ -75,7 +157,6 @@ $catSql = "
     SELECT category, COUNT(*) as total_rows,
     SUM(CASE WHEN is_generated = 1 THEN 1 ELSE 0 END) as generated_rows,
     (SELECT generator_config_id FROM rapid_showcase r2 WHERE r2.category = r1.category LIMIT 1) as current_config_id,
-    (SELECT description_prompt FROM rapid_showcase r3 WHERE r3.category = r1.category ORDER BY id ASC LIMIT 1) as sample_prompt,
     MAX(is_archived) as is_archived
     FROM rapid_showcase r1
     GROUP BY category
@@ -227,12 +308,6 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 .info-card-label { font-family:var(--mono); font-size:0.63rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
 .info-card-value { font-family:var(--mono); font-size:1rem; font-weight:700; }
 
-/* Sample prompt block */
-.context-block { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
-.context-block-header { padding:8px 14px; background:var(--surface); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
-.context-block-label { font-family:var(--mono); font-size:0.65rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; }
-.context-pre { padding:14px; font-family:var(--mono); font-size:0.75rem; color:var(--text-dim); white-space:pre-wrap; word-break:break-word; line-height:1.6; max-height:140px; overflow-y:auto; }
-
 /* Editor form */
 .editor-block { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
 .editor-block-header { padding:10px 16px; background:var(--surface); border-bottom:1px solid var(--border); font-family:var(--mono); font-size:0.68rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; }
@@ -240,32 +315,36 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 
 .form-group { display:flex; flex-direction:column; gap:6px; }
 .form-label { font-family:var(--mono); font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; }
-.form-select { width:100%; padding:9px 28px 9px 12px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:var(--mono); font-size:0.8rem; transition:border-color 0.15s; appearance:none; cursor:pointer; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235a6a80' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; }
-.form-select:focus { outline:none; border-color:var(--amber); }
+.form-input, .form-select { width:100%; padding:9px 28px 9px 12px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:var(--mono); font-size:0.8rem; transition:border-color 0.15s; appearance:none; }
+.form-input { padding-right:12px; }
+.form-input:focus, .form-select:focus { outline:none; border-color:var(--amber); }
+.form-select { cursor:pointer; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235a6a80' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; }
 
 .checkbox-row { display:flex; gap:16px; flex-wrap:wrap; }
 .checkbox-label { display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:0.75rem; color:var(--text-dim); cursor:pointer; user-select:none; }
 .checkbox-label input { accent-color:var(--amber); cursor:pointer; width:14px; height:14px; }
+
+/* Item Editor Blocks */
+.item-block { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); margin-bottom:12px; padding:16px; transition:border-color 0.2s; position:relative; }
+.item-block:focus-within { border-color:var(--amber); }
+.item-block.generated { border-color:rgba(34,211,160,0.4); background:rgba(34,211,160,0.02); }
+.item-header-row { display:flex; gap:10px; margin-bottom:12px; align-items:center; }
+.item-ref-input { width:110px; font-family:var(--mono); font-size:0.75rem; font-weight:700; color:var(--amber); background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:8px 10px; }
+.item-title-input { flex:1; font-family:var(--sans); font-size:0.85rem; font-weight:600; color:var(--text-bright); background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:8px 10px; }
+.item-desc-input { width:100%; min-height:80px; font-family:var(--mono); font-size:0.75rem; color:var(--text-dim); background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:12px; resize:vertical; line-height:1.6; }
+.item-ref-input:focus, .item-title-input:focus, .item-desc-input:focus { outline:none; border-color:var(--amber); background:var(--bg); color:var(--text); }
+.item-del-btn { width:32px; height:32px; border-radius:4px; border:1px solid transparent; background:transparent; color:var(--red); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:0.9rem; transition:all 0.15s; flex-shrink:0; }
+.item-del-btn:hover { background:rgba(240,80,96,0.1); border-color:var(--red); }
+.add-item-btn { width:100%; padding:12px; border-radius:var(--radius); border:1px dashed var(--border); background:transparent; color:var(--text-dim); font-family:var(--mono); font-size:0.8rem; cursor:pointer; transition:all 0.2s; text-transform:uppercase; margin-top:10px; font-weight:700; letter-spacing:1px; }
+.add-item-btn:hover { border-color:var(--amber); color:var(--amber); background:rgba(245,166,35,0.05); }
 
 /* Generate bar */
 .generate-bar { padding:14px 24px; border-top:1px solid var(--border); background:var(--surface); display:flex; gap:8px; align-items:center; flex-shrink:0; }
 .btn-generate { flex:1; padding:12px 20px; background:var(--amber); color:#000; border:none; border-radius:var(--radius); font-family:var(--mono); font-size:0.85rem; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; cursor:pointer; transition:all 0.15s; display:flex; align-items:center; justify-content:center; gap:8px; }
 .btn-generate:hover:not(:disabled) { filter:brightness(1.15); }
 .btn-generate:disabled { opacity:0.5; cursor:not-allowed; }
-.btn-forge-secondary { padding:10px 16px; background:transparent; color:var(--text-dim); border:1px solid var(--border); border-radius:var(--radius); cursor:pointer; font-family:var(--mono); font-size:0.78rem; transition:all 0.15s; }
-.btn-forge-secondary:hover { border-color:var(--border-glow); color:var(--text); }
 
-/* Items panel inside workspace */
-.items-list { display:flex; flex-direction:column; gap:4px; }
-.item-row { padding:10px 14px; border-radius:var(--radius); border:1px solid var(--border); background:var(--card); transition:background 0.15s; }
-.item-row.generated { border-color:rgba(34,211,160,0.2); background:rgba(34,211,160,0.03); }
-.item-row-top { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
-.item-ref { font-family:var(--mono); font-size:0.72rem; color:var(--amber); font-weight:700; }
-.item-title { font-family:var(--sans); font-weight:600; font-size:0.85rem; color:var(--text-bright); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.item-check { color:var(--green); font-size:0.9rem; }
-.item-desc { font-family:var(--mono); font-size:0.72rem; color:var(--text-dim); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.4; }
-
-/* ── MODAL (context viewer) ── */
+/* ── MODAL ── */
 .forge-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(3px); z-index:10000; display:none; align-items:center; justify-content:center; padding:16px; }
 .forge-modal-overlay.open { display:flex; }
 .forge-modal { background:var(--surface); border:1px solid var(--border-glow); border-radius:var(--radius-lg); width:100%; max-width:600px; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,0.6); animation:modalIn 0.2s ease; }
@@ -274,7 +353,6 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 .forge-modal-close { width:28px; height:28px; border-radius:4px; border:1px solid var(--border); background:transparent; color:var(--text-dim); cursor:pointer; transition:all 0.15s; display:flex; align-items:center; justify-content:center; font-size:14px; }
 .forge-modal-close:hover { border-color:var(--red); color:var(--red); background:var(--red-dim); }
 .forge-modal-body { padding:20px; overflow-y:auto; flex:1; }
-.context-viewer { white-space:pre-wrap; font-family:var(--mono); font-size:0.8rem; color:var(--text); line-height:1.6; }
 
 /* ── TOAST ── */
 .forge-toast-container { position:fixed; bottom:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
@@ -324,8 +402,13 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
     <!-- ── SIDEBAR ── -->
     <aside class="forge-sidebar">
         <div class="sidebar-search">
-            <div class="sidebar-search-wrap">
-                <input type="text" class="sidebar-search-input" id="sidebarSearch" placeholder="Search categories…" autocomplete="off">
+            <div style="display:flex; gap:8px; align-items:center;">
+                <div class="sidebar-search-wrap" style="flex:1;">
+                    <input type="text" class="sidebar-search-input" id="sidebarSearch" placeholder="Search categories…" autocomplete="off">
+                </div>
+                <button class="btn-icon-sm" onclick="ConfigForge.openNewCategoryModal()" title="New Category" style="flex-shrink:0;">
+                    <i class="bi bi-plus-lg"></i>
+                </button>
             </div>
         </div>
         <div class="sidebar-count" id="sidebarCount"></div>
@@ -348,10 +431,7 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
             </div>
             <div class="generate-bar">
                 <button class="btn-generate" id="btnSave" onclick="ConfigForge.saveCategory()">
-                    <i class="bi bi-floppy"></i> SAVE CATEGORY
-                </button>
-                <button class="btn-forge-secondary" onclick="ConfigForge.viewItems(ConfigForge.currentCategory())">
-                    <i class="bi bi-list-ul"></i> Items
+                    <i class="bi bi-floppy"></i> SAVE CATEGORY SETTINGS
                 </button>
             </div>
         </div>
@@ -359,14 +439,20 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
     </main>
 </div>
 
-<!-- ── CONTEXT VIEWER MODAL ── -->
-<div class="forge-modal-overlay" id="contextModal">
-    <div class="forge-modal">
+<!-- ── NEW CATEGORY MODAL ── -->
+<div class="forge-modal-overlay" id="newCategoryModal">
+    <div class="forge-modal" style="max-width:400px;">
         <div class="forge-modal-header">
-            <div class="forge-modal-title" id="modalTitle">Context Preview</div>
-            <button class="forge-modal-close" onclick="ConfigForge.closeModal()"><i class="bi bi-x-lg"></i></button>
+            <div class="forge-modal-title">New Category</div>
+            <button class="forge-modal-close" onclick="document.getElementById('newCategoryModal').classList.remove('open')"><i class="bi bi-x-lg"></i></button>
         </div>
-        <div class="forge-modal-body" id="modalBody"></div>
+        <div class="forge-modal-body" style="display:flex; flex-direction:column; gap:14px;">
+            <div class="form-group" style="margin:0;">
+                <label class="form-label">Category Name</label>
+                <input type="text" id="newCatName" class="form-input" placeholder="e.g. NT-MEGA">
+            </div>
+            <button class="btn-generate" style="margin-top:10px;" onclick="ConfigForge.createCategory()">CREATE</button>
+        </div>
     </div>
 </div>
 
@@ -374,7 +460,7 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 
 <!-- PHP data injected for JS -->
 <script>
-const _PHP_CATEGORIES = <?= json_encode($categories) ?>;
+const _PHP_CATEGORIES  = <?= json_encode($categories) ?>;
 const _PHP_GENERATORS  = <?= json_encode($generators) ?>;
 </script>
 
@@ -387,8 +473,7 @@ const ConfigForge = (() => {
     let _current      = null;
     let _searchTimeout= null;
 
-    // ── visibility state (preserved from rapid_config.php) ───────────────────
-
+    // ── visibility state ─────────────────────────────────────────────────────────
     function applyVisibility() {
         const showArchived  = document.getElementById('showArchivedToggle').checked;
         const hideCompleted = document.getElementById('hideCompletedToggle').checked;
@@ -402,16 +487,10 @@ const ConfigForge = (() => {
         renderSidebar();
     }
 
-    function toggleView() {
-        applyVisibility();
-    }
-
-    function currentCategory() {
-        return _current ? _current.category : '';
-    }
+    function toggleView() { applyVisibility(); }
+    function currentCategory() { return _current ? _current.category : ''; }
 
     // ── helpers ──────────────────────────────────────────────────────────────
-
     function toast(msg, type = 'info', duration = 3000) {
         const el = document.createElement('div');
         el.className = `forge-toast ${type}`;
@@ -429,7 +508,6 @@ const ConfigForge = (() => {
     }
 
     // ── sidebar ───────────────────────────────────────────────────────────────
-
     function renderSidebar() {
         const list     = document.getElementById('sidebarList');
         const countEl  = document.getElementById('sidebarCount');
@@ -437,7 +515,6 @@ const ConfigForge = (() => {
         const showArc  = document.getElementById('showArchivedToggle').checked;
         const hideDone = document.getElementById('hideCompletedToggle').checked;
 
-        // Apply all filters (mirrors rapid_config.php CSS logic, now in JS)
         _filtered = _cats.filter(cat => {
             const percent  = cat.total_rows > 0 ? Math.round((cat.generated_rows / cat.total_rows) * 100) : 0;
             const archived = parseInt(cat.is_archived) === 1;
@@ -447,9 +524,7 @@ const ConfigForge = (() => {
             if (showArc   && !archived) return false;
             if (hideDone  && complete)  return false;
 
-            if (term) {
-                return (cat.category || '').toLowerCase().includes(term);
-            }
+            if (term) return (cat.category || '').toLowerCase().includes(term);
             return true;
         });
 
@@ -478,15 +553,14 @@ const ConfigForge = (() => {
                     <div class="progress-bar ${barClass}" style="width:${percent}%"></div>
                 </div>
                 <div class="cat-card-meta">
-                    <span class="gen-badge model">${cat.total_rows} items</span>
+                    <span class="gen-badge model">${cat.total_rows} seeds</span>
                     ${badge}${arcBadge}
                 </div>
             </div>`;
         }).join('');
     }
 
-    // ── select category ───────────────────────────────────────────────────────
-
+    // ── workspace / item builder ───────────────────────────────────────────────
     function selectCategory(catName) {
         _current = _cats.find(c => c.category === catName) || null;
         if (!_current) return;
@@ -504,30 +578,18 @@ const ConfigForge = (() => {
         const percent = cat.total_rows > 0 ? Math.round((cat.generated_rows / cat.total_rows) * 100) : 0;
         const barClass= percent === 100 ? '' : (percent >= 50 ? 'amber' : 'red');
 
-        // Build generator options
         const genOptions = _PHP_GENERATORS.map(g =>
             `<option value="${esc(g.config_id)}" ${cat.current_config_id === g.config_id ? 'selected' : ''}>
                 ${esc(g.title)}
             </option>`
         ).join('');
 
-        const sampleHtml = cat.sample_prompt
-            ? `<div class="panel-label">Sample Context</div>
-               <div class="context-block">
-                   <div class="context-block-header">
-                       <span class="context-block-label">First item prompt</span>
-                       <button class="btn-icon-sm" style="width:26px;height:26px;font-size:11px;" onclick="ConfigForge.viewContext(${JSON.stringify(cat.sample_prompt)})" title="Full preview"><i class="bi bi-arrows-fullscreen"></i></button>
-                   </div>
-                   <pre class="context-pre">${esc(cat.sample_prompt)}</pre>
-               </div>`
-            : '';
-
         document.getElementById('workspaceBody').innerHTML = `
             <div>
                 <div class="panel-label">${esc(cat.category)}</div>
                 <div class="info-grid">
                     <div class="info-card">
-                        <div class="info-card-label">Total</div>
+                        <div class="info-card-label">Total Seeds</div>
                         <div class="info-card-value">${cat.total_rows}</div>
                     </div>
                     <div class="info-card">
@@ -547,8 +609,6 @@ const ConfigForge = (() => {
                     <div class="progress-bar ${barClass}" style="width:${percent}%"></div>
                 </div>
             </div>
-
-            ${sampleHtml}
 
             <div>
                 <div class="panel-label">Generator Assignment</div>
@@ -575,11 +635,148 @@ const ConfigForge = (() => {
                     </div>
                 </div>
             </div>
+
+            <div style="margin-top:10px;">
+                <div class="panel-label">Scenario Seeds (Auto-Saving)</div>
+                <div id="editorItemsContainer"></div>
+            </div>
         `;
+
+        loadItems(cat.category);
     }
 
-    // ── save (preserved exactly from rapid_config.php) ────────────────────────
+    async function loadItems(catName) {
+        const itemsContainer = document.getElementById('editorItemsContainer');
+        itemsContainer.innerHTML = '<div style="padding:20px; color:var(--text-dim); text-align:center;">Loading seeds...</div>';
 
+        const formData = new FormData();
+        formData.append('action', 'get_category_items');
+        formData.append('category', catName);
+
+        try {
+            const res = await fetch('', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.ok) {
+                renderItems(data.items, catName);
+            } else {
+                itemsContainer.innerHTML = `<div style="color:var(--red);">Error: ${data.error}</div>`;
+            }
+        } catch(e) {
+            itemsContainer.innerHTML = `<div style="color:var(--red);">Error: ${e.message}</div>`;
+        }
+    }
+
+    function renderItems(items, catName) {
+        const itemsContainer = document.getElementById('editorItemsContainer');
+        
+        let html = items.map(item => {
+            const isGen = parseInt(item.is_generated) === 1;
+            const borderClass = isGen ? ' generated' : '';
+            const checkIcon = isGen ? '<i class="bi bi-check-circle-fill" style="color:var(--green); margin-right:8px;" title="Generated"></i>' : '';
+            return `
+            <div class="item-block${borderClass}" data-id="${item.id}">
+                <div class="item-header-row">
+                    ${checkIcon}
+                    <input type="text" class="item-ref-input" value="${esc(item.reference_code)}" placeholder="REF">
+                    <input type="text" class="item-title-input" value="${esc(item.title)}" placeholder="Title">
+                    <button class="item-del-btn" onclick="ConfigForge.deleteItem(${item.id}, '${esc(catName).replace(/'/g, "\\'")}')" title="Delete Seed"><i class="bi bi-trash"></i></button>
+                </div>
+                <textarea class="item-desc-input" placeholder="Scenario description...">${esc(item.description_prompt)}</textarea>
+            </div>
+            `;
+        }).join('');
+
+        html += `<button class="add-item-btn" onclick="ConfigForge.addItem('${esc(catName).replace(/'/g, "\\'")}')"><i class="bi bi-plus-lg"></i> Add Seed</button>`;
+        
+        itemsContainer.innerHTML = html;
+
+        itemsContainer.querySelectorAll('.item-block').forEach(block => {
+            const id = block.dataset.id;
+            const inputs = block.querySelectorAll('input, textarea');
+            inputs.forEach(inp => {
+                inp.addEventListener('input', () => debounceSaveItem(id, block));
+            });
+            const ta = block.querySelector('textarea');
+            if(ta) {
+                setTimeout(() => {
+                    ta.style.height = 'auto';
+                    ta.style.height = ta.scrollHeight + 'px';
+                }, 10);
+                ta.addEventListener('input', function() {
+                    this.style.height = 'auto';
+                    this.style.height = this.scrollHeight + 'px';
+                });
+            }
+        });
+    }
+
+    let saveTimer = null;
+    function debounceSaveItem(id, block) {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => {
+            const ref = block.querySelector('.item-ref-input').value;
+            const title = block.querySelector('.item-title-input').value;
+            const desc = block.querySelector('.item-desc-input').value;
+            
+            const fd = new FormData();
+            fd.append('action', 'update_item');
+            fd.append('id', id);
+            fd.append('reference_code', ref);
+            fd.append('title', title);
+            fd.append('description_prompt', desc);
+            fetch('', { method: 'POST', body: fd }).then(r=>r.json()).then(res => {
+                if(!res.ok) toast('Error saving seed: ' + res.error, 'error');
+            }).catch(e => toast('Error saving seed: ' + e.message, 'error'));
+        }, 600);
+    }
+
+    async function addItem(catName) {
+        const fd = new FormData();
+        fd.append('action', 'add_item');
+        fd.append('category', catName);
+        try {
+            const res = await fetch('', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (data.ok) {
+                const cat = _cats.find(c => c.category === catName);
+                if (cat) cat.total_rows = parseInt(cat.total_rows) + 1;
+                renderSidebar();
+                renderWorkspace();
+                toast('Seed added', 'success');
+            } else {
+                toast(data.error, 'error');
+            }
+        } catch(e) { toast(e.message, 'error'); }
+    }
+
+    async function deleteItem(id, catName) {
+        if(!confirm('Delete this scenario seed?')) return;
+        const fd = new FormData();
+        fd.append('action', 'delete_item');
+        fd.append('id', id);
+        try {
+            const res = await fetch('', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (data.ok) {
+                const block = document.querySelector(`.item-block[data-id="${id}"]`);
+                const isGen = block && block.classList.contains('generated');
+                
+                const cat = _cats.find(c => c.category === catName);
+                if (cat) {
+                    cat.total_rows = Math.max(0, parseInt(cat.total_rows) - 1);
+                    if (isGen) cat.generated_rows = Math.max(0, parseInt(cat.generated_rows) - 1);
+                }
+                
+                toast('Seed deleted', 'info');
+                renderSidebar();
+                renderWorkspace();
+            } else {
+                toast(data.error, 'error');
+            }
+        } catch(e) { toast(e.message, 'error'); }
+    }
+
+    // ── category management ──────────────────────────────────────────────────
     async function saveCategory() {
         if (!_current) return;
 
@@ -607,8 +804,6 @@ const ConfigForge = (() => {
 
             if (data.ok) {
                 toast(data.message, 'success');
-
-                // Update local data
                 const idx = _cats.findIndex(c => c.category === _current.category);
                 if (idx !== -1) {
                     _cats[idx].current_config_id = configId;
@@ -616,12 +811,11 @@ const ConfigForge = (() => {
                     if (doReset) {
                         _cats[idx].generated_rows = 0;
                         _current = _cats[idx];
-                        setTimeout(() => location.reload(), 1000); // reload for accurate counts on reset
+                        setTimeout(() => location.reload(), 1000); 
                     } else {
                         _current = _cats[idx];
                     }
                 }
-
                 document.getElementById('editorResetChk').checked = false;
                 renderSidebar();
                 renderWorkspace();
@@ -636,59 +830,42 @@ const ConfigForge = (() => {
         }
     }
 
-    // ── items modal ───────────────────────────────────────────────────────────
+    function openNewCategoryModal() {
+        document.getElementById('newCatName').value = '';
+        document.getElementById('newCategoryModal').classList.add('open');
+        setTimeout(() => document.getElementById('newCatName').focus(), 100);
+    }
 
-    async function viewItems(catName) {
-        if (!catName) return;
-        openModal('Items — ' + catName, '<div style="padding:20px; text-align:center; color:var(--text-dim); font-family:var(--mono); font-size:0.8rem;">Loading…</div>');
-
-        const formData = new FormData();
-        formData.append('action',   'get_category_items');
-        formData.append('category', catName);
-
+    async function createCategory() {
+        const catName = document.getElementById('newCatName').value.trim();
+        if(!catName) { toast('Please enter a name', 'error'); return; }
+        
+        const btn = document.querySelector('#newCategoryModal .btn-generate');
+        btn.disabled = true;
+        btn.innerHTML = 'CREATING...';
+        
+        const fd = new FormData();
+        fd.append('action', 'create_category');
+        fd.append('category', catName);
+        
         try {
-            const res  = await fetch('', { method: 'POST', body: formData });
+            const res = await fetch('', { method: 'POST', body: fd });
             const data = await res.json();
-
-            if (data.ok && data.items.length > 0) {
-                const html = data.items.map(item => {
-                    const check    = item.is_generated == 1 ? '<span class="item-check"><i class="bi bi-check-lg"></i></span>' : '';
-                    const genClass = item.is_generated == 1 ? 'generated' : '';
-                    return `
-                    <div class="item-row ${genClass}">
-                        <div class="item-row-top">
-                            <span class="item-ref">${esc(item.reference_code)}</span>
-                            <span class="item-title">${esc(item.title)}</span>
-                            ${check}
-                        </div>
-                        <div class="item-desc">${esc(item.description_prompt)}</div>
-                    </div>`;
-                }).join('');
-                document.getElementById('modalBody').innerHTML = `<div class="items-list">${html}</div>`;
+            if (data.ok) {
+                location.reload(); 
             } else {
-                document.getElementById('modalBody').innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-dim);">No items found.</div>';
+                toast(data.error, 'error');
+                btn.disabled = false;
+                btn.innerHTML = 'CREATE';
             }
-        } catch(e) {
-            document.getElementById('modalBody').innerHTML = `<div style="padding:20px; text-align:center; color:var(--red);">Error: ${esc(e.message)}</div>`;
+        } catch(e) { 
+            toast(e.message, 'error'); 
+            btn.disabled = false;
+            btn.innerHTML = 'CREATE';
         }
     }
 
-    function viewContext(text) {
-        openModal('Context Preview', `<div class="context-viewer">${esc(text)}</div>`);
-    }
-
-    function openModal(title, bodyHtml) {
-        document.getElementById('modalTitle').textContent = title;
-        document.getElementById('modalBody').innerHTML    = bodyHtml;
-        document.getElementById('contextModal').classList.add('open');
-    }
-
-    function closeModal() {
-        document.getElementById('contextModal').classList.remove('open');
-    }
-
     // ── events & init ─────────────────────────────────────────────────────────
-
     function bindEvents() {
         document.getElementById('sidebarList').addEventListener('click', e => {
             const card = e.target.closest('.cat-card');
@@ -700,13 +877,14 @@ const ConfigForge = (() => {
             _searchTimeout = setTimeout(() => renderSidebar(), 150);
         });
 
-        document.getElementById('contextModal').addEventListener('click', e => {
-            if (e.target === document.getElementById('contextModal')) closeModal();
+        document.getElementById('newCategoryModal').addEventListener('click', e => {
+            if (e.target === document.getElementById('newCategoryModal')) {
+                document.getElementById('newCategoryModal').classList.remove('open');
+            }
         });
     }
 
     function init() {
-        // Restore toggle state (preserved from rapid_config.php)
         const showArc  = localStorage.getItem('rapid_show_archived')  === 'true';
         const hideDone = localStorage.getItem('rapid_hide_completed') === 'true';
         document.getElementById('showArchivedToggle').checked  = showArc;
@@ -718,7 +896,7 @@ const ConfigForge = (() => {
         renderSidebar();
     }
 
-    return { init, toggleView, saveCategory, viewItems, viewContext, closeModal, currentCategory };
+    return { init, toggleView, saveCategory, createCategory, addItem, deleteItem, openNewCategoryModal, currentCategory };
 })();
 
 document.addEventListener('DOMContentLoaded', () => ConfigForge.init());

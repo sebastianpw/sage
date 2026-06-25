@@ -659,6 +659,18 @@ foreach ($tokenFiles as $key => $filename) {
                             
                             <a href="narseq.php" class="link-card"><div class="link-card-title">✂️ Sequence Cut</div></a>
                             
+                           
+                                                      
+                            <a href="beap.php" class="link-card"><div class="link-card-title">💭 Beap</div></a>
+                            
+                            
+                           
+                            <a href="bang.php" class="link-card"><div class="link-card-title">🗯️ Bang</div></a>
+                            
+                            
+                            
+                                                       
+                            <a href="fuki.php" class="link-card"><div class="link-card-title">🈵️ Fuki</div></a>
                             
                             
                             
@@ -684,7 +696,7 @@ foreach ($tokenFiles as $key => $filename) {
                             
                             <!-- Duo Buttons -->
                             <div class="duo-button-group">
-                                <a href="seqmatrix.php" class="duo-button-half">🌃 Seq Matrix</a>
+                                <a href="kgnodeseq.php" class="duo-button-half">🌃 KGNodeSeq</a>
                                 <a href="animejseq.php" class="duo-button-half">🌆 AnimeJSeq</a>
                             </div>
                             
@@ -795,7 +807,62 @@ foreach ($tokenFiles as $key => $filename) {
                             </div>
 
                             <!-- Standard Buttons -->
+                            
+                            
+                            
+                           
+                            
+                            
+                                                        
+                            <!-- Duo Buttons -->
+                            <div class="duo-button-group">
+                           
+                                <a href="ag_map_run_export.php" class="duo-button-half">📃 AG Narrative</a>
+                                
+                                <a href="agnodeseq.php" class="duo-button-half">✈️ AG Travel Guide</a>
+                               
+                            </div>
+                            
+                            
+                            
+                           
+                            
+                            <!-- Duo Buttons -->
+                            <div class="duo-button-group">
+                           
+                                <a href="kg_travel.php" class="duo-button-half">🛩️ KG Travel</a>
+                                
+                                <a href="kgnodeseq.php" class="duo-button-half">🌃 KG Travel Guide</a>
+                               
+                            </div>
+                            
+                            
+                            
+                            <!--
+                            <a href="kg_travel.php" class="link-card"><div class="link-card-title">🛩️ KG Travel</div></a>
+                            -->
+                            
+                            
+                
+                           
+                            <a href="kg_narrative.php" class="link-card"><div class="link-card-title">📜 KG Narrative</div></a>
+                
+                            
+                            <a href="kg_edge_curator.php" class="link-card"><div class="link-card-title"><i class="fa-solid fa-code-fork"></i> KG Edge Audit</div></a>
+            
+                            
                             <a href="kg_filter.php" class="link-card"><div class="link-card-title"><i class="fa-solid fa-filter"></i> KG Graph Filter</div></a>
+                            
+                            
+                            
+                            
+                            
+                            
+                            
+                            
+                            
+                            
+                            
                             <a href="view_lore_explorer.php" class="link-card"><div class="link-card-title">☪️ Auto Bible Match</div></a>
                             <a href="sketch_match.php" class="link-card"><div class="link-card-title">🃏 Sketch Match Stories</div></a>
                             <a href="sketches_viewer.php" class="link-card"><div class="link-card-title">🏞️ Sketch Match Sketches</div></a>
@@ -1234,8 +1301,14 @@ foreach ($tokenFiles as $key => $filename) {
                         
                         
                         
+
                          
-                            <a href="view_vidbat_review.php" class="link-card"><div class="link-card-title">🍿 Videos</div></a>
+                            <a href="popkorn.php" class="link-card"><div class="link-card-title">🍿 Popkorn</div></a>
+
+
+                        
+                         
+                            <a href="view_vidbat_review.php" class="link-card"><div class="link-card-title">🎟️ Videos</div></a>
 
                         
                         
@@ -1371,6 +1444,7 @@ foreach ($tokenFiles as $key => $filename) {
                             
                            
                             <a href="pytoon/index.php" class="link-card"><div class="link-card-title">💥 Pytoon</div></a>
+                            
                             
                             
                             

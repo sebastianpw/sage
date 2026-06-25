@@ -10,11 +10,16 @@ ob_start();
 
 $pdo = $spw->getPDO();
 
-// Fetch nodes
-$stmtNodes = $pdo->query("SELECT id, name, node_type FROM kg_nodes WHERE status='active'");
+// Fetch nodes (now joined with coordinates)
+$stmtNodes = $pdo->query("
+    SELECT n.id, n.name, n.node_type, c.x, c.y 
+    FROM kg_nodes n 
+    LEFT JOIN kg_node_coordinates c ON n.id = c.node_id 
+    WHERE n.status='active'
+");
 $dbNodes = $stmtNodes->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch edges (only mapping active internal kg_nodes)
+// Fetch edges
 $stmtEdges = $pdo->query("
     SELECT id, node_id AS source, item_id AS target, relationship, item_label
     FROM kg_node_items 
@@ -391,7 +396,8 @@ iframe.frame-viewer { width: 100%; height: 100%; border: none; }
     <div class="kg-topbar">
         <h2><i class="bi bi-diagram-3-fill" style="color:var(--accent);"></i> Knowledge Graph Visualizer</h2>
         <div style="margin-left: auto; display: flex; gap: 8px;">
-            <button class="btn btn-ghost btn-sm" onclick="window.location.href='kg_view.php'"><i class="bi bi-list"></i> Standard Tree View</button>
+            <button class="btn btn-ghost btn-sm" onclick="window.location.href='kg_travel.php'"><i class="bi bi-airplane-engines"></i> Travel View</button>
+            <button class="btn btn-ghost btn-sm" onclick="window.location.href='kg_view.php'"><i class="bi bi-list"></i> Tree View</button>
         </div>
     </div>
 
@@ -405,9 +411,9 @@ iframe.frame-viewer { width: 100%; height: 100%; border: none; }
             </div>
             <div class="panel-content">
                 <button class="btn btn-primary btn-block" id="btn-layout"><i class="bi bi-play-fill"></i> Run ForceAtlas2</button>
+                <button class="btn btn-ghost btn-block" id="btn-save-layout" onclick="saveLayout()"><i class="bi bi-floppy"></i> Save Layout</button>
                 <button class="btn btn-ghost btn-block" id="btn-reset"><i class="bi bi-arrows-collapse"></i> Reset Camera</button>
                 <button class="btn btn-ghost btn-block" onclick="showModal('modalNode')"><i class="bi bi-plus-circle"></i> Add Node</button>
-                <!-- ── FILTER BUTTON ── -->
                 <button class="btn btn-ghost btn-block" id="btn-filter" onclick="openFilterModal()"><i class="bi bi-funnel"></i> Filter Nodes</button>
                 
                 <div style="margin-top:10px;">
@@ -437,7 +443,6 @@ iframe.frame-viewer { width: 100%; height: 100%; border: none; }
                 <div style="margin-top:10px; padding-top:10px; border-top: 1px solid var(--border);">
                     <div class="stat">Nodes: <strong id="stat-nodes">0</strong></div>
                     <div class="stat">Edges: <strong id="stat-edges">0</strong></div>
-                    <!-- ── FILTER STATUS ── -->
                     <div class="stat" id="stat-filter" style="display:none; color:var(--orange);">
                         <i class="bi bi-funnel-fill"></i> Filter active
                     </div>
@@ -566,7 +571,7 @@ iframe.frame-viewer { width: 100%; height: 100%; border: none; }
                 </div>
                 <textarea id="sketchDesc" readonly style="width:100%; font-size:0.85rem; color:var(--text-muted); background:var(--bg); border:1px solid var(--border); padding: 8px; border-radius: 4px; resize:vertical; height:60px; outline:none;" placeholder="Sketch Description..."></textarea>
             </div>
-            
+
             <div id="details-text-content">
                 <div class="details-empty">Loading…</div>
             </div>
@@ -632,7 +637,7 @@ let isLayoutRunning = false;
 let fa2LoopId = null;
 let selectedNode = null;
 let hoveredNode = null;
-let searchMatches = null;
+let searchMatches = null; // null = no search active; Set = active filter
 let visualSwiper = null;
 
 const typeColors = {
@@ -656,22 +661,52 @@ function escHtml(s) {
 function updateSizes() {
     graph.forEachNode((node, attrs) => {
         const degree = graph.degree(node);
-        graph.setNodeAttribute(node, 'size', 4 + Math.sqrt(degree) * 1.5);
+        graph.setNodeAttribute(node, 'size', 1 + Math.sqrt(degree) * 2);
     });
     document.getElementById('stat-nodes').textContent = graph.order;
     document.getElementById('stat-edges').textContent = graph.size;
 }
 
+function saveLayout() {
+    const btn = document.getElementById('btn-save-layout');
+    btn.innerHTML = '<i class="bi bi-hourglass"></i> Saving...';
+    btn.disabled = true;
+
+    const positions = [];
+    graph.forEachNode((node, attrs) => {
+        positions.push({ id: parseInt(node), x: attrs.x, y: attrs.y });
+    });
+
+    fetch('kg_api.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_layout', positions: positions })
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.ok) {
+            toast('Layout saved successfully!');
+        } else {
+            toast('Error: ' + res.error, 'error');
+        }
+    })
+    .catch(err => toast('Network error', 'error'))
+    .finally(() => {
+        btn.innerHTML = '<i class="bi bi-floppy"></i> Save Layout';
+        btn.disabled = false;
+    });
+}
+
 // ══════════════════════════════════════════════
 // FILTER STATE
-// Namespaced localStorage keys — separate from staging graph
+// Namespaced localStorage key
 // ══════════════════════════════════════════════
-const KGF_STORAGE_KEY = 'kg_live_graph_filter';
-const KGF_OPEN_KEY    = 'kg_live_graph_filter_open';
+const KGF_STORAGE_KEY    = 'kg_live_graph_filter';
+const KGF_OPEN_KEY       = 'kg_live_graph_filter_open';
 
-let kgfRawTree   = [];
-let kgfChecked   = new Set();
-let kgfActiveIds = null; // Set of DB node id strings; null = show all
+let kgfRawTree     = [];      // full tree from API
+let kgfChecked     = new Set(); // jstree-style IDs currently checked in modal
+let kgfActiveIds   = null;    // Set of DB node id strings currently visible; null = show all
 
 function kgfLoadFromStorage() {
     try {
@@ -681,7 +716,7 @@ function kgfLoadFromStorage() {
             if (Array.isArray(parsed)) return new Set(parsed);
         }
     } catch(e) {}
-    return null;
+    return null; // null means "all"
 }
 
 function kgfSaveToStorage(ids) {
@@ -707,7 +742,7 @@ function kgfLoadOpenState() {
         const raw = localStorage.getItem(KGF_OPEN_KEY);
         if (raw) return new Set(JSON.parse(raw));
     } catch(e) {}
-    return null;
+    return null; // null = all open by default
 }
 
 function kgfGetVisibleDbIds() {
@@ -721,7 +756,7 @@ function kgfGetVisibleDbIds() {
 }
 
 function kgfIsAllSelected() {
-    const totalNodes   = kgfRawTree.filter(n => n.type === 'node').length;
+    const totalNodes = kgfRawTree.filter(n => n.type === 'node').length;
     const checkedNodes = kgfRawTree.filter(n => n.type === 'node' && kgfChecked.has(n.id)).length;
     return checkedNodes === totalNodes;
 }
@@ -739,6 +774,8 @@ function kgfApplyActiveFilter() {
         document.getElementById('btn-filter').style.color = 'var(--orange)';
     }
 }
+
+// ── Filter Modal ─────────────────────────────
 
 function openFilterModal() {
     document.getElementById('kgf-modal-bg').classList.add('open');
@@ -760,14 +797,11 @@ function kgfLoadTree() {
 
             if (kgfActiveIds !== null) {
                 kgfChecked = new Set();
-                // Seed only matching leaf nodes
                 kgfRawTree.forEach(n => {
                     if (n.type === 'node' && kgfActiveIds.has(n.data.db_id.toString())) {
                         kgfChecked.add(n.id);
                     }
                 });
-                // Bottom-up folder sync: sort folders deepest-first so children resolve
-                // before parents, then set folder checked iff ALL direct children are checked.
                 const folders = kgfRawTree.filter(n => n.type === 'folder');
                 function getFolderDepth(jsId) {
                     let d = 0, cur = jsId;
@@ -826,7 +860,6 @@ function kgfRenderTree() {
         const kids = jsId ? document.getElementById('kgf-kids-' + jsId) : null;
         el.classList.toggle('open', kids ? kids.classList.contains('open') : false);
     });
-    // Set indeterminate state on folder checkboxes where children are partially checked
     kgfRawTree.filter(n => n.type === 'folder').forEach(folder => {
         const el = wrap.querySelector(`.kgf-tree-node[data-jid="${folder.id}"] input[type=checkbox]`);
         if (!el) return;
@@ -972,9 +1005,14 @@ function kgfApplyFilter() {
 
 function kgfInitFromStorage() {
     const stored = kgfLoadFromStorage();
-    kgfActiveIds = (stored !== null && stored.size > 0) ? stored : null;
+    if (stored !== null && stored.size > 0) {
+        kgfActiveIds = stored;
+    } else {
+        kgfActiveIds = null;
+    }
     kgfApplyActiveFilter();
 }
+
 
 // Draggable & Collapsible Panels
 function makeDraggable(panelId) {
@@ -988,8 +1026,11 @@ function makeDraggable(panelId) {
         isDragging = true;
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        startX = clientX; startY = clientY;
-        initialX = panel.offsetLeft; initialY = panel.offsetTop;
+        startX = clientX;
+        startY = clientY;
+        initialX = panel.offsetLeft;
+        initialY = panel.offsetTop;
+        
         document.addEventListener('mousemove', move);
         document.addEventListener('mouseup', end);
         document.addEventListener('touchmove', move, {passive: false});
@@ -1001,8 +1042,8 @@ function makeDraggable(panelId) {
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
         panel.style.left = (initialX + (clientX - startX)) + 'px';
-        panel.style.top  = (initialY + (clientY - startY)) + 'px';
-        panel.style.right = 'auto';
+        panel.style.top = (initialY + (clientY - startY)) + 'px';
+        panel.style.right = 'auto'; // release constraints
     }
     function end() {
         isDragging = false;
@@ -1033,11 +1074,7 @@ function openNodePanel(nodeId) {
     document.getElementById('np-name').textContent = attrs.label;
     document.getElementById('np-type').textContent = attrs.node_type;
     document.getElementById('np-type').className = 'kge-type-pill kge-pill-' + (attrs.node_type || 'default');
-    panel.style.display = 'flex';
-    document.querySelector('#node-panel .panel-content').style.display = 'block';
-    document.querySelector('#node-panel .collapse-btn').innerHTML = '<i class="bi bi-dash"></i>';
-    renderer.refresh();
-
+    
     // Check for a linked promoted fuzz candidate
     const fuzzBtn = document.getElementById('btn-open-fuzz');
     fuzzBtn.style.display = 'none';
@@ -1050,7 +1087,13 @@ function openNodePanel(nodeId) {
                 fuzzBtn.style.display = 'flex';
             }
         })
-        .catch(() => {}); // silent fail — fuzz is optional
+        .catch(() => {});
+
+    panel.style.display = 'flex';
+    document.querySelector('#node-panel .panel-content').style.display = 'block';
+    document.querySelector('#node-panel .collapse-btn').innerHTML = '<i class="bi bi-dash"></i>';
+    
+    renderer.refresh();
 }
 
 // ═══════════════════════════════════════════════
@@ -1067,7 +1110,6 @@ function fetchVisuals(name) {
         entity_name: name
     }, res => {
         if (res.ok && res.sketch && res.sketch.frames && res.sketch.frames.length > 0) {
-            
             let curationBadge = '';
             if (res.sketch.curation) {
                 const cData = escapeHtmlAttr(JSON.stringify(res.sketch.curation));
@@ -1176,16 +1218,15 @@ document.addEventListener('DOMContentLoaded', () => {
     makeDraggable('controls-panel');
     makeDraggable('node-panel');
 
-    // Initialise filter from localStorage before graph renders
     kgfInitFromStorage();
 
     graph = new graphology.MultiDirectedGraph();
 
     dbNodes.forEach(n => {
         graph.addNode(n.id.toString(), {
-            x: Math.random() * 100,
-            y: Math.random() * 100,
-            size: 4,
+            x: n.x !== null ? parseFloat(n.x) : Math.random() * 100,
+            y: n.y !== null ? parseFloat(n.y) : Math.random() * 100,
+            size: 8,
             label: n.name,
             color: typeColors[n.node_type] || typeColors['default'],
             node_type: n.node_type || 'note'
@@ -1205,17 +1246,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     updateSizes();
+    
+    const hasSavedCoords = dbNodes.some(n => n.x !== null);
+    
+    // Clear heavy JSON arrays to free memory for WebGL
+    dbNodes.length = 0;
+    dbEdges.length = 0;
 
     const container = document.getElementById('graph-container');
     const getLabelColor = () => document.documentElement.getAttribute('data-theme') === 'dark' ? '#c9d1d9' : '#24292f';
 
     renderer = new Sigma(graph, container, {
-        renderEdgeLabels: true,
+        renderEdgeLabels: graph.size <= 150,
         defaultEdgeType: "arrow",
         allowInvalidContainer: true,
+        labelRenderedSizeThreshold: 2, 
         labelColor: { color: getLabelColor() },
         edgeLabelColor: { color: getLabelColor() },
-        edgeLabelSize: 7
+        edgeLabelSize: 7,
+        pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5)
     });
 
     new MutationObserver(() => {
@@ -1251,53 +1300,82 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     fa2Btn.addEventListener('click', toggleLayout);
-    toggleLayout();
-    setTimeout(() => { if (isLayoutRunning) toggleLayout(); }, 2500);
 
-    document.getElementById('btn-reset').addEventListener('click', () => {
+    // Only run layout automatically if we do NOT have saved coordinates
+    if (!hasSavedCoords) {
+        toggleLayout();
+        setTimeout(() => { 
+            if (isLayoutRunning) toggleLayout(); 
+            resetGraphCamera();
+        }, 3000);
+    } else {
+        setTimeout(resetGraphCamera, 100);
+    }
+    
+    function resetGraphCamera() {
+        if(!renderer) return;
         renderer.getCamera().animatedReset({ duration: 500 });
-    });
+        setTimeout(() => {
+            const cam = renderer.getCamera();
+            //cam.animatedZoom({ ratio: cam.ratio * 0.5, duration: 300 });
+        }, 520);
+    }
+    document.getElementById('btn-reset').addEventListener('click', resetGraphCamera);
 
+    // ── Drag & Tap (Mobile-friendly threshold) ──
     let dragNode = null;
     let dragStartX = 0;
     let dragStartY = 0;
+    let dragFrame = null;
     const DRAG_THRESHOLD = 6;
 
     renderer.on("downNode", (e) => {
         dragNode = e.node;
-        const nativeEvent = e.event && e.event.original ? e.event.original : (e.event || {});
-        if (nativeEvent.touches && nativeEvent.touches.length) {
-            dragStartX = nativeEvent.touches[0].clientX;
-            dragStartY = nativeEvent.touches[0].clientY;
+        const ne = e.event && e.event.original ? e.event.original : (e.event || {});
+        if (ne.touches && ne.touches.length) {
+            dragStartX = ne.touches[0].clientX;
+            dragStartY = ne.touches[0].clientY;
         } else {
-            dragStartX = nativeEvent.clientX || 0;
-            dragStartY = nativeEvent.clientY || 0;
+            dragStartX = ne.clientX || 0;
+            dragStartY = ne.clientY || 0;
         }
         renderer.getCamera().disable();
     });
 
     renderer.getMouseCaptor().on("mousemovebody", (e) => {
         if (!dragNode) return;
-        const pos = renderer.viewportToGraph(e);
-        graph.setNodeAttribute(dragNode, "x", pos.x);
-        graph.setNodeAttribute(dragNode, "y", pos.y);
         e.preventSigmaDefault();
         e.original.preventDefault();
         e.original.stopPropagation();
+        if (dragFrame) cancelAnimationFrame(dragFrame);
+        dragFrame = requestAnimationFrame(() => {
+            const pos = renderer.viewportToGraph(e);
+            graph.setNodeAttribute(dragNode, "x", pos.x);
+            graph.setNodeAttribute(dragNode, "y", pos.y);
+            dragFrame = null;
+        });
     });
 
     container.addEventListener('touchmove', (e) => {
         if (!dragNode) return;
+        e.preventDefault();
         const rect = container.getBoundingClientRect();
         const touch = e.touches[0];
-        const pos = renderer.viewportToGraph({ x: touch.clientX - rect.left, y: touch.clientY - rect.top });
-        graph.setNodeAttribute(dragNode, "x", pos.x);
-        graph.setNodeAttribute(dragNode, "y", pos.y);
-        e.preventDefault();
+        if (dragFrame) cancelAnimationFrame(dragFrame);
+        dragFrame = requestAnimationFrame(() => {
+            const pos = renderer.viewportToGraph({
+                x: touch.clientX - rect.left,
+                y: touch.clientY - rect.top
+            });
+            graph.setNodeAttribute(dragNode, "x", pos.x);
+            graph.setNodeAttribute(dragNode, "y", pos.y);
+            dragFrame = null;
+        });
     }, { passive: false });
 
     function releaseNode(e) {
         if (!dragNode) return;
+
         let endX = 0, endY = 0;
         if (e.changedTouches && e.changedTouches.length) {
             endX = e.changedTouches[0].clientX;
@@ -1306,11 +1384,15 @@ document.addEventListener('DOMContentLoaded', () => {
             endX = e.clientX || dragStartX;
             endY = e.clientY || dragStartY;
         }
+
         const dx = endX - dragStartX;
         const dy = endY - dragStartY;
-        if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) {
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < DRAG_THRESHOLD) {
             openNodePanel(dragNode);
         }
+
         renderer.getCamera().enable();
         dragNode = null;
     }
@@ -1318,7 +1400,9 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('touchend', releaseNode);
 
     renderer.on("clickNode", ({ node }) => {
-        if (!selectedNode || selectedNode !== node) openNodePanel(node);
+        if (!selectedNode || selectedNode !== node) {
+            openNodePanel(node);
+        }
     });
 
     renderer.on("clickStage", () => {
@@ -1330,12 +1414,12 @@ document.addEventListener('DOMContentLoaded', () => {
     renderer.on('enterNode', ({ node }) => { hoveredNode = node; renderer.refresh(); });
     renderer.on('leaveNode', () => { hoveredNode = null; renderer.refresh(); });
 
-    // ── Node Reducer — filter + search + hover/select highlight ──
+    // ── Node Reducer — incorporates filter, search, and hover/select highlight ──
     renderer.setSetting('nodeReducer', (node, data) => {
         const res = { ...data };
         const muted = getMutedColor();
 
-        // Category filter: hide nodes not in the active set
+        // ── Category filter: hide nodes not in the active set ──
         if (kgfActiveIds !== null && !kgfActiveIds.has(node)) {
             res.hidden = true;
             return res;
@@ -1344,21 +1428,28 @@ document.addEventListener('DOMContentLoaded', () => {
         // Search filter: dim non-matches
         if (searchMatches !== null) {
             if (!searchMatches.has(node)) {
-                res.color = muted; res.label = ''; res.zIndex = 0;
+                res.color = muted;
+                res.label = '';
+                res.zIndex = 0;
             } else {
-                res.zIndex = 2; res.size = (data.size || 4) * 1.4;
+                res.zIndex = 2;
+                res.size = (data.size || 8) * 1.4;
             }
             return res;
         }
 
         if (hoveredNode && hoveredNode !== node && !graph.hasEdge(node, hoveredNode) && !graph.hasEdge(hoveredNode, node)) {
-            res.color = muted; res.zIndex = 0;
+            res.color = muted;
+            res.zIndex = 0;
         } else if (selectedNode && selectedNode !== node && !graph.hasEdge(node, selectedNode) && !graph.hasEdge(selectedNode, node)) {
-            res.color = muted; res.zIndex = 0;
+            res.color = muted;
+            res.zIndex = 0;
         } else {
             res.zIndex = 1;
         }
-        if (node === hoveredNode || node === selectedNode) res.zIndex = 2;
+        if (node === hoveredNode || node === selectedNode) {
+            res.zIndex = 2;
+        }
         return res;
     });
 
@@ -1368,21 +1459,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const target = graph.target(edge);
         const muted = getMutedColor();
 
-        // Hide edges where either endpoint is filtered out
+        // ── Hide edges where either endpoint is filtered out ──
         if (kgfActiveIds !== null && (!kgfActiveIds.has(source) || !kgfActiveIds.has(target))) {
             res.hidden = true;
             return res;
         }
 
+        // Hide edges where neither endpoint is a search match
         if (searchMatches !== null) {
-            if (!searchMatches.has(source) && !searchMatches.has(target)) res.hidden = true;
+            if (!searchMatches.has(source) && !searchMatches.has(target)) {
+                res.hidden = true;
+            }
             return res;
         }
 
         if (hoveredNode && source !== hoveredNode && target !== hoveredNode) {
-            res.color = muted; res.hidden = true;
+            res.color = muted;
+            res.hidden = true;
         } else if (selectedNode && source !== selectedNode && target !== selectedNode) {
-            res.color = muted; res.hidden = true;
+            res.color = muted;
+            res.hidden = true;
         } else if (hoveredNode || selectedNode) {
             res.size = 2;
             res.color = document.documentElement.getAttribute('data-theme') === 'dark' ? '#6b7280' : '#94a3b8';
@@ -1390,17 +1486,22 @@ document.addEventListener('DOMContentLoaded', () => {
         return res;
     });
 
+    // Connect node panel buttons
     document.getElementById('btn-close-panel').addEventListener('click', () => {
         selectedNode = null;
         document.getElementById('node-panel').style.display = 'none';
         renderer.refresh();
     });
 
+    document.getElementById('btn-open-node').addEventListener('click', () => {
+        if (selectedNode) window.open('kg_view.php?node_id=' + selectedNode, '_blank');
+    });
+    
     document.getElementById('btn-open-fuzz').addEventListener('click', () => {
         const candidateId = document.getElementById('btn-open-fuzz').dataset.candidateId;
         if (candidateId) window.open('fuzz_forge_landing.php?id=' + candidateId, '_blank');
     });
-    
+
     document.getElementById('btn-add-edge').addEventListener('click', () => {
         if (selectedNode) {
             const attrs = graph.getNodeAttributes(selectedNode);
@@ -1422,7 +1523,8 @@ document.addEventListener('DOMContentLoaded', () => {
             searchMatches = null;
             countEl.textContent = '';
             const eb = document.getElementById('btn-search-export');
-            eb.style.opacity = '0.4'; eb.style.pointerEvents = 'none';
+            eb.style.opacity = '0.4';
+            eb.style.pointerEvents = 'none';
             renderer.refresh();
             return;
         }
@@ -1430,38 +1532,51 @@ document.addEventListener('DOMContentLoaded', () => {
         graph.forEachNode((node, attrs) => {
             // Respect active filter: only search within visible nodes
             if (kgfActiveIds !== null && !kgfActiveIds.has(node)) return;
-            if (attrs.label && attrs.label.toLowerCase().includes(q)) searchMatches.add(node);
+            if (attrs.label && attrs.label.toLowerCase().includes(q)) {
+                searchMatches.add(node);
+            }
         });
         const n = searchMatches.size;
         countEl.textContent = n === 0 ? 'No matches' : n + ' node' + (n === 1 ? '' : 's') + ' matched';
         countEl.style.color = n === 0 ? 'var(--red)' : 'var(--text-muted)';
         const exportBtn = document.getElementById('btn-search-export');
-        exportBtn.style.opacity = n > 0 ? '1' : '0.4';
-        exportBtn.style.pointerEvents = n > 0 ? 'auto' : 'none';
+        if (n > 0) {
+            exportBtn.style.opacity = '1';
+            exportBtn.style.pointerEvents = 'auto';
+        } else {
+            exportBtn.style.opacity = '0.4';
+            exportBtn.style.pointerEvents = 'none';
+        }
         renderer.refresh();
     });
 
-    const searchInput   = document.getElementById('edgeTargetSearch');
+    // Target Node Search logic
+    const searchInput = document.getElementById('edgeTargetSearch');
     const searchResults = document.getElementById('edgeTargetResults');
-    const targetInput   = document.getElementById('edgeTargetId');
+    const targetInput = document.getElementById('edgeTargetId');
 
     searchInput.addEventListener('input', (e) => {
         const q = e.target.value.toLowerCase();
         searchResults.innerHTML = '';
-        if (q.length < 2) { searchResults.style.display = 'none'; return; }
+        if (q.length < 2) {
+            searchResults.style.display = 'none';
+            return;
+        }
         const matches = graph.nodes().filter(n => graph.getNodeAttribute(n, 'label').toLowerCase().includes(q));
         if (matches.length > 0) {
             matches.slice(0, 10).forEach(n => {
                 const label = graph.getNodeAttribute(n, 'label');
                 const div = document.createElement('div');
                 div.textContent = label + ' (#' + n + ')';
-                div.style.padding = '6px 10px'; div.style.cursor = 'pointer';
+                div.style.padding = '6px 10px';
+                div.style.cursor = 'pointer';
                 div.addEventListener('click', () => {
-                    targetInput.value = n; searchInput.value = label;
+                    targetInput.value = n;
+                    searchInput.value = label;
                     searchResults.style.display = 'none';
                 });
                 div.addEventListener('mouseover', () => div.style.background = 'var(--border)');
-                div.addEventListener('mouseout',  () => div.style.background = 'transparent');
+                div.addEventListener('mouseout', () => div.style.background = 'transparent');
                 searchResults.appendChild(div);
             });
             searchResults.style.display = 'block';
@@ -1486,6 +1601,7 @@ function openDetailsModal(nodeId, addToHistory = true) {
         detailsHistPos = detailsHistory.length - 1;
     }
     detailsUpdateNavButtons();
+
     openNodePanel(nodeId);
 
     const attrs = graph.getNodeAttributes(nodeId);
@@ -1494,9 +1610,10 @@ function openDetailsModal(nodeId, addToHistory = true) {
     typeEl.textContent = attrs.node_type;
     typeEl.className = 'kge-type-pill kge-pill-' + (attrs.node_type || 'default');
 
-    const textContent = document.getElementById('details-text-content');
+    const body = document.getElementById('details-text-content');
     const connContent = document.getElementById('details-connections-content');
-    textContent.innerHTML = '<div class="details-empty" style="font-style:italic;">Loading…</div>';
+    
+    body.innerHTML = '<div class="details-empty" style="font-style:italic;">Loading…</div>';
     connContent.innerHTML = '';
 
     document.getElementById('modalDetails').style.display = 'flex';
@@ -1506,15 +1623,16 @@ function openDetailsModal(nodeId, addToHistory = true) {
 
     $.get('kg_api.php?action=get_node&id=' + nodeId, res => {
         if (!res.ok) {
-            textContent.innerHTML = '<div class="details-empty">Failed to load node content.</div>';
+            body.innerHTML = '<div class="details-empty">Failed to load node content.</div>';
             return;
         }
         const md = (res.node && res.node.content) ? res.node.content.trim() : '';
-        textContent.innerHTML = md ? marked.parse(md) : '<div class="details-empty">This node has no content yet.</div>';
+        body.innerHTML = md ? marked.parse(md) : '<div class="details-empty">This node has no content yet.</div>';
+
         connContent.appendChild(detailsBuildConnections(nodeId));
         document.getElementById('details-body').scrollTop = 0;
     }, 'json').fail(() => {
-        textContent.innerHTML = '<div class="details-empty">Network error loading content.</div>';
+        body.innerHTML = '<div class="details-empty">Network error loading content.</div>';
     });
 }
 
@@ -1526,13 +1644,15 @@ function detailsBuildConnections(nodeId) {
     graph.forEachOutboundEdge(nid, (edge, attrs, source, target) => {
         if (target !== nid && graph.hasNode(target)) {
             outgoing.push({ id: target, label: graph.getNodeAttribute(target, 'label'),
-                            type: graph.getNodeAttribute(target, 'node_type'), rel: attrs.label || '' });
+                            type: graph.getNodeAttribute(target, 'node_type'),
+                            rel: attrs.label || '' });
         }
     });
     graph.forEachInboundEdge(nid, (edge, attrs, source, target) => {
         if (source !== nid && graph.hasNode(source)) {
             incoming.push({ id: source, label: graph.getNodeAttribute(source, 'label'),
-                            type: graph.getNodeAttribute(source, 'node_type'), rel: attrs.label || '' });
+                            type: graph.getNodeAttribute(source, 'node_type'),
+                            rel: attrs.label || '' });
         }
     });
 
@@ -1555,7 +1675,8 @@ function detailsBuildConnections(nodeId) {
                                 event:'#ef4444', arc:'#8b5cf6', episode:'#06b6d4',
                                 relationship:'#ec4899', note:'#64748b' };
             const dot = document.createElement('span');
-            dot.style.cssText = 'width:7px;height:7px;border-radius:50%;flex-shrink:0;background:' + (typeColor[item.type] || '#888');
+            dot.style.cssText = 'width:7px;height:7px;border-radius:50%;flex-shrink:0;background:' +
+                                 (typeColor[item.type] || '#888');
             pill.appendChild(dot);
             const lbl = document.createElement('span');
             lbl.textContent = item.label;
@@ -1587,11 +1708,17 @@ function detailsUpdateNavButtons() {
 }
 
 function detailsHistoryBack() {
-    if (detailsHistPos > 0) { detailsHistPos--; openDetailsModal(detailsHistory[detailsHistPos], false); }
+    if (detailsHistPos > 0) {
+        detailsHistPos--;
+        openDetailsModal(detailsHistory[detailsHistPos], false);
+    }
 }
 
 function detailsHistoryFwd() {
-    if (detailsHistPos < detailsHistory.length - 1) { detailsHistPos++; openDetailsModal(detailsHistory[detailsHistPos], false); }
+    if (detailsHistPos < detailsHistory.length - 1) {
+        detailsHistPos++;
+        openDetailsModal(detailsHistory[detailsHistPos], false);
+    }
 }
 
 let toastTimer;
@@ -1620,8 +1747,7 @@ document.addEventListener('keydown', e => {
             curationModal.style.display = 'none';
         } else {
             document.querySelectorAll('.kg-modal-bg').forEach(b => b.style.display='none');
-            hideModal('modalDetails');
-            detailsHistory = []; detailsHistPos = -1;
+            hideModal('modalDetails'); detailsHistory = []; detailsHistPos = -1;
             closeFilterModal();
         }
     }
@@ -1632,8 +1758,10 @@ document.getElementById('kgf-modal-bg').addEventListener('click', function(e) {
     if (e.target === this) closeFilterModal();
 });
 
+// Graph Mutations API Hooks
 function exportSearchMatches() {
     if (!searchMatches || searchMatches.size === 0) return;
+
     const nodeIds = Array.from(searchMatches);
     const withContent = document.getElementById('search-export-content').checked;
     const btn = document.getElementById('btn-search-export');
@@ -1643,12 +1771,17 @@ function exportSearchMatches() {
     fetch('kg_api.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'focused_snapshot', node_ids: nodeIds, with_content: withContent }),
+        body: JSON.stringify({
+            action:       'focused_snapshot',
+            node_ids:     nodeIds,
+            with_content: withContent,
+        }),
     })
     .then(r => r.json())
     .then(res => {
         if (!res.ok) throw new Error(res.error || 'Snapshot failed');
-        const q      = document.getElementById('graph-search').value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
+        const q = document.getElementById('graph-search').value.trim()
+                         .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
         const suffix = withContent ? '_content' : '';
         const date   = new Date().toISOString().slice(0, 10);
         const fname  = 'kg_search_' + (q || 'export') + suffix + '_' + date + '.json';
@@ -1660,25 +1793,38 @@ function exportSearchMatches() {
         toast('Exported ' + nodeIds.length + ' node' + (nodeIds.length === 1 ? '' : 's') + ' ✓');
     })
     .catch(err => toast('Export failed: ' + err.message, 'error'))
-    .finally(() => { btn.disabled = false; btn.innerHTML = '<i class="bi bi-download"></i> Export Matches'; });
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-download"></i> Export Matches';
+    });
 }
 
 function createNode() {
     const name = document.getElementById('newNodeName').value.trim();
     const type = document.getElementById('newNodeType').value;
     if (!name) return;
+    
     $.post('kg_api.php', { action: 'create_node', name: name, node_type: type }, res => {
         if (res.ok) {
             hideModal('modalNode');
             document.getElementById('newNodeName').value = '';
+            
             const id = res.id.toString();
-            const centerPos = renderer.viewportToGraph({
-                x: renderer.getContainer().offsetWidth / 2,
-                y: renderer.getContainer().offsetHeight / 2
+            const centerPos = renderer.viewportToGraph({ 
+                x: renderer.getContainer().offsetWidth / 2, 
+                y: renderer.getContainer().offsetHeight / 2 
             });
-            graph.addNode(id, { x: centerPos.x, y: centerPos.y, size: 4, label: name,
-                                color: typeColors[type] || typeColors['default'], node_type: type });
+            
+            graph.addNode(id, {
+                x: centerPos.x,
+                y: centerPos.y,
+                size: 8,
+                label: name,
+                color: typeColors[type] || typeColors['default'],
+                node_type: type
+            });
             updateSizes();
+            renderer.refresh();
             toast('Node created');
         } else {
             toast('Error: ' + res.error, 'error');
@@ -1690,20 +1836,40 @@ function createEdge() {
     if (!selectedNode) return;
     const targetId = document.getElementById('edgeTargetId').value;
     const rel = document.getElementById('edgeRelationship').value.trim();
-    if (!targetId || !graph.hasNode(targetId.toString())) { toast('Invalid target node selected', 'error'); return; }
-    if (targetId.toString() === selectedNode.toString()) { toast('Cannot link node to itself', 'error'); return; }
+    
+    if (!targetId || !graph.hasNode(targetId.toString())) {
+        toast('Invalid target node selected', 'error');
+        return;
+    }
+    if (targetId.toString() === selectedNode.toString()) {
+        toast('Cannot link node to itself', 'error');
+        return;
+    }
+    
     const targetLabel = graph.getNodeAttribute(targetId, 'label');
+
     $.post('kg_api.php', {
-        action: 'add_item', node_id: selectedNode, item_type: 'kg_node',
-        item_id: targetId, item_label: targetLabel, relationship: rel, note: ''
+        action: 'add_item',
+        node_id: selectedNode,
+        item_type: 'kg_node',
+        item_id: targetId,
+        item_label: targetLabel,
+        relationship: rel,
+        note: ''
     }, res => {
         if (res.ok) {
             hideModal('modalAddEdge');
             document.getElementById('edgeTargetId').value = '';
             document.getElementById('edgeTargetSearch').value = '';
             document.getElementById('edgeRelationship').value = '';
-            graph.addDirectedEdge(selectedNode, targetId, { label: rel || '', size: 1, color: getMutedColor() });
+            
+            graph.addDirectedEdge(selectedNode, targetId, {
+                label: rel || '',
+                size: 1,
+                color: getMutedColor()
+            });
             updateSizes();
+            renderer.refresh();
             toast('Link added');
         } else {
             toast('Error: ' + res.error, 'error');

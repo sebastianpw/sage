@@ -198,49 +198,44 @@ class PytoonManager
     }
 
     /**
-     * Returns done magazine_pdf_jobs for a given series, to allow browsing
-     * existing Cinemagic PDFs for splitting into webtoon pages.
+     * Returns actual physical PDF files for a given series, ensuring we only 
+     * return the absolute latest generated files without DB job duplicates.
      */
     public function getCinemagicPdfsForSeries(int $seriesId): array
     {
-        // magazine_pdf_jobs stores per-language PDFs; show done rows
-        $stmt = $this->pdo->prepare("
-            SELECT mpj.id, mpj.sequence_id, mpj.languages, mpj.status,
-                   mpj.created_at, ns.name AS sequence_name,
-                   mpj.result_zip
-              FROM magazine_pdf_jobs mpj
-              LEFT JOIN narrative_sequences ns ON ns.id = mpj.sequence_id
-             WHERE mpj.series_id = ?
-               AND mpj.status = 'done'
-             ORDER BY mpj.created_at DESC
-             LIMIT 50
-        ");
-        $stmt->execute([$seriesId]);
-        $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-
-        // Build list of actual PDF files stored on disk
         $pdfDir = $this->publicPathAbs . "/media/magazines/series_{$seriesId}";
-        $pdfs   = [];
+        if (!is_dir($pdfDir)) {
+            return ['success' => true, 'pdfs' => []];
+        }
 
-        foreach ($rows as $row) {
-            // The fetchAndStorePdfJob method extracts PDFs into media/magazines/series_N/
-            // Files are named: magazine_seq{seqId}_{lang}.pdf
-            $langs = array_filter(array_map('trim', explode(',', $row['languages'])));
-            foreach ($langs as $lang) {
-                $filename = "magazine_seq{$row['sequence_id']}_{$lang}.pdf";
-                $absPath  = $pdfDir . '/' . $filename;
-                if (file_exists($absPath)) {
-                    $pdfs[] = [
-                        'filename'      => $filename,
-                        'rel_path'      => "media/magazines/series_{$seriesId}/{$filename}",
-                        'size'          => filesize($absPath),
-                        'sequence_name' => $row['sequence_name'] ?? "Seq #{$row['sequence_id']}",
-                        'lang'          => $lang,
-                        'created_at'    => $row['created_at'],
-                    ];
-                }
+        $pdfs = [];
+        // Scan directory for all PDFs
+        foreach (glob($pdfDir . '/*.pdf') ?: [] as $absPath) {
+            $filename = basename($absPath);
+            // Expected format from Cinemagic Hub: magazine_seq{seqId}_{lang}.pdf
+            if (preg_match('/^magazine_seq(\d+)_([a-zA-Z0-9_-]+)\.pdf$/', $filename, $matches)) {
+                $seqId = (int)$matches[1];
+                $lang  = $matches[2];
+
+                // Fetch real sequence name from DB
+                $stmt = $this->pdo->prepare("SELECT name FROM narrative_sequences WHERE id = ?");
+                $stmt->execute([$seqId]);
+                $seqName = $stmt->fetchColumn() ?: "Seq #{$seqId}";
+
+                $pdfs[] = [
+                    'filename'      => $filename,
+                    'rel_path'      => "media/magazines/series_{$seriesId}/{$filename}",
+                    'size'          => filesize($absPath),
+                    'sequence_name' => $seqName,
+                    'lang'          => $lang,
+                    'mtime'         => filemtime($absPath),
+                    'created_at'    => date('Y-m-d H:i:s', filemtime($absPath)),
+                ];
             }
         }
+        
+        // Sort by modification time descending (newest files first)
+        usort($pdfs, fn($a, $b) => $b['mtime'] <=> $a['mtime']);
 
         return ['success' => true, 'pdfs' => $pdfs];
     }
@@ -583,3 +578,4 @@ class PytoonManager
         return ['success' => true];
     }
 }
+

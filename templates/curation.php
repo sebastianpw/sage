@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<!-- DEFAULT: Mobile Zoom (0.6) as requested -->
+
 <meta name="viewport" id="viewportMeta" content="width=device-width, initial-scale=0.8">
 
 <!-- WORKAROUND: Detect Tablet/Desktop and switch to scale 1.0 -->
