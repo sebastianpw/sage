@@ -52,6 +52,13 @@
       "prefix": "",
       "tags": ["pytoon"]
     },
+    "bang": {
+  "active": true,
+  "module": "services.bang_service",
+  "router_var": "router",
+  "prefix": "/bang",
+  "tags": ["bang"]
+},
     "magazine_pdf": {
       "active": true,
       "module": "services.magazine_pdf_service",
