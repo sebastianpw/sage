@@ -11874,10 +11874,12 @@ COMMIT;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+
+
 -- ============================================================
 -- Incremental Update Rollout SQL
 -- Source DB : starlight_guardians_nu
--- Generated : 2026-06-25 13:00:58
+-- Generated : 2026-06-25 14:08:56
 -- Apply this patch to your baseline rollout SQL in your repo.
 -- ============================================================
 
@@ -12433,19 +12435,19 @@ ALTER TABLE `cinemagic_series_2_cinemagics` ADD COLUMN IF NOT EXISTS `cover_imag
 ALTER TABLE `narrative_sequences` ADD COLUMN IF NOT EXISTS `category_id` int(11) NULL DEFAULT NULL;
 
 -- [ADD_FOREIGN_KEY] table/view: beap_beats
-ALTER TABLE `beap_beats` ADD CONSTRAINT IF NOT EXISTS `fk_beap_beats_session` FOREIGN KEY (`session_id`) REFERENCES `beap_sessions` (`id`) ON DELETE CASCADE;
+ALTER TABLE `beap_beats` ADD CONSTRAINT `fk_beap_beats_session` FOREIGN KEY (`session_id`) REFERENCES `beap_sessions` (`id`) ON DELETE CASCADE;
 
 -- [ADD_FOREIGN_KEY] table/view: kg_edge_run_ai_edges
-ALTER TABLE `kg_edge_run_ai_edges` ADD CONSTRAINT IF NOT EXISTS `fk_kg_edge_run_ai_edges_run` FOREIGN KEY (`run_id`) REFERENCES `kg_edge_runs` (`id`) ON DELETE CASCADE;
+ALTER TABLE `kg_edge_run_ai_edges` ADD CONSTRAINT `fk_kg_edge_run_ai_edges_run` FOREIGN KEY (`run_id`) REFERENCES `kg_edge_runs` (`id`) ON DELETE CASCADE;
 
 -- [ADD_FOREIGN_KEY] table/view: kg_edge_run_candidates
-ALTER TABLE `kg_edge_run_candidates` ADD CONSTRAINT IF NOT EXISTS `fk_kg_edge_run_candidates_run` FOREIGN KEY (`run_id`) REFERENCES `kg_edge_runs` (`id`) ON DELETE CASCADE;
+ALTER TABLE `kg_edge_run_candidates` ADD CONSTRAINT `fk_kg_edge_run_candidates_run` FOREIGN KEY (`run_id`) REFERENCES `kg_edge_runs` (`id`) ON DELETE CASCADE;
 
 -- [ADD_FOREIGN_KEY] table/view: kg_edge_run_logs
-ALTER TABLE `kg_edge_run_logs` ADD CONSTRAINT IF NOT EXISTS `fk_kg_edge_run_logs_run` FOREIGN KEY (`run_id`) REFERENCES `kg_edge_runs` (`id`) ON DELETE CASCADE;
+ALTER TABLE `kg_edge_run_logs` ADD CONSTRAINT `fk_kg_edge_run_logs_run` FOREIGN KEY (`run_id`) REFERENCES `kg_edge_runs` (`id`) ON DELETE CASCADE;
 
 -- [ADD_FOREIGN_KEY] table/view: kg_node_coordinates
-ALTER TABLE `kg_node_coordinates` ADD CONSTRAINT IF NOT EXISTS `fk_kg_node_coord` FOREIGN KEY (`node_id`) REFERENCES `kg_nodes` (`id`) ON DELETE CASCADE;
+ALTER TABLE `kg_node_coordinates` ADD CONSTRAINT `fk_kg_node_coord` FOREIGN KEY (`node_id`) REFERENCES `kg_nodes` (`id`) ON DELETE CASCADE;
 
 -- [REPLACE_VIEW] table/view: v_scene_part_full
 CREATE OR REPLACE VIEW `v_scene_part_full` AS select `sp`.`id` AS `scene_part_id`,`sp`.`name` AS `scene_part_name`,`sp`.`description` AS `scene_part_description`,`p`.`angle` AS `perspective_angle`,`p`.`description` AS `perspective_notes`,`b`.`name` AS `background_name`,`b`.`description` AS `background_description`,group_concat(distinct `a`.`name` separator ', ') AS `animas_in_scene`,group_concat(distinct concat(`a`.`name`,': ',`a`.`traits`,'; ',`a`.`abilities`) separator ' | ') AS `animas_details` from (((((`scene_parts` `sp` join `perspectives` `p` on(`p`.`scene_part_id` = `sp`.`id`)) left join `scene_part_backgrounds` `spb` on(`spb`.`perspective_id` = `p`.`id`)) left join `backgrounds` `b` on(`b`.`id` = `spb`.`background_id`)) left join `scene_part_animas` `spa` on(`spa`.`scene_part_id` = `sp`.`id`)) left join `animas` `a` on(`a`.`id` = `spa`.`character_anima_id`)) group by `sp`.`id`,`p`.`id`,`b`.`id` order by `sp`.`sequence`,`p`.`id`;
