@@ -33,6 +33,8 @@ TRY AT YOUR OWN RISK.
 
 *Use cloudflared URL to access SAGE web UI.*
 
+**PLEASE MAKE SURE TO PROVIDE YOUR AI PROVIDER TOKEN IN SAGE DASHBOARD FOR EXAMPLE POLLINATIONS.AI**
+
 **P.S.: For ChromaDB ingestion use:**
 ```bash
 /var/www/sage/bash/ingest_sketches.sh
