@@ -77,6 +77,22 @@ class FrameDetails
                 }
                 $stmt->close();
             }
+            
+            // Check sketch_frames if not found yet
+            if (!$sketchId) {
+                $stmt = $this->mysqli->prepare(
+                    "SELECT sketch_id FROM sketch_frames WHERE frame_id = ? LIMIT 1"
+                );
+                if ($stmt) {
+                    $stmt->bind_param('i', $frameId);
+                    $stmt->execute();
+                    $result = $stmt->get_result();
+                    if ($row = $result->fetch_assoc()) {
+                        $sketchId = (int)$row['sketch_id'];
+                    }
+                    $stmt->close();
+                }
+            }
         }
 
         if ($sketchId) {
@@ -518,6 +534,84 @@ class FrameDetails
     color: var(--text-muted, #666);
 }
 
+.vision-model-select {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    font-family: inherit;
+    font-size: 0.9em;
+    background: var(--input-bg, #fff);
+    color: var(--input-text, #000);
+    box-sizing: border-box;
+    margin-bottom: 4px;
+}
+
+.vision-clipboard-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.vision-clipboard-chips {
+    flex: 1;
+    display: flex;
+    gap: 5px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    min-width: 0;
+    align-items: center;
+}
+.vision-clipboard-chips::-webkit-scrollbar { display: none; }
+
+.vision-chip {
+    flex-shrink: 0;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid #ccc;
+    background: rgba(0,0,0,0.04);
+    color: var(--text-muted, #555);
+    font-family: inherit;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+.vision-chip:hover {
+    border-color: #007bff;
+    color: #007bff;
+    background: rgba(0,123,255,0.08);
+}
+.vision-chip.pinned {
+    border-color: rgba(245, 158, 11, 0.4);
+    color: #b45309;
+}
+[data-theme="dark"] .vision-chip {
+    background: rgba(255,255,255,0.06);
+    border-color: #444;
+    color: #aaa;
+}
+[data-theme="dark"] .vision-chip.pinned {
+    color: #f59e0b;
+}
+
+.vision-chips-empty {
+    font-size: 0.68rem;
+    color: var(--text-muted, #999);
+    opacity: 0.7;
+    padding: 0 4px;
+    white-space: nowrap;
+    font-style: italic;
+}
+
+.vision-clip-manage-btn {
+    flex-shrink: 0;
+    padding: 6px 10px;
+    font-size: 0.72rem;
+    white-space: nowrap;
+}
+
 .vision-textarea {
     width: 100%;
     padding: 10px;
@@ -770,7 +864,16 @@ class FrameDetails
         
         <!-- Step 1: Input -->
         <div id="visionInputSection">
-            <div class="vision-label">Instructions for AI:</div>
+            <div class="vision-label">CV Model:</div>
+            <select id="visionModelSelect" class="vision-model-select"></select>
+
+            <div class="vision-label" style="margin-top:10px;">Clipboard:</div>
+            <div class="vision-clipboard-row">
+                <div class="vision-clipboard-chips" id="visionClipboardChips"><span class="vision-chips-empty">loading…</span></div>
+                <button type="button" class="vision-btn-ui vision-clip-manage-btn" onclick="openVisionClipboardManager()" title="Manage Clipboard">📋 Manage</button>
+            </div>
+
+            <div class="vision-label" style="margin-top:10px;">Instructions for AI:</div>
             <textarea id="visionPromptInput" class="vision-textarea">Describe this image in a comma-separated format suitable for Stable Diffusion prompting. Describe every detail. Focus on visual elements, style, lighting, and composition. Do not include introductory text.</textarea>
             <div class="vision-actions">
                 <button class="vision-btn-ui primary" onclick="submitVisionRequest()">Generate Description</button>
@@ -796,6 +899,118 @@ class FrameDetails
 </div>
 
 <script>
+// ─────────────────────────────────────────────────────────────────────────────
+// CV Models Fetcher (Pollinations TEXT models — used for computer vision here,
+// NOT the /image/models endpoint used elsewhere for image generation).
+// ─────────────────────────────────────────────────────────────────────────────
+const VisionModelsAPI = (() => {
+    let _models = [];
+    async function getModels() {
+        if (_models.length > 0) return _models;
+        try {
+            const r = await fetch('https://gen.pollinations.ai/text/models');
+            const d = await r.json();
+            _models = d.map(x => x.name);
+        } catch(e) {
+            console.error('CV model fetch failed', e);
+            _models = ['openai-fast', 'openai']; // fallback
+        }
+        return _models;
+    }
+    return { getModels };
+})();
+
+async function populateVisionModelSelect() {
+    const sel = document.getElementById('visionModelSelect');
+    if (!sel) return;
+    const preferredDefault = 'openai-fast';
+    const LS_KEY = 'view_frame_cv_last_model';
+    let models = await VisionModelsAPI.getModels();
+    if (!models || !models.length) models = ['openai-fast', 'openai'];
+
+    sel.innerHTML = '';
+    models.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        sel.appendChild(opt);
+    });
+
+    // Preselect the last model the user actually chose (if it's still in the
+    // fetched list), so switching models is opt-in rather than the default.
+    // Falls back to 'openai-fast' (matches PyApiCVService's own default), then
+    // to whatever is first in the fetched/fallback list.
+    let lastUsed = null;
+    try { lastUsed = localStorage.getItem(LS_KEY); } catch(e) {}
+
+    if (lastUsed && models.includes(lastUsed)) {
+        sel.value = lastUsed;
+    } else if (models.includes(preferredDefault)) {
+        sel.value = preferredDefault;
+    }
+
+    // Persist on every change so the next modal open remembers it.
+    sel.onchange = function() {
+        try { localStorage.setItem(LS_KEY, sel.value); } catch(e) {}
+    };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Clipboard integration (same pattern as enhanimaticism.php's clipboard chips),
+// scoped to its own view_area so CV prompts don't mix with other tools' clipboards.
+// ─────────────────────────────────────────────────────────────────────────────
+const VISION_CB_AREA = 'view_frame_cv';
+
+function loadVisionClipboardChips() {
+    fetch('clipboard_manager.php?api_action=cb_get&view_area=' + VISION_CB_AREA)
+        .then(r => r.json())
+        .then(res => { if (res.status === 'success') renderVisionClipboardChips(res.data); })
+        .catch(() => {});
+}
+
+function renderVisionClipboardChips(items) {
+    const container = document.getElementById('visionClipboardChips');
+    if (!container) return;
+    container.innerHTML = '';
+    if (!items || items.length === 0) {
+        container.innerHTML = '<span class="vision-chips-empty">Clipboard empty</span>';
+        return;
+    }
+    items.forEach(item => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'vision-chip' + (parseInt(item.pinned) ? ' pinned' : '');
+        let displayTxt = item.label ? item.label : item.content;
+        btn.textContent = displayTxt.length > 28 ? displayTxt.slice(0, 27) + '…' : displayTxt;
+        btn.title = item.content;
+        btn.onclick = () => { document.getElementById('visionPromptInput').value = item.content; };
+        container.appendChild(btn);
+    });
+}
+
+window.openVisionClipboardManager = function() {
+    const url = `clipboard_manager.php?view_area=${VISION_CB_AREA}`;
+    const modal  = document.getElementById('frameDetailsModal');
+    const iframe = document.getElementById('frameDetailsIframe');
+    const loader = document.getElementById('ieLoadingOverlay');
+    const pickerFooter = document.getElementById('iePickerFooter');
+    if (modal && iframe) {
+        if (pickerFooter) pickerFooter.style.display = 'none';
+        if (loader) { loader.style.display = 'flex'; const p = loader.querySelector('p'); if (p) p.textContent = 'Loading Clipboard...'; }
+        iframe.style.opacity = '0';
+        iframe.src = url;
+        modal.style.display = 'flex';
+    } else {
+        window.open(url, '_blank', 'width=400,height=600');
+    }
+}
+
+window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'clipboard_updated' && e.data.view_area === VISION_CB_AREA) {
+        renderVisionClipboardChips(e.data.items);
+    }
+});
+
 // Global UI Functions
 window.closeVisionModal = function() {
     $('#visionModal').fadeOut(200);
@@ -816,6 +1031,7 @@ window.copyVisionResult = function() {
     }
 }
 
+
 // Global Request Function
 window.submitVisionRequest = function() {
     // UI Transitions
@@ -824,6 +1040,10 @@ window.submitVisionRequest = function() {
     $('#visionResultSection').slideUp(200); // Hide previous if any
 
     const instruction = $('#visionPromptInput').val();
+    const selectedModel = $('#visionModelSelect').val() || '';
+    if (selectedModel) {
+        try { localStorage.setItem('view_frame_cv_last_model', selectedModel); } catch(e) {}
+    }
 
     $.ajax({
         url: 'view_frame.php', 
@@ -831,14 +1051,15 @@ window.submitVisionRequest = function() {
         data: {
             action: 'analyze_frame',
             frame_id: <?= $frameId ?>,
-            prompt: instruction
+            prompt: instruction,
+            model: selectedModel
         },
         dataType: 'json',
         success: function(response) {
             $('#visionLoading').hide();
             $('#visionInputSection button').prop('disabled', false).css('opacity', 1);
 
-            if (response.status === 'success' && response.data && response.data.description) {
+            if (response.status === 'success' && response.data && response.data.description !== undefined) {
                 let raw = response.data.description;
                 
                 // Safety Fix: Check if response is Object/Array and stringify it
@@ -847,14 +1068,20 @@ window.submitVisionRequest = function() {
                     raw = JSON.stringify(raw, null, 2);
                 }
 
-                // Cleanup
-                raw = raw.replace(/```[\s\S]*?```/g, "");
+                // Fixed Regex: Allow extracting contents from within code blocks
+                raw = raw.replace(/```(json|text|markdown)?/gi, "").replace(/```/g, "");
                 raw = raw.replace(/\*\*/g, "");
-                raw = raw.replace(/^(Here is|Sure|I can|Certainly).*?:/i, "");
+                raw = raw.replace(/^(Here is|Sure|I can|Certainly|The image|This image).*?:/is, "");
                 raw = raw.replace(/\s+/g, ' ').trim();
                 
-                $('#visionResultText').val(raw);
-                $('#visionResultSection').slideDown(200);
+                if (raw.length === 0) {
+                    let msg = "API returned an empty description.";
+                    if(window.Toast) Toast.show("Analysis failed: " + msg, "error");
+                    else alert("Error: " + msg);
+                } else {
+                    $('#visionResultText').val(raw);
+                    $('#visionResultSection').slideDown(200);
+                }
             } else {
                 let msg = response.message || "Unknown error";
                 if(window.Toast) Toast.show("Analysis failed: " + msg, "error");
@@ -890,6 +1117,10 @@ function initializeFrameDetailsScripts() {
         $('#visionResultSection').hide();
         $('#visionInputSection button').prop('disabled', false).css('opacity', 1);
         $('#visionModal').fadeIn(200);
+        // Populate model list + clipboard chips each time the modal opens
+        // (cheap no-op if already loaded; keeps chips fresh after external edits)
+        populateVisionModelSelect();
+        loadVisionClipboardChips();
     });
     
     // Background click close

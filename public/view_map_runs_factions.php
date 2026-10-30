@@ -614,7 +614,7 @@ function getPaginationUrl($page, $search) {
 
     <!-- Header Section -->
     <div class="header-compact">
-        <a href="sql_crud_factions.php" class="entity-icon-link" title="factions CRUD"><?php echo $iconChar; ?></a>
+        <a href="cruzz.php?entity=factions" class="entity-icon-link" title="factions CRUD"><?php echo $iconChar; ?></a>
         <a href="gallery_factions_nu.php" class="entity-icon-link" title="factions Gallery">▦</a>
         <h2 style="margin:0; font-size:1.2rem; color:var(--text);">factions Map Runs</h2>
         <?php if ($schedulerId): ?>
@@ -719,7 +719,7 @@ function getPaginationUrl($page, $search) {
                                            data-pswp-width="1024"
                                            data-pswp-height="1024"
                                            target="_blank">
-                                            <img src="<?= htmlspecialchars($img_path) ?>" alt="<?= htmlspecialchars($frame['frame_name']) ?>" loading="lazy">
+                                            <img src="<?= htmlspecialchars($img_path) ?>" alt="<?= htmlspecialchars($frame['frame_name']) ?>" loading="lazy" onload="this.parentElement.dataset.pswpWidth = this.naturalWidth; this.parentElement.dataset.pswpHeight = this.naturalHeight;">
                                         </a>
                                     </div>
 
@@ -841,7 +841,9 @@ function getPaginationUrl($page, $search) {
         const lightbox = new PhotoSwipeLightbox({
             gallery: '.pswp-gallery',
             children: '.pswp-gallery-item',
-            pswpModule: () => import('https://cdn.jsdelivr.net/npm/photoswipe@5/dist/photoswipe.esm.js')
+            pswpModule: () => import('https://cdn.jsdelivr.net/npm/photoswipe@5/dist/photoswipe.esm.js'),
+            initialZoomLevel: 'fit',
+            secondaryZoomLevel: 1
         });
         lightbox.init();
     </script>

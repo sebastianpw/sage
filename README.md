@@ -1,4 +1,4 @@
-# SAGE 2.0 BETA
+# SAGE 3 UUKI
 
 [![Built with Pollinations](https://img.shields.io/badge/Built%20with-Pollinations-8a2be2?style=for-the-badge&logo=data:image/png;base64,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&logoColor=white&labelColor=6a0dad)](https://pollinations.ai)
 
@@ -13,13 +13,33 @@
 
 > Open-source multimedia AI orchestration platform for creative storytelling — runs fully on Android via Termux
 
-**SAGE** (Storyboard Animation Generation Environment) is an open-source multimedia AI orchestration and automation platform. It merges creative generation, development assistance, and intelligent orchestration under one cohesive system — fully runnable in Termux on Android.
+**SAGE** (Story Architecture & Generative Engine / Storyboard Animation Generation Environment) is an open-source multimedia AI orchestration and production automation platform. It unites narrative architecture, generative media creation, studio pipeline execution, and autonomous database interaction into one portable, mobile-first system designed to execute high-concept creative series entirely on an Android/Termux device.
 
+---
+
+## 🌟 What's New in SAGE 3 (UUKI Release)
+
+The **SAGE 3 UUKI** milestone transforms SAGE from a dense, complex workstation into a lean, highly adaptable production cockpit. Designed for solo-showrunners operating in responsive mobile and desktop environments alike, SAGE 3 introduces conversational database agents and an ultra-lean, profile-driven dashboard that tailors your workspace strictly to the task at hand.
+
+### 🎯 Lean, Profile-Driven Dashboard (`sage.php`)
+* **Task-Centric Custom Cockpits:** Switch between specialized, distraction-free dashboards (e.g., *Comic Production*, *Worldbuilding & Lore*, *Editorial*, or *Core Engine Operations*) with a single tap.
+* **Per-Profile State Persistence:** All shortcuts, custom tabs, visibility toggles, and Control Deck task runners are stored in isolated profile configurations in `sage_settings`, allowing unlimited customized production views without cluttering the global interface.
+
+### 💬 Conversational AI & Database Chat Interfaces (`chatty.php`)
+* **Direct Natural-Language DB Interaction:** Talk directly to your production database through interactive AI chat interfaces. The AI can inspect schema, query entities, curate concepts, surface unlinked assets, and execute transactional updates across your tables autonomously.
+* **Context-Grounding with Lore & Graph RAG:** Chat UIs bridge directly into ChromaDB vector collections, Princeton WordNet synsets, and Knowledge Graph nodes to provide instant, canon-compliant answers and narrative revisions during drafting sessions.
+
+### 🌀 Integrated Native Control Deck (Scheduler Runner)
+* **Native Console:** The control deck is now baked directly into the primary SAGE dashboard tab for lightning-fast generation.
+* **Buttery Drag-and-Drop Reordering:** Reorder task wrapper buttons using dedicated touch drag handles (`⣿`)
+* **Reactive Real-Time Log Console:** Expandable and auto-scrolling terminal drawer that watches output logs, auto-expands on execution, and streams execution telemetry from bash daemon scripts.
+* **Independent Pre-Seeded Wrappers:** Pre-configured with essential production triggers (Generative Sketched, Composites, Genhances, Workers, Diverse queues)
+ 
 ---
 
 ## ⚡ Quick Summary
 
-**THIS IS A BETA RELEASE. Only minor bugfixes left!**
+**THIS IS A PRODUCTION-READY RELEASE.**
 TRY AT YOUR OWN RISK.
 
 **Install in GitHub Codespaces terminal:**
@@ -55,6 +75,8 @@ Please like, share, subscribe...
 
 Rather than bridging disparate software, SAGE integrates the entire creative lifecycle: from prompting a world-building Knowledge Graph, to assembling beats in a virtual writer's room, generating thousands of frames, and bouncing composited video and multitrack audio natively in the browser.
 
+---
+
 ## 🚀 Core Subsystems
 
 ### 🏛️ Story Architecture & Lore
@@ -83,7 +105,8 @@ Rather than bridging disparate software, SAGE integrates the entire creative lif
 * **AnimeJSeq Viewer:** SAGE's cinematic playback interface for narrative sequences. A full-screen, scroll-driven gallery that presents generated sequences as immersive, animated visual experiences, complete with ambient blurred backgrounds and self-contained ZIP export modes.
 
 ### 🎨 Generative Asset Production
-* **Entity Gallery System:** A platform-wide architectural convention managing the CRUD, visual browsing, and batch-run review for every visual and narrative entity in the pipeline (Characters, Factions, Vehicles, Spawns, etc.), complete with PhotoSwipe galleries and GearMenu integrations.
+* **Creatives & Entities Cockpit:** A consolidated, high-density command deck linking all core production models (Sketches, Animatics, Generatives, Composites, Meshes, Blueprints, ControlNets) and World Entities (Characters, Factions, Poses, Anima Poses, Expressions, Animas, Locations, Backgrounds, Artifacts, Vehicles) with instant CRUD, NHX enhancement, and trigger actions.
+* **Entity Gallery System:** A platform-wide architectural convention managing the CRUD, visual browsing, and batch-run review for every visual and narrative entity in the pipeline, complete with PhotoSwipe galleries and GearMenu integrations.
 * **Entity Viewer:** A universal asset gallery and inspection interface. Provides a paginated, multi-mode browser for viewing frames across all major production entity types, grouped by entity or by generation batch (Map Run).
 * **LocaHub:** A unified location discovery and consolidation browser. Surfaces location entities scattered across five distinct data sources (canonical tables, Fuzz candidates, KG nodes, AG nodes, sketch ranges) and presents them in a single browsable interface for batch deduplication and migration into the core entity layer.
 * **Mass Import Tools:** SAGE's bulk ingestion layer. Provides a suite of dedicated views and drag-and-drop utilities for moving large quantities of external assets (images to spawns, audio to dialogue, video to animatics) into the relational production pipeline in a single operation.
@@ -138,7 +161,9 @@ Rather than bridging disparate software, SAGE integrates the entire creative lif
 * **Chroma Collections Admin & ChromaTool:** Vector database administration interfaces. Manage the registry of ChromaDB collection definitions and provide direct CRUD access to the embeddings that power SAGE's semantic search.
 * **Backup Forge:** The platform's infrastructure protection layer. A browser-based control panel for configuring, triggering, and monitoring the full backup pipeline, pushing media archives, database dumps, and codebase snapshots to remote destinations over SCP with SHA-256 verification.
 * **Recipe Forge:** A code-dump provenance and registry browser. Tracks every invocation of the platform's context-bundling scripts, recording exact file inclusions, content hashes, and CLI reproduction commands to ensure any AI prompt session can be precisely audited and recreated.
-* **Forge Tool, Clipboard & Control Deck:** A persistent, platform-wide floating action button (FAB) injecting a cross-module productivity layer. Includes a globally scoped clipboard manager and a curated launcher grid for triggering scheduled tasks with a single tap.
+* **Forge Tool & Global Clipboard:** A persistent, platform-wide floating action button (FAB) providing a globally scoped clipboard manager and dynamic cross-tool shortcuts on any page across the entire production suite.
+
+---
 
 ## 🛠️ Tech Stack & Architecture
 
@@ -151,6 +176,8 @@ SAGE is built for aggressive portability and offline-first resilience:
   * **AI/Inference:** Background removal (u2net/birefnet), ControlNet maps, Voice Cloning (so-vits-svc, Qwen3-TTS), and local Ollama daemon routing.
   * **RAG/Embeddings:** ChromaDB lifecycle management, fast embedding generation (MiniLM/CLIP), and O(N) TF-IDF sparse clustering for the Fuzz Forge.
 * **AI Integration:** Unified provider layer routing to Pollinations, Groq, Cerebras, Google Gemini, Mistral, and Cohere.
+
+---
 
 ## 📜 Notice
 
@@ -202,5 +229,3 @@ If you find SAGE useful, please consider:
 ---
 
 **Made with ❤️ for the creative coding community**
-
-

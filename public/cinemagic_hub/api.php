@@ -15,7 +15,7 @@ $spw = \App\Core\SpwBase::getInstance();
 $publicPathAbs = $spw->getPublicPath();
 
 $action = $_POST['action'] ?? ($_GET['action'] ?? '');
-$previewActions = ['preview_series', 'preview_episode', 'serve_image', 'download_local_sitemap_json', 'download_global_sitemap_xml', 'download_pdf'];
+$previewActions = ['preview_series', 'preview_episode', 'preview_coverflow', 'serve_image', 'download_local_sitemap_json', 'download_global_sitemap_xml', 'download_pdf'];
 
 if ($action !== 'export_series_zip' && !in_array($action, $previewActions)) {
     header('Content-Type: application/json');
@@ -75,6 +75,15 @@ try {
         header('Content-Disposition: attachment; filename="' . basename($abs) . '"');
         header('Content-Length: ' . filesize($abs));
         readfile($abs);
+        exit;
+    }
+
+    if ($action === 'preview_coverflow') {
+        $seriesId    = (int)($_REQUEST['series_id'] ?? 0);
+        $cinemagicId = (int)($_REQUEST['cinemagic_id'] ?? 0);
+        $lang        = $_REQUEST['lang'] ?? 'en';
+        header('Content-Type: text/html');
+        echo $hub->renderCoverflowHtml($seriesId, $cinemagicId, $lang, true);
         exit;
     }
 

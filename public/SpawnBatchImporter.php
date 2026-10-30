@@ -1,4 +1,5 @@
 <?php
+// filepath: public/SpawnBatchImporter.php
 
 class SpawnBatchImporter
 {
@@ -22,18 +23,18 @@ class SpawnBatchImporter
         require __DIR__ . '/load_root.php'; // must define PROJECT_ROOT and FRAMES_ROOT
 
         // Directories
-        $this->importDir   = PROJECT_ROOT . '/public/import/frames_2_spawns/';
-        $this->framesDir   = FRAMES_ROOT . '/'; // absolute, scheduler-safe
+        $this->importDir    = PROJECT_ROOT . '/public/import/frames_2_spawns/';
+        $this->framesDir    = FRAMES_ROOT . '/'; // absolute, scheduler-safe
         $this->framesDirRel = str_replace(PROJECT_ROOT . '/public/', '', FRAMES_ROOT); // dynamic relative
 
         $this->spw = \App\Core\SpwBase::getInstance();
 
         $this->spw->getLogger()->debug([
-            'action'      => 'SpawnBatchImporter::__construct',
-            'importDir'   => $this->importDir,
-            'framesDir'   => $this->framesDir,
-            'framesDirRel'=> $this->framesDirRel,
-            'spawnTypeId' => $this->spawnTypeId
+            'action'       => 'SpawnBatchImporter::__construct',
+            'importDir'    => $this->importDir,
+            'framesDir'    => $this->framesDir,
+            'framesDirRel' => $this->framesDirRel,
+            'spawnTypeId'  => $this->spawnTypeId
         ]);
 
         // Ensure frames directory exists
@@ -75,32 +76,46 @@ class SpawnBatchImporter
             'spawnTypeId' => $this->spawnTypeId
         ]);
 
+        // Create ONE shared map run for the whole batch
+        $mapRunEntityType = 'spawns';
+        $mapRunNote = 'Mass import run for spawn batch import (' . count($selectedFiles) . ' files)';
+        $stmt = $this->mysqli->prepare(
+            "INSERT INTO map_runs (entity_type, note, parent_map_run_id)
+             VALUES (?, ?, NULL)"
+        );
+        $stmt->bind_param('ss', $mapRunEntityType, $mapRunNote);
+        $stmt->execute();
+        $mapRunId = $stmt->insert_id;
+        $stmt->close();
+
         // Prepare run directory (done/00001)
         $runDir = $this->getNextImportRunDir();
         $this->spw->getLogger()->debug([
-            'action' => 'createdRunDir',
-            'runDir' => $runDir
+            'action'  => 'createdRunDir',
+            'runDir'  => $runDir,
+            'mapRunId'=> $mapRunId
         ]);
 
         foreach ($selectedFiles as $file) {
             $filename = basename($file);
             $this->spw->getLogger()->debug([
-                'action' => 'processingFileStart',
-                'file' => $file,
+                'action'   => 'processingFileStart',
+                'file'     => $file,
                 'basename' => $filename
             ]);
 
             $spawnName = $this->uniqueSpawnName(pathinfo($filename, PATHINFO_FILENAME));
             $spawnDesc = '';
 
-            $result = $this->importSingle($file, $spawnName, $spawnDesc);
+            $result = $this->importSingle($file, $spawnName, $spawnDesc, $mapRunId);
 
             $this->spw->getLogger()->debug([
-                'action' => 'importSingleResult',
-                'file' => $file,
-                'spawnName' => $spawnName,
-                'spawnDesc' => $spawnDesc,
-                'result' => $result
+                'action'     => 'importSingleResult',
+                'file'       => $file,
+                'spawnName'  => $spawnName,
+                'spawnDesc'  => $spawnDesc,
+                'mapRunId'   => $mapRunId,
+                'result'     => $result
             ]);
 
             $results[] = strip_tags($result);
@@ -140,22 +155,26 @@ class SpawnBatchImporter
         return $exists;
     }
 
-    private function importSingle(string $filePath, string $spawnName, string $spawnDesc): string
+    private function importSingle(string $filePath, string $spawnName, string $spawnDesc, int $mapRunId): string
     {
-        $frameBase = $this->nextFrameBasenameFromDB();
-        $relativeFilename = $this->framesDirRel . '/' . $frameBase . '.jpg';
-        $absolutePath = $this->framesDir . $frameBase . '.jpg';
+        $filename = basename($filePath);
 
         $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-        $okConvert = $this->convertToJpg($filePath, $ext, $absolutePath);
+        if ($ext === 'jpeg') {
+            $ext = 'jpg';
+        }
 
-        if (!$okConvert) {
-            return $this->err("Failed to convert $filePath to JPG.");
+        $frameBase = $this->nextFrameBasenameFromDB();
+        $relativeFilename = $this->framesDirRel . '/' . $frameBase . '.' . $ext;
+        $absolutePath = $this->framesDir . $frameBase . '.' . $ext;
+
+        if (!copy($filePath, $absolutePath)) {
+            return $this->err("Failed to copy $filePath to frames directory.");
         }
 
         $this->mysqli->begin_transaction();
         try {
-            // --- spawns (now with spawn_type_id) ---
+            // --- spawns ---
             $stmt = $this->mysqli->prepare(
                 "INSERT INTO spawns (name, description, spawn_type_id) VALUES (?, ?, ?)"
             );
@@ -168,10 +187,20 @@ class SpawnBatchImporter
             $frameName = $frameBase;
             $prompt = $spawnDesc;
             $entityType = 'spawns';
+
             $stmt = $this->mysqli->prepare(
-                "INSERT INTO frames (name, filename, prompt, entity_type) VALUES (?, ?, ?, ?)"
+                "INSERT INTO frames (name, filename, prompt, entity_type, entity_id, map_run_id)
+                 VALUES (?, ?, ?, ?, ?, ?)"
             );
-            $stmt->bind_param('ssss', $frameName, $relativeFilename, $prompt, $entityType);
+            $stmt->bind_param(
+                'ssssii',
+                $frameName,
+                $relativeFilename,
+                $prompt,
+                $entityType,
+                $spawnId,
+                $mapRunId
+            );
             $stmt->execute();
             $frameId = $stmt->insert_id;
             $stmt->close();
@@ -188,7 +217,9 @@ class SpawnBatchImporter
 
         } catch (\Exception $e) {
             $this->mysqli->rollback();
-            if (is_file($absolutePath)) @unlink($absolutePath);
+            if (is_file($absolutePath)) {
+                @unlink($absolutePath);
+            }
             return $this->err("Failed to import '$spawnName': " . $e->getMessage());
         }
     }
@@ -211,42 +242,6 @@ class SpawnBatchImporter
         return 'frame' . str_pad((string)$num, 7, '0', STR_PAD_LEFT);
     }
 
-    private function convertToJpg(string $srcPath, string $ext, string $targetPath): bool
-    {
-        $info = @getimagesize($srcPath);
-        $mime = $info['mime'] ?? null;
-
-        if ($mime === 'image/jpeg' || $ext === 'jpg' || $ext === 'jpeg') {
-            return copy($srcPath, $targetPath);
-        }
-
-        $create = null;
-        if ($mime === 'image/png' || $ext === 'png') {
-            $create = 'imagecreatefrompng';
-        } elseif ($mime === 'image/gif' || $ext === 'gif') {
-            $create = 'imagecreatefromgif';
-        } elseif (($mime === 'image/webp' || $ext === 'webp') && function_exists('imagecreatefromwebp')) {
-            $create = 'imagecreatefromwebp';
-        } else {
-            return false;
-        }
-
-        $src = @$create($srcPath);
-        if (!$src) return false;
-
-        $w = imagesx($src);
-        $h = imagesy($src);
-        $dst = imagecreatetruecolor($w, $h);
-        $white = imagecolorallocate($dst, 255, 255, 255);
-        imagefilledrectangle($dst, 0, 0, $w, $h, $white);
-        imagecopy($dst, $src, 0, 0, 0, 0, $w, $h);
-        $ok = imagejpeg($dst, $targetPath, 90);
-        imagedestroy($src);
-        imagedestroy($dst);
-
-        return $ok;
-    }
-
     private function getNextImportRunDir(): string
     {
         $doneBase = $this->importDir . 'done/';
@@ -256,10 +251,14 @@ class SpawnBatchImporter
 
         $max = 0;
         foreach (scandir($doneBase) as $item) {
-            if ($item === '.' || $item === '..') continue;
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
             if (is_dir($doneBase . $item) && preg_match('/^\d{5}$/', $item)) {
                 $val = (int)$item;
-                if ($val > $max) $max = $val;
+                if ($val > $max) {
+                    $max = $val;
+                }
             }
         }
 

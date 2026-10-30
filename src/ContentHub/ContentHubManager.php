@@ -435,15 +435,6 @@ HTML;
         // ── Published magazine series + Highlights ──────────────────────────────────────
         $magazineCardsHtml = '';
         
-        
-        
-        
-        
-        
-        
-        
-        
-       
         try {
             // 1. HIGHLIGHTS
             $hlStmt = $this->pdo->prepare("SELECT * FROM content_hub_posts WHERE post_type = 'magazine_highlight' AND status = 'published' ORDER BY sort_order DESC, scheduled_at DESC, created_at DESC LIMIT 5");
@@ -619,22 +610,6 @@ HTML;
 HTML;
             }
         } catch (\Throwable $e) {}
-
-        
-        
-        
-        
-
-
-        
-        
-        
-        
-        
-        
-        
-        
-        
         
         
         
@@ -987,6 +962,21 @@ HTML;
         }
     }
     
+    private function parseMarkdown(string $text): string {
+        $text = htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+        // Bold
+        $text = preg_replace('/\*\*(.+?)\*\*/s', '<strong>$1</strong>', $text);
+        $text = preg_replace('/__(.+?)__/s', '<strong>$1</strong>', $text);
+        // Italic
+        $text = preg_replace('/\*(.+?)\*/s', '<em>$1</em>', $text);
+        $text = preg_replace('/_(.+?)_/s', '<em>$1</em>', $text);
+        // Bullet Lists (Convert to HTML list)
+        $text = preg_replace('/^[\-\*]\s+(.+)$/m', '<ul><li>$1</li></ul>', $text);
+        // Clean up adjacent ul tags
+        $text = preg_replace('/<\/ul>\s*<ul>/', '', $text);
+        
+        return nl2br($text);
+    }
     
    public function renderPostHtml(array $post, bool $forStaticExport = false, string $urlPrefix = '', bool $makeLocalRelative = false): string {
         global $spw;

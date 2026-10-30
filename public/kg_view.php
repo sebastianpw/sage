@@ -247,6 +247,47 @@ body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,
 }
 .kg-meta-bar input[type="text"] { flex:1; min-width:120px; }
 
+/* Node Tabs & Continuity Editor */
+.kg-node-tabs {
+    display: flex; background: var(--card); border-bottom: 1px solid var(--border);
+}
+.kg-ntab {
+    padding: 8px 16px; font-size: 0.85rem; font-weight: 600; color: var(--text-muted);
+    background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer;
+}
+.kg-ntab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.kg-tab-content { display: none; flex: 1; flex-direction: column; min-height: 0; overflow-y: auto; }
+.kg-tab-content.active { display: flex; }
+
+.cont-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+.cont-field { display: flex; flex-direction: column; gap: 4px; }
+.cont-field label { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.cont-field input, .cont-field select, .cont-field textarea {
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 0.85rem; font-family: inherit;
+}
+.cont-field textarea { resize: vertical; min-height: 60px; }
+
+.ms-list { display: flex; flex-direction: column; gap: 10px; }
+.ms-row {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px;
+    display: grid; grid-template-columns: 80px 120px 120px 1fr 1fr 30px; gap: 10px; align-items: start;
+}
+.ms-row input, .ms-row select, .ms-row textarea {
+    width: 100%; padding: 4px 8px; font-size: 0.8rem; border: 1px solid var(--border); border-radius: 4px; background: var(--card); color: var(--text);
+}
+.ms-row textarea { min-height: 40px; resize: vertical; }
+.ms-remove {
+    background: none; border: none; color: var(--red); cursor: pointer; padding: 4px; opacity: 0.6; transition: opacity 0.2s;
+}
+.ms-remove:hover { opacity: 1; }
+
+.timeline-table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 0.85rem; }
+.timeline-table th, .timeline-table td { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 6px 10px; text-align: center; white-space: nowrap; }
+.timeline-table th { background: var(--bg); position: sticky; top: 0; z-index: 10; border-top: 1px solid var(--border); }
+.timeline-table th.char-name { text-align: left; left: 0; z-index: 11; border-left: 1px solid var(--border); }
+.timeline-table td.char-name { text-align: left; position: sticky; left: 0; background: var(--card); z-index: 9; border-left: 1px solid var(--border); font-weight: 600; }
+.tsym { font-size: 1.1rem; }
+
 #kg-editor {
     flex: 1;
     min-height: 0;
@@ -803,8 +844,6 @@ iframe.kg-frame-viewer { width: 100%; height: 100%; border: none; }
 #kg-export-btn { opacity: 0.5; }
 #kg-import-btn { opacity: 0.5; }
 
-#kg-editor { max-height: 55vh; }
-
 /* ── Spinner for TTS ── */
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
@@ -1236,6 +1275,11 @@ iframe.kg-frame-viewer { width: 100%; height: 100%; border: none; }
             </div>
             <audio id="kg-tts-audio" style="display:none;" onended="resetNodeTtsUI()"></audio>
 
+            <!-- Timeline button -->
+            <button class="btn btn-ghost btn-sm" onclick="openTimelineMatrix()" title="Timeline Matrix">
+                <i class="bi bi-calendar-range"></i> Timeline
+            </button>
+
             <!-- ── Link to Graph Visualizer ── -->
             <a href="kg_graph.php" class="btn btn-ghost btn-sm" title="Open Graph Visualizer">
                 <i class="bi bi-diagram-3"></i> Graph View
@@ -1294,7 +1338,72 @@ iframe.kg-frame-viewer { width: 100%; height: 100%; border: none; }
                     </select>
                 </div>
 
-                <div id="kg-editor"></div>
+                <div class="kg-node-tabs">
+                    <button class="kg-ntab active" id="tab-btn-lore" onclick="switchNodeTab('lore')">Lore</button>
+                    <button class="kg-ntab" id="tab-btn-continuity" onclick="switchNodeTab('continuity')">Continuity & Timeline</button>
+                </div>
+
+                <div id="tab-lore" class="kg-tab-content active">
+                    <div id="kg-editor"></div>
+                </div>
+
+                <div id="tab-continuity" class="kg-tab-content" style="padding: 16px;">
+                    <div class="cont-grid">
+                        <div class="cont-field">
+                            <label>Tag / Status</label>
+                            <select id="contTag">
+                                <option value="EXTRA">EXTRA - Visual only</option>
+                                <option value="TAGGED SUPPORT">TAGGED SUPPORT - Named, basic state</option>
+                                <option value="RECURRING">RECURRING - Expected to return</option>
+                                <option value="MAJOR">MAJOR - Planned relationships</option>
+                                <option value="CORE">CORE - Continuous</option>
+                            </select>
+                        </div>
+                        <div class="cont-field">
+                            <label>Current Faction</label>
+                            <input type="text" id="contFaction">
+                        </div>
+                        <div class="cont-field">
+                            <label>Current Attitude</label>
+                            <input type="text" id="contAttitude">
+                        </div>
+                        <div class="cont-field">
+                            <label>Current Location</label>
+                            <input type="text" id="contLocation">
+                        </div>
+                        <div class="cont-field">
+                            <label>Knows</label>
+                            <textarea id="contKnows"></textarea>
+                        </div>
+                        <div class="cont-field">
+                            <label>Does NOT Know</label>
+                            <textarea id="contNotKnows"></textarea>
+                        </div>
+                        <div class="cont-field">
+                            <label>Open Hooks</label>
+                            <textarea id="contHooks"></textarea>
+                        </div>
+                        <div class="cont-field">
+                            <div style="display:flex; gap:10px;">
+                                <div style="flex:1;"><label>Last Seen</label><input type="text" id="contLastSeen" style="width:100%"></div>
+                                <div style="flex:1;"><label>Pref Return Win</label><input type="text" id="contPrefWin" style="width:100%"></div>
+                                <div style="flex:1;"><label>Max Absence</label><input type="text" id="contMaxAbs" style="width:100%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr style="border:0; border-top:1px solid var(--border); margin: 10px 0 20px;">
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h4 style="margin: 0; font-size: 0.95rem;">Temporal Milestones</h4>
+                        <button class="btn btn-ghost btn-sm" onclick="addMilestoneRow()"><i class="bi bi-plus"></i> Add Milestone</button>
+                    </div>
+
+                    <div class="ms-list" id="milestonesList">
+                        <!-- Rows added via JS -->
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
@@ -1350,6 +1459,18 @@ iframe.kg-frame-viewer { width: 100%; height: 100%; border: none; }
             <div class="swiper-button-prev"></div>
         </div>
         <textarea class="kg-gallery-desc" id="kgGalleryDesc" readonly placeholder="Sketch description…"></textarea>
+    </div>
+</div>
+
+<!-- ═══════ TIMELINE MATRIX MODAL ═══════ -->
+<div class="kg-modal-bg" id="modalTimeline" style="z-index: 100000; align-items: flex-start; padding-top: 30px;">
+    <div class="kg-modal" style="width: 95vw; max-width: 1400px; height: 90vh; max-height: 90vh; display: flex; flex-direction: column; padding: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;">
+            <h3 style="margin: 0;"><i class="bi bi-calendar-range"></i> Character × Page Matrix</h3>
+            <button class="btn btn-ghost btn-sm" onclick="hideModal('modalTimeline')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div id="timelineMatrixContainer" style="flex: 1; overflow: auto; background: var(--bg); position: relative;">
+        </div>
     </div>
 </div>
 
@@ -1640,6 +1761,114 @@ document.getElementById('kg-curated-modal-bg').addEventListener('click', functio
 });
 
 // ═══════════════════════════════════════════════
+// TIMELINE MATRIX
+// ═══════════════════════════════════════════════
+function openTimelineMatrix() {
+    document.getElementById('modalTimeline').style.display = 'flex';
+    document.getElementById('timelineMatrixContainer').innerHTML = '<div style="padding:20px;text-align:center;">Loading...</div>';
+    
+    fetch('kg_api.php?action=get_timeline_matrix')
+        .then(r => r.json())
+        .then(res => {
+            if (!res.ok) throw new Error();
+            renderTimelineMatrix(res.matrix);
+        })
+        .catch(() => {
+            document.getElementById('timelineMatrixContainer').innerHTML = '<div style="padding:20px;text-align:center;color:red;">Error loading matrix.</div>';
+        });
+}
+
+function renderTimelineMatrix(data) {
+    if (!data || data.length === 0) {
+        document.getElementById('timelineMatrixContainer').innerHTML = '<div style="padding:20px;text-align:center;">No milestones found in any active characters.</div>';
+        return;
+    }
+    
+    // Extract unique pages
+    let pageSet = new Set();
+    data.forEach(char => {
+        char.milestones.forEach(m => {
+            if (m.page) pageSet.add(m.page);
+        });
+    });
+    
+    // Sort pages: try to extract numbers
+    let pages = Array.from(pageSet).sort((a, b) => {
+        let numA = parseInt(a.replace(/\D/g, '')) || 0;
+        let numB = parseInt(b.replace(/\D/g, '')) || 0;
+        if (numA !== numB) return numA - numB;
+        return a.localeCompare(b);
+    });
+    
+    // Sort characters by Tag Type (CORE -> EXTRA) then name
+    const tagOrder = { 'CORE': 1, 'MAJOR': 2, 'RECURRING': 3, 'TAGGED SUPPORT': 4, 'EXTRA': 5 };
+    data.sort((a, b) => {
+        let oA = tagOrder[a.tag_type] || 9;
+        let oB = tagOrder[b.tag_type] || 9;
+        if (oA !== oB) return oA - oB;
+        return a.name.localeCompare(b.name);
+    });
+    
+    let html = '<table class="timeline-table">';
+    html += '<thead><tr><th class="char-name">Character</th>';
+    pages.forEach(p => {
+        html += `<th>${escHtml(p)}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+    
+    data.forEach(char => {
+        // Map page -> symbols
+        let cellMap = {};
+        char.milestones.forEach(m => {
+            let p = m.page;
+            if (!p) return;
+            // Determine symbol
+            let w = m.weight;
+            let d = m.dimension;
+            let sym = '·';
+            if (w === 'MAJOR') sym = '█';
+            else if (w === 'PAYOFF' || d === 'PAID OFF') sym = '★';
+            else if (w === 'CONSEQUENCE') sym = '◆';
+            else if (w === 'RELATIONSHIP' || d === 'CHANGED') sym = '●';
+            else if (w === 'FUNCTIONAL' || d === 'ESTABLISHED') sym = '▲';
+            else if (w === 'CAMEO' || w === 'RECOGNITION' || d === 'INTRODUCED' || d === 'RETURNED') sym = '·';
+            
+            cellMap[p] = sym;
+        });
+        
+        let tagBadge = `<span style="font-size:0.65rem; color:var(--text-muted); display:block; font-weight:normal;">${char.tag_type}</span>`;
+        
+        html += `<tr><td class="char-name">${escHtml(char.name)}${tagBadge}</td>`;
+        pages.forEach(p => {
+            let sym = cellMap[p] || '';
+            let color = 'inherit';
+            if (sym === '█') color = 'var(--accent)';
+            if (sym === '★') color = 'var(--orange)';
+            if (sym === '●') color = '#ec4899';
+            if (sym === '◆') color = '#10b981';
+            html += `<td class="tsym" style="color:${color};">${sym}</td>`;
+        });
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    
+    // Add legend
+    let legend = `
+    <div style="padding: 10px 16px; background: var(--card); border-top: 1px solid var(--border); display: flex; gap: 15px; font-size: 0.8rem; color: var(--text-muted); position: sticky; bottom: 0;">
+        <strong>Legend:</strong>
+        <span><span style="color:var(--accent);">█</span> Major</span>
+        <span><span style="color:var(--orange);">★</span> Payoff</span>
+        <span><span style="color:#10b981;">◆</span> Consequence</span>
+        <span><span style="color:#ec4899;">●</span> Relationship / Changed</span>
+        <span>▲ Functional / Established</span>
+        <span>· Cameo / Intro / Return</span>
+    </div>
+    `;
+    
+    document.getElementById('timelineMatrixContainer').innerHTML = html + legend;
+}
+
+// ═══════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════
 let currentNodeId    = null;
@@ -1760,7 +1989,7 @@ applyTheme();
 new MutationObserver(() => applyTheme()).observe(document.documentElement, {attributes:true});
 
 // ═══════════════════════════════════════════════
-// EDITOR
+// EDITOR & TABS
 // ═══════════════════════════════════════════════
 function initEditor(initialMd = '') {
     const el = document.getElementById('kg-editor');
@@ -1780,6 +2009,68 @@ function initEditor(initialMd = '') {
         const text = e.clipboardData?.getData('text/plain');
         if (text) { e.preventDefault(); e.stopPropagation(); editor.insertText(text); }
     }, true);
+}
+
+function switchNodeTab(tab) {
+    document.getElementById('tab-btn-lore').classList.toggle('active', tab === 'lore');
+    document.getElementById('tab-btn-continuity').classList.toggle('active', tab === 'continuity');
+    document.getElementById('tab-lore').classList.toggle('active', tab === 'lore');
+    document.getElementById('tab-continuity').classList.toggle('active', tab === 'continuity');
+}
+
+function addMilestoneRow(data = null) {
+    const list = document.getElementById('milestonesList');
+    const div = document.createElement('div');
+    div.className = 'ms-row';
+    
+    const page = data ? escHtmlAttr(data.page) : '';
+    const dim = data ? data.dimension : '';
+    const w = data ? data.weight : '';
+    const event = data ? escHtmlAttr(data.event) : '';
+    const cons = data ? escHtmlAttr(data.consequence) : '';
+
+    div.innerHTML = `
+        <div>
+            <label style="font-size:0.7rem;color:var(--text-muted)">Page</label>
+            <input type="text" class="ms-page" value="${page}" placeholder="P12">
+        </div>
+        <div>
+            <label style="font-size:0.7rem;color:var(--text-muted)">Dimension</label>
+            <select class="ms-dim">
+                <option value="" ${dim===''?'selected':''}>-</option>
+                <option value="INTRODUCED" ${dim==='INTRODUCED'?'selected':''}>INTRODUCED</option>
+                <option value="ESTABLISHED" ${dim==='ESTABLISHED'?'selected':''}>ESTABLISHED</option>
+                <option value="RETURNED" ${dim==='RETURNED'?'selected':''}>RETURNED</option>
+                <option value="CHANGED" ${dim==='CHANGED'?'selected':''}>CHANGED</option>
+                <option value="PAID OFF" ${dim==='PAID OFF'?'selected':''}>PAID OFF</option>
+            </select>
+        </div>
+        <div>
+            <label style="font-size:0.7rem;color:var(--text-muted)">Weight</label>
+            <select class="ms-weight">
+                <option value="" ${w===''?'selected':''}>-</option>
+                <option value="CAMEO" ${w==='CAMEO'?'selected':''}>CAMEO</option>
+                <option value="RECOGNITION" ${w==='RECOGNITION'?'selected':''}>RECOGNITION</option>
+                <option value="FUNCTIONAL" ${w==='FUNCTIONAL'?'selected':''}>FUNCTIONAL</option>
+                <option value="RELATIONSHIP" ${w==='RELATIONSHIP'?'selected':''}>RELATIONSHIP</option>
+                <option value="CONSEQUENCE" ${w==='CONSEQUENCE'?'selected':''}>CONSEQUENCE</option>
+                <option value="MAJOR" ${w==='MAJOR'?'selected':''}>MAJOR</option>
+                <option value="PAYOFF" ${w==='PAYOFF'?'selected':''}>PAYOFF</option>
+            </select>
+        </div>
+        <div>
+            <label style="font-size:0.7rem;color:var(--text-muted)">Event / Action</label>
+            <textarea class="ms-event" placeholder="What happened?">${event}</textarea>
+        </div>
+        <div>
+            <label style="font-size:0.7rem;color:var(--text-muted)">Last Consequence</label>
+            <textarea class="ms-cons" placeholder="New state / info">${cons}</textarea>
+        </div>
+        <div style="padding-top:16px;">
+            <button class="ms-remove" onclick="this.closest('.ms-row').remove()"><i class="bi bi-trash"></i></button>
+        </div>
+    `;
+    list.appendChild(div);
 }
 
 // ═══════════════════════════════════════════════
@@ -1966,6 +2257,25 @@ function loadNode(id) {
         document.getElementById('nodeKeywords').value             = n.keywords || '';
         document.getElementById('nodeCategorySelect').value       = n.category_id || '';
 
+        // Populate continuity data
+        const cd = n.continuity_data ? JSON.parse(n.continuity_data) : {};
+        document.getElementById('contTag').value = cd.tag_type || 'EXTRA';
+        document.getElementById('contFaction').value = cd.faction || '';
+        document.getElementById('contAttitude').value = cd.attitude || '';
+        document.getElementById('contLocation').value = cd.location || '';
+        document.getElementById('contKnows').value = cd.knows || '';
+        document.getElementById('contNotKnows').value = cd.does_not_know || '';
+        document.getElementById('contHooks').value = cd.open_hooks || '';
+        document.getElementById('contLastSeen').value = cd.last_seen || '';
+        document.getElementById('contPrefWin').value = cd.pref_window || '';
+        document.getElementById('contMaxAbs').value = cd.max_absence || '';
+
+        document.getElementById('milestonesList').innerHTML = '';
+        if (cd.milestones && cd.milestones.length) {
+            cd.milestones.forEach(m => addMilestoneRow(m));
+        }
+
+        switchNodeTab('lore'); // reset to lore tab
         initEditor(n.content || '');
         renderLinkedItems(n.items || []);
 
@@ -2131,10 +2441,36 @@ function saveNode() {
     const btn = document.getElementById('btnSaveNode');
     btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass"></i> Saving…';
 
+    const milestones = [];
+    document.querySelectorAll('#milestonesList .ms-row').forEach(row => {
+        milestones.push({
+            page: row.querySelector('.ms-page').value.trim(),
+            dimension: row.querySelector('.ms-dim').value,
+            weight: row.querySelector('.ms-weight').value,
+            event: row.querySelector('.ms-event').value.trim(),
+            consequence: row.querySelector('.ms-cons').value.trim()
+        });
+    });
+    
+    const continuity_data = {
+        tag_type: document.getElementById('contTag').value,
+        faction: document.getElementById('contFaction').value.trim(),
+        attitude: document.getElementById('contAttitude').value.trim(),
+        location: document.getElementById('contLocation').value.trim(),
+        knows: document.getElementById('contKnows').value.trim(),
+        does_not_know: document.getElementById('contNotKnows').value.trim(),
+        open_hooks: document.getElementById('contHooks').value.trim(),
+        last_seen: document.getElementById('contLastSeen').value.trim(),
+        pref_window: document.getElementById('contPrefWin').value.trim(),
+        max_absence: document.getElementById('contMaxAbs').value.trim(),
+        milestones: milestones
+    };
+
     const payload = {
         id:          currentNodeId,
         name:        document.getElementById('nodeNameInput').value,
         content:     editor ? editor.getMarkdown() : '',
+        continuity_data: JSON.stringify(continuity_data),
         keywords:    document.getElementById('nodeKeywords').value,
         node_type:   document.getElementById('nodeTypeSelect').value,
         category_id: document.getElementById('nodeCategorySelect').value || null,

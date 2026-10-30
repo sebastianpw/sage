@@ -87,6 +87,35 @@
       "prefix": "/cv",
       "tags": ["computer-vision"]
     },
+
+"griditor": {
+  "active": true,
+  "module": "services.griditor_service",
+  "router_var": "router",
+  "prefix": "",
+  "tags": ["griditor"]
+},
+"continuity": {
+  "active": true,
+  "module": "services.continuity_service",
+  "prefix": "/continuity",
+  "tags": ["prompt-engineering", "continuity"]
+},
+"tiktok": {
+  "active": true,
+  "module": "services.tiktok_transport",
+  "router_var": "router",
+  "prefix": "/tiktok",
+  "tags": ["tiktok"]
+},
+"md_pdf": {
+  "active": true,
+  "module": "services.md_pdf_service",
+  "router_var": "router",
+  "prefix": "/md-pdf",
+  "tags": ["md-pdf"]
+},
+
     "style": {
       "active": true,
       "module": "services.style_service",

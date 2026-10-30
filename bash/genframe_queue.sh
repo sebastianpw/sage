@@ -1,3 +1,4 @@
+# bash/genframe_queue.sh
 #!/bin/bash
 
 # ==============================================================================
@@ -13,6 +14,48 @@ PROCESS_LIMIT="${1:-4}"
 
 export PAI_TOKEN=$(cat "$SCRIPT_DIR/../token/.pollinationsaitoken")
 export FREEIMAGE_KEY=$(cat "$SCRIPT_DIR/../token/.freeimage_key")
+
+# ------------------------------------------------------------------------------
+# Helper: Upload Image Chain (Pollinations -> Freeimage -> Litterbox)
+# ------------------------------------------------------------------------------
+upload_image_chain() {
+    local filepath="$1"
+    local final_url=""
+    
+    # 1. Pollinations
+    local polli_resp
+    polli_resp=$(curl -s -X POST "https://media.pollinations.ai/upload" -H "Authorization: Bearer $PAI_TOKEN" -F "file=@$filepath")
+    if [[ "$polli_resp" == http* ]]; then
+        final_url="$polli_resp"
+    else
+        local polli_url
+        polli_url=$(echo "$polli_resp" | jq -r '.url // empty' 2>/dev/null)
+        if [[ "$polli_url" == http* ]]; then
+            final_url="$polli_url"
+        fi
+    fi
+    
+    # 2. Freeimage
+    if [ -z "$final_url" ] || [ "$final_url" == "null" ]; then
+        local fi_resp fi_url
+        fi_resp=$(curl -s -X POST "https://freeimage.host/api/1/upload" -F "key=$FREEIMAGE_KEY" -F "action=upload" -F "source=@$filepath" -F "format=json")
+        fi_url=$(echo "$fi_resp" | jq -r '.image.url' 2>/dev/null)
+        if [ -n "$fi_url" ] && [ "$fi_url" != "null" ]; then
+            final_url="$fi_url"
+        fi
+    fi
+    
+    # 3. Litterbox
+    if [ -z "$final_url" ] || [ "$final_url" == "null" ]; then
+        local lb_resp
+        lb_resp=$(curl -s -F "reqtype=fileupload" -F "time=1h" -F "fileToUpload=@$filepath" https://litterbox.catbox.moe/resources/internals/api.php)
+        if [[ "$lb_resp" == http* ]]; then
+            final_url="$lb_resp"
+        fi
+    fi
+    
+    echo "$final_url"
+}
 
 if [ -f "$SCRIPT_DIR/load_root.sh" ]; then
   source "$SCRIPT_DIR/load_root.sh"
@@ -187,13 +230,8 @@ for i in "${!Q_IDS[@]}"; do
                     if [ -n "$frame_filename" ]; then
                         frame_abs_path="$PROJECT_ROOT/public/$frame_filename"
                         if [ -f "$frame_abs_path" ]; then
-                            echo "Uploading composite frame $frame_id ($frame_filename) to Freeimage.host..."
-                            response=$(curl -s -X POST "https://freeimage.host/api/1/upload" \
-                                -F "key=$FREEIMAGE_KEY" \
-                                -F "action=upload" \
-                                -F "source=@$frame_abs_path" \
-                                -F "format=json")
-                            frame_url=$(echo "$response" | jq -r '.image.url')
+                            echo "Uploading composite frame $frame_id ($frame_filename) (Pollinations -> Freeimage -> Litterbox)..."
+                            frame_url=$(upload_image_chain "$frame_abs_path")
                             if [ -n "$frame_url" ] && [ "$frame_url" != "null" ]; then
                                 echo "Uploaded frame $frame_id: $frame_url"
                                 uploaded_urls+=("$frame_url")
@@ -213,13 +251,8 @@ for i in "${!Q_IDS[@]}"; do
             IMAGE_URL="$COMPOSITE_IMAGE_URLS"
             echo "Using composite assigned frames for img2img"
         elif [ -n "$IMG2IMG_FILENAME" ] && [ -f "$IMG2IMG_FILENAME" ]; then
-            echo "Uploading local source image $IMG2IMG_FILENAME to Freeimage.host..."
-            response=$(curl -s -X POST "https://freeimage.host/api/1/upload" \
-                -F "key=$FREEIMAGE_KEY" \
-                -F "action=upload" \
-                -F "source=@$IMG2IMG_FILENAME" \
-                -F "format=json")
-            IMAGE_URL=$(echo "$response" | jq -r '.image.url')
+            echo "Uploading local source image (Pollinations -> Freeimage -> Litterbox)..."
+            IMAGE_URL=$(upload_image_chain "$IMG2IMG_FILENAME")
             if [ -z "$IMAGE_URL" ] || [ "$IMAGE_URL" = "null" ]; then
                 ERROR_MSG="Failed to upload source image."
             else

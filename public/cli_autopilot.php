@@ -3,7 +3,7 @@
 // Infinite Creative Autopilot for Sketches
 // Usage: 
 //   Interactive: php public/cli_autopilot.php
-//   Batch:       php public/cli_autopilot.php [GenID] [Amount] [MaxChars] [MaxHops] [MaxRefs] [ContGenID]
+//   Batch:       php public/cli_autopilot.php [GenID] [Amount] [MaxChars] [MaxHops] [MaxRefs] [ContGenID] [RespectGF]
 
 if (php_sapi_name() !== 'cli') {
     die("This script can only be run from the command line.");
@@ -110,6 +110,30 @@ function fetchRandomIngredientRows($conn, $table, $limit) {
     }
 }
 
+/**
+ * Reads the server-side graph-filter mirror saved by kg_filter.php.
+ * Returns:
+ *   null  → no filter saved / "all nodes"  (no restriction)
+ *   []    → filter active but zero nodes selected (nothing visible)
+ *   [id..]→ whitelist of node IDs
+ *
+ * The CLI uses the LIVE filter (matches the kg_nodes table it queries).
+ */
+function loadKgFilterIds($conn, string $mode = 'live'): ?array {
+    $col = $mode . '_ids';
+    try {
+        $row = $conn->fetchAssociative("SELECT `$col` FROM kg_filter_state WHERE id = 1 LIMIT 1");
+    } catch (\Throwable $e) {
+        return null; // table missing → treat as "no filter"
+    }
+    if (!$row || !array_key_exists($col, $row) || $row[$col] === null || $row[$col] === '') {
+        return null;
+    }
+    $decoded = json_decode((string)$row[$col], true);
+    if (!is_array($decoded)) return null;
+    return array_values(array_map('intval', $decoded));
+}
+
 
 
 function generateWithRetry($service, $config, $params, $maxTries = 3) {
@@ -127,8 +151,22 @@ function generateWithRetry($service, $config, $params, $maxTries = 3) {
     throw new Exception("AI Generation failed after $maxTries attempts.");
 }
 
-function buildKgSubpot($conn, $maxHops, $maxRefs) {
-    $startNode = $conn->fetchAssociative("SELECT * FROM kg_nodes WHERE status='active' ORDER BY RAND() LIMIT 1");
+/**
+ * @param array|null $filterIds  null = no filter; [] = filter excludes everything (returns null)
+ *                               [id..] = whitelist applied to both start node and hops
+ */
+function buildKgSubpot($conn, $maxHops, $maxRefs, ?array $filterIds = null) {
+    // Compose the filter fragment (empty string when $filterIds === null)
+    $startFilter = '';
+    $hopFilter   = '';
+    if ($filterIds !== null) {
+        if (empty($filterIds)) return null; // nothing visible → skip KG subplot entirely
+        $idList      = implode(',', array_map('intval', $filterIds));
+        $startFilter = " AND id IN ($idList)";
+        $hopFilter   = " AND kn.id IN ($idList)";
+    }
+
+    $startNode = $conn->fetchAssociative("SELECT * FROM kg_nodes WHERE status='active'{$startFilter} ORDER BY RAND() LIMIT 1");
     if (!$startNode) return null;
 
     $nodes = [$startNode['id'] => $startNode];
@@ -144,7 +182,7 @@ function buildKgSubpot($conn, $maxHops, $maxRefs) {
             FROM kg_node_items kni 
             JOIN kg_nodes kn ON kn.id = kni.item_id 
             JOIN kg_nodes kn_src ON kn_src.id = kni.node_id
-            WHERE kni.item_type = 'kg_node' AND kni.node_id IN ($ph) AND kn.status = 'active'
+            WHERE kni.item_type = 'kg_node' AND kni.node_id IN ($ph) AND kn.status = 'active'{$hopFilter}
         ";
         
         $neighbors = $conn->fetchAllAssociative($sql, $frontier);
@@ -219,6 +257,8 @@ $maxCharacters = 3;
 $maxHops = 1;
 $maxRefs = 3;
 
+$respectGraphFilter = false; // Only relevant when kg_subpot > 0
+
 $args = array_slice($argv, 1);
 
 // 2. INTERACTIVE MODE
@@ -271,6 +311,9 @@ if (empty($args)) {
             
             $inRefs = readline(sprintf("    ↳ %-24s [Default %3d] : ", "Max KG References", 3));
             $maxRefs = (trim($inRefs) !== "" && is_numeric($inRefs)) ? max(1, (int)$inRefs) : 3;
+
+            $inGF = readline(sprintf("    ↳ %-24s [y/N] : ", "Respect Graph Filter"));
+            $respectGraphFilter = (strtolower(substr(trim($inGF), 0, 1)) === 'y');
         }
 
         if ($key === 'continuity' && $probs['continuity'] > 0) {
@@ -287,7 +330,10 @@ if (empty($args)) {
     $maxHops       = isset($args[3]) ? max(1, (int)$args[3]) : 1;
     $maxRefs       = isset($args[4]) ? max(1, (int)$args[4]) : 3;
     $contGenId     = isset($args[5]) ? (int)$args[5] : DEFAULT_CONT_GEN_ID;
-    
+
+    // 7th arg (optional): 1 = respect graph filter, anything else = off
+    $respectGraphFilter = isset($args[6]) ? ((int)$args[6] === 1) : false;
+
     foreach ($ingredientsConfig as $key => $conf) {
         $probs[$key] = $conf[1]; // Use defaults
     }
@@ -306,12 +352,33 @@ $nameConfig = $repo->findOneBy(['configId' => DEFAULT_NAME_GEN_HASH]);
 if (!$nameConfig) die(C_RED . "Error: Default Name Generator (Hash) not found.\n" . C_RESET);
 $nameGenId = $nameConfig->getId();
 
+// --- GRAPH FILTER RESOLUTION ---
+// Only relevant when the user asked to respect it AND KG subplots are on.
+$kgFilterIds = null; // null = all nodes
+if ($respectGraphFilter && $probs['kg_subpot'] > 0) {
+    $loaded = loadKgFilterIds($conn, 'live');
+
+    if ($loaded === null) {
+        echo C_YELLOW . "  ⚠ Graph filter is 'all nodes' (or unset) — no effective restriction.\n" . C_RESET;
+    } elseif (empty($loaded)) {
+        echo C_YELLOW . "  ⚠ Graph filter selected zero nodes — KG subplots will be skipped this run.\n" . C_RESET;
+        $kgFilterIds = []; // empty array → buildKgSubpot returns null
+    } else {
+        $kgFilterIds = $loaded;
+        echo C_GRAY . "  ↳ Graph filter active: " . count($loaded) . " nodes whitelisted.\n" . C_RESET;
+    }
+} elseif ($respectGraphFilter) {
+    echo C_GRAY . "  ↳ Graph filter requested but KG subplots are disabled (prob=0). Ignored.\n" . C_RESET;
+}
+
 echo C_GRAY . "------------------------------------------" . C_RESET . "\n";
 echo " Config:      " . C_WHITE . $descConfig->getTitle() . C_RESET . "\n";
 echo " Target:      " . C_WHITE . ($amount > 0 ? "$amount sketches" : "Infinite") . C_RESET . "\n";
 echo " Ingredients: ";
 foreach ($probs as $k => $v) { echo "$k=" . C_YELLOW . "$v%" . C_RESET . " "; }
-echo "\n" . C_GRAY . "------------------------------------------" . C_RESET . "\n\n";
+echo "\n";
+echo " Graph Filter:" . (($respectGraphFilter && $probs['kg_subpot'] > 0) ? C_GREEN . " RESPECTED" . C_RESET : C_GRAY . " off" . C_RESET) . "\n";
+echo C_GRAY . "------------------------------------------" . C_RESET . "\n\n";
 
 if ($amount === 0) echo C_YELLOW . "Starting Infinite Loop... (Ctrl+C to stop)" . C_RESET . "\n\n";
 
@@ -394,7 +461,7 @@ while (true) {
 
         // E. KG Subpot
         if (rand(1, 100) <= $probs['kg_subpot']) {
-            $subpot = buildKgSubpot($conn, $maxHops, $maxRefs);
+            $subpot = buildKgSubpot($conn, $maxHops, $maxRefs, $kgFilterIds);
             if ($subpot) {
                 $nodeIds = array_map(fn($n) => $n['id'], $subpot['nodes']);
                 $subpotId = 'kg_' . implode('_', $nodeIds);

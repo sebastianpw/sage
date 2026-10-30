@@ -223,14 +223,17 @@ html, body {
             </div>
         </div>
 
-        <div class="rv-actions">
+<div class="rv-actions" style="grid-template-columns: repeat(6, 1fr);">
             <button class="rv-btn rv-btn-nav" id="btnPrev" disabled onclick="navigate(-1)">◀</button>
             <button class="rv-btn rv-btn-bin" id="btnToggleBin" disabled onclick="toggleVideoInPot()" title="Add/Remove from Pot">🍿</button>
             <button class="rv-btn rv-btn-viewbin" id="btnViewBin" onclick="openRightSidebarModal()" title="View Active Pot">📁</button>
-            <button class="rv-btn rv-btn-filter" id="btnFilter" onclick="openFilterModal()" title="Categories & Filters">⚙</button>
+            <button class="rv-btn rv-btn-filter" id="btnFilter" onclick="openFilterModal()" title="Categories & Filters">⚙️</button>
+            <a href="popkorn_player.php" class="rv-btn" style="text-decoration:none; border-color: var(--accent); color: var(--accent);" title="Switch to Player">▶️</a>
             <button class="rv-btn rv-btn-nav" id="btnNext" disabled onclick="navigate(1)">▶</button>
         </div>
-
+        
+        
+        
         <!-- ACTIVE FILTER BANNER -->
         <div id="filterActiveBanner" style="display:none; background:var(--card); border-bottom:1px solid var(--border); flex-shrink:0;">
             <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px; gap:10px;">
@@ -443,6 +446,7 @@ html, body {
     if (activePotId) {
         refreshActivePotVideos();
     }
+    loadVideos(1);
 
     // ════════════════════════════════════
     // FILTER MODAL & FUZZ LIST
@@ -539,17 +543,12 @@ html, body {
         filterFuzzCandId = null;
         filterFuzzCandName = '';
         filterSearchQuery = '';
-        gridPage = 1;
         
         document.getElementById('btnFilter').classList.remove('active-filter');
         document.getElementById('filterActiveBanner').style.display = 'none';
-        document.getElementById('gridPagination').style.display = 'none';
-        document.getElementById('gridCounter').textContent = '0 videos total';
         
-        videos = [];
-        renderGrid();
-        gridEl.innerHTML = '<div class="rv-state" style="grid-column: 1/-1;">Open Filters (⚙) to select a category.</div>';
-        resetPlayer();
+        // Load all videos instead of blanking out the grid
+        loadVideos(1);
     };
 
     // ════════════════════════════════════

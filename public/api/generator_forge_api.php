@@ -205,7 +205,27 @@ try {
             if (!$rec || ($rec->userId !== $userId && !$rec->isPublic && !$userIsAdmin)) {
                 exit(fail('Generator not found or access denied', 404));
             }
-            exit(ok($rec->toArray()));
+
+            $data = $rec->toArray();
+
+            // Attach display_area_keys — the edit modal uses these to pre-check
+            // the right boxes. Without them the modal always renders unchecked
+            // and the user believes their save did nothing.
+            try {
+                $stmt = $pdo->prepare(
+                    'SELECT da.id, da.area_key, da.label
+                     FROM generator_config_to_display_area gda
+                     INNER JOIN generator_config_display_area da ON da.id = gda.display_area_id
+                     WHERE gda.generator_config_id = :id
+                     ORDER BY da.label ASC'
+                );
+                $stmt->execute([':id' => $id]);
+                $data['display_area_keys'] = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+            } catch (\Throwable $e) {
+                $data['display_area_keys'] = [];
+            }
+
+            exit(ok($data));
         }
 
         // ── get_info (no AI call, just param schema) ──────────────────────────
@@ -234,7 +254,8 @@ try {
             if (!$title || !$model || !$configJson) {
                 exit(fail('title, model, config_json are required'));
             }
-            $isPublic       = !empty($input['is_public']) && $userIsAdmin;
+            // Owner may set public on their own generator; admins may too.
+            $isPublic       = !empty($input['is_public']);
             $oracleConfig   = !empty($input['oracle_config']) && is_array($input['oracle_config'])
                                 ? $input['oracle_config'] : [];
             $displayAreaIds = !empty($input['display_area_ids']) && is_array($input['display_area_ids'])
@@ -257,13 +278,17 @@ try {
             $title      = strInput($input, 'title')      ?: $rec->title;
             $model      = strInput($input, 'model')       ?: $rec->model;
             $configJson = strInput($input, 'config_json') ?: $rec->toConfigJson();
-            $isPublic   = isset($input['is_public']) ? (bool)$input['is_public'] && $userIsAdmin : $rec->isPublic;
+            // Owner (or admin) may toggle public on their own generator.
+            $isPublic   = isset($input['is_public']) ? (bool)$input['is_public'] : $rec->isPublic;
             // is_active: explicit boolean when sent from the forge edit modal
             $isActive   = isset($input['is_active']) ? (bool)$input['is_active'] : $rec->active;
             $listOrder  = isset($input['list_order']) ? (int)$input['list_order'] : $rec->listOrder;
 
+            // Use array_key_exists (not isset) so an explicit `null` from the
+            // frontend actually clears the Oracle config instead of being
+            // silently treated as "not provided".
             $oracleConfig = null;
-            if (isset($input['oracle_config'])) {
+            if (array_key_exists('oracle_config', $input)) {
                 $oracleConfig = is_array($input['oracle_config']) && !empty($input['oracle_config'])
                     ? $input['oracle_config'] : null;
             } else {

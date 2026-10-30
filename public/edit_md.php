@@ -37,6 +37,8 @@ ob_start();
     })();
 </script>
 
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.12.0/font/bootstrap-icons.css">
+
 <!-- LIBRARY LOAD (CSS) -->
 <?php if (\App\Core\SpwBase::CDN_USAGE): ?>
     <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css" />
@@ -47,147 +49,287 @@ ob_start();
 <?php endif; ?>
 
 <style>
-    /* CSS PATCH for Dark Mode override */
-    :root[data-theme="dark"] {
-        --bg: #0d1117;
-        --card: #161b22;
-        --border: #30363d;
-        --text: #c9d1d9;
-        --text-muted: #8b949e;
-        --accent: #3b82f6;
-        --green: #238636;
-        --red: #da3633;
-        --orange: #f59e0b;
-        --overlay-bg: rgba(0,0,0,0.85);
-        --card-elevation: 0 6px 18px rgba(0,0,0,0.6);
-        --modal-bg: #1e252e;
-    }
-    :root[data-theme="light"] {
+    :root {
         --bg: #f6f8fa;
         --card: #ffffff;
         --border: #d0d7de;
         --text: #24292f;
         --text-muted: #57606a;
         --accent: #0969da;
-        --green: #2da44e;
-        --red: #cf222e;
-        --orange: #bf8700;
-        --overlay-bg: rgba(0,0,0,0.5);
-        --card-elevation: 0 4px 12px rgba(0,0,0,0.15);
-        --modal-bg: #ffffff;
+        --green: #238636;
+        --red: #da3633;
+        --orange: #f59e0b;
+        --overlay-bg: rgba(0,0,0,0.55);
+        --focus-ring: rgba(9, 105, 218, 0.15);
+    }
+    :root[data-theme="dark"] {
+        --bg: #0d1117;
+        --card: #161b22;
+        --border: #30363d;
+        --text: #c9d1d9;
+        --text-muted: #8b949e;
+        --accent: #58a6ff;
+        --green: #238636;
+        --red: #da3633;
+        --orange: #f59e0b;
+        --overlay-bg: rgba(0,0,0,0.75);
+        --focus-ring: rgba(88, 166, 255, 0.2);
+    }
+    @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+            --bg: #0d1117;
+            --card: #161b22;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --text-muted: #8b949e;
+            --accent: #58a6ff;
+            --green: #238636;
+            --red: #da3633;
+            --orange: #f59e0b;
+            --overlay-bg: rgba(0,0,0,0.75);
+            --focus-ring: rgba(88, 166, 255, 0.2);
+        }
     }
 
-    body { background-color: var(--bg) !important; color: var(--text) !important; transition: background-color 0.2s, color 0.2s; } 
-    .editor-container { display: flex; flex-direction: column; height: 90vh; padding: 10px; gap: 0px; }
-    
-    .toolbar-wrapper { background: var(--card); border-radius: 6px; border: 1px solid var(--border); margin-bottom: 10px; padding: 5px; box-shadow: var(--card-elevation); }
-    .toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 5px; }
-    .subheader { display: flex; align-items: center; gap: 10px; padding: 5px 10px 8px 10px; border-top: 1px solid var(--border); margin-top: 5px; font-size: 0.9rem; }
-
-    .toolbar input { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 8px; border-radius: 4px; font-size: 1.1em; flex: 1 1 100px; min-width: 0; }
-    .subheader select, .modal-select { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; min-width: 200px; }
-
-    .btn { cursor: pointer; padding: 6px 10px; border-radius: 4px; border: none; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; flex: 0 0 auto; line-height: 1; height: 36px; }
-    .btn-sm { padding: 4px 10px; font-size: 0.9rem; height: auto; }
-    
-    .btn-save { background: var(--green); color: white; }
-    .btn-save:hover { filter: brightness(0.9); }
-    .btn-read { background: var(--accent); color: white; }
-    .btn-meta { background: var(--card); border: 1px solid var(--border); color: var(--text); }
-    .btn-meta:hover { border-color: var(--accent); color: var(--accent); }
-    .btn-cancel { background: var(--card); border: 1px solid var(--border); color: var(--text-muted); }
-    .btn-add { background: var(--card); color: var(--text-muted); border: 1px solid var(--border); }
-    .btn-add:hover { color: var(--text); border-color: var(--text); }
-    
-    #editor { flex-grow: 1; background: white; border-radius: 4px; overflow: hidden; }
-    
-    #toast { visibility: hidden; min-width: 250px; background-color: var(--card); color: var(--text); text-align: center; border-radius: 4px; padding: 16px; position: fixed; z-index: 9999; bottom: 30px; right: 30px; box-shadow: var(--card-elevation); border-left: 5px solid var(--green); border: 1px solid var(--border); }
-    #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
-    @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
-    @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
-
-    /* Modal Styles */
-    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--overlay-bg); display: none; justify-content: center; align-items: center; z-index: 5000; backdrop-filter: blur(2px); }
-    .modal-content { background-color: var(--modal-bg); color: var(--text); width: 85%; max-width: 900px; height: 80vh; border-radius: 8px; border: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px; box-shadow: 0 15px 40px rgba(0,0,0,0.5); }
-    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
-    .modal-header h3 { margin: 0; font-size: 1.2rem; }
-    .modal-body { flex-grow: 1; display: flex; flex-direction: column; gap: 15px; overflow: hidden; }
-    .modal-footer { display: flex; justify-content: flex-end; margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border); }
-    
-    .modal-label { display: block; font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
-    
-    /* Simple textarea for description */
-    #metaDescription { 
-        flex-grow: 1; 
-        width: 100%; 
-        background: var(--bg); 
-        color: var(--text); 
-        border: 1px solid var(--border); 
-        border-radius: 4px; 
-        padding: 10px; 
-        font-family: 'Courier New', monospace; 
-        font-size: 0.95rem; 
-        resize: none;
-        line-height: 1.5;
-        min-height: 160px;
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        background-color: var(--bg) !important;
+        color: var(--text) !important;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        transition: background-color 0.2s, color 0.2s;
     }
-    #metaDescription:focus {
+
+    .editor-container {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 20px);
+        max-height: 94vh;
+        padding: 8px 10px;
+        gap: 8px;
+    }
+    
+    .toolbar-wrapper {
+        background: var(--card);
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        padding: 8px 10px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+    }
+    .subheader {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 2px 2px 2px;
+        border-top: 1px solid var(--border);
+        margin-top: 8px;
+        font-size: 0.85rem;
+    }
+
+    .title-input {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 6px 10px;
+        border-radius: 6px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        flex: 1 1 180px;
+        min-width: 0;
+        height: 34px;
+        transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .title-input:focus {
         outline: none;
         border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--focus-ring);
     }
 
-    /* Short description (smaller) */
-    #metaDescShort {
+    .field-label {
+        display: block;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted);
+        margin-bottom: 5px;
+    }
+    .input-control {
         width: 100%;
+        padding: 7px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
         background: var(--bg);
         color: var(--text);
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        padding: 8px;
-        font-family: 'Courier New', monospace;
-        font-size: 0.9rem;
-        resize: none;
-        line-height: 1.4;
-        min-height: 70px;
+        font-size: 0.88rem;
+        font-family: inherit;
+        box-sizing: border-box;
+        transition: border-color 0.15s, box-shadow 0.15s;
     }
-    #metaDescShort:focus { outline: none; border-color: var(--accent); }
+    .input-control:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--focus-ring);
+    }
+    select.input-control {
+        cursor: pointer;
+    }
 
-    /* Keywords input */
-    #metaKeywords {
+    .btn {
+        padding: 6px 11px;
+        border-radius: 6px;
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 0.85rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        text-decoration: none;
+        white-space: nowrap;
+        transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s, transform 0.1s;
+        height: 34px;
+        flex: 0 0 auto;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { filter: brightness(1.08); }
+    .btn-save { background: var(--green); color: #fff; }
+    .btn-save:hover { filter: brightness(1.08); }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-sm { padding: 4px 8px; font-size: 0.78rem; height: 28px; }
+
+    #editor {
+        flex: 1;
+        min-height: 0;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    
+    /* Modals */
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: var(--overlay-bg);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 9000;
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        padding: 12px;
+    }
+    .modal-content {
+        background-color: var(--card);
+        color: var(--text);
         width: 100%;
-        background: var(--bg);
+        max-width: 680px;
+        max-height: 85vh;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        padding: 18px 20px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 14px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 10px;
+    }
+    .modal-header h3 {
+        margin: 0;
+        font-size: 1.05rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .modal-body {
+        flex: 1;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-height: 0;
+    }
+    .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 14px;
+        padding-top: 10px;
+        border-top: 1px solid var(--border);
+    }
+
+    textarea.input-control {
+        resize: vertical;
+        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+        line-height: 1.45;
+    }
+
+    #toast {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 99999;
+        background: var(--card);
         color: var(--text);
         border: 1px solid var(--border);
-        border-radius: 4px;
-        padding: 8px;
-        font-size: 0.95rem;
+        border-left: 4px solid var(--green);
+        border-radius: 6px;
+        padding: 10px 16px;
+        font-size: 0.88rem;
+        display: none;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     }
-    #metaKeywords:focus { outline: none; border-color: var(--accent); }
+
+    @media (max-width: 600px) {
+        .editor-container { padding: 6px; }
+        .toolbar-wrapper { padding: 6px 8px; }
+        .title-input { flex: 1 1 140px; font-size: 0.9rem; }
+        .btn { padding: 5px 9px; font-size: 0.8rem; }
+    }
 </style>
 
 <div class="editor-container">
     <div class="toolbar-wrapper">
         <div class="toolbar">
-            <a href="<?= $backLink ?>" class="btn btn-cancel" title="Back to Index">↩️</a>
-            <input type="text" id="docName" placeholder="Document Title" value="">
+            <a href="<?= $backLink ?>" class="btn btn-ghost" style="margin-left: 40px;" title="Back to Index"><i class="bi bi-arrow-left"></i></a>
+            <input style="flex: 0 0 120px !important;" type="text" id="docName" class="title-input" placeholder="Document Title" value="">
             
-            <button class="btn btn-meta" id="btnOpenMeta" title="Edit Summary & Collection">✏️</button>
-
-            <button class="btn btn-save" id="btnSave" title="Save Document">💾</button>
+            <button class="btn btn-ghost" id="btnOpenMeta" title="Edit Summary & Collection"><i class="bi bi-sliders"></i></button>
+            <button class="btn btn-ghost" id="btnExportPdf" title="Export to PDF"><i class="bi bi-file-earmark-pdf"></i></button>
+            
+            <button class="btn btn-save" id="btnSave" title="Save Document"><i class="bi bi-floppy"></i></button>
             <?php 
                 if($docId): 
                     $readLink = "view_md.php?id=$docId"; 
                     if (!empty($linkParams)) $readLink .= "&" . http_build_query($linkParams);
             ?>
-                <a href="<?= $readLink ?>" class="btn btn-read" target="_self" title="Open Read Mode">👁️</a>
+                <a href="<?= $readLink ?>" class="btn btn-primary" target="_self" title="Open Read Mode"><i class="bi bi-eye"></i></a>
             <?php endif; ?>
         </div>
         <div class="subheader">
-            <label for="docCategory" style="color:var(--text-muted);">Category:</label>
-            <select id="docCategory">
+            <span class="field-label" style="margin-bottom:0; display:inline-flex; align-items:center;">Category:</span>
+            <select id="docCategory" class="input-control" style="width: auto; min-width: 180px; height: 30px; padding: 3px 8px; font-size: 0.82rem;">
                 <?php foreach($cats as $cat): ?><option value="<?= $cat['id'] ?>"><?= htmlspecialchars($cat['name']) ?></option><?php endforeach; ?>
             </select>
-            <button class="btn btn-sm btn-add" id="btnAddCategory" title="Create New Category">+</button>
+            <button class="btn btn-sm btn-ghost" id="btnAddCategory" title="Create New Category"><i class="bi bi-plus-lg"></i></button>
         </div>
     </div>
     <div id="editor"></div>
@@ -197,36 +339,77 @@ ob_start();
 <div class="modal-overlay" id="metaModal">
     <div class="modal-content">
         <div class="modal-header">
-            <h3>Document Summary & Settings</h3>
-            <button class="btn btn-sm btn-cancel" id="btnCloseMeta">✕</button>
+            <h3><i class="bi bi-sliders" style="color:var(--accent);"></i> Document Summary & Settings</h3>
+            <button class="btn btn-sm btn-ghost" id="btnCloseMeta"><i class="bi bi-x-lg"></i></button>
         </div>
         <div class="modal-body">
             <div>
-                <span class="modal-label">Target Chroma Collection (for Parser):</span>
-                <select id="metaCollection" class="modal-select" style="width: 100%;">
+                <label class="field-label" for="metaCollection">Target Chroma Collection (for Parser):</label>
+                <select id="metaCollection" class="input-control">
                     <option value="">-- No Collection --</option>
                 </select>
             </div>
 
-            <div style="display:flex; flex-direction:column; gap:10px;">
-                <div>
-                    <span class="modal-label">Summary / Description (Markdown):</span>
-                    <textarea id="metaDescription" placeholder="Enter description in Markdown format..."></textarea>
-                </div>
+            <div>
+                <label class="field-label" for="metaDescription">Summary / Description (Markdown):</label>
+                <textarea id="metaDescription" class="input-control" style="min-height: 140px;" placeholder="Enter description in Markdown format..."></textarea>
+            </div>
 
-                <div>
-                    <span class="modal-label">Short Description (Brief summary):</span>
-                    <textarea id="metaDescShort" placeholder="Short summary for lists, previews..."></textarea>
-                </div>
+            <div>
+                <label class="field-label" for="metaDescShort">Short Description (Brief summary):</label>
+                <textarea id="metaDescShort" class="input-control" style="min-height: 65px;" placeholder="Short summary for lists, previews..."></textarea>
+            </div>
 
-                <div>
-                    <span class="modal-label">Keywords (comma separated):</span>
-                    <input id="metaKeywords" placeholder="keyword1, keyword2, ..." />
-                </div>
+            <div>
+                <label class="field-label" for="metaKeywords">Keywords (comma separated):</label>
+                <input id="metaKeywords" class="input-control" placeholder="keyword1, keyword2, ..." />
             </div>
         </div>
         <div class="modal-footer">
             <button class="btn btn-save btn-sm" id="btnMetaDone">Done</button>
+        </div>
+    </div>
+</div>
+
+<!-- PDF MODAL -->
+<div class="modal-overlay" id="pdfModal">
+    <div class="modal-content" style="height: auto; max-width: 420px;">
+        <div class="modal-header">
+            <h3><i class="bi bi-file-earmark-pdf" style="color:var(--accent);"></i> Export to PDF</h3>
+            <button class="btn btn-sm btn-ghost" id="btnClosePdf"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body">
+            <div>
+                <label class="field-label" for="pdfPageSize">Page Size:</label>
+                <select id="pdfPageSize" class="input-control">
+                    <option value="A4">A4</option>
+                </select>
+            </div>
+            <div>
+                <label class="field-label" for="pdfOrientation">Orientation:</label>
+                <select id="pdfOrientation" class="input-control">
+                    <option value="portrait">Portrait</option>
+                    <option value="landscape">Landscape</option>
+                </select>
+            </div>
+            <div>
+                <label class="field-label" for="pdfFontFamily">Font Family:</label>
+                <select id="pdfFontFamily" class="input-control">
+                    <option value="Helvetica">Helvetica (Default)</option>
+                    <option value="Lora">Lora (Serif)</option>
+                    <option value="Cinzel">Cinzel (Display)</option>
+                    <option value="Bangers">Bangers (Comic)</option>
+                    <option value="Times-Roman">Times New Roman</option>
+                    <option value="Courier">Courier</option>
+                </select>
+            </div>
+            <div>
+                <label class="field-label" for="pdfFontSize">Font Size:</label>
+                <input type="number" id="pdfFontSize" class="input-control" value="16" min="6" max="72">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-save btn-sm" id="btnPdfExportDone"><i class="bi bi-download"></i> Export</button>
         </div>
     </div>
 </div>
@@ -299,7 +482,6 @@ ob_start();
     }
 
     // --- DATA & DOM ELEMENTS PREP ---
-    // Modal elements referenced early so we can initialize them after fetching doc
     const modal = document.getElementById('metaModal');
     const descTextarea = document.getElementById('metaDescription');
     const shortDescTextarea = document.getElementById('metaDescShort');
@@ -313,19 +495,17 @@ ob_start();
             .then(res => {
                 if(res.status === 'success') {
                     const sel = document.getElementById('metaCollection');
-                    // Clear existing options except the first
                     while (sel.options.length > 1) {
                         sel.remove(1);
                     }
                     
                     res.data.forEach(col => {
                         const opt = document.createElement('option');
-                        opt.value = col.name; // Now using NAME as value
+                        opt.value = col.name;
                         opt.text = `${col.name} (${col.type})`;
                         sel.add(opt);
                     });
                     
-                    // Set saved value if exists
                     if(selectedCollectionName) {
                         sel.value = selectedCollectionName;
                     }
@@ -345,10 +525,8 @@ ob_start();
                 if(res.status === 'success') {
                     const data = res.data;
                     
-                    // Set title
                     document.getElementById('docName').value = data.name || '';
                     
-                    // Set category
                     if(data.category_id) {
                         const sel = document.getElementById('docCategory');
                         if(sel.querySelector(`option[value="${data.category_id}"]`)) {
@@ -356,21 +534,11 @@ ob_start();
                         }
                     }
                     
-                    // Store description, short description, keywords and collection NAME
                     descriptionContent = data.description ?? "";
                     shortDescriptionContent = data.desc_short ?? "";
                     keywordsContent = data.keywords ?? "";
                     selectedCollectionName = data.target_collection ?? "";
                     
-                    console.log("Document loaded:", {
-                        id: docId,
-                        description: descriptionContent,
-                        desc_short: shortDescriptionContent,
-                        keywords: keywordsContent,
-                        collection: selectedCollectionName
-                    });
-                    
-                    // Ensure the modal fields are initialized (fixes truncation when modal never opened)
                     try {
                         if (descTextarea) descTextarea.value = descriptionContent;
                         if (shortDescTextarea) shortDescTextarea.value = shortDescriptionContent;
@@ -379,13 +547,11 @@ ob_start();
                         console.warn("Could not set meta modal values on load:", e);
                     }
                     
-                    // Set collection dropdown if already populated
                     const metaSel = document.getElementById('metaCollection');
                     if(metaSel && selectedCollectionName) {
                         metaSel.value = selectedCollectionName;
                     }
 
-                    // Set main editor content
                     setTimeout(() => { 
                         editor.setMarkdown(data.content || ''); 
                         editor.moveCursorToStart(); 
@@ -400,7 +566,6 @@ ob_start();
             });
     } else {
         editor.setMarkdown('# New Document\nStart writing here...');
-        // initialize meta textarea and short/keywords for new documents too
         if(descTextarea) descTextarea.value = '';
         if(shortDescTextarea) shortDescTextarea.value = '';
         if(keywordsInput) keywordsInput.value = '';
@@ -412,68 +577,124 @@ ob_start();
 
     // --- MODAL LOGIC ---
     document.getElementById('btnOpenMeta').addEventListener('click', () => {
-        console.log("Opening modal - current state:", {
-            description: descriptionContent,
-            desc_short: shortDescriptionContent,
-            keywords: keywordsContent,
-            collection: selectedCollectionName
-        });
-        
-        // Set modal fields value directly from in-memory state
         if (descTextarea) descTextarea.value = descriptionContent;
         if (shortDescTextarea) shortDescTextarea.value = shortDescriptionContent;
         if (keywordsInput) keywordsInput.value = keywordsContent;
-        
-        // Set collection select (by NAME)
         if (collectionSelect) collectionSelect.value = selectedCollectionName || "";
         
-        // Show modal
         modal.style.display = 'flex';
-        
-        // Focus description textarea
         setTimeout(() => descTextarea.focus(), 100);
     });
 
-    // Done (explicit confirm) -> update in-memory description, short description, keywords and mark metaConfirmed
     document.getElementById('btnMetaDone').addEventListener('click', () => {
-        if (descTextarea) {
-            descriptionContent = descTextarea.value;
-        } else {
-            descriptionContent = "";
-        }
-        if (shortDescTextarea) {
-            shortDescriptionContent = shortDescTextarea.value;
-        } else {
-            shortDescriptionContent = "";
-        }
-        if (keywordsInput) {
-            keywordsContent = keywordsInput.value;
-        } else {
-            keywordsContent = "";
-        }
+        descriptionContent = descTextarea ? descTextarea.value : "";
+        shortDescriptionContent = shortDescTextarea ? shortDescTextarea.value : "";
+        keywordsContent = keywordsInput ? keywordsInput.value : "";
 
-        // Also save selected collection from the modal (collection changes are immediate intent)
         if (collectionSelect) {
             selectedCollectionName = collectionSelect.value;
         }
         metaConfirmed = true;
-        console.log("Modal Done - confirmed:", { descriptionContent, shortDescriptionContent, keywordsContent, selectedCollectionName });
         modal.style.display = 'none';
     });
 
     function closeMeta() {
-        // Closing without Done = cancel; do not change in-memory values or metaConfirmed
-        console.log("Modal closed/cancelled - no changes confirmed.");
         modal.style.display = 'none';
     }
 
     document.getElementById('btnCloseMeta').addEventListener('click', closeMeta);
     
-    // Close on overlay click -> cancel (do not confirm)
     modal.addEventListener('click', (e) => {
         if(e.target === modal) {
             closeMeta();
         }
+    });
+    
+    // --- PDF EXPORT LOGIC ---
+    const pdfModal = document.getElementById('pdfModal');
+    const btnExportPdf = document.getElementById('btnExportPdf');
+    
+    if (btnExportPdf) {
+        btnExportPdf.addEventListener('click', () => {
+            pdfModal.style.display = 'flex';
+        });
+    }
+    
+    document.getElementById('btnClosePdf').addEventListener('click', () => {
+        pdfModal.style.display = 'none';
+    });
+    
+    pdfModal.addEventListener('click', (e) => {
+        if(e.target === pdfModal) {
+            pdfModal.style.display = 'none';
+        }
+    });
+    
+    document.getElementById('btnPdfExportDone').addEventListener('click', () => {
+        const mdText = editor.getMarkdown();
+        const pageSize = document.getElementById('pdfPageSize').value;
+        const orientation = document.getElementById('pdfOrientation').value;
+        const fontFamily = document.getElementById('pdfFontFamily').value;
+        const fontSize = document.getElementById('pdfFontSize').value;
+        const docName = document.getElementById('docName').value || 'Untitled';
+        
+        const btn = document.getElementById('btnPdfExportDone');
+        const origContent = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Exporting...';
+        btn.disabled = true;
+
+        const formData = new FormData();
+        formData.append('markdown_text', mdText);
+        formData.append('page_size', pageSize);
+        formData.append('orientation', orientation);
+        formData.append('font_family', fontFamily);
+        formData.append('font_size', fontSize);
+        formData.append('title', docName);
+
+        fetch('api_md.php?action=export_pdf', {
+            method: 'POST',
+            body: formData
+        })
+        .then(async (response) => {
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(errText || `Server returned HTTP ${response.status}`);
+            }
+
+            let filename = (docName.trim().replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_') || 'document') + '.pdf';
+            const disposition = response.headers.get('Content-Disposition');
+            if (disposition && disposition.indexOf('filename=') !== -1) {
+                const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+                if (match && match[1]) {
+                    filename = match[1].replace(/['"]/g, '').trim();
+                }
+            }
+
+            const blob = await response.blob();
+            return { blob, filename };
+        })
+        .then(({ blob, filename }) => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showToast("PDF exported successfully!");
+            pdfModal.style.display = 'none';
+        })
+        .catch(err => {
+            console.error('PDF export failed:', err);
+            alert("PDF Export failed: " + err.message);
+        })
+        .finally(() => {
+            btn.innerHTML = origContent;
+            btn.disabled = false;
+        });
     });
     
     // --- CATEGORY ADD ---
@@ -504,31 +725,11 @@ ob_start();
 
     // --- SAVE ---
     document.getElementById('btnSave').addEventListener('click', () => {
-        // For description/short/keywords: only apply change if user explicitly confirmed via Done (metaConfirmed === true).
-        // If metaConfirmed is false, keep the loaded values (do nothing) — they were initialized on load.
-        if (metaConfirmed) {
-            // descriptionContent, shortDescriptionContent and keywordsContent already updated in Done handler (including empty strings)
-        } else {
-            // No confirmation -- keep existing values (do nothing)
-        }
-
-        // For collection, we will always read the current select value (user may have changed via modal before hitting Done).
-        // If the collection was changed but Done wasn't pressed, we must ensure we don't accidentally capture it.
-        // Current behavior: read collectionSelect regardless (consistent with previous behavior).
         if (collectionSelect) selectedCollectionName = collectionSelect.value;
-
-        console.log("Saving document:", {
-            id: docId,
-            description: descriptionContent,
-            desc_short: shortDescriptionContent,
-            keywords: keywordsContent,
-            collection: selectedCollectionName,
-            metaConfirmed
-        });
 
         const btn = document.getElementById('btnSave'); 
         const originalContent = btn.innerHTML; 
-        btn.innerHTML = '⏳'; 
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i>'; 
         btn.disabled = true;
         
         const payload = { 
@@ -539,7 +740,7 @@ ob_start();
             description: descriptionContent,
             desc_short: shortDescriptionContent,
             keywords: keywordsContent,
-            target_collection: selectedCollectionName || null // Now sending NAME instead of ID
+            target_collection: selectedCollectionName || null
         };
 
         fetch('api_md.php?action=save', { 
@@ -552,7 +753,6 @@ ob_start();
             btn.disabled = false;
             if(res.status === 'success') {
                 showToast("Document saved!");
-                // reset metaConfirmed after successful save (server state now matches in-memory state)
                 metaConfirmed = false;
                 if(!docId && res.id) {
                     let url = `edit_md.php?id=${res.id}`;
@@ -572,13 +772,15 @@ ob_start();
         });
     });
 
-    function showToast(msg) {
-        const x = document.getElementById("toast"); 
-        if(msg) x.innerText = msg; 
-        x.className = "show"; 
-        setTimeout(() => { 
-            x.className = x.className.replace("show", ""); 
-        }, 3000);
+    let toastTimer;
+    function showToast(msg, isError = false) {
+        const el = document.getElementById('toast');
+        if (!el) return;
+        el.textContent = msg;
+        el.style.borderLeftColor = isError ? 'var(--red)' : 'var(--green)';
+        el.style.display = 'block';
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { el.style.display = 'none'; }, 2800);
     }
 </script>
 

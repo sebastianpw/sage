@@ -112,15 +112,24 @@ try {
         header('Content-Type: application/json; charset=utf-8');
         $config = $input['config'] ?? [];
         $data = $kgn->generateExportData($config);
+        
+        $warnings = $data['warnings'] ?? [];
+        
         echo json_encode([
             'ok' => true,
             'counts' => [
-                'nodes'    => count($data['kg']['kg_nodes']),
-                'edges'    => count($data['kg']['kg_node_items']),
-                'sketches' => count($data['sketches']),
-                'frames'   => count($data['frames']),
+                'nodes'    => isset($data['kg']['kg_nodes']) ? count($data['kg']['kg_nodes']) : 0,
+                'edges'    => isset($data['kg']['kg_node_items']) ? count($data['kg']['kg_node_items']) : 0,
+                'sketches' => isset($data['sketches']) ? count($data['sketches']) : 0,
+                'frames'   => isset($data['frames']) ? count($data['frames']) : 0,
             ],
-            'warnings' => $data['warnings'],
+            'warnings' => [
+                'nodes_without_sketch'   => $warnings['nodes_without_sketch'] ?? [],
+                'sketches_without_frame' => $warnings['sketches_without_frame'] ?? [],
+                'over_node_threshold'    => !empty($warnings['over_node_threshold']),
+                'over_sketch_threshold'  => !empty($warnings['over_sketch_threshold']),
+                'over_frame_threshold'   => !empty($warnings['over_frame_threshold']),
+            ],
         ]);
         exit;
     }
@@ -132,6 +141,16 @@ try {
         $content = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
         header('Content-Type: application/json; charset=utf-8');
         header('Content-Disposition: attachment; filename="kg_narrative_export.json"');
+        echo $content;
+        exit;
+    }
+
+    // ── Export (download SQL file) ──
+    if ($action === 'export_sql') {
+        $config = $input['config'] ?? [];
+        $content = $kgn->generateSqlExport($config);
+        header('Content-Type: application/sql; charset=utf-8');
+        header('Content-Disposition: attachment; filename="kg_narrative_export.sql"');
         echo $content;
         exit;
     }

@@ -34,6 +34,7 @@ MAX_RETRIES=2
 RETRY_DELAY=2
 POLL_INTERVAL=5
 MAX_POLL_ATTEMPTS=12
+CURL_TIMEOUT=120
 
 # -----------------------------
 # Freepik API key
@@ -158,7 +159,7 @@ if [ "$ENTITY_TYPE" = "composites" ]; then
         frame_abs_path="$PROJECT_ROOT/public/$frame_filename"
         if [ -f "$frame_abs_path" ]; then
           echo "Uploading composite frame $frame_id ($frame_filename) to Freeimage.host..."
-          response=$(curl -s -X POST "https://freeimage.host/api/1/upload" \
+          response=$(curl -m "$CURL_TIMEOUT" -s -X POST "https://freeimage.host/api/1/upload" \
             -F "key=$FREEIMAGE_KEY" \
             -F "action=upload" \
             -F "source=@$frame_abs_path" \
@@ -183,14 +184,62 @@ if [ "$ENTITY_TYPE" = "composites" ]; then
 fi
 
 # -----------------------------
+# Sketch frames handling
+# -----------------------------
+SKETCH_IMAGE_URLS=""
+if [ "$ENTITY_TYPE" = "sketches" ]; then
+  echo "Entity is sketches. Checking for assigned frames..."
+  mapfile -t sketch_frame_ids < <(mysql $MYSQL_ARGS -N -e \
+    "SELECT frame_id FROM sketch_frames WHERE sketch_id = $ENTITY_ID ORDER BY frame_id ASC;")
+
+  if [ ${#sketch_frame_ids[@]} -gt 0 ]; then
+    echo "Found ${#sketch_frame_ids[@]} assigned frame(s) for sketch ID $ENTITY_ID"
+    declare -a uploaded_sketch_urls
+
+    for frame_id in "${sketch_frame_ids[@]}"; do
+      frame_filename=$(mysql $MYSQL_ARGS -N -e \
+        "SELECT filename FROM frames WHERE id = $frame_id LIMIT 1;" | tr -d '\r')
+
+      if [ -n "$frame_filename" ]; then
+        frame_abs_path="$PROJECT_ROOT/public/$frame_filename"
+        if [ -f "$frame_abs_path" ]; then
+          echo "Uploading sketch frame $frame_id ($frame_filename) to Freeimage.host..."
+          response=$(curl -m "$CURL_TIMEOUT" -s -X POST "https://freeimage.host/api/1/upload" \
+            -F "key=$FREEIMAGE_KEY" \
+            -F "action=upload" \
+            -F "source=@$frame_abs_path" \
+            -F "format=json")
+          frame_url=$(echo "$response" | jq -r '.image.url')
+
+          if [ -n "$frame_url" ] && [ "$frame_url" != "null" ]; then
+            echo "Uploaded frame $frame_id: $frame_url"
+            uploaded_sketch_urls+=("$frame_url")
+          fi
+        fi
+      fi
+    done
+
+    if [ ${#uploaded_sketch_urls[@]} -gt 0 ]; then
+      SKETCH_IMAGE_URLS=$(IFS=,; echo "${uploaded_sketch_urls[*]}")
+      echo "Sketch image URLs: $SKETCH_IMAGE_URLS"
+    fi
+  else
+    echo "No assigned frames found for sketch ID $ENTITY_ID"
+  fi
+fi
+
+# -----------------------------
 # Set up IMAGE_URL for img2img
 # -----------------------------
 if [ -n "$COMPOSITE_IMAGE_URLS" ]; then
   IMAGE_URL="$COMPOSITE_IMAGE_URLS"
   echo "Using composite assigned frames for img2img"
+elif [ -n "$SKETCH_IMAGE_URLS" ]; then
+  IMAGE_URL="$SKETCH_IMAGE_URLS"
+  echo "Using sketch assigned frames for img2img"
 elif [ -n "$IMG2IMG_FILENAME" ] && [ -f "$IMG2IMG_FILENAME" ]; then
   echo "Uploading local source image $IMG2IMG_FILENAME to Freeimage.host..."
-  response=$(curl -s -X POST "https://freeimage.host/api/1/upload" \
+  response=$(curl -m "$CURL_TIMEOUT" -s -X POST "https://freeimage.host/api/1/upload" \
     -F "key=$FREEIMAGE_KEY" \
     -F "action=upload" \
     -F "source=@$IMG2IMG_FILENAME" \
@@ -281,7 +330,7 @@ for ((i=START; i<=END; i++)); do
 
     # POST to create a task
     echo "Posting generation request to Freepik..."
-    create_resp=$(curl -s -X POST "https://api.freepik.com/v1/ai/gemini-2-5-flash-image-preview" \
+    create_resp=$(curl -m "$CURL_TIMEOUT" -s -X POST "https://api.freepik.com/v1/ai/gemini-2-5-flash-image-preview" \
       -H "x-freepik-api-key: $FREEPIK_KEY" \
       -H "Content-Type: application/json" \
       -d "$body")
@@ -304,7 +353,7 @@ for ((i=START; i<=END; i++)); do
       sleep $POLL_INTERVAL
       poll_count=$((poll_count+1))
 
-      poll_resp=$(curl -s -H "x-freepik-api-key: $FREEPIK_KEY" \
+      poll_resp=$(curl -m "$CURL_TIMEOUT" -s -H "x-freepik-api-key: $FREEPIK_KEY" \
         "https://api.freepik.com/v1/ai/gemini-2-5-flash-image-preview/$TASK_ID")
 
       status=$(printf '%s' "$poll_resp" | jq -r '.data.status // empty')
@@ -318,7 +367,7 @@ for ((i=START; i<=END; i++)); do
         fi
 
         echo "Downloading image from: $image_url"
-        curl -s -L "$image_url" -o "$outfile"
+        curl -m "$CURL_TIMEOUT" -s -L "$image_url" -o "$outfile"
         POLL_OK=true
         break
       elif [ "$status" = "FAILED" ]; then

@@ -22,7 +22,7 @@ class PyApiCVService extends PyApiProxy
      * @return array|null       Returns array containing 'description', 'image_url', 'model' on success
      * @throws Exception        If file is missing or API returns an error
      */
-    public function analyze(string $imagePath, string $prompt = "Describe this image", string $model = "qwen-vision"): ?array
+    public function analyze(string $imagePath, string $prompt = "Describe this image", string $model = "openai-fast"): ?array
     {
         // Construct endpoint URL: base + prefix (/cv) + route (/analyze)
         $endpoint = $this->apiUrl . '/cv/analyze';

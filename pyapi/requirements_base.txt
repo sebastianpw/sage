@@ -32,3 +32,4 @@ python-dotenv
 imageio[ffmpeg]
 imageio-ffmpeg
 pdf2image
+yt-dlp

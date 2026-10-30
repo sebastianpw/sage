@@ -318,7 +318,10 @@ $(function() {
             html += `
             <div class="gallery-container">
                 <div class="gallery-meta">
-                    <span class="gallery-title">${item.title}</span>
+                    <div style="display:flex; align-items:center;">
+                        <span class="gallery-title">${item.title}</span>
+                        ${item.item_type !== 'map_run' ? `<a href="#" class="scroll-magic-link regen-entity-btn" data-id="${item.id}" data-type="${item.item_type}" title="Regenerate Images"><i class="bi bi-arrow-repeat"></i></a>` : ''}
+                    </div>
                     <small style="color:var(--text-muted);">${item.meta}</small>
                 </div>`;
 
@@ -444,6 +447,21 @@ $(function() {
     $('.mode-btn').click(function() { 
         $('.mode-btn').removeClass('active'); $(this).addClass('active'); 
         currentPage = 1; loadContent(); 
+    });
+
+    // Entity Regeneration Event
+    $(document).on('click', '.regen-entity-btn', function(e) {
+        e.preventDefault();
+        const $btn = $(this);
+        if (!confirm("Regenerate images for this " + $btn.data('type') + "?")) return;
+        
+        const orig = $btn.html();
+        $btn.html('...').css('pointer-events', 'none');
+
+        $.post('entity_viewer_api.php', { action: 'regenerate_entity', entity_type: $btn.data('type'), entity_id: $btn.data('id') }, function(res) {
+            if (res.ok) { Toast.show('Marked for regeneration', 'success'); $btn.html('✔'); }
+            else { Toast.show('Error: ' + res.error, 'error'); $btn.html(orig).css('pointer-events', 'auto'); }
+        }, 'json').fail(function(){ Toast.show('Network Error', 'error'); $btn.html(orig).css('pointer-events', 'auto'); });
     });
 
     // --- Restore URL Params ---

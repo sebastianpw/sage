@@ -33,20 +33,63 @@ if ($action) {
                 echo json_encode(['success' => true, 'results' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
                 break;
 
-            // ── Search PLUSH Stories ──────────────────────────────────────────────────────
+            // ── Search PLUSH Containers (Stories AND Scenes) ──────────────────────────────
             case 'search_plush':
                 $q = trim($input['q'] ?? '');
+                $results = [];
+
+                // 1. Stories
                 if (is_numeric($q)) {
-                    $stmt = $pdo->prepare("SELECT id, title as name FROM plush_stories WHERE id = ? OR title LIKE ? ORDER BY id DESC LIMIT 20");
-                    $stmt->execute([(int)$q, "%$q%"]);
+                    $sStmt = $pdo->prepare("SELECT id, title, 'story' as target_type FROM plush_stories WHERE id = ? OR title LIKE ? ORDER BY id DESC LIMIT 10");
+                    $sStmt->execute([(int)$q, "%$q%"]);
                 } else {
-                    $stmt = $pdo->prepare("SELECT id, title as name FROM plush_stories WHERE title LIKE ? ORDER BY id DESC LIMIT 20");
-                    $stmt->execute(["%$q%"]);
+                    $sStmt = $pdo->prepare("SELECT id, title, 'story' as target_type FROM plush_stories WHERE title LIKE ? ORDER BY id DESC LIMIT 10");
+                    $sStmt->execute(["%$q%"]);
                 }
-                echo json_encode(['success' => true, 'results' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+                foreach ($sStmt->fetchAll(PDO::FETCH_ASSOC) as $s) {
+                    $results[] = [
+                        'id'          => (int)$s['id'],
+                        'story_id'    => (int)$s['id'],
+                        'scene_id'    => null,
+                        'target_type' => 'story',
+                        'name'        => '[Story #' . $s['id'] . '] ' . $s['title']
+                    ];
+                }
+
+                // 2. Scenes
+                if (is_numeric($q)) {
+                    $scStmt = $pdo->prepare("
+                        SELECT sc.id, sc.title, sc.story_id, st.title as story_title
+                        FROM plush_scenes sc
+                        JOIN plush_stories st ON st.id = sc.story_id
+                        WHERE sc.id = ? OR sc.title LIKE ? OR st.title LIKE ?
+                        ORDER BY sc.id DESC LIMIT 15
+                    ");
+                    $scStmt->execute([(int)$q, "%$q%", "%$q%"]);
+                } else {
+                    $scStmt = $pdo->prepare("
+                        SELECT sc.id, sc.title, sc.story_id, st.title as story_title
+                        FROM plush_scenes sc
+                        JOIN plush_stories st ON st.id = sc.story_id
+                        WHERE sc.title LIKE ? OR st.title LIKE ?
+                        ORDER BY sc.id DESC LIMIT 15
+                    ");
+                    $scStmt->execute(["%$q%", "%$q%"]);
+                }
+                foreach ($scStmt->fetchAll(PDO::FETCH_ASSOC) as $sc) {
+                    $results[] = [
+                        'id'          => (int)$sc['id'],
+                        'story_id'    => (int)$sc['story_id'],
+                        'scene_id'    => (int)$sc['id'],
+                        'target_type' => 'scene',
+                        'name'        => '[Scene #' . $sc['id'] . '] ' . $sc['story_title'] . ' → ' . $sc['title']
+                    ];
+                }
+
+                echo json_encode(['success' => true, 'results' => $results]);
                 break;
 
-            // ── Direction 1: Narrative Sequence ➔ PLUSH ──────────────────────────────────
+            // ── Direction 1: Narrative Sequence ➔ PLUSH (Create New Story) ──────────────
             case 'migrate_to_plush':
                 $seqId = (int)($input['sequence_id'] ?? 0);
                 if (!$seqId) throw new Exception('Sequence ID required.');
@@ -58,18 +101,15 @@ if ($action) {
                 $seq = $stmt->fetch(PDO::FETCH_ASSOC);
                 if (!$seq) throw new Exception('Sequence not found.');
 
-                // Create Story
                 $storyTitle = "Imported: " . $seq['name'];
                 $sIns = $pdo->prepare("INSERT INTO plush_stories (title, description) VALUES (?, ?)");
                 $sIns->execute([$storyTitle, $seq['description']]);
                 $storyId = (int)$pdo->lastInsertId();
 
-                // Create Scene
                 $scIns = $pdo->prepare("INSERT INTO plush_scenes (story_id, title, scene_order) VALUES (?, 'Scene 1', 0)");
                 $scIns->execute([$storyId]);
                 $sceneId = (int)$pdo->lastInsertId();
 
-                // Create Default Group
                 $gIns = $pdo->prepare("INSERT INTO plush_highlight_groups (scene_id, label, group_order) VALUES (?, 'Main', 0)");
                 $gIns->execute([$sceneId]);
                 $groupId = (int)$pdo->lastInsertId();
@@ -94,7 +134,6 @@ if ($action) {
                     $ovStmt->execute([$sketchId]);
                     $overlays = $ovStmt->fetchAll(PDO::FETCH_COLUMN);
 
-                    // Concatenate all overlay texts into a single string to avoid 1:N fan-out on reverse migration
                     $finalText = empty($overlays) ? ($sk['description'] ?? '') : implode("\n\n", $overlays);
 
                     $bIns->execute([$sceneId, $groupId, (string)$finalText, $displayOrder++]);
@@ -106,12 +145,11 @@ if ($action) {
                 echo json_encode(['success' => true, 'new_story_id' => $storyId]);
                 break;
 
-            // ── Direction 2: PLUSH ➔ Narrative Sequence (Analysis Phase) ────────────────
+            // ── Direction 2: PLUSH ➔ Narrative Sequence (Create New Sequence) ───────────
             case 'analyze_plush_to_narrative':
                 $storyId = (int)($input['story_id'] ?? 0);
                 if (!$storyId) throw new Exception('Story ID required.');
 
-                // Fetch chronological sketch mentions
                 $stmt = $pdo->prepare("
                     SELECT 
                         b.id as block_id, b.text_content, 
@@ -129,7 +167,7 @@ if ($action) {
                 if (empty($mentions)) throw new Exception('No sketches found linked to this PLUSH story.');
 
                 $uniqueSketches = [];
-                $newTexts = []; // sketch_id => array of texts
+                $newTexts = [];
 
                 foreach ($mentions as $m) {
                     $sid = (int)$m['sketch_id'];
@@ -137,7 +175,6 @@ if ($action) {
                     $newTexts[$sid][] = $m['text_content'];
                 }
 
-                // Check for existing overlay texts
                 $in = implode(',', array_fill(0, count($uniqueSketches), '?'));
                 $ovStmt = $pdo->prepare("SELECT sketch_id, text_content FROM sketch_overlay_texts WHERE language_code = 'en' AND sketch_id IN ($in) ORDER BY display_order ASC");
                 $ovStmt->execute(array_keys($uniqueSketches));
@@ -160,7 +197,6 @@ if ($action) {
                 echo json_encode(['success' => true, 'conflicts' => $conflicts]);
                 break;
 
-            // ── Direction 2: PLUSH ➔ Narrative Sequence (Execute Phase) ────────────────
             case 'migrate_to_narrative':
                 $storyId = (int)($input['story_id'] ?? 0);
                 $overwriteIds = array_map('intval', (array)($input['overwrite_sketch_ids'] ?? []));
@@ -172,7 +208,6 @@ if ($action) {
                 $stmt->execute([$storyId]);
                 $storyTitle = $stmt->fetchColumn();
 
-                // Re-fetch chronological sketches
                 $mStmt = $pdo->prepare("
                     SELECT b.text_content, e.entity_id as sketch_id
                     FROM plush_highlight_blocks b
@@ -195,7 +230,6 @@ if ($action) {
                     $sketchIds[] = $sid;
                 }
 
-                // Find latest frames
                 $sketchIds = array_unique($sketchIds);
                 if (!empty($sketchIds)) {
                     $in = implode(',', array_fill(0, count($sketchIds), '?'));
@@ -218,13 +252,11 @@ if ($action) {
                     unset($item);
                 }
 
-                // Create Sequence
                 $seqName = "Migrated from PLUSH: " . $storyTitle;
                 $seqIns = $pdo->prepare("INSERT INTO narrative_sequences (name, sequence_data) VALUES (?, ?)");
                 $seqIns->execute([$seqName, json_encode($sequenceData, JSON_UNESCAPED_UNICODE)]);
                 $newSeqId = (int)$pdo->lastInsertId();
 
-                // Handle Overlay Texts
                 $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM sketch_overlay_texts WHERE sketch_id = ? AND language_code = 'en'");
                 $delStmt   = $pdo->prepare("DELETE FROM sketch_overlay_texts WHERE sketch_id = ? AND language_code = 'en'");
                 $insStmt   = $pdo->prepare("INSERT INTO sketch_overlay_texts (sketch_id, text_content, language_code, display_order) VALUES (?, ?, 'en', ?)");
@@ -234,7 +266,7 @@ if ($action) {
                     $exists = (int)$checkStmt->fetchColumn() > 0;
 
                     if ($exists && !in_array($sid, $overwriteIds)) {
-                        continue; // Keep existing
+                        continue;
                     }
 
                     if ($exists) {
@@ -250,11 +282,12 @@ if ($action) {
                 echo json_encode(['success' => true, 'new_sequence_id' => $newSeqId]);
                 break;
 
-            // ── Direction 3: Sequence ➔ Existing PLUSH (Analysis Phase) ────────────────
+            // ── Direction 3: Sequence ➔ Existing PLUSH (Sync, Add, Remove, Order) ───────
             case 'analyze_sync_seq_to_plush':
-                $seqId = (int)($input['sequence_id'] ?? 0);
-                $storyId = (int)($input['story_id'] ?? 0);
-                if (!$seqId || !$storyId) throw new Exception('Sequence ID and Story ID required.');
+                $seqId    = (int)($input['sequence_id'] ?? 0);
+                $storyId  = (int)($input['story_id'] ?? 0);
+                $sceneId  = !empty($input['scene_id']) ? (int)$input['scene_id'] : 0;
+                if (!$seqId || (!$storyId && !$sceneId)) throw new Exception('Sequence ID and PLUSH Container required.');
 
                 $stmt = $pdo->prepare("SELECT sequence_data FROM narrative_sequences WHERE id = ?");
                 $stmt->execute([$seqId]);
@@ -267,17 +300,54 @@ if ($action) {
                 }
                 $seqSketchIds = array_values(array_unique($seqSketchIds));
 
+                // Fetch PLUSH blocks in scope (by scene_id or story_id)
+                if ($sceneId > 0) {
+                    $plushStmt = $pdo->prepare("
+                        SELECT b.id as block_id, b.scene_id, b.group_id, b.display_order, b.text_content, e.entity_id as sketch_id, s.name as sketch_name
+                        FROM plush_highlight_blocks b
+                        JOIN plush_highlight_block_entities e ON e.block_id = b.id AND e.entity_type = 'sketches'
+                        JOIN sketches s ON s.id = e.entity_id
+                        WHERE b.scene_id = ? AND b.language_code = 'en'
+                        ORDER BY b.group_id ASC, b.display_order ASC, b.id ASC
+                    ");
+                    $plushStmt->execute([$sceneId]);
+                } else {
+                    $plushStmt = $pdo->prepare("
+                        SELECT b.id as block_id, b.scene_id, b.group_id, b.display_order, b.text_content, e.entity_id as sketch_id, s.name as sketch_name
+                        FROM plush_highlight_blocks b
+                        JOIN plush_highlight_block_entities e ON e.block_id = b.id AND e.entity_type = 'sketches'
+                        JOIN plush_scenes sc ON sc.id = b.scene_id
+                        JOIN sketches s ON s.id = e.entity_id
+                        WHERE sc.story_id = ? AND b.language_code = 'en'
+                        ORDER BY sc.scene_order ASC, sc.id ASC, b.group_id ASC, b.display_order ASC, b.id ASC
+                    ");
+                    $plushStmt->execute([$storyId]);
+                }
+                $plushRows = $plushStmt->fetchAll(PDO::FETCH_ASSOC);
+
+                $plushMap = [];
+                $plushOrder = [];
+                foreach ($plushRows as $row) {
+                    $sid = (int)$row['sketch_id'];
+                    if (!isset($plushMap[$sid])) {
+                        $plushMap[$sid] = $row;
+                        $plushOrder[] = $sid;
+                    }
+                }
+
+                // Load sketch metadata and overlays for sequence sketches
+                $allSids = array_values(array_unique(array_merge($seqSketchIds, $plushOrder)));
                 $sketchesData = [];
-                if (!empty($seqSketchIds)) {
-                    $in = implode(',', array_fill(0, count($seqSketchIds), '?'));
+                if (!empty($allSids)) {
+                    $in = implode(',', array_fill(0, count($allSids), '?'));
                     $skStmt = $pdo->prepare("SELECT id, name, description FROM sketches WHERE id IN ($in)");
-                    $skStmt->execute($seqSketchIds);
+                    $skStmt->execute($allSids);
                     foreach ($skStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                         $sketchesData[(int)$row['id']] = $row;
                     }
 
                     $ovStmt = $pdo->prepare("SELECT sketch_id, text_content FROM sketch_overlay_texts WHERE language_code = 'en' AND sketch_id IN ($in) ORDER BY display_order ASC");
-                    $ovStmt->execute($seqSketchIds);
+                    $ovStmt->execute($allSids);
                     foreach ($ovStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                         $sid = (int)$row['sketch_id'];
                         if (!isset($sketchesData[$sid]['overlays'])) $sketchesData[$sid]['overlays'] = [];
@@ -285,56 +355,73 @@ if ($action) {
                     }
                 }
 
-                // Fetch mapping from PLUSH (Blocks mapped to sketches)
-                $plushStmt = $pdo->prepare("
-                    SELECT b.id as block_id, b.text_content, e.entity_id as sketch_id
-                    FROM plush_highlight_blocks b
-                    JOIN plush_highlight_block_entities e ON e.block_id = b.id AND e.entity_type = 'sketches'
-                    JOIN plush_scenes sc ON sc.id = b.scene_id
-                    WHERE sc.story_id = ? AND b.language_code = 'en'
-                ");
-                $plushStmt->execute([$storyId]);
-                $plushMap = [];
-                foreach ($plushStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                    $sid = (int)$row['sketch_id'];
-                    // Keep the first block we find for a given sketch
-                    if (!isset($plushMap[$sid])) {
-                        $plushMap[$sid] = $row;
-                    }
-                }
+                // Detect relative order differences among shared items
+                $seqOrderShared   = array_values(array_filter($seqSketchIds, fn($sid) => isset($plushMap[$sid])));
+                $plushOrderShared = array_values(array_filter($plushOrder, fn($sid) => in_array($sid, $seqOrderShared, true)));
 
                 $conflicts = [];
-                foreach ($seqSketchIds as $sid) {
+
+                // 1. Process Sequence sketches (New, Modified, Reordered)
+                foreach ($seqSketchIds as $seqIdx => $sid) {
                     $sk = $sketchesData[$sid] ?? null;
                     if (!$sk) continue;
 
                     $overlays = $sk['overlays'] ?? [];
-                    $seqText = empty($overlays) ? ($sk['description'] ?? '') : implode("\n\n", $overlays);
+                    $seqText  = empty($overlays) ? ($sk['description'] ?? '') : implode("\n\n", $overlays);
                     
                     if (isset($plushMap[$sid])) {
-                        $plushText = $plushMap[$sid]['text_content'];
-                        // Normalize newlines for comparison
-                        $nSeqText = str_replace("\r\n", "\n", trim($seqText));
-                        $nPlushText = str_replace("\r\n", "\n", trim($plushText));
+                        $plushText   = $plushMap[$sid]['text_content'];
+                        $nSeqText    = str_replace("\r\n", "\n", trim($seqText));
+                        $nPlushText  = str_replace("\r\n", "\n", trim($plushText));
 
-                        if ($nSeqText !== $nPlushText) {
+                        $hasTextDiff  = ($nSeqText !== $nPlushText);
+
+                        $seqRelPos   = array_search($sid, $seqOrderShared);
+                        $plushRelPos = array_search($sid, $plushOrderShared);
+                        $hasOrderDiff = ($seqRelPos !== false && $plushRelPos !== false && $seqRelPos !== $plushRelPos);
+
+                        if ($hasTextDiff) {
                             $conflicts[] = [
-                                'sketch_id' => $sid,
-                                'sketch_name' => $sk['name'],
-                                'status' => 'modified',
-                                'sequence_text' => $seqText,
-                                'plush_text' => $plushText,
+                                'sketch_id'      => $sid,
+                                'sketch_name'    => $sk['name'],
+                                'status'         => 'modified',
+                                'sequence_text'  => $seqText,
+                                'plush_text'     => $plushText,
+                                'plush_block_id' => $plushMap[$sid]['block_id']
+                            ];
+                        } elseif ($hasOrderDiff) {
+                            $conflicts[] = [
+                                'sketch_id'      => $sid,
+                                'sketch_name'    => $sk['name'],
+                                'status'         => 'reordered',
+                                'sequence_text'  => "(Sequence pos: #" . ($seqIdx + 1) . ")\n\n" . $seqText,
+                                'plush_text'     => "(PLUSH pos: #" . ($plushRelPos + 1) . ")\n\n" . $plushText,
                                 'plush_block_id' => $plushMap[$sid]['block_id']
                             ];
                         }
                     } else {
                         $conflicts[] = [
-                            'sketch_id' => $sid,
-                            'sketch_name' => $sk['name'],
-                            'status' => 'new',
-                            'sequence_text' => $seqText,
-                            'plush_text' => null,
+                            'sketch_id'      => $sid,
+                            'sketch_name'    => $sk['name'],
+                            'status'         => 'new',
+                            'sequence_text'  => $seqText,
+                            'plush_text'     => null,
                             'plush_block_id' => null
+                        ];
+                    }
+                }
+
+                // 2. Process sketches in PLUSH but missing from Sequence (Removed)
+                foreach ($plushOrder as $pIdx => $sid) {
+                    if (!in_array($sid, $seqSketchIds, true)) {
+                        $skName = $plushMap[$sid]['sketch_name'] ?? ($sketchesData[$sid]['name'] ?? 'Sketch #' . $sid);
+                        $conflicts[] = [
+                            'sketch_id'      => $sid,
+                            'sketch_name'    => $skName,
+                            'status'         => 'removed',
+                            'sequence_text'  => '(Not in sequence — block will be deleted from PLUSH)',
+                            'plush_text'     => $plushMap[$sid]['text_content'],
+                            'plush_block_id' => $plushMap[$sid]['block_id']
                         ];
                     }
                 }
@@ -342,33 +429,87 @@ if ($action) {
                 echo json_encode(['success' => true, 'conflicts' => $conflicts]);
                 break;
 
-            // ── Direction 3: Sequence ➔ Existing PLUSH (Execute Phase) ──────────────────
             case 'execute_sync_seq_to_plush':
-                $storyId = (int)($input['story_id'] ?? 0);
-                $updates = $input['updates'] ?? [];
-                if (!$storyId || empty($updates)) throw new Exception('Story ID and updates required.');
+                $seqId    = (int)($input['sequence_id'] ?? 0);
+                $storyId  = (int)($input['story_id'] ?? 0);
+                $sceneId  = !empty($input['scene_id']) ? (int)$input['scene_id'] : 0;
+                $updates  = $input['updates'] ?? [];
+                if (!$storyId && !$sceneId) throw new Exception('PLUSH container ID required.');
 
                 $pdo->beginTransaction();
 
-                // If there are 'new' blocks, append to the last scene/group available.
-                $lastSceneId = null;
-                $lastGroupId = 0;
-                
-                $scStmt = $pdo->prepare("SELECT id FROM plush_scenes WHERE story_id = ? ORDER BY scene_order DESC, id DESC LIMIT 1");
-                $scStmt->execute([$storyId]);
-                $lastSceneId = $scStmt->fetchColumn();
-
-                if (!$lastSceneId) {
-                    // Create a scene if none exist
-                    $pdo->prepare("INSERT INTO plush_scenes (story_id, title, scene_order) VALUES (?, 'Scene 1', 0)")->execute([$storyId]);
-                    $lastSceneId = (int)$pdo->lastInsertId();
+                // Resolve story_id if only scene_id was given
+                if (!$storyId && $sceneId > 0) {
+                    $scSt = $pdo->prepare("SELECT story_id FROM plush_scenes WHERE id = ?");
+                    $scSt->execute([$sceneId]);
+                    $storyId = (int)$scSt->fetchColumn();
                 }
 
-                $bIns = $pdo->prepare("INSERT INTO plush_highlight_blocks (scene_id, group_id, text_content, display_order) VALUES (?, ?, ?, ?)");
-                $eIns = $pdo->prepare("INSERT INTO plush_highlight_block_entities (block_id, entity_type, entity_id, entity_label) VALUES (?, 'sketches', ?, ?)");
-                $bUpd = $pdo->prepare("UPDATE plush_highlight_blocks SET text_content = ? WHERE id = ?");
+                // Fetch sequence order
+                $seqItems = [];
+                if ($seqId > 0) {
+                    $seqStmt = $pdo->prepare("SELECT sequence_data FROM narrative_sequences WHERE id = ?");
+                    $seqStmt->execute([$seqId]);
+                    $seqData = json_decode($seqStmt->fetchColumn() ?: '[]', true) ?: [];
+                    foreach ($seqData as $item) {
+                        $sid = is_array($item) ? (int)($item['sketch_id'] ?? 0) : (int)$item;
+                        if ($sid > 0) $seqItems[] = $sid;
+                    }
+                    $seqItems = array_values(array_unique($seqItems));
+                }
 
-                // Fetch names for new sketches
+                // Fetch existing story blocks
+                $bMapStmt = $pdo->prepare("
+                    SELECT b.id as block_id, b.scene_id, b.group_id, b.display_order, e.entity_id as sketch_id
+                    FROM plush_highlight_blocks b
+                    JOIN plush_highlight_block_entities e ON e.block_id = b.id AND e.entity_type = 'sketches'
+                    JOIN plush_scenes sc ON sc.id = b.scene_id
+                    WHERE sc.story_id = ? AND b.language_code = 'en'
+                    ORDER BY sc.scene_order ASC, sc.id ASC, b.group_id ASC, b.display_order ASC
+                ");
+                $bMapStmt->execute([$storyId]);
+                $sketchBlockMap = [];
+                foreach ($bMapStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                    $sketchBlockMap[(int)$r['sketch_id']] = $r;
+                }
+
+                // Resolve anchor target scene & group
+                $anchorSceneId = $sceneId > 0 ? $sceneId : null;
+                $anchorGroupId = null;
+
+                if (!$anchorSceneId) {
+                    foreach ($seqItems as $sid) {
+                        if (isset($sketchBlockMap[$sid])) {
+                            $anchorSceneId = (int)$sketchBlockMap[$sid]['scene_id'];
+                            $anchorGroupId = (int)$sketchBlockMap[$sid]['group_id'];
+                            break;
+                        }
+                    }
+                }
+
+                if (!$anchorSceneId) {
+                    $scStmt = $pdo->prepare("SELECT id FROM plush_scenes WHERE story_id = ? ORDER BY scene_order ASC, id ASC LIMIT 1");
+                    $scStmt->execute([$storyId]);
+                    $anchorSceneId = (int)$scStmt->fetchColumn();
+                    if (!$anchorSceneId) {
+                        $pdo->prepare("INSERT INTO plush_scenes (story_id, title, scene_order) VALUES (?, 'Scene 1', 0)")->execute([$storyId]);
+                        $anchorSceneId = (int)$pdo->lastInsertId();
+                    }
+                }
+
+                if ($anchorGroupId === null) {
+                    $grpStmt = $pdo->prepare("SELECT id FROM plush_highlight_groups WHERE scene_id = ? ORDER BY group_order ASC, id ASC LIMIT 1");
+                    $grpStmt->execute([$anchorSceneId]);
+                    $anchorGroupId = (int)$grpStmt->fetchColumn() ?: 0;
+                }
+
+                $bIns  = $pdo->prepare("INSERT INTO plush_highlight_blocks (scene_id, group_id, text_content, language_code, display_order) VALUES (?, ?, ?, 'en', ?)");
+                $eIns  = $pdo->prepare("INSERT INTO plush_highlight_block_entities (block_id, entity_type, entity_id, entity_label) VALUES (?, 'sketches', ?, ?)");
+                $bUpd  = $pdo->prepare("UPDATE plush_highlight_blocks SET text_content = ? WHERE id = ?");
+                $bMove = $pdo->prepare("UPDATE plush_highlight_blocks SET scene_id = ?, group_id = ? WHERE id = ?");
+                $bDelE = $pdo->prepare("DELETE FROM plush_highlight_block_entities WHERE block_id = ?");
+                $bDelB = $pdo->prepare("DELETE FROM plush_highlight_blocks WHERE id = ?");
+
                 $newSketchIds = [];
                 foreach ($updates as $u) {
                     if ($u['status'] === 'new') $newSketchIds[] = (int)$u['sketch_id'];
@@ -383,24 +524,352 @@ if ($action) {
                     }
                 }
 
-                $dispOrdStmt = $pdo->prepare("SELECT COALESCE(MAX(display_order), -1) FROM plush_highlight_blocks WHERE scene_id = ? AND group_id = ? AND language_code = 'en'");
-
+                // 1. Process updates (Removals, modifications, additions)
                 foreach ($updates as $u) {
-                    $sid = (int)($u['sketch_id'] ?? 0);
+                    $sid    = (int)($u['sketch_id'] ?? 0);
                     $status = $u['status'] ?? '';
-                    $text = $u['text'] ?? '';
+                    $text   = $u['text'] ?? '';
+                    $bId    = !empty($u['plush_block_id']) ? (int)$u['plush_block_id'] : ($sketchBlockMap[$sid]['block_id'] ?? 0);
 
-                    if ($status === 'modified' && !empty($u['plush_block_id'])) {
-                        $bUpd->execute([$text, (int)$u['plush_block_id']]);
+                    if ($status === 'removed' && $bId > 0) {
+                        $bDelE->execute([$bId]);
+                        $bDelB->execute([$bId]);
+                        unset($sketchBlockMap[$sid]);
+                    } elseif ($status === 'modified' && $bId > 0) {
+                        $bUpd->execute([$text, $bId]);
                     } elseif ($status === 'new' && $sid > 0) {
-                        $dispOrdStmt->execute([$lastSceneId, $lastGroupId]);
-                        $dOrder = (int)$dispOrdStmt->fetchColumn() + 1;
-
-                        $bIns->execute([$lastSceneId, $lastGroupId, $text, $dOrder]);
+                        $bIns->execute([$anchorSceneId, $anchorGroupId, $text, 0]);
                         $blockId = (int)$pdo->lastInsertId();
 
                         $sName = $skNames[$sid] ?? 'Unknown Sketch';
                         $eIns->execute([$blockId, $sid, $sName]);
+
+                        $sketchBlockMap[$sid] = [
+                            'block_id'      => $blockId,
+                            'scene_id'      => $anchorSceneId,
+                            'group_id'      => $anchorGroupId,
+                            'display_order' => 0
+                        ];
+                    }
+                }
+
+                // 2. Unify placement into the target scene & group
+                foreach ($seqItems as $sid) {
+                    if (isset($sketchBlockMap[$sid])) {
+                        $curSc = (int)$sketchBlockMap[$sid]['scene_id'];
+                        $curGp = (int)$sketchBlockMap[$sid]['group_id'];
+                        $bId   = (int)$sketchBlockMap[$sid]['block_id'];
+
+                        if ($curSc !== $anchorSceneId || $curGp !== $anchorGroupId) {
+                            $bMove->execute([$anchorSceneId, $anchorGroupId, $bId]);
+                            $sketchBlockMap[$sid]['scene_id'] = $anchorSceneId;
+                            $sketchBlockMap[$sid]['group_id'] = $anchorGroupId;
+                        }
+                    }
+                }
+
+                // 3. Reorder the target group strictly by sequence order
+                $stmtG = $pdo->prepare("
+                    SELECT b.id, e.entity_id as sketch_id, b.display_order
+                    FROM plush_highlight_blocks b
+                    LEFT JOIN plush_highlight_block_entities e ON e.block_id = b.id AND e.entity_type = 'sketches'
+                    WHERE b.scene_id = ? AND b.group_id = ? AND b.language_code = 'en'
+                    ORDER BY b.display_order ASC, b.id ASC
+                ");
+                $stmtG->execute([$anchorSceneId, $anchorGroupId]);
+                $groupBlocks = $stmtG->fetchAll(PDO::FETCH_ASSOC);
+
+                if (!empty($groupBlocks)) {
+                    usort($groupBlocks, function($a, $b) use ($seqItems) {
+                        $sidA = (int)($a['sketch_id'] ?? 0);
+                        $sidB = (int)($b['sketch_id'] ?? 0);
+                        $posA = array_search($sidA, $seqItems);
+                        $posB = array_search($sidB, $seqItems);
+
+                        if ($posA !== false && $posB !== false) {
+                            return $posA <=> $posB;
+                        }
+                        if ($posA !== false && $posB === false) {
+                            return -1;
+                        }
+                        if ($posA === false && $posB !== false) {
+                            return 1;
+                        }
+                        return ((int)$a['display_order']) <=> ((int)$b['display_order']);
+                    });
+
+                    $sortedIds = array_column($groupBlocks, 'id');
+                    $oldOrders = [];
+                    foreach ($groupBlocks as $gb) {
+                        $oldOrders[(int)$gb['id']] = (int)$gb['display_order'];
+                    }
+
+                    $uEn = $pdo->prepare("UPDATE plush_highlight_blocks SET display_order = ? WHERE id = ?");
+                    $uTr = $pdo->prepare("UPDATE plush_highlight_blocks SET display_order = ? WHERE scene_id = ? AND group_id = ? AND language_code != 'en' AND display_order = ?");
+                    $uTrFinal = $pdo->prepare("UPDATE plush_highlight_blocks SET display_order = ? WHERE scene_id = ? AND group_id = ? AND language_code != 'en' AND display_order = ?");
+
+                    foreach ($sortedIds as $newIdx => $bId) {
+                        if (isset($oldOrders[$bId])) {
+                            $oldIdx = $oldOrders[$bId];
+                            $uTr->execute([-$newIdx - 1000, $anchorSceneId, $anchorGroupId, $oldIdx]);
+                        }
+                        $uEn->execute([$newIdx, $bId]);
+                    }
+
+                    foreach ($sortedIds as $newIdx => $bId) {
+                        $uTrFinal->execute([$newIdx, $anchorSceneId, $anchorGroupId, -$newIdx - 1000]);
+                    }
+                }
+
+                $pdo->commit();
+                echo json_encode(['success' => true, 'target_story_id' => $storyId]);
+                break;
+
+            // ── Direction 4: PLUSH ➔ Existing Sequence (Sync, Add, Remove, Order) ───────
+            case 'analyze_sync_plush_to_seq':
+                $storyId  = (int)($input['story_id'] ?? 0);
+                $sceneId  = !empty($input['scene_id']) ? (int)$input['scene_id'] : 0;
+                $seqId    = (int)($input['sequence_id'] ?? 0);
+                if ((!$storyId && !$sceneId) || !$seqId) throw new Exception('PLUSH Container and Sequence ID required.');
+
+                // Fetch chronological sketch blocks from PLUSH
+                if ($sceneId > 0) {
+                    $stmt = $pdo->prepare("
+                        SELECT b.id as block_id, b.text_content, e.entity_id as sketch_id, s.name as sketch_name
+                        FROM plush_highlight_blocks b
+                        JOIN plush_highlight_block_entities e ON e.block_id = b.id AND e.entity_type = 'sketches'
+                        JOIN sketches s ON s.id = e.entity_id
+                        WHERE b.scene_id = ? AND b.language_code = 'en'
+                        ORDER BY b.group_id ASC, b.display_order ASC, e.id ASC
+                    ");
+                    $stmt->execute([$sceneId]);
+                } else {
+                    $stmt = $pdo->prepare("
+                        SELECT b.id as block_id, b.text_content, e.entity_id as sketch_id, s.name as sketch_name
+                        FROM plush_highlight_blocks b
+                        JOIN plush_highlight_block_entities e ON e.block_id = b.id AND e.entity_type = 'sketches'
+                        JOIN plush_scenes sc ON sc.id = b.scene_id
+                        JOIN sketches s ON s.id = e.entity_id
+                        WHERE sc.story_id = ? AND b.language_code = 'en'
+                        ORDER BY sc.scene_order ASC, sc.id ASC, b.group_id ASC, b.display_order ASC, e.id ASC
+                    ");
+                    $stmt->execute([$storyId]);
+                }
+                $plushMentions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                // Fetch sequence items
+                $seqStmt = $pdo->prepare("SELECT sequence_data FROM narrative_sequences WHERE id = ?");
+                $seqStmt->execute([$seqId]);
+                $seqData = json_decode($seqStmt->fetchColumn() ?: '[]', true) ?: [];
+
+                $seqSketches = [];
+                $seqSketchIds = [];
+                foreach ($seqData as $idx => $item) {
+                    $sid = is_array($item) ? (int)($item['sketch_id'] ?? 0) : (int)$item;
+                    if ($sid > 0) {
+                        $seqSketches[$sid] = ['idx' => $idx, 'item' => $item];
+                        $seqSketchIds[] = $sid;
+                    }
+                }
+
+                $plushSketchIds = [];
+                $plushTexts     = [];
+                $sketchNames    = [];
+                foreach ($plushMentions as $pm) {
+                    $sid = (int)$pm['sketch_id'];
+                    $plushSketchIds[]    = $sid;
+                    $plushTexts[$sid][]  = $pm['text_content'];
+                    $sketchNames[$sid]   = $pm['sketch_name'];
+                }
+                $plushSketchIds = array_values(array_unique($plushSketchIds));
+
+                // Fetch existing overlay texts for comparison
+                $allSids = array_values(array_unique(array_merge($plushSketchIds, $seqSketchIds)));
+                $existingOverlays = [];
+                $skNamesExtra = [];
+                if (!empty($allSids)) {
+                    $in = implode(',', array_fill(0, count($allSids), '?'));
+                    $ovStmt = $pdo->prepare("SELECT sketch_id, text_content FROM sketch_overlay_texts WHERE language_code = 'en' AND sketch_id IN ($in) ORDER BY display_order ASC");
+                    $ovStmt->execute($allSids);
+                    foreach ($ovStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                        $existingOverlays[(int)$row['sketch_id']][] = $row['text_content'];
+                    }
+
+                    $skExtraStmt = $pdo->prepare("SELECT id, name FROM sketches WHERE id IN ($in)");
+                    $skExtraStmt->execute($allSids);
+                    foreach ($skExtraStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                        $skNamesExtra[(int)$r['id']] = $r['name'];
+                    }
+                }
+
+                // Detect order mismatch on shared items
+                $sharedInPlush = array_values(array_filter($plushSketchIds, fn($sid) => isset($seqSketches[$sid])));
+                $sharedInSeq   = array_values(array_filter($seqSketchIds, fn($sid) => in_array($sid, $sharedInPlush, true)));
+
+                $conflicts = [];
+
+                // 1. Process PLUSH sketches (New, Modified, Reordered)
+                foreach ($plushSketchIds as $pIdx => $sid) {
+                    $pText  = implode("\n\n", $plushTexts[$sid] ?? []);
+                    $exText = implode("\n---\n", $existingOverlays[$sid] ?? []);
+                    $sName  = $sketchNames[$sid] ?? ($skNamesExtra[$sid] ?? 'Sketch #' . $sid);
+
+                    if (!isset($seqSketches[$sid])) {
+                        $conflicts[] = [
+                            'sketch_id'     => $sid,
+                            'sketch_name'   => $sName,
+                            'status'        => 'new',
+                            'plush_text'    => $pText,
+                            'sequence_text' => '(Not in sequence — will be added)'
+                        ];
+                    } else {
+                        $nPlushText = str_replace("\r\n", "\n", trim($pText));
+                        $nExText    = str_replace("\r\n", "\n", trim($exText));
+
+                        $hasTextDiff = ($nPlushText !== $nExText);
+
+                        $pRelPos = array_search($sid, $sharedInPlush);
+                        $sRelPos = array_search($sid, $sharedInSeq);
+                        $hasOrderDiff = ($pRelPos !== false && $sRelPos !== false && $pRelPos !== $sRelPos);
+
+                        if ($hasTextDiff) {
+                            $conflicts[] = [
+                                'sketch_id'     => $sid,
+                                'sketch_name'   => $sName,
+                                'status'        => 'modified',
+                                'plush_text'    => $pText,
+                                'sequence_text' => $exText
+                            ];
+                        } elseif ($hasOrderDiff) {
+                            $conflicts[] = [
+                                'sketch_id'     => $sid,
+                                'sketch_name'   => $sName,
+                                'status'        => 'reordered',
+                                'plush_text'    => "(PLUSH order: #" . ($pIdx + 1) . ")\n\n" . $pText,
+                                'sequence_text' => "(Sequence order: #" . ($seqSketches[$sid]['idx'] + 1) . ")\n\n" . $exText
+                            ];
+                        }
+                    }
+                }
+
+                // 2. Process sketches in Sequence missing from PLUSH (Removed)
+                foreach ($seqSketchIds as $sIdx => $sid) {
+                    if (!in_array($sid, $plushSketchIds, true)) {
+                        $sName = $skNamesExtra[$sid] ?? 'Sketch #' . $sid;
+                        $exText = implode("\n---\n", $existingOverlays[$sid] ?? []);
+                        $conflicts[] = [
+                            'sketch_id'     => $sid,
+                            'sketch_name'   => $sName,
+                            'status'        => 'removed',
+                            'plush_text'    => '(Removed from PLUSH — will be deleted from sequence)',
+                            'sequence_text' => $exText ?: '(Present in sequence)'
+                        ];
+                    }
+                }
+
+                echo json_encode(['success' => true, 'conflicts' => $conflicts]);
+                break;
+
+            case 'execute_sync_plush_to_seq':
+                $storyId  = (int)($input['story_id'] ?? 0);
+                $sceneId  = !empty($input['scene_id']) ? (int)$input['scene_id'] : 0;
+                $seqId    = (int)($input['sequence_id'] ?? 0);
+                $updates  = $input['updates'] ?? [];
+                if ((!$storyId && !$sceneId) || !$seqId) throw new Exception('PLUSH Container and Sequence ID required.');
+
+                $pdo->beginTransaction();
+
+                // Fetch sketches from PLUSH in exact chronological order
+                if ($sceneId > 0) {
+                    $stmt = $pdo->prepare("
+                        SELECT b.text_content, e.entity_id as sketch_id
+                        FROM plush_highlight_blocks b
+                        JOIN plush_highlight_block_entities e ON e.block_id = b.id AND e.entity_type = 'sketches'
+                        WHERE b.scene_id = ? AND b.language_code = 'en'
+                        ORDER BY b.group_id ASC, b.display_order ASC, e.id ASC
+                    ");
+                    $stmt->execute([$sceneId]);
+                } else {
+                    $stmt = $pdo->prepare("
+                        SELECT b.text_content, e.entity_id as sketch_id
+                        FROM plush_highlight_blocks b
+                        JOIN plush_highlight_block_entities e ON e.block_id = b.id AND e.entity_type = 'sketches'
+                        JOIN plush_scenes sc ON sc.id = b.scene_id
+                        WHERE sc.story_id = ? AND b.language_code = 'en'
+                        ORDER BY sc.scene_order ASC, sc.id ASC, b.group_id ASC, b.display_order ASC, e.id ASC
+                    ");
+                    $stmt->execute([$storyId]);
+                }
+                $plushMentions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                // Fetch existing sequence items to preserve known frame_ids
+                $seqStmt = $pdo->prepare("SELECT sequence_data FROM narrative_sequences WHERE id = ?");
+                $seqStmt->execute([$seqId]);
+                $existingSeqData = json_decode($seqStmt->fetchColumn() ?: '[]', true) ?: [];
+
+                $existingFrameMap = [];
+                foreach ($existingSeqData as $item) {
+                    if (is_array($item) && !empty($item['sketch_id']) && !empty($item['frame_id'])) {
+                        $existingFrameMap[(int)$item['sketch_id']] = (int)$item['frame_id'];
+                    }
+                }
+
+                // Build new sequenceData in the exact order of PLUSH
+                $newSequenceData  = [];
+                $plushSketchTexts = [];
+                $neededSketchIds  = [];
+
+                foreach ($plushMentions as $pm) {
+                    $sid = (int)$pm['sketch_id'];
+                    $newSequenceData[] = [
+                        'sketch_id' => $sid,
+                        'frame_id'  => $existingFrameMap[$sid] ?? null
+                    ];
+                    $plushSketchTexts[$sid][] = $pm['text_content'];
+                    $neededSketchIds[] = $sid;
+                }
+
+                // Resolve latest frames for newly added sketches
+                $neededSketchIds = array_unique($neededSketchIds);
+                if (!empty($neededSketchIds)) {
+                    $in = implode(',', array_fill(0, count($neededSketchIds), '?'));
+                    $fStmt = $pdo->prepare("
+                        SELECT f.id, f.entity_id as sketch_id FROM frames f WHERE f.entity_type = 'sketches' AND f.entity_id IN ($in)
+                        UNION
+                        SELECT f.id, fs.to_id as sketch_id FROM frames f JOIN frames_2_sketches fs ON fs.from_id = f.id WHERE fs.to_id IN ($in)
+                        ORDER BY id DESC
+                    ");
+                    $fStmt->execute(array_merge($neededSketchIds, $neededSketchIds));
+                    foreach ($fStmt->fetchAll(PDO::FETCH_ASSOC) as $fr) {
+                        $sid = (int)$fr['sketch_id'];
+                        if (!isset($existingFrameMap[$sid])) {
+                            $existingFrameMap[$sid] = (int)$fr['id'];
+                        }
+                    }
+                    foreach ($newSequenceData as &$item) {
+                        $sid = $item['sketch_id'];
+                        if (empty($item['frame_id']) && isset($existingFrameMap[$sid])) {
+                            $item['frame_id'] = $existingFrameMap[$sid];
+                        }
+                    }
+                    unset($item);
+                }
+
+                // Save updated sequence_data reflecting PLUSH order & contents
+                $uSeq = $pdo->prepare("UPDATE narrative_sequences SET sequence_data = ? WHERE id = ?");
+                $uSeq->execute([json_encode($newSequenceData, JSON_UNESCAPED_UNICODE), $seqId]);
+
+                // Update overlay texts for applied modified/new updates
+                $delStmt = $pdo->prepare("DELETE FROM sketch_overlay_texts WHERE sketch_id = ? AND language_code = 'en'");
+                $insStmt = $pdo->prepare("INSERT INTO sketch_overlay_texts (sketch_id, text_content, language_code, display_order) VALUES (?, ?, 'en', ?)");
+
+                $appliedSids = array_map(fn($u) => (int)$u['sketch_id'], $updates);
+                foreach ($appliedSids as $sid) {
+                    if (isset($plushSketchTexts[$sid])) {
+                        $delStmt->execute([$sid]);
+                        foreach ($plushSketchTexts[$sid] as $order => $txt) {
+                            $insStmt->execute([$sid, $txt, $order]);
+                        }
                     }
                 }
 
@@ -458,32 +927,34 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', san
 [data-theme="light"] .pl-nav { background:rgba(244,246,250,.92); }
 .pl-nav-title { font-family:'Space Mono',monospace; font-size:.85rem; color:var(--pl-purple); flex:1; }
 
-.workspace { max-width:1200px; margin:40px auto; padding:0 20px; display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:30px; }
+.workspace { max-width:1200px; margin:40px auto; padding:0 20px; display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:24px; }
 @media(max-width:768px) { .workspace { grid-template-columns:1fr; } }
 
-.bridge-card { background:var(--pl-card); border:1px solid var(--pl-border); border-radius:8px; padding:25px; box-shadow:0 8px 30px rgba(0,0,0,.3); display:flex; flex-direction:column; }
+.bridge-card { background:var(--pl-card); border:1px solid var(--pl-border); border-radius:8px; padding:22px; box-shadow:0 8px 30px rgba(0,0,0,.3); display:flex; flex-direction:column; }
 [data-theme="light"] .bridge-card { box-shadow:0 4px 15px rgba(0,0,0,.05); }
 
-.card-title { font-family:'Space Mono',monospace; font-size:1.1rem; text-transform:uppercase; letter-spacing:1px; margin:0 0 10px 0; display:flex; align-items:center; gap:10px; }
+.card-title { font-family:'Space Mono',monospace; font-size:1rem; text-transform:uppercase; letter-spacing:1px; margin:0 0 10px 0; display:flex; align-items:center; gap:8px; }
 .card-title.dir1 { color:var(--pl-teal); }
 .card-title.dir2 { color:var(--pl-amber); }
-.card-desc { font-size:0.85rem; color:var(--pl-text-dim); line-height:1.5; margin-bottom:20px; }
+.card-title.dir3 { color:var(--pl-purple); }
+.card-title.dir4 { color:var(--pl-teal); }
+.card-desc { font-size:0.82rem; color:var(--pl-text-dim); line-height:1.5; margin-bottom:18px; }
 
-.su-input { width:100%; box-sizing:border-box; background:var(--pl-surface); color:var(--pl-text); border:1px solid var(--pl-border); border-radius:4px; padding:10px 12px; font-family:'Syne',sans-serif; font-size:.9rem; outline:none; transition:border-color .2s; }
+.su-input { width:100%; box-sizing:border-box; background:var(--pl-surface); color:var(--pl-text); border:1px solid var(--pl-border); border-radius:4px; padding:9px 12px; font-family:'Syne',sans-serif; font-size:.85rem; outline:none; transition:border-color .2s; }
 .su-input:focus { border-color:var(--pl-purple); }
 
-.ac-wrap { position:relative; margin-bottom:20px; }
-.ac-dropdown { position:absolute; top:100%; left:0; right:0; z-index:10; background:var(--pl-card); border:1px solid var(--pl-border); border-top:none; border-radius:0 0 4px 4px; max-height:300px; overflow-y:auto; display:none; box-shadow:0 4px 12px rgba(0,0,0,.5); }
-.ac-item { padding:10px 12px; font-size:.85rem; cursor:pointer; transition:background .1s; border-bottom:1px solid var(--pl-border); }
+.ac-wrap { position:relative; margin-bottom:14px; }
+.ac-dropdown { position:absolute; top:100%; left:0; right:0; z-index:10; background:var(--pl-card); border:1px solid var(--pl-border); border-top:none; border-radius:0 0 4px 4px; max-height:260px; overflow-y:auto; display:none; box-shadow:0 4px 12px rgba(0,0,0,.5); }
+.ac-item { padding:9px 12px; font-size:.82rem; cursor:pointer; transition:background .1s; border-bottom:1px solid var(--pl-border); }
 .ac-item:hover { background:rgba(167,139,250,.1); color:var(--pl-purple); }
 .ac-item:last-child { border-bottom:none; }
 
-.selected-chip { display:none; align-items:center; justify-content:space-between; padding:12px 16px; background:rgba(0,0,0,.2); border:1px solid var(--pl-border); border-radius:6px; margin-bottom:20px; font-family:'Space Mono',monospace; font-size:.85rem; }
+.selected-chip { display:none; align-items:center; justify-content:space-between; padding:10px 14px; background:rgba(0,0,0,.2); border:1px solid var(--pl-border); border-radius:6px; margin-bottom:14px; font-family:'Space Mono',monospace; font-size:.8rem; }
 .selected-chip.active { display:flex; }
-.selected-chip button { background:none; border:none; color:var(--pl-text-dim); cursor:pointer; font-size:1.2rem; line-height:1; }
+.selected-chip button { background:none; border:none; color:var(--pl-text-dim); cursor:pointer; font-size:1.1rem; line-height:1; }
 .selected-chip button:hover { color:var(--pl-red); }
 
-.pl-btn { padding:12px; border-radius:6px; border:none; font-family:'Space Mono',monospace; font-size:.85rem; font-weight:bold; cursor:pointer; transition:all .15s; text-transform:uppercase; letter-spacing:1px; width:100%; }
+.pl-btn { padding:10px; border-radius:6px; border:none; font-family:'Space Mono',monospace; font-size:.8rem; font-weight:bold; cursor:pointer; transition:all .15s; text-transform:uppercase; letter-spacing:1px; width:100%; }
 .pl-btn:disabled { opacity:0.5; cursor:not-allowed; }
 .pl-btn.dir1-btn { background:var(--pl-teal); color:#000; }
 .pl-btn.dir1-btn:hover:not(:disabled) { filter:brightness(1.15); }
@@ -494,19 +965,20 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', san
 .su-modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.8); z-index:300000; display:none; align-items:center; justify-content:center; backdrop-filter:blur(3px); }
 .su-modal-backdrop.active { display:flex; }
 .su-modal-box { width:100%; max-width:800px; max-height:85vh; background:var(--pl-surface); border:1px solid var(--pl-border); border-radius:8px; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,.5); margin:16px; }
-.su-modal-header { display:flex; justify-content:space-between; align-items:center; padding:15px 20px; border-bottom:1px solid var(--pl-border); background:var(--pl-card); flex-shrink:0; border-radius:8px 8px 0 0; }
-.su-modal-title { font-size:1rem; font-weight:bold; font-family:'Space Mono',monospace; color:var(--pl-amber); text-transform:uppercase; letter-spacing:1px; }
+.su-modal-header { display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid var(--pl-border); background:var(--pl-card); flex-shrink:0; border-radius:8px 8px 0 0; }
+.su-modal-title { font-size:0.95rem; font-weight:bold; font-family:'Space Mono',monospace; color:var(--pl-amber); text-transform:uppercase; letter-spacing:1px; }
 .su-modal-close { background:transparent; border:none; color:var(--pl-text-dim); cursor:pointer; font-size:1.2rem; }
 
-.conflict-list { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:15px; }
-.conflict-item { background:var(--pl-card); border:1px solid var(--pl-border); border-radius:6px; padding:15px; }
-.conflict-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; font-family:'Space Mono',monospace; font-size:0.8rem; color:var(--pl-text); border-bottom:1px dashed var(--pl-border); padding-bottom:8px; }
-.conflict-text-grid { display:grid; grid-template-columns:1fr 1fr; gap:15px; font-size:0.85rem; line-height:1.5; color:var(--pl-text-dim); }
+.conflict-list { flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:14px; }
+.conflict-item { background:var(--pl-card); border:1px solid var(--pl-border); border-radius:6px; padding:14px; }
+.conflict-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; font-family:'Space Mono',monospace; font-size:0.78rem; color:var(--pl-text); border-bottom:1px dashed var(--pl-border); padding-bottom:8px; }
+.conflict-text-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:0.82rem; line-height:1.5; color:var(--pl-text-dim); }
+@media(max-width:600px) { .conflict-text-grid { grid-template-columns:1fr; } }
 .conflict-text-box { background:rgba(0,0,0,.15); padding:10px; border-radius:4px; border:1px solid var(--pl-border); white-space:pre-wrap; }
-.conflict-title { font-weight:bold; margin-bottom:5px; color:var(--pl-text); font-size:0.75rem; text-transform:uppercase; }
+.conflict-title { font-weight:bold; margin-bottom:5px; color:var(--pl-text); font-size:0.72rem; text-transform:uppercase; }
 
-.su-check-label { display:flex; align-items:center; gap:8px; font-size:.85rem; cursor:pointer; user-select:none; color:var(--pl-amber); font-weight:bold; }
-.su-check-label input[type="checkbox"] { accent-color:var(--pl-amber); width:18px; height:18px; cursor:pointer; }
+.su-check-label { display:flex; align-items:center; gap:8px; font-size:.8rem; cursor:pointer; user-select:none; color:var(--pl-amber); font-weight:bold; }
+.su-check-label input[type="checkbox"] { accent-color:var(--pl-amber); width:17px; height:17px; cursor:pointer; }
 </style>
 
 <div class="pl-nav">
@@ -514,10 +986,10 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', san
 </div>
 
 <div class="workspace">
-    <!-- Direction 1: Seq -> PLUSH -->
+    <!-- Direction 1: Seq -> PLUSH (New Story) -->
     <div class="bridge-card">
-        <h3 class="card-title dir1"><i class="bi bi-film"></i> Sequence ➔ PLUSH</h3>
-        <div class="card-desc">Convert a Narrative Sequence into a new PLUSH Story, generating highlight blocks from existing overlay texts.</div>
+        <h3 class="card-title dir1"><i class="bi bi-film"></i> Sequence ➔ New PLUSH</h3>
+        <div class="card-desc">Convert a Narrative Sequence into a new PLUSH Story, generating highlight blocks from overlay texts.</div>
         
         <div class="ac-wrap" id="wrapSeq">
             <input type="text" id="searchSeq" class="su-input" placeholder="Search Narrative Sequences..." onfocus="PlunarApp.search('sequences', this.value)" oninput="PlunarApp.search('sequences', this.value)">
@@ -530,14 +1002,14 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', san
         </div>
 
         <div style="margin-top:auto;">
-            <button id="btnDir1" class="pl-btn dir1-btn" onclick="PlunarApp.migrateToPlush()" disabled>Migrate to PLUSH</button>
+            <button id="btnDir1" class="pl-btn dir1-btn" onclick="PlunarApp.migrateToPlush()" disabled>Create New PLUSH</button>
         </div>
     </div>
 
-    <!-- Direction 2: PLUSH -> Seq -->
+    <!-- Direction 2: PLUSH -> Seq (New Sequence) -->
     <div class="bridge-card">
-        <h3 class="card-title dir2">PLUSH ➔ Sequence <i class="bi bi-journal-richtext"></i></h3>
-        <div class="card-desc">Convert a PLUSH Story into a Narrative Sequence, flattening chronological sketch references and transferring texts.</div>
+        <h3 class="card-title dir2">PLUSH ➔ New Sequence <i class="bi bi-journal-richtext"></i></h3>
+        <div class="card-desc">Convert a PLUSH Story into a new Narrative Sequence, flattening chronological sketch references.</div>
         
         <div class="ac-wrap" id="wrapPlush">
             <input type="text" id="searchPlush" class="su-input" placeholder="Search PLUSH Stories..." onfocus="PlunarApp.search('plush', this.value)" oninput="PlunarApp.search('plush', this.value)">
@@ -550,17 +1022,17 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', san
         </div>
 
         <div style="margin-top:auto;">
-            <button id="btnDir2" class="pl-btn dir2-btn" onclick="PlunarApp.analyzePlush()" disabled>Migrate to Sequence</button>
+            <button id="btnDir2" class="pl-btn dir2-btn" onclick="PlunarApp.analyzePlush()" disabled>Create New Sequence</button>
         </div>
     </div>
 
-    <!-- Direction 3: Seq -> Existing PLUSH (Sync) -->
+    <!-- Direction 3: Seq -> Existing PLUSH (Sync, Add, Remove, Order) -->
     <div class="bridge-card">
-        <h3 class="card-title dir3" style="color:var(--pl-purple);"><i class="bi bi-arrow-repeat"></i> Update PLUSH</h3>
-        <div class="card-desc">Sync an existing PLUSH Story with updates from a Narrative Sequence.</div>
+        <h3 class="card-title dir3"><i class="bi bi-arrow-repeat"></i> Update PLUSH</h3>
+        <div class="card-desc">Sync an existing PLUSH Story or Scene with updates, removals, and exact order from a Narrative Sequence.</div>
         
         <div class="ac-wrap" id="wrapSeqSync">
-            <input type="text" id="searchSeqSync" class="su-input" placeholder="Search Narrative Sequence..." onfocus="PlunarApp.search('sequences', this.value, 'sync')" oninput="PlunarApp.search('sequences', this.value, 'sync')">
+            <input type="text" id="searchSeqSync" class="su-input" placeholder="Search Source Sequence..." onfocus="PlunarApp.search('sequences', this.value, 'sync')" oninput="PlunarApp.search('sequences', this.value, 'sync')">
             <div id="acSeqSync" class="ac-dropdown"></div>
         </div>
 
@@ -570,7 +1042,7 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', san
         </div>
 
         <div class="ac-wrap" id="wrapPlushSync">
-            <input type="text" id="searchPlushSync" class="su-input" placeholder="Search PLUSH Story..." onfocus="PlunarApp.search('plush', this.value, 'sync')" oninput="PlunarApp.search('plush', this.value, 'sync')">
+            <input type="text" id="searchPlushSync" class="su-input" placeholder="Search Target PLUSH Story or Scene..." onfocus="PlunarApp.search('plush', this.value, 'sync')" oninput="PlunarApp.search('plush', this.value, 'sync')">
             <div id="acPlushSync" class="ac-dropdown"></div>
         </div>
 
@@ -580,12 +1052,42 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', san
         </div>
 
         <div style="margin-top:auto;">
-            <button id="btnDir3" class="pl-btn dir3-btn" style="background:var(--pl-purple); color:#fff;" onclick="PlunarApp.analyzeSync()" disabled>Analyze Changes</button>
+            <button id="btnDir3" class="pl-btn" style="background:var(--pl-purple); color:#fff;" onclick="PlunarApp.analyzeSync()" disabled>Analyze Sequence ➔ PLUSH</button>
+        </div>
+    </div>
+
+    <!-- Direction 4: PLUSH -> Existing Seq (Sync, Add, Remove, Order) -->
+    <div class="bridge-card">
+        <h3 class="card-title dir4"><i class="bi bi-arrow-repeat"></i> Update Sequence</h3>
+        <div class="card-desc">Sync an existing Narrative Sequence with additions, removals, text, and exact reading order from a PLUSH Story or Scene.</div>
+        
+        <div class="ac-wrap" id="wrapPlushToSeq_story">
+            <input type="text" id="searchPlushToSeq_story" class="su-input" placeholder="Search Source PLUSH Story or Scene..." onfocus="PlunarApp.search('plush', this.value, 'syncToSeq')" oninput="PlunarApp.search('plush', this.value, 'syncToSeq')">
+            <div id="acPlushToSeq_story" class="ac-dropdown"></div>
+        </div>
+
+        <div id="selectedPlushToSeq_story" class="selected-chip">
+            <span id="lblPlushToSeq_story"></span>
+            <button onclick="PlunarApp.clearSelection('plushToSeq_story')">✕</button>
+        </div>
+
+        <div class="ac-wrap" id="wrapPlushToSeq_seq">
+            <input type="text" id="searchPlushToSeq_seq" class="su-input" placeholder="Search Target Narrative Sequence..." onfocus="PlunarApp.search('sequences', this.value, 'syncToSeq')" oninput="PlunarApp.search('sequences', this.value, 'syncToSeq')">
+            <div id="acPlushToSeq_seq" class="ac-dropdown"></div>
+        </div>
+
+        <div id="selectedPlushToSeq_seq" class="selected-chip">
+            <span id="lblPlushToSeq_seq"></span>
+            <button onclick="PlunarApp.clearSelection('plushToSeq_seq')">✕</button>
+        </div>
+
+        <div style="margin-top:auto;">
+            <button id="btnDir4" class="pl-btn dir1-btn" onclick="PlunarApp.analyzeSyncToSeq()" disabled>Analyze PLUSH ➔ Sequence</button>
         </div>
     </div>
 </div>
 
-<!-- Conflict Modal (PLUSH -> Seq) -->
+<!-- Conflict Modal (PLUSH -> New Seq) -->
 <div id="conflictModal" class="su-modal-backdrop" onmousedown="if(event.target===this) document.getElementById('conflictModal').classList.remove('active')">
     <div class="su-modal-box" style="max-width:700px;">
         <div class="su-modal-header">
@@ -611,16 +1113,16 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', san
     </div>
 </div>
 
-<!-- Sync Modal (Seq -> PLUSH) -->
+<!-- Sync Modal (Bi-directional Sync) -->
 <div id="syncModal" class="su-modal-backdrop" onmousedown="if(event.target===this) document.getElementById('syncModal').classList.remove('active')">
     <div class="su-modal-box">
         <div class="su-modal-header">
-            <div class="su-modal-title" style="color:var(--pl-purple);"><i class="bi bi-arrow-repeat"></i> Sync Changes to PLUSH</div>
+            <div class="su-modal-title" id="syncModalTitle" style="color:var(--pl-purple);"><i class="bi bi-arrow-repeat"></i> Review Sync Changes</div>
             <button onclick="document.getElementById('syncModal').classList.remove('active')" class="su-modal-close">✕</button>
         </div>
         
-        <div style="padding:15px 20px 0; font-size:0.85rem; color:var(--pl-text-dim);">
-            Review the updates from the Narrative Sequence. Select the items you want to apply to the PLUSH story.
+        <div style="padding:15px 20px 0; font-size:0.85rem; color:var(--pl-text-dim);" id="syncModalSubtext">
+            Review the additions, removals, and order adjustments. Select the items you wish to apply.
             <div style="margin-top:10px;">
                 <label class="su-check-label" style="color:var(--pl-text);">
                     <input type="checkbox" id="checkAllSync" onchange="PlunarApp.toggleAllSync(this.checked)"> Select All Updates
@@ -632,7 +1134,7 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', san
 
         <div style="padding:15px 20px; border-top:1px solid var(--pl-border); background:var(--pl-card); display:flex; justify-content:flex-end; gap:10px; border-radius:0 0 8px 8px;">
             <button onclick="document.getElementById('syncModal').classList.remove('active')" style="padding:10px 15px; border-radius:6px; border:1px solid var(--pl-border); background:transparent; color:var(--pl-text); cursor:pointer;">Cancel</button>
-            <button onclick="PlunarApp.executeSync()" style="padding:10px 20px; border-radius:6px; border:none; background:var(--pl-purple); color:#fff; font-weight:bold; cursor:pointer;">Apply Selected</button>
+            <button id="btnApplySync" onclick="PlunarApp.executeCurrentSync()" style="padding:10px 20px; border-radius:6px; border:none; background:var(--pl-purple); color:#fff; font-weight:bold; cursor:pointer;">Apply Selected</button>
         </div>
     </div>
 </div>
@@ -646,9 +1148,12 @@ const PlunarApp = (() => {
         seq: { id: null, name: '' },
         plush: { id: null, name: '' },
         seqSync: { id: null, name: '' },
-        plushSync: { id: null, name: '' }
+        plushSync: { id: null, name: '', story_id: null, scene_id: null, target_type: 'story' },
+        plushToSeq_story: { id: null, name: '', story_id: null, scene_id: null, target_type: 'story' },
+        plushToSeq_seq: { id: null, name: '' }
     };
     let syncData = [];
+    let syncMode = 'seq_to_plush'; // 'seq_to_plush' or 'plush_to_seq'
 
     function search(type, q, context = 'default') {
         const timerKey = type + context;
@@ -657,6 +1162,8 @@ const PlunarApp = (() => {
         let acId = '';
         if (context === 'sync') {
             acId = type === 'sequences' ? 'acSeqSync' : 'acPlushSync';
+        } else if (context === 'syncToSeq') {
+            acId = type === 'sequences' ? 'acPlushToSeq_seq' : 'acPlushToSeq_story';
         } else {
             acId = type === 'sequences' ? 'acSeq' : 'acPlush';
         }
@@ -674,19 +1181,21 @@ const PlunarApp = (() => {
                         ac.style.display = 'block'; 
                         return; 
                     }
-                    ac.innerHTML = res.results.map(r => `
-                        <div class="ac-item" onclick="PlunarApp.select('${type}', ${r.id}, '${r.name.replace(/'/g, "\\'")}', '${context}')">
+                    ac.innerHTML = res.results.map(r => {
+                        const safeItem = JSON.stringify(r).replace(/"/g, '&quot;');
+                        return `
+                        <div class="ac-item" onclick="PlunarApp.select('${type}', ${safeItem}, '${context}')">
                             <span style="color:var(--pl-text-dim); font-family:monospace; margin-right:6px;">#${r.id}</span>
                             ${r.name}
-                        </div>
-                    `).join('');
+                        </div>`;
+                    }).join('');
                     ac.style.display = 'block';
                 }
             });
         }, 150);
     }
 
-    function select(type, id, name, context = 'default') {
+    function select(type, item, context = 'default') {
         const isSeq = type === 'sequences';
         let key, wrapId, acId, selectedId, lblId, color;
 
@@ -697,6 +1206,13 @@ const PlunarApp = (() => {
             selectedId = isSeq ? 'selectedSeqSync' : 'selectedPlushSync';
             lblId = isSeq ? 'lblSeqSync' : 'lblPlushSync';
             color = 'var(--pl-purple)';
+        } else if (context === 'syncToSeq') {
+            key = isSeq ? 'plushToSeq_seq' : 'plushToSeq_story';
+            wrapId = isSeq ? 'wrapPlushToSeq_seq' : 'wrapPlushToSeq_story';
+            acId = isSeq ? 'acPlushToSeq_seq' : 'acPlushToSeq_story';
+            selectedId = isSeq ? 'selectedPlushToSeq_seq' : 'selectedPlushToSeq_story';
+            lblId = isSeq ? 'lblPlushToSeq_seq' : 'lblPlushToSeq_story';
+            color = 'var(--pl-teal)';
         } else {
             key = isSeq ? 'seq' : 'plush';
             wrapId = isSeq ? 'wrapSeq' : 'wrapPlush';
@@ -706,24 +1222,32 @@ const PlunarApp = (() => {
             color = isSeq ? 'var(--pl-teal)' : 'var(--pl-amber)';
         }
         
-        state[key] = { id, name };
+        state[key] = {
+            id: item.id,
+            name: item.name,
+            story_id: item.story_id || (item.target_type === 'story' ? item.id : null),
+            scene_id: item.scene_id || (item.target_type === 'scene' ? item.id : null),
+            target_type: item.target_type || 'story'
+        };
         
         document.getElementById(wrapId).style.display = 'none';
         document.getElementById(acId).style.display = 'none';
         
         const chip = document.getElementById(selectedId);
-        document.getElementById(lblId).innerHTML = `<span style="color:${color}; margin-right:8px;">#${id}</span> ${name}`;
+        document.getElementById(lblId).innerHTML = `<span style="color:${color}; margin-right:8px;">#${item.id}</span> ${item.name}`;
         chip.classList.add('active');
 
         if (context === 'sync') {
             document.getElementById('btnDir3').disabled = !(state.seqSync.id && state.plushSync.id);
+        } else if (context === 'syncToSeq') {
+            document.getElementById('btnDir4').disabled = !(state.plushToSeq_story.id && state.plushToSeq_seq.id);
         } else {
             document.getElementById(isSeq ? 'btnDir1' : 'btnDir2').disabled = false;
         }
     }
 
     function clearSelection(key) {
-        state[key] = { id: null, name: '' };
+        state[key] = { id: null, name: '', story_id: null, scene_id: null, target_type: 'story' };
         
         let wrapId, selectedId, searchId;
         if (key === 'seqSync' || key === 'plushSync') {
@@ -732,6 +1256,12 @@ const PlunarApp = (() => {
             selectedId = isSeq ? 'selectedSeqSync' : 'selectedPlushSync';
             searchId = isSeq ? 'searchSeqSync' : 'searchPlushSync';
             document.getElementById('btnDir3').disabled = true;
+        } else if (key === 'plushToSeq_story' || key === 'plushToSeq_seq') {
+            const isSeq = key === 'plushToSeq_seq';
+            wrapId = isSeq ? 'wrapPlushToSeq_seq' : 'wrapPlushToSeq_story';
+            selectedId = isSeq ? 'selectedPlushToSeq_seq' : 'selectedPlushToSeq_story';
+            searchId = isSeq ? 'searchPlushToSeq_seq' : 'searchPlushToSeq_story';
+            document.getElementById('btnDir4').disabled = true;
         } else {
             const isSeq = key === 'seq';
             wrapId = isSeq ? 'wrapSeq' : 'wrapPlush';
@@ -781,7 +1311,7 @@ const PlunarApp = (() => {
                 if (res.conflicts && res.conflicts.length > 0) {
                     showConflicts(res.conflicts);
                 } else {
-                    executePlushMigration([]); // No conflicts, proceed immediately
+                    executePlushMigration([]);
                 }
             } else {
                 Toast.show(res.message || 'Error', 'error');
@@ -789,6 +1319,7 @@ const PlunarApp = (() => {
         });
     }
 
+    // Direction 3: Sequence -> Existing PLUSH
     function analyzeSync() {
         if (!state.seqSync.id || !state.plushSync.id) return;
         const btn = document.getElementById('btnDir3');
@@ -797,14 +1328,50 @@ const PlunarApp = (() => {
 
         fetch('plunar.php', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ action: 'analyze_sync_seq_to_plush', sequence_id: state.seqSync.id, story_id: state.plushSync.id })
+            body: JSON.stringify({ 
+                action: 'analyze_sync_seq_to_plush', 
+                sequence_id: state.seqSync.id, 
+                story_id: state.plushSync.story_id || state.plushSync.id,
+                scene_id: state.plushSync.scene_id || null
+            })
         }).then(r=>r.json()).then(res => {
             btn.innerHTML = orig; btn.disabled = false;
             if (res.success) {
                 if (res.conflicts && res.conflicts.length > 0) {
-                    showSyncModal(res.conflicts);
+                    syncMode = 'seq_to_plush';
+                    showSyncModal(res.conflicts, 'Sequence ➔ PLUSH Sync', 'Review updates, additions, removals, and sequence order to apply to PLUSH.');
                 } else {
-                    Toast.show('No changes found. PLUSH is up to date.', 'info');
+                    Toast.show('No changes found. PLUSH container matches sequence.', 'info');
+                }
+            } else {
+                Toast.show(res.message || 'Error', 'error');
+            }
+        });
+    }
+
+    // Direction 4: PLUSH -> Existing Sequence
+    function analyzeSyncToSeq() {
+        if (!state.plushToSeq_story.id || !state.plushToSeq_seq.id) return;
+        const btn = document.getElementById('btnDir4');
+        const orig = btn.innerHTML;
+        btn.innerHTML = 'Analyzing...'; btn.disabled = true;
+
+        fetch('plunar.php', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                action: 'analyze_sync_plush_to_seq', 
+                story_id: state.plushToSeq_story.story_id || state.plushToSeq_story.id,
+                scene_id: state.plushToSeq_story.scene_id || null,
+                sequence_id: state.plushToSeq_seq.id 
+            })
+        }).then(r=>r.json()).then(res => {
+            btn.innerHTML = orig; btn.disabled = false;
+            if (res.success) {
+                if (res.conflicts && res.conflicts.length > 0) {
+                    syncMode = 'plush_to_seq';
+                    showSyncModal(res.conflicts, 'PLUSH ➔ Sequence Sync', 'Review updates, additions, removals, and PLUSH reading order to apply to the Narrative Sequence.');
+                } else {
+                    Toast.show('No changes found. Sequence matches PLUSH container.', 'info');
                 }
             } else {
                 Toast.show(res.message || 'Error', 'error');
@@ -838,32 +1405,62 @@ const PlunarApp = (() => {
         document.getElementById('conflictModal').classList.add('active');
     }
 
-    function showSyncModal(conflicts) {
+    function showSyncModal(conflicts, title, subtitle) {
         syncData = conflicts;
         document.getElementById('checkAllSync').checked = false;
+        document.getElementById('syncModalTitle').innerHTML = `<i class="bi bi-arrow-repeat"></i> ${escHtml(title || 'Review Sync Changes')}`;
+        document.getElementById('syncModalSubtext').innerHTML = `${escHtml(subtitle || '')}
+            <div style="margin-top:10px;">
+                <label class="su-check-label" style="color:var(--pl-text);">
+                    <input type="checkbox" id="checkAllSync" onchange="PlunarApp.toggleAllSync(this.checked)"> Select All Updates
+                </label>
+            </div>`;
+
+        const applyBtn = document.getElementById('btnApplySync');
+        applyBtn.style.background = (syncMode === 'plush_to_seq') ? 'var(--pl-teal)' : 'var(--pl-purple)';
+        applyBtn.style.color = (syncMode === 'plush_to_seq') ? '#000' : '#fff';
+
         const list = document.getElementById('syncList');
-        list.innerHTML = conflicts.map((c, i) => `
+        list.innerHTML = conflicts.map((c, i) => {
+            let statusBg = 'var(--pl-amber)';
+            let statusColor = '#000';
+            if (c.status === 'new') {
+                statusBg = 'var(--pl-teal)';
+            } else if (c.status === 'reordered') {
+                statusBg = 'var(--pl-purple)';
+                statusColor = '#fff';
+            } else if (c.status === 'removed') {
+                statusBg = 'var(--pl-red)';
+                statusColor = '#fff';
+            }
+
+            const leftTitle  = (syncMode === 'plush_to_seq') ? 'Existing Sequence' : 'Existing PLUSH';
+            const rightTitle = (syncMode === 'plush_to_seq') ? 'New PLUSH' : 'New Sequence';
+            const leftText   = (syncMode === 'plush_to_seq') ? c.sequence_text : c.plush_text;
+            const rightText  = (syncMode === 'plush_to_seq') ? c.plush_text : c.sequence_text;
+
+            return `
             <div class="conflict-item">
                 <div class="conflict-header">
-                    <span>#${c.sketch_id} — ${escHtml(c.sketch_name)} <span style="margin-left:10px; padding:2px 6px; border-radius:4px; font-size:0.6rem; background:${c.status==='new'?'var(--pl-teal)':'var(--pl-amber)'}; color:#000;">${c.status.toUpperCase()}</span></span>
+                    <span>#${c.sketch_id} — ${escHtml(c.sketch_name)} <span style="margin-left:10px; padding:2px 6px; border-radius:4px; font-size:0.6rem; background:${statusBg}; color:${statusColor}; font-weight:bold;">${c.status.toUpperCase()}</span></span>
                     <label class="su-check-label">
                         <input type="checkbox" class="sync-cb" value="${i}"> Apply
                     </label>
                 </div>
                 <div class="conflict-text-grid">
-                    ${c.status === 'modified' ? `
+                    ${leftText !== null ? `
                     <div>
-                        <div class="conflict-title">Existing PLUSH Text</div>
-                        <div class="conflict-text-box">${escHtml(c.plush_text)}</div>
+                        <div class="conflict-title">${leftTitle}</div>
+                        <div class="conflict-text-box">${escHtml(leftText)}</div>
                     </div>
                     ` : ''}
-                    <div ${c.status === 'new' ? 'style="grid-column: 1 / -1;"' : ''}>
-                        <div class="conflict-title" style="color:var(--pl-purple);">New Sequence Text</div>
-                        <div class="conflict-text-box">${escHtml(c.sequence_text)}</div>
+                    <div ${leftText === null ? 'style="grid-column: 1 / -1;"' : ''}>
+                        <div class="conflict-title" style="color:var(--pl-purple);">${rightTitle}</div>
+                        <div class="conflict-text-box">${escHtml(rightText)}</div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
         document.getElementById('syncModal').classList.add('active');
     }
 
@@ -905,7 +1502,16 @@ const PlunarApp = (() => {
         });
     }
 
-    function executeSync() {
+    function executeCurrentSync() {
+        if (syncMode === 'plush_to_seq') {
+            executeSyncPlushToSeq();
+        } else {
+            executeSyncSeqToPlush();
+        }
+    }
+
+    // Apply updates for Direction 3: Sequence -> Existing PLUSH
+    function executeSyncSeqToPlush() {
         const selectedIndices = Array.from(document.querySelectorAll('.sync-cb:checked')).map(cb => parseInt(cb.value));
         if (selectedIndices.length === 0) {
             Toast.show('No updates selected.', 'warn');
@@ -932,13 +1538,59 @@ const PlunarApp = (() => {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ 
                 action: 'execute_sync_seq_to_plush', 
-                story_id: state.plushSync.id,
+                sequence_id: state.seqSync.id,
+                story_id: state.plushSync.story_id || state.plushSync.id,
+                scene_id: state.plushSync.scene_id || null,
                 updates: updatesToApply
             })
         }).then(r=>r.json()).then(res => {
             if (res.success) {
-                Toast.show('PLUSH story updated successfully!', 'success');
-                setTimeout(() => window.location.href = `plush.php?id=${state.plushSync.id}`, 1000);
+                Toast.show('PLUSH container synchronized and ordered successfully!', 'success');
+                const targetStoryId = res.target_story_id || state.plushSync.story_id || state.plushSync.id;
+                setTimeout(() => window.location.href = `plush.php?id=${targetStoryId}`, 1000);
+            } else {
+                Toast.show(res.message || 'Error', 'error');
+                btn.innerHTML = orig; btn.disabled = false;
+            }
+        });
+    }
+
+    // Apply updates for Direction 4: PLUSH -> Existing Sequence
+    function executeSyncPlushToSeq() {
+        const selectedIndices = Array.from(document.querySelectorAll('.sync-cb:checked')).map(cb => parseInt(cb.value));
+        if (selectedIndices.length === 0) {
+            Toast.show('No updates selected.', 'warn');
+            return;
+        }
+
+        const updatesToApply = selectedIndices.map(i => {
+            const c = syncData[i];
+            return {
+                sketch_id: c.sketch_id,
+                status: c.status,
+                text: c.plush_text
+            };
+        });
+
+        document.getElementById('syncModal').classList.remove('active');
+        
+        const btn = document.getElementById('btnDir4');
+        const orig = btn.innerHTML;
+        btn.innerHTML = 'Applying...'; btn.disabled = true;
+
+        fetch('plunar.php', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                action: 'execute_sync_plush_to_seq', 
+                story_id: state.plushToSeq_story.story_id || state.plushToSeq_story.id,
+                scene_id: state.plushToSeq_story.scene_id || null,
+                sequence_id: state.plushToSeq_seq.id,
+                updates: updatesToApply
+            })
+        }).then(r=>r.json()).then(res => {
+            if (res.success) {
+                Toast.show('Narrative Sequence synchronized and ordered successfully!', 'success');
+                setTimeout(() => window.location.href = `narseq.php?id=${state.plushToSeq_seq.id}`, 1000);
             } else {
                 Toast.show(res.message || 'Error', 'error');
                 btn.innerHTML = orig; btn.disabled = false;
@@ -953,7 +1605,7 @@ const PlunarApp = (() => {
     return { 
         search, select, clearSelection, 
         migrateToPlush, analyzePlush, toggleAllConflicts, executePlushMigration,
-        analyzeSync, toggleAllSync, executeSync
+        analyzeSync, analyzeSyncToSeq, toggleAllSync, executeCurrentSync
     };
 })();
 

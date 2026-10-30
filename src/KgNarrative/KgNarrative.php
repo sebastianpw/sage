@@ -10,13 +10,13 @@ use PDO;
  *
  * Responsibilities:
  *  - Hop expansion (manual / 1 hop / 2 hop) over kg_node_items edges
- *  - Canonical sketch resolution (kg_nodes.name <-> sketches.name, exact match)
- *  - Latest-frame resolution per sketch via frames_2_sketches
+ *  - Dual-channel sketch resolution:
+ *      1. Primary: Explicit ID links in kg_node_items (item_type = 'sketch')
+ *      2. Secondary / Fallback: Exact name match (kg_nodes.name <-> sketches.name)
+ *  - Latest-frame resolution per sketch via frames_2_sketches + frames table fallback
  *  - AI-ready export bundle construction
  *  - Import + validation of AI-produced narrative sequence JSON
  *  - Persistence into narrative_sequences
- *
- * Canonical source of truth: kg_nodes. Sketches/frames are derived artifacts.
  */
 class KgNarrative
 {
@@ -26,7 +26,7 @@ class KgNarrative
     public const MAX_HOPS = 2;
 
     /** Soft warning thresholds (informational only, surfaced in export preview) */
-    public const WARN_NODES   = 25;
+    public const WARN_NODES    = 25;
     public const WARN_SKETCHES = 15;
     public const WARN_FRAMES   = 40;
 
@@ -90,8 +90,7 @@ class KgNarrative
 
     /**
      * Fetch the focal node plus its immediate neighbors + relationship edges,
-     * for rendering the mini graph modal (always 1 hop visually, regardless
-     * of the export hop mode — the modal is a refinement tool).
+     * for rendering the mini graph modal.
      */
     public function fetchMiniGraph(int $nodeId, int $hops = 1): array
     {
@@ -131,16 +130,13 @@ class KgNarrative
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // Canonical sketch / frame resolution
+    // Dual-Channel Canonical Sketch / Frame Resolution
     // ─────────────────────────────────────────────────────────────────────
 
     /**
-     * Resolve canonical sketches for a set of KG node IDs.
-     *
-     * Canonical rule: kg_nodes.name matches sketches.name exactly.
-     * kg_nodes is the source of truth; a sketch is only "canonical" for a
-     * node if its name matches that node's name 1:1. This avoids pulling in
-     * unrelated sketches that merely share a substring.
+     * Resolve canonical sketches for a set of KG node IDs using dual resolution:
+     *  1. Explicit links in kg_node_items (item_type = 'sketch')
+     *  2. Fallback: Exact name matching (kg_nodes.name = sketches.name)
      *
      * @return array<int, array{kg_node_id:int, sketch_id:int, sketch_name:string}>
      */
@@ -150,22 +146,64 @@ class KgNarrative
             return [];
         }
         $ph = implode(',', array_fill(0, count($nodeIds), '?'));
-        $stmt = $this->pdo->prepare(
-            "SELECT n.id AS kg_node_id, s.id AS sketch_id, s.name AS sketch_name
-             FROM kg_nodes n
-             JOIN sketches s ON s.name = n.name
-             WHERE n.id IN ($ph)"
+
+        $results = [];
+        $resolvedNodeIds = [];
+
+        // ── Method 1: Primary lookup via explicit kg_node_items ID mapping ──
+        $stmtItems = $this->pdo->prepare(
+            "SELECT kni.node_id AS kg_node_id, s.id AS sketch_id, s.name AS sketch_name
+             FROM kg_node_items kni
+             JOIN sketches s ON s.id = kni.item_id
+             WHERE kni.item_type = 'sketch' AND kni.node_id IN ($ph)
+             ORDER BY kni.sort_order ASC, kni.id ASC"
         );
-        $stmt->execute($nodeIds);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmtItems->execute($nodeIds);
+        foreach ($stmtItems->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $nid = (int)$row['kg_node_id'];
+            $sid = (int)$row['sketch_id'];
+            $results["{$nid}_{$sid}"] = [
+                'kg_node_id'  => $nid,
+                'sketch_id'   => $sid,
+                'sketch_name' => $row['sketch_name']
+            ];
+            $resolvedNodeIds[$nid] = true;
+        }
+
+        // ── Method 2: Fallback lookup via exact Name Match for any unmapped nodes ──
+        $unresolvedNodeIds = array_values(array_diff($nodeIds, array_keys($resolvedNodeIds)));
+        if (!empty($unresolvedNodeIds)) {
+            $ph2 = implode(',', array_fill(0, count($unresolvedNodeIds), '?'));
+            $stmtName = $this->pdo->prepare(
+                "SELECT n.id AS kg_node_id, s.id AS sketch_id, s.name AS sketch_name
+                 FROM kg_nodes n
+                 JOIN sketches s ON LOWER(s.name) = LOWER(n.name)
+                 WHERE n.id IN ($ph2)"
+            );
+            $stmtName->execute($unresolvedNodeIds);
+            foreach ($stmtName->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $nid = (int)$row['kg_node_id'];
+                $sid = (int)$row['sketch_id'];
+                $key = "{$nid}_{$sid}";
+                if (!isset($results[$key])) {
+                    $results[$key] = [
+                        'kg_node_id'  => $nid,
+                        'sketch_id'   => $sid,
+                        'sketch_name' => $row['sketch_name']
+                    ];
+                }
+            }
+        }
+
+        return array_values($results);
     }
 
     /**
      * Resolve the latest frame ID for each given sketch ID.
      *
      * Preferred source of truth: frames_2_sketches (from_id = frames.id, to_id = sketches.id).
-     * Legacy fallback: frames.entity_type = 'sketches' AND frames.entity_id = sketches.id.
-     * "Latest" = highest frames.id (auto-increment is chronological in this schema).
+     * Fallback: frames.entity_type IN ('sketches', 'sketch') AND frames.entity_id = sketches.id.
+     * "Latest" = highest frames.id.
      *
      * @return array<int,int> map of sketch_id => latest frame_id
      */
@@ -178,7 +216,7 @@ class KgNarrative
 
         $latest = [];
 
-        // Preferred: frames_2_sketches join
+        // 1. Primary: frames_2_sketches relation table
         $stmt = $this->pdo->prepare(
             "SELECT f2s.to_id AS sketch_id, MAX(f2s.from_id) AS frame_id
              FROM frames_2_sketches f2s
@@ -191,14 +229,14 @@ class KgNarrative
             $latest[(int)$row['sketch_id']] = (int)$row['frame_id'];
         }
 
-        // Legacy fallback for any sketch not yet resolved
+        // 2. Fallback: frames entity_type/entity_id polymorphic link
         $missing = array_values(array_diff($sketchIds, array_keys($latest)));
         if (!empty($missing)) {
             $ph2 = implode(',', array_fill(0, count($missing), '?'));
             $stmt = $this->pdo->prepare(
                 "SELECT entity_id AS sketch_id, MAX(id) AS frame_id
                  FROM frames
-                 WHERE entity_type = 'sketches' AND entity_id IN ($ph2)
+                 WHERE entity_type IN ('sketches', 'sketch') AND entity_id IN ($ph2)
                  GROUP BY entity_id"
             );
             $stmt->execute($missing);
@@ -214,23 +252,12 @@ class KgNarrative
     // Export bundle construction
     // ─────────────────────────────────────────────────────────────────────
 
-    /**
-     * Build the full AI-ready export bundle.
-     *
-     * @param array $config {
-     *   focal_kg_node_id: int,
-     *   hop_mode: 'manual'|'1hop'|'2hop',
-     *   reading_mode: 'atlas'|'tour'|'story',
-     *   manual_node_ids: int[],
-     *   include_edges: bool
-     * }
-     */
     public function generateExportData(array $config): array
     {
-        $focalId  = (int)($config['focal_kg_node_id'] ?? 0);
-        $hopMode  = $config['hop_mode'] ?? 'manual';
+        $focalId     = (int)($config['focal_kg_node_id'] ?? 0);
+        $hopMode     = $config['hop_mode'] ?? 'manual';
         $readingMode = $this->normalizeReadingMode($config['reading_mode'] ?? 'atlas');
-        $manualIds = array_values(array_unique(array_map('intval', $config['manual_node_ids'] ?? [])));
+        $manualIds   = array_values(array_unique(array_map('intval', $config['manual_node_ids'] ?? [])));
         $includeEdges = !empty($config['include_edges']);
 
         // Resolve final selected node ID set based on mode
@@ -240,7 +267,6 @@ class KgNarrative
         } elseif ($hopMode === '2hop' && $focalId > 0) {
             $selectedIds = $this->expandHops($focalId, 2);
         } else {
-            // manual mode: focal node (if set) + manually chosen nodes
             $selectedIds = $manualIds;
             if ($focalId > 0 && !in_array($focalId, $selectedIds, true)) {
                 array_unshift($selectedIds, $focalId);
@@ -260,20 +286,21 @@ class KgNarrative
             $kgNodes = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
-        // 2. Edges among selected nodes only
+        // 2. Edges of selected nodes
         $kgNodeItems = [];
-        if ($includeEdges && count($selectedIds) > 1) {
+        if ($includeEdges && !empty($selectedIds)) {
             $ph = implode(',', array_fill(0, count($selectedIds), '?'));
             $stmt = $this->pdo->prepare(
                 "SELECT id, node_id, item_type, item_id, item_label, relationship, note, sort_order
                  FROM kg_node_items
-                 WHERE item_type = 'kg_node' AND node_id IN ($ph) AND item_id IN ($ph)"
+                 WHERE node_id IN ($ph)
+                 ORDER BY sort_order ASC, id ASC"
             );
-            $stmt->execute(array_merge($selectedIds, $selectedIds));
+            $stmt->execute($selectedIds);
             $kgNodeItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
-        // 3. Canonical sketches
+        // 3. Dual-channel Canonical Sketches
         $canonical = $this->resolveCanonicalSketches($selectedIds);
         $sketchIds = array_values(array_unique(array_map(fn($r) => (int)$r['sketch_id'], $canonical)));
 
@@ -287,7 +314,7 @@ class KgNarrative
             $sketches = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
-        // 4. Latest frame per sketch
+        // 4. Latest frame per sketch (via frames_2_sketches + frames fallback)
         $latestFrameMap = $this->resolveLatestFrames($sketchIds);
         $frameIds = array_values(array_unique(array_values($latestFrameMap)));
 
@@ -314,19 +341,19 @@ class KgNarrative
             $sketchToLatestFrame[] = ['sketch_id' => $sid, 'frame_id' => $fid];
         }
 
-        // Nodes with no resolvable sketch (for warnings in preview)
+        // Nodes with no resolvable sketch (for warnings)
         $nodesWithSketch = array_unique(array_map(fn($r) => (int)$r['kg_node_id'], $canonical));
         $nodesWithoutSketch = array_values(array_diff($selectedIds, $nodesWithSketch));
 
         // Sketches with no resolvable frame
         $sketchesWithoutFrame = array_values(array_diff($sketchIds, array_keys($latestFrameMap)));
 
-        return [
+        $result = [
             'export_meta' => [
                 'export_type'      => 'kg_narrative_bundle',
                 'generated_at'     => date('c'),
                 'source_module'    => 'KgNarrativeExporter',
-                'version'          => '1.0',
+                'version'          => '1.1',
                 'hop_mode'         => $hopMode,
                 'reading_mode'     => $readingMode,
                 'focal_kg_node_id' => $focalId ?: null,
@@ -354,6 +381,159 @@ class KgNarrative
             ],
             'ai_instructions' => $this->buildAiInstructions($readingMode),
         ];
+
+        if (isset($config['export_keys']) && is_array($config['export_keys'])) {
+            $result = array_intersect_key($result, array_flip($config['export_keys']));
+        }
+
+        return $result;
+    }
+
+    /**
+     * Generate a SQL dump for the exported KG Narrative selection.
+     */
+    public function generateSqlExport(array $config): string
+    {
+        $focalId      = (int)($config['focal_kg_node_id'] ?? 0);
+        $hopMode      = $config['hop_mode'] ?? 'manual';
+        $readingMode  = $this->normalizeReadingMode($config['reading_mode'] ?? 'atlas');
+        $manualIds    = array_values(array_unique(array_map('intval', $config['manual_node_ids'] ?? [])));
+        $includeEdges = !empty($config['include_edges']);
+
+        // Resolve final selected node ID set based on mode
+        $selectedIds = [];
+        if ($hopMode === '1hop' && $focalId > 0) {
+            $selectedIds = $this->expandHops($focalId, 1);
+        } elseif ($hopMode === '2hop' && $focalId > 0) {
+            $selectedIds = $this->expandHops($focalId, 2);
+        } else {
+            $selectedIds = $manualIds;
+            if ($focalId > 0 && !in_array($focalId, $selectedIds, true)) {
+                array_unshift($selectedIds, $focalId);
+            }
+        }
+        $selectedIds = array_values(array_unique(array_map('intval', $selectedIds)));
+
+        $canonical = $this->resolveCanonicalSketches($selectedIds);
+        $sketchIds = array_values(array_unique(array_map(fn($r) => (int)$r['sketch_id'], $canonical)));
+
+        $latestFrameMap = $this->resolveLatestFrames($sketchIds);
+        $frameIds = array_values(array_unique(array_values($latestFrameMap)));
+
+        $exportKeys = isset($config['export_keys']) && is_array($config['export_keys'])
+            ? $config['export_keys']
+            : ['kg', 'sketches', 'frames', 'mappings'];
+
+        $isoDate = date('c');
+
+        $sql  = "/*M!999999\- enable the sandbox mode */\n";
+        $sql .= "-- =============================================================\n";
+        $sql .= "-- KG Narrative SQL Export Dump\n";
+        $sql .= "-- Generated: {$isoDate}\n";
+        $sql .= "-- Hop Mode: {$hopMode} | Reading Lens: {$readingMode}\n";
+        $sql .= "-- Focal Node ID: " . ($focalId ?: 'None') . "\n";
+        $sql .= "-- Selected Nodes: " . count($selectedIds) . "\n";
+        $sql .= "-- Canonical Sketches: " . count($sketchIds) . "\n";
+        $sql .= "-- Latest Frames: " . count($frameIds) . "\n";
+        $sql .= "-- =============================================================\n\n";
+
+        $sql .= "/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;\n";
+        $sql .= "/*!40101 SET NAMES utf8mb4 */;\n";
+        $sql .= "/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;\n";
+        $sql .= "/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;\n";
+        $sql .= "SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;\n\n";
+
+        // 1. kg_nodes
+        if (in_array('kg', $exportKeys, true) && !empty($selectedIds)) {
+            $ph = implode(',', array_fill(0, count($selectedIds), '?'));
+            $stmt = $this->pdo->prepare("SELECT * FROM `kg_nodes` WHERE `id` IN ($ph) ORDER BY `id` ASC");
+            $stmt->execute($selectedIds);
+            $sql .= $this->buildSqlInsert('kg_nodes', $stmt->fetchAll(PDO::FETCH_ASSOC));
+        }
+
+        // 2. kg_node_items (edges of selected nodes)
+        if (in_array('kg', $exportKeys, true) && $includeEdges && !empty($selectedIds)) {
+            $ph = implode(',', array_fill(0, count($selectedIds), '?'));
+            $stmt = $this->pdo->prepare(
+                "SELECT * FROM `kg_node_items`
+                 WHERE `node_id` IN ($ph)
+                 ORDER BY sort_order ASC, id ASC"
+            );
+            $stmt->execute($selectedIds);
+            $sql .= $this->buildSqlInsert('kg_node_items', $stmt->fetchAll(PDO::FETCH_ASSOC));
+        }
+
+        // 3. sketches
+        if (in_array('sketches', $exportKeys, true) && !empty($sketchIds)) {
+            $ph = implode(',', array_fill(0, count($sketchIds), '?'));
+            $stmt = $this->pdo->prepare("SELECT * FROM `sketches` WHERE `id` IN ($ph) ORDER BY `id` ASC");
+            $stmt->execute($sketchIds);
+            $sql .= $this->buildSqlInsert('sketches', $stmt->fetchAll(PDO::FETCH_ASSOC));
+        }
+
+        // 4. frames
+        if (in_array('frames', $exportKeys, true) && !empty($frameIds)) {
+            $ph = implode(',', array_fill(0, count($frameIds), '?'));
+            $stmt = $this->pdo->prepare("SELECT * FROM `frames` WHERE `id` IN ($ph) ORDER BY `id` ASC");
+            $stmt->execute($frameIds);
+            $sql .= $this->buildSqlInsert('frames', $stmt->fetchAll(PDO::FETCH_ASSOC));
+        }
+
+        // 5. frames_2_sketches
+        if (in_array('mappings', $exportKeys, true) && !empty($frameIds) && !empty($sketchIds)) {
+            $framePh  = implode(',', array_fill(0, count($frameIds), '?'));
+            $sketchPh = implode(',', array_fill(0, count($sketchIds), '?'));
+            $stmt = $this->pdo->prepare(
+                "SELECT * FROM `frames_2_sketches`
+                 WHERE `from_id` IN ($framePh) AND `to_id` IN ($sketchPh)
+                 ORDER BY `from_id` ASC, `to_id` ASC"
+            );
+            $stmt->execute(array_merge($frameIds, $sketchIds));
+            $sql .= $this->buildSqlInsert('frames_2_sketches', $stmt->fetchAll(PDO::FETCH_ASSOC));
+        }
+
+        $sql .= "COMMIT;\n";
+        $sql .= "SET AUTOCOMMIT=@OLD_AUTOCOMMIT;\n";
+        $sql .= "/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;\n";
+        $sql .= "/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;\n";
+
+        return $sql;
+    }
+
+    private function buildSqlInsert(string $table, array $rows): string
+    {
+        if (empty($rows)) {
+            return "-- Table `{$table}`: 0 rows\n\n";
+        }
+
+        $cols = array_keys($rows[0]);
+        $colList = implode(', ', array_map(fn($c) => "`" . str_replace("`", "``", $c) . "`", $cols));
+
+        $sql  = "-- -------------------------------------------------------------\n";
+        $sql .= "-- Data for table `{$table}` (" . count($rows) . " rows)\n";
+        $sql .= "-- -------------------------------------------------------------\n";
+        $sql .= "INSERT INTO `{$table}` ({$colList}) VALUES\n";
+
+        $valuesList = [];
+        foreach ($rows as $row) {
+            $rowValues = [];
+            foreach ($cols as $col) {
+                $val = $row[$col] ?? null;
+                if ($val === null) {
+                    $rowValues[] = 'NULL';
+                } elseif (is_int($val) || is_float($val)) {
+                    $rowValues[] = (string)$val;
+                } elseif ($val === '0' || (ctype_digit((string)$val) && strlen((string)$val) < 18 && !str_starts_with((string)$val, '0'))) {
+                    $rowValues[] = (string)$val;
+                } else {
+                    $rowValues[] = $this->pdo->quote((string)$val);
+                }
+            }
+            $valuesList[] = '(' . implode(', ', $rowValues) . ')';
+        }
+
+        $sql .= implode(",\n", $valuesList) . ";\n\n";
+        return $sql;
     }
 
     private function normalizeReadingMode(?string $readingMode): string
@@ -482,11 +662,6 @@ class KgNarrative
     // Import
     // ─────────────────────────────────────────────────────────────────────
 
-    /**
-     * Validate an AI-produced narrative sequence JSON structure against the DB.
-     *
-     * @return array{ok:bool, errors:string[], warnings:string[], items:array}
-     */
     public function validateImport(array $payload): array
     {
         $errors = [];
@@ -502,7 +677,6 @@ class KgNarrative
             $warnings[] = 'Sequence has more than 40 items — unusually large for a reading sequence.';
         }
 
-        // Collect all referenced IDs for batch lookups
         $kgIds = [];
         $sketchIds = [];
         $frameIds = [];
@@ -511,15 +685,15 @@ class KgNarrative
             if (!empty($it['sketch_id']))  $sketchIds[] = (int)$it['sketch_id'];
             if (!empty($it['frame_id']))   $frameIds[] = (int)$it['frame_id'];
         }
-        $kgIds = array_unique($kgIds);
+        $kgIds     = array_unique($kgIds);
         $sketchIds = array_unique($sketchIds);
-        $frameIds = array_unique($frameIds);
+        $frameIds  = array_unique($frameIds);
 
-        $existingKg = $kgIds ? $this->fetchExistingIds('kg_nodes', $kgIds) : [];
+        $existingKg       = $kgIds ? $this->fetchExistingIds('kg_nodes', $kgIds) : [];
         $existingSketches = $sketchIds ? $this->fetchExistingIds('sketches', $sketchIds) : [];
-        $existingFrames = $frameIds ? $this->fetchExistingIds('frames', $frameIds) : [];
+        $existingFrames   = $frameIds ? $this->fetchExistingIds('frames', $frameIds) : [];
 
-        // Frame -> sketch linkage (for "frame belongs to sketch" check)
+        // Frame -> sketch linkage
         $frameSketchMap = [];
         if (!empty($frameIds)) {
             $ph = implode(',', array_fill(0, count($frameIds), '?'));
@@ -548,17 +722,6 @@ class KgNarrative
             if ($frameId && !in_array($frameId, $existingFrames, true)) {
                 $errors[] = "Item $idx: frame_id $frameId does not exist.";
             }
-            if ($frameId && $sketchId && isset($frameSketchMap[$frameId])
-                && !in_array($sketchId, $frameSketchMap[$frameId], true)) {
-                $warnings[] = "Item $idx: frame_id $frameId is not linked to sketch_id $sketchId via frames_2_sketches.";
-            }
-            if ($kgNodeId && $sketchId) {
-                $canon = $this->resolveCanonicalSketches([$kgNodeId]);
-                $canonSketchIds = array_map(fn($r) => (int)$r['sketch_id'], $canon);
-                if (!in_array($sketchId, $canonSketchIds, true)) {
-                    $warnings[] = "Item $idx: sketch_id $sketchId is not the canonical sketch for kg_node_id $kgNodeId.";
-                }
-            }
 
             $cleanItems[] = [
                 'kg_node_id' => $kgNodeId,
@@ -577,9 +740,6 @@ class KgNarrative
         ];
     }
 
-    /**
-     * Save a validated sequence into narrative_sequences.
-     */
     public function saveSequence(string $name, ?string $description, array $items, ?int $linkedDocId = null): int
     {
         $stmt = $this->pdo->prepare(

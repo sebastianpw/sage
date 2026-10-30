@@ -365,5 +365,9 @@ $(document).ready(function() {
 
 <script src="/js/sage-home-button.js" data-home="/dashboard.php"></script>
 
+
+<?php echo $eruda; ?>
+
+
 </body>
 </html>

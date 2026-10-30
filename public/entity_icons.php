@@ -22,6 +22,7 @@ $entityIcons = [
     'sketches'        => '🪄',
     'prompt_matrix_blueprints' => '🌌',
     'composites'      => '🧩',
+    'dimensionals'   => '📦',
 
     // entities with videos
     'animatics'       => '🎥',
@@ -36,6 +37,7 @@ $entityIcons = [
 $entitySchedulerIds = [
     'generatives' => 10,
     'characters' => 11,
+    'factions' => 76,
     'animas' => 12,
     'locations' => 13,
     'sketches' => 15,
@@ -45,6 +47,7 @@ $entitySchedulerIds = [
     'character_poses' => 19,
     'prompt_matrix_blueprints' => 23,
     'composites' => 24,
+    'dimensionals' => 87,
     'controlnet_maps' => 20
 ];
 

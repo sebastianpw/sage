@@ -32,6 +32,8 @@ function resolveFrameThumb(array $row, int $frameId = 0): string {
 if (!$seqId) {
     ob_start();
     ?>
+        <?php // echo $eruda ?? '';?>
+
     <link rel="stylesheet" href="/css/base.css">
     <link rel="stylesheet" href="/css/toast.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
@@ -105,6 +107,7 @@ if (!$seqId) {
                 </select>
             </div>
             <div style="display:flex; align-items:center; gap:8px; margin-left:auto;">
+                <button class="pl-btn pl-btn-secondary" onclick="resetMainFilter()" title="Clear filters & reset">↻ Reset</button>
                 <button class="pl-btn pl-btn-secondary" onclick="changeMainPage(-1)">« Prev</button>
                 <div style="font-size:0.8rem; color:var(--pl-text-dim); display:flex; align-items:center; gap:6px;">
                     <input type="number" id="mainPageInput" class="su-input" style="width:50px; text-align:center; padding:4px;" value="1" min="1" onchange="goToMainPage(this.value)"> 
@@ -118,7 +121,7 @@ if (!$seqId) {
             <div style="text-align:center; padding:20px; color:var(--pl-text-dim); font-size:0.85rem;">Loading sequences...</div>
         </div>
     </div>
-
+    
     <!-- New Sequence Modal -->
     <div id="newModal" class="su-modal-backdrop" onmousedown="if(event.target===this)closeNewModal()">
         <div class="su-modal-box">
@@ -188,6 +191,72 @@ if (!$seqId) {
         </div>
     </div>
 
+    <!-- BANG! Direct Render Modal -->
+    <div id="bangRenderModal" class="su-modal-backdrop" onmousedown="if(event.target===this)closeBangRenderModal()">
+        <div class="su-modal-box" style="max-width:440px;">
+            <div class="su-modal-header">
+                <div class="su-modal-title" style="color:var(--pl-amber); display:flex; align-items:center; gap:8px;">
+                    <span>💥</span> BANG! Grid Render
+                </div>
+                <button onclick="closeBangRenderModal()" class="su-modal-close">✕</button>
+            </div>
+            
+            <div id="bangRenderMeta" style="margin-bottom:15px; font-size:0.85rem; color:var(--pl-text); line-height:1.4;"></div>
+
+            <!-- Loading overlay during render -->
+            <div id="bangRenderIndicator" style="display:none; text-align:center; padding:20px; background:var(--pl-card); border:1px solid var(--pl-border); border-radius:6px; margin-bottom:15px;">
+                <div style="font-size:2rem; animation:bangSpin 1s linear infinite; display:inline-block; margin-bottom:8px;">⟳</div>
+                <div style="font-size:0.85rem; font-family:'Space Mono',monospace; color:var(--pl-amber);">Compositing & Rendering Panel Strip…</div>
+                <div style="font-size:0.7rem; color:var(--pl-text-dim); margin-top:4px;">Please wait while PyAPI renders all panels.</div>
+            </div>
+
+            <!-- Render Success Box -->
+            <div id="bangRenderResult" style="display:none; margin-bottom:15px; padding:12px; background:var(--pl-card); border:1px solid var(--pl-teal); border-radius:6px; text-align:center;">
+                <div style="color:var(--pl-teal); font-weight:bold; font-size:0.85rem; margin-bottom:6px;">✓ Render Complete!</div>
+                <div id="bangRenderResultLinks" style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:10px;"></div>
+            </div>
+
+            <div id="bangRenderForm">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
+                    <div>
+                        <label style="display:block;font-family:'Space Mono',monospace;font-size:.65rem;color:var(--pl-text-dim);margin-bottom:4px;text-transform:uppercase;">Width (px)</label>
+                        <input type="number" id="brWidth" class="su-input" value="1024" min="100">
+                    </div>
+                    <div>
+                        <label style="display:block;font-family:'Space Mono',monospace;font-size:.65rem;color:var(--pl-text-dim);margin-bottom:4px;text-transform:uppercase;">Height (px)</label>
+                        <input type="number" id="brHeight" class="su-input" value="1536" min="100">
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
+                    <div>
+                        <label style="display:block;font-family:'Space Mono',monospace;font-size:.65rem;color:var(--pl-text-dim);margin-bottom:4px;text-transform:uppercase;">Rows</label>
+                        <input type="number" id="brRows" class="su-input" value="3" min="1">
+                    </div>
+                    <div>
+                        <label style="display:block;font-family:'Space Mono',monospace;font-size:.65rem;color:var(--pl-text-dim);margin-bottom:4px;text-transform:uppercase;">Cols</label>
+                        <input type="number" id="brCols" class="su-input" value="3" min="1">
+                    </div>
+                </div>
+
+                <div style="margin-bottom:16px;">
+                    <label style="display:block;font-family:'Space Mono',monospace;font-size:.65rem;color:var(--pl-text-dim);margin-bottom:4px;text-transform:uppercase;">Gutter (px)</label>
+                    <input type="number" id="brGutter" class="su-input" value="10" min="0">
+                </div>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:8px; border-top:1px solid var(--pl-border); padding-top:15px;">
+                <button onclick="closeBangRenderModal()" class="pl-btn pl-btn-secondary" id="brCancelBtn">Cancel</button>
+                <button onclick="submitBangRender()" class="pl-btn pl-btn-primary" id="brSubmitBtn" style="background:var(--pl-amber); color:#000; border-color:var(--pl-amber);">
+                    Render Strip
+                </button>
+            </div>
+        </div>
+    </div>
+    <style>
+    @keyframes bangSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    </style>
+
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="/js/toast.js"></script>
     <script>
@@ -197,12 +266,47 @@ if (!$seqId) {
     let totalMainPages = 1;
 
     document.addEventListener('DOMContentLoaded', () => {
-        loadMainCategories();
-        loadMainSequences();
+        restoreMainState();
+        loadMainCategories().then(() => {
+            const stored = localStorage.getItem('narseq_list_state');
+            if (stored) {
+                try {
+                    const state = JSON.parse(stored);
+                    if (state.category) document.getElementById('mainSeqCat').value = state.category;
+                } catch(e) {}
+            }
+            loadMainSequences();
+        });
     });
 
+    function saveMainState() {
+        const state = {
+            page: curMainPage,
+            search: document.getElementById('mainSeqSearch').value.trim(),
+            category: document.getElementById('mainSeqCat').value
+        };
+        localStorage.setItem('narseq_list_state', JSON.stringify(state));
+    }
+
+    function restoreMainState() {
+        try {
+            const stored = localStorage.getItem('narseq_list_state');
+            if (stored) {
+                const state = JSON.parse(stored);
+                if (state.page) curMainPage = parseInt(state.page) || 1;
+                if (state.search) document.getElementById('mainSeqSearch').value = state.search;
+                document.getElementById('mainPageInput').value = curMainPage;
+            }
+        } catch (e) {}
+    }
+
+    function resetMainFilter() {
+        localStorage.removeItem('narseq_list_state');
+        window.location.reload();
+    }
+
     function loadMainCategories() {
-        fetch('narseq_api.php?action=get_sequence_categories')
+        return fetch('narseq_api.php?action=get_sequence_categories')
             .then(r=>r.json()).then(res => {
                 if(res.success && res.data && res.data.length > 0) {
                     const sel = document.getElementById('mainSeqCat');
@@ -230,6 +334,7 @@ if (!$seqId) {
     }
 
     function loadMainSequences() {
+        saveMainState();
         const search = document.getElementById('mainSeqSearch').value.trim();
         const catId = document.getElementById('mainSeqCat').value;
         const url = `narseq_api.php?action=get_sequences_list&page=${curMainPage}&search=${encodeURIComponent(search)}&category_id=${catId}`;
@@ -248,22 +353,25 @@ if (!$seqId) {
                     cont.innerHTML = '<div style="text-align:center; padding:20px; color:var(--pl-text-dim); font-size:0.85rem;">No sequences found.</div>';
                     return;
                 }
-
+                
                 cont.innerHTML = res.data.map(s => {
                     const safeName = s.name.replace(/"/g, '&quot;').replace(/'/g, "\\'");
-                    return `<div style="display:flex;align-items:center;background:var(--pl-card);border:1px solid var(--pl-border);border-radius:6px;overflow:hidden;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--pl-teal)'" onmouseout="this.style.borderColor='var(--pl-border)'">
-                        <a href="?id=${s.id}" style="display:flex;justify-content:space-between;align-items:center;flex:1;padding:12px 14px;text-decoration:none;color:var(--pl-text);font-family:'Space Mono',monospace;font-size:.85rem;">
-                            <span>
+                    const dateShort = s.created_at ? s.created_at.replace(/\D/g, '').slice(2, 8) : '';
+                    return `<div style="display:flex;align-items:stretch;background:var(--pl-card);border:1px solid var(--pl-border);border-radius:6px;overflow:hidden;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--pl-teal)'" onmouseout="this.style.borderColor='var(--pl-border)'">
+                        <a href="?id=${s.id}" style="display:flex;justify-content:space-between;align-items:flex-start;flex:1;min-width:0;padding:10px 12px;text-decoration:none;color:var(--pl-text);font-family:'Space Mono',monospace;font-size:.85rem;gap:8px;">
+                            <span style="flex:1;min-width:0;white-space:normal;word-break:break-word;line-height:1.35;">
                                 #${s.id} 
-                                <span style="color:var(--pl-teal);opacity:0.8;margin:0 6px;">[${s.skt_count} skts]</span> 
+                                <span style="color:var(--pl-teal);opacity:0.8;margin:0 4px;">[${s.skt_count}]</span> 
                                 ${s.name}
                             </span>
-                            <span style="color:var(--pl-text-dim);">${s.created_at}</span>
+                            <span style="color:var(--pl-text-dim);font-size:0.75rem;flex-shrink:0;margin-top:1px;">${dateShort}</span>
                         </a>
                         <div style="display:flex; border-left:1px solid var(--pl-border); align-self:stretch;">
-                            <button onclick="openEditModal(${s.id}, '${safeName}', ${s.category_id || 0})" title="Edit" style="background:transparent;border:none;border-right:1px solid var(--pl-border);padding:0 12px;cursor:pointer;color:var(--pl-text-dim);font-size:.9rem;transition:all .2s;" onmouseover="this.style.color='var(--pl-teal)';this.style.background='rgba(58,181,200,0.07)'" onmouseout="this.style.color='var(--pl-text-dim)';this.style.background='transparent'"><i class="bi bi-pencil"></i></button>
-                            <button onclick="openCopyModal(${s.id}, '${safeName}')" title="Copy" style="background:transparent;border:none;border-right:1px solid var(--pl-border);padding:0 12px;cursor:pointer;color:var(--pl-text-dim);font-size:.9rem;transition:all .2s;" onmouseover="this.style.color='var(--pl-teal)';this.style.background='rgba(58,181,200,0.07)'" onmouseout="this.style.color='var(--pl-text-dim)';this.style.background='transparent'"><i class="bi bi-files"></i></button>
-                            <button onclick="deleteSequence(${s.id})" title="Delete" style="background:transparent;border:none;padding:0 12px;cursor:pointer;color:var(--pl-text-dim);font-size:.9rem;transition:all .2s;" onmouseover="this.style.color='#ff4444';this.style.background='rgba(255,68,68,0.07)'" onmouseout="this.style.color='var(--pl-text-dim)';this.style.background='transparent'"><i class="bi bi-trash"></i></button>
+                            <a href="view_scrollmagic_narseq.php?id=${s.id}" title="ScrollMagic" style="display:flex;align-items:center;justify-content:center;text-decoration:none;border-right:1px solid var(--pl-border);padding:0 10px;cursor:pointer;color:var(--pl-text-dim);font-size:.9rem;transition:all .2s;" onmouseover="this.style.color='var(--pl-teal)';this.style.background='rgba(58,181,200,0.07)'" onmouseout="this.style.color='var(--pl-text-dim)';this.style.background='transparent'"><i class="bi bi-film"></i></a>
+                            <button onclick="openBangRenderModal(${s.id}, '${safeName}', ${s.skt_count})" title="BANG! Grid Render" style="background:transparent;border:none;border-right:1px solid var(--pl-border);padding:0 10px;cursor:pointer;color:var(--pl-amber);font-size:.9rem;transition:all .2s;" onmouseover="this.style.color='#fff';this.style.background='rgba(245,166,35,0.15)'" onmouseout="this.style.color='var(--pl-amber)';this.style.background='transparent'"><i class="bi bi-grid-3x3-gap"></i></button>
+                            <button onclick="openEditModal(${s.id}, '${safeName}', ${s.category_id || 0})" title="Edit" style="background:transparent;border:none;border-right:1px solid var(--pl-border);padding:0 10px;cursor:pointer;color:var(--pl-text-dim);font-size:.9rem;transition:all .2s;" onmouseover="this.style.color='var(--pl-teal)';this.style.background='rgba(58,181,200,0.07)'" onmouseout="this.style.color='var(--pl-text-dim)';this.style.background='transparent'"><i class="bi bi-pencil"></i></button>
+                            <button onclick="openCopyModal(${s.id}, '${safeName}')" title="Copy" style="background:transparent;border:none;border-right:1px solid var(--pl-border);padding:0 10px;cursor:pointer;color:var(--pl-text-dim);font-size:.9rem;transition:all .2s;" onmouseover="this.style.color='var(--pl-teal)';this.style.background='rgba(58,181,200,0.07)'" onmouseout="this.style.color='var(--pl-text-dim)';this.style.background='transparent'"><i class="bi bi-files"></i></button>
+                            <button onclick="deleteSequence(${s.id})" title="Delete" style="background:transparent;border:none;padding:0 10px;cursor:pointer;color:var(--pl-text-dim);font-size:.9rem;transition:all .2s;" onmouseover="this.style.color='#ff4444';this.style.background='rgba(255,68,68,0.07)'" onmouseout="this.style.color='var(--pl-text-dim)';this.style.background='transparent'"><i class="bi bi-trash"></i></button>
                         </div>
                     </div>`;
                 }).join('');
@@ -279,11 +387,9 @@ if (!$seqId) {
         const drop = document.getElementById('mainSeqDrop');
         
         mainSearchTimer = setTimeout(() => {
-            // Instantly update the list based on search filter
             curMainPage = 1;
             loadMainSequences();
 
-            // Populate the proposal dropdown for quick jumping
             if(!val.trim()) {
                 drop.classList.remove('open');
                 return;
@@ -307,7 +413,6 @@ if (!$seqId) {
         }, 350);
     }
     
-    // Close dropdown when clicking outside
     document.addEventListener('click', e => {
         const drop = document.getElementById('mainSeqDrop');
         if(drop && !e.target.closest('#mainSeqSearch') && !e.target.closest('#mainSeqDrop')) {
@@ -342,7 +447,7 @@ if (!$seqId) {
             });
     }
     
-   function openNewModal() {
+    function openNewModal() {
         document.getElementById('newSeqName').value = '';
         document.getElementById('newModal').classList.add('active');
         setTimeout(() => document.getElementById('newSeqName').focus(), 50);
@@ -371,7 +476,6 @@ if (!$seqId) {
         document.getElementById('editSeqId').value = id;
         document.getElementById('editSeqName').value = name;
         
-        // Clone categories from the main filter select
         const editCatSelect = document.getElementById('editSeqCat');
         editCatSelect.innerHTML = '<option value="0">No Category</option>';
         const mainOpts = document.querySelectorAll('#mainSeqCat option');
@@ -429,12 +533,111 @@ if (!$seqId) {
             .then(r=>r.json()).then(res => {
                 if (res.success) {
                     Toast.show('Sequence deleted', 'success');
-                    // Reload current page. If page is now empty, it will naturally show "No sequences found"
                     loadMainSequences();
                 } else {
                     Toast.show(res.message || 'Delete failed', 'error');
                 }
             });
+    }
+
+    // --- BANG! DIRECT RENDER LOGIC ---
+    let activeBrSeqId = null;
+
+    function openBangRenderModal(id, name, frameCount) {
+        activeBrSeqId = id;
+        document.getElementById('bangRenderMeta').innerHTML = `<b>#${id} — ${name}</b><br><span style="color:var(--pl-text-dim); font-size:0.75rem;">Sequence contains ${frameCount} frames</span>`;
+        
+        
+        
+        // In openBangRenderModal(): read from localStorage (fallback to 1024 / 1536)
+document.getElementById('brWidth').value = localStorage.getItem('bang_w') || 1024;
+document.getElementById('brHeight').value = localStorage.getItem('bang_h') || 1536;
+
+
+        
+
+        const rc = Math.ceil(Math.sqrt(frameCount));
+        document.getElementById('brRows').value = Math.max(1, Math.ceil(frameCount / rc)) || 3;
+        document.getElementById('brCols').value = Math.max(1, rc) || 3;
+        document.getElementById('brGutter').value = 10;
+
+        document.getElementById('bangRenderIndicator').style.display = 'none';
+        document.getElementById('bangRenderResult').style.display = 'none';
+        document.getElementById('bangRenderForm').style.display = 'block';
+        document.getElementById('brSubmitBtn').style.display = 'inline-block';
+        document.getElementById('brSubmitBtn').disabled = false;
+        document.getElementById('brCancelBtn').textContent = 'Cancel';
+
+        document.getElementById('bangRenderModal').classList.add('active');
+    }
+
+    function closeBangRenderModal() {
+        document.getElementById('bangRenderModal').classList.remove('active');
+        activeBrSeqId = null;
+    }
+
+    async function submitBangRender() {
+        if (!activeBrSeqId) return;
+
+        const width = parseInt(document.getElementById('brWidth').value) || 1024;
+        const height = parseInt(document.getElementById('brHeight').value) || 1536;
+        const rows = parseInt(document.getElementById('brRows').value) || 3;
+        const cols = parseInt(document.getElementById('brCols').value) || 3;
+        const gutter = parseInt(document.getElementById('brGutter').value) || 10;
+        
+        
+        // In submitBangRender(): persist before sending
+localStorage.setItem('bang_w', width);
+localStorage.setItem('bang_h', height);
+
+        document.getElementById('bangRenderIndicator').style.display = 'block';
+        document.getElementById('bangRenderForm').style.display = 'none';
+        document.getElementById('brSubmitBtn').disabled = true;
+        document.getElementById('brSubmitBtn').style.display = 'none';
+
+        const fd = new FormData();
+        fd.append('action', 'direct_render_sequence');
+        fd.append('sequence_id', activeBrSeqId);
+        fd.append('canvas_width', width);
+        fd.append('canvas_height', height);
+        fd.append('rows', rows);
+        fd.append('cols', cols);
+        fd.append('gutter', gutter);
+        
+        const pyapiUrl = localStorage.getItem('sage_pyapi_url') || 'http://127.0.0.1:8009';
+        fd.append('pyapi_url', pyapiUrl);
+
+        try {
+            const r = await fetch('bang_api.php', { method: 'POST', body: fd });
+            const res = await r.json();
+
+            document.getElementById('bangRenderIndicator').style.display = 'none';
+
+            if (res.success) {
+                Toast.show(`Frame #${res.frame_id} rendered!`, 'success');
+                
+                const resultBox = document.getElementById('bangRenderResult');
+                const linksBox = document.getElementById('bangRenderResultLinks');
+                
+                resultBox.style.display = 'block';
+                linksBox.innerHTML = `
+                    <a href="view_frame.php?frame_id=${res.frame_id}" target="_blank" class="pl-btn pl-btn-teal" style="text-decoration:none;">View Frame #${res.frame_id}</a>
+                    <a href="bang.php?composite_id=${res.composite_id}&canvas_id=${res.canvas_id}" target="_blank" class="pl-btn pl-btn-primary" style="text-decoration:none; background:var(--pl-amber); color:#000; border-color:var(--pl-amber);">Open in BANG!</a>
+                `;
+                document.getElementById('brCancelBtn').textContent = 'Close';
+            } else {
+                Toast.show(res.message || 'Render failed', 'error');
+                document.getElementById('bangRenderForm').style.display = 'block';
+                document.getElementById('brSubmitBtn').style.display = 'inline-block';
+                document.getElementById('brSubmitBtn').disabled = false;
+            }
+        } catch (e) {
+            document.getElementById('bangRenderIndicator').style.display = 'none';
+            document.getElementById('bangRenderForm').style.display = 'block';
+            document.getElementById('brSubmitBtn').style.display = 'inline-block';
+            document.getElementById('brSubmitBtn').disabled = false;
+            Toast.show('Network error during render', 'error');
+        }
     }
     </script>
     <?php
@@ -557,10 +760,15 @@ ob_start();
 
 body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', system-ui, sans-serif; margin: 0; padding: 0; }
 
-.pl-nav { display:flex; align-items:center; gap:10px; padding:10px 16px; background:rgba(0,0,0,.6); border-bottom:1px solid var(--pl-border); position:sticky; top:0; z-index:100; backdrop-filter:blur(6px); }
+.pl-nav { display:flex; align-items:center; gap:6px; padding:8px 12px; padding-left:68px; background:rgba(0,0,0,.6); border-bottom:1px solid var(--pl-border); position:sticky; top:0; z-index:100; backdrop-filter:blur(6px); }
 [data-theme="light"] .pl-nav { background:rgba(244,246,250,.92); }
-.pl-nav-btn { font-family:'Space Mono',monospace; font-size:.7rem; padding:6px 12px; border:1px solid var(--pl-border); border-radius:4px; color:var(--pl-text-dim); text-decoration:none; transition:all .2s; background:var(--pl-surface); cursor:pointer; }
+.pl-nav-btn { font-family:'Space Mono',monospace; font-size:.7rem; padding:5px 9px; border:1px solid var(--pl-border); border-radius:4px; color:var(--pl-text-dim); text-decoration:none; transition:all .2s; background:var(--pl-surface); cursor:pointer; display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
 .pl-nav-btn:hover { color:var(--pl-teal); border-color:var(--pl-teal); }
+
+@media (max-width: 480px) {
+    .pl-nav { padding-left: 60px; gap: 4px; padding-right: 6px; }
+    .pl-nav-btn { padding: 4px 6px; font-size: 0.65rem; }
+}
 
 .workspace { max-width:900px; margin:0 auto; padding:30px 15px 100px; }
 
@@ -617,9 +825,11 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
 .frame-cycle-btn:hover { border-color: var(--pl-teal); color: var(--pl-teal); background: rgba(58,181,200,0.1); }
 
 .sketch-info { flex: 1; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
-.sketch-id { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--pl-teal); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 5px; }
-.sketch-title { font-size: 1.05rem; font-weight: bold; margin: 0 0 5px 0; color: var(--pl-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; transition: color 0.15s; }
-.sketch-title:hover { color: var(--pl-amber); }
+.sketch-id { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--pl-teal); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 5px; padding: 3px 0; cursor: pointer; transition: color 0.15s; display: inline-block; }
+.sketch-id:hover { color: var(--pl-amber); }
+.sketch-title { font-size: 1.05rem; font-weight: bold; margin: 0 0 5px 0; color: var(--pl-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text; transition: color 0.15s; outline: none; }
+.sketch-title:hover, .sketch-title:focus { color: var(--pl-amber); }
+.sketch-title:focus { border-bottom: 1px dashed var(--pl-teal); text-overflow: clip; }
 .sketch-desc { font-size: 0.8rem; color: var(--pl-text-dim); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
 /* Inline Split Divider */
@@ -646,7 +856,7 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
 .pl-btn-teal { border-color:var(--pl-teal); background:var(--pl-teal); color:#000; font-weight:bold; }
 .pl-btn-teal:hover { filter:brightness(1.1); }
 
-/* FORGE MODAL (Enhanimaticism Style) */
+/* FORGE MODAL */
 .compose-modal-backdrop {
     position: fixed; inset: 0; background: rgba(0,0,0,0.75);
     z-index: 300000; display: none; align-items: flex-end; justify-content: center;
@@ -723,13 +933,12 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
     position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff;
     border-radius: 4px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
     font-size: 0.85rem; z-index: 10; cursor: grab; opacity: 0.85; transition: opacity 0.15s;
-    touch-action: none; /* Prevents mobile scroll while dragging */
+    touch-action: none;
 }
 .ff-result-card:hover .ff-drag-indicator { opacity: 1; }
 .ff-drag-indicator:active { background: var(--pl-teal); color: #000; cursor: grabbing; }
 .forge-result-empty { grid-column: 1 / -1; text-align: center; padding: 20px 0; color: var(--pl-text-dim); font-size: 0.8rem; }
 
-/* Ensure PhotoSwipe Lightbox pops over the 300,000 z-index modal */
 .pswp { z-index: 400000 !important; }
 
     /* Empty sequence drop zone */
@@ -774,13 +983,12 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
         opacity: 0.6;
         line-height: 1.5;
     }
-    /* Matches .seq-item-wrap.drag-over-top / drag-over-bottom border style */
     #emptyDropZone.drag-over {
         border-style: solid;
         border-color: var(--pl-teal);
         border-width: 2px;
         background: rgba(58, 181, 200, 0.07);
-        padding-top: 44px;   /* mimics the padding-top bump on drag-over-top */
+        padding-top: 44px;
         color: var(--pl-teal);
     }
     #emptyDropZone.drag-over .dz-title {
@@ -789,24 +997,22 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
 
 </style>
 
-<div class="pl-nav" style="padding-left: 70px;">
-    <!-- Back Link (Visible in Default Mode) -->
-    <a href="narseq.php" class="pl-nav-btn default-mode-el" style="margin-right:10px;">&#9664; Seq</a>
+<div class="pl-nav">
+    <a href="narseq.php" class="pl-nav-btn default-mode-el">&#9664; Seq</a>
 
-    <!-- Mass Action Buttons (Hidden by default) -->
-    <button class="pl-nav-btn mass-action-btn" style="display:none; margin-right:5px;" onclick="massCheckAll()">All</button>
-    <button class="pl-nav-btn mass-action-btn" style="display:none; color:#ff4444; border-color:rgba(255,68,68,0.3); margin-right:5px;" onclick="massDelete()">Del</button>
+    <button class="pl-nav-btn mass-action-btn" style="display:none;" onclick="massCheckAll()">All</button>
+    <button class="pl-nav-btn mass-action-btn" style="display:none; color:#ff4444; border-color:rgba(255,68,68,0.3);" onclick="massDelete()">Del</button>
     <button class="pl-nav-btn mass-action-btn" style="display:none; margin-right:auto;" onclick="openMassCopyModal()">Copy</button>
     
-    <!-- Mass Toggle -->
-    <button class="pl-nav-btn" id="massToggleBtn" onclick="toggleMassMode()" style="margin-left:auto; margin-right:10px;">
+    <button class="pl-nav-btn" id="massToggleBtn" onclick="toggleMassMode()" style="margin-left:auto;">
         Mass
     </button>
-    <!-- Add Button -->
-    <button class="pl-nav-btn" onclick="openForgeModal()" style="margin-right:10px; background:var(--pl-teal); color:#000; border-color:var(--pl-teal); font-weight:bold;">
+    <a href="view_scrollmagic_narseq.php?id=<?= $seqId ?>" class="pl-nav-btn" title="View in ScrollMagic">
+        <i class="bi bi-film"></i> Magic
+    </a>
+    <button class="pl-nav-btn" onclick="openForgeModal()" style="background:var(--pl-teal); color:#000; border-color:var(--pl-teal); font-weight:bold;">
         <i class="bi bi-funnel"></i> Add
     </button>
-    <!-- JSON Export -->
     <button class="pl-nav-btn" onclick="exportSequence(event)" title="Export JSON">
         <i class="bi bi-download"></i> JSON
     </button>
@@ -840,7 +1046,6 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
             $activeFrameId = $latestFrameBySketch[$sid]['id'];
         }
         
-        // Use first frame available as fallback
         if (!$activeFrameId && !empty($framesBySketch[$sid])) {
             $activeFrameId = $framesBySketch[$sid][0]['id'];
             $thumb         = $framesBySketch[$sid][0]['filename'];
@@ -872,8 +1077,8 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
                         <?php endif; ?>
                     </div>
                     <div class="sketch-info">
-                        <div class="sketch-id">Item <span class="sketch-id-num"><?= sprintf('%02d', $idx + 1) ?></span> &bull; Sketch #<?= $sid ?></div>
-                        <div class="sketch-title" onclick="openEntityModal('sketches', <?= $sid ?>, '<?= htmlspecialchars(addslashes($sketchRow['name'])) ?>')">
+                        <div class="sketch-id" onclick="openEntityModal('sketches', <?= $sid ?>, this.nextElementSibling.textContent.trim())" title="Open Details">Item <span class="sketch-id-num"><?= sprintf('%02d', $idx + 1) ?></span> &bull; Sketch #<?= $sid ?></div>
+                        <div class="sketch-title" contenteditable="true" spellcheck="false" onfocus="this.dataset.orig = this.textContent.trim()" onblur="saveSketchTitle(this, <?= $sid ?>)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
                             <?= htmlspecialchars($sketchRow['name']) ?>
                         </div>
                         <div class="sketch-desc"><?= htmlspecialchars($sketchRow['description'] ?? 'No description.') ?></div>
@@ -949,8 +1154,7 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
     </div>
 </div>
 
-
-<!-- FORGE MODAL (Enhanimaticism Style) -->
+<!-- FORGE MODAL -->
 <div class="compose-modal-backdrop" id="ffBackdrop" onmousedown="if(event.target===this)closeForgeModal()">
     <div class="compose-modal" id="ffModal">
         <div class="cm-handle" onclick="closeForgeModal()"><div class="cm-handle-bar"></div></div>
@@ -1016,6 +1220,12 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
                     <label class="ff-label">Map Run</label>
                     <input type="text" id="ffSearch-map_run" class="su-input" placeholder="Search map runs..." onfocus="ffDebounceSearch('map_run', this.value)" oninput="ffDebounceSearch('map_run', this.value)">
                     <div class="ff-dropdown" id="ffDrop-map_run"></div>
+                    <div id="ffMapRunSelectedInfo" style="display:none; margin-top:12px; padding:12px; background:var(--pl-card); border:1px solid var(--pl-border); border-radius:6px; flex-direction:column; gap:8px;">
+                        <div style="font-size:0.8rem; font-weight:bold; color:var(--pl-teal);" id="ffMapRunSelectedLabel"></div>
+                        <button class="pl-btn pl-btn-teal" style="width:100%; display:flex; align-items:center; justify-content:center; gap:6px;" onclick="addMapRunToSequence()">
+                            <i class="bi bi-plus-circle-fill"></i> Add All Frames From This Map Run
+                        </button>
+                    </div>
                 </div>
                 <!-- VECTOR -->
                 <div class="forge-tab-pane" id="pane-vector">
@@ -1043,10 +1253,8 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
                         <button class="pl-btn pl-btn-secondary" style="padding:4px 8px; font-size:0.65rem;" onclick="runForgeSearch(ffCurrentPage)">↻ Refresh</button>
                     </div>
                     
-                    <!-- Fixed 3x3 Grid Layout -->
                     <div class="ff-result-grid" id="ffResultGrid"></div>
                     
-                    <!-- Pagination directly mapped to the 3x3 layout (9 per page) -->
                     <div id="ffPagination" style="display:none; justify-content:space-between; align-items:center; margin-top:12px;">
                         <button class="pl-btn pl-btn-secondary" id="ffPrevBtn" onclick="runForgeSearch(ffCurrentPage - 1)">« Prev</button>
                         <span style="font-size:0.75rem; color:var(--pl-text-dim);" id="ffPageLabel">Page 1</span>
@@ -1092,7 +1300,7 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
     window.forgeLightbox = null;
     window.initForgeLightbox = () => {
         if (window.forgeLightbox) {
-            window.forgeLightbox.destroy(); // Tear down old event listeners safely
+            window.forgeLightbox.destroy();
         }
         window.forgeLightbox = new PhotoSwipeLightbox({
             gallery: '#ffResultGrid',
@@ -1159,7 +1367,7 @@ function exportSequence(e) {
 function cycleSeqFrame(btnEl, sketchId, direction) {
     const wrapEl = btnEl.closest('.seq-item-wrap');
     if (!wrapEl) return;
-    const currentIdx = wrapEl.dataset.idx; // This dynamically updates during reorder
+    const currentIdx = wrapEl.dataset.idx;
     
     const frames = frameRegistry[sketchId];
     if (!frames || frames.length < 2) return;
@@ -1179,16 +1387,13 @@ function cycleSeqFrame(btnEl, sketchId, direction) {
     
     const newFrame = frames[newIndex];
     
-    // Update UI locally (link href targets lightbox, img src targets thumbnail)
     link.href = newFrame.filename;
     img.src = newFrame.filename;
     thumbWrap.dataset.activeFrame = newFrame.id;
     
-    // Clear dimensions so PhotoSwipe recalculates them smoothly on next load
     delete link.dataset.pswpWidth;
     delete link.dataset.pswpHeight;
     
-    // Auto-save via API so reload persists
     const fd = new URLSearchParams();
     fd.append('action', 'update_item_frame');
     fd.append('sequence_id', SEQ_ID);
@@ -1208,12 +1413,45 @@ function cycleSeqFrame(btnEl, sketchId, direction) {
         });
 }
 
+// ── Inline Sketch Title Editing ──────────────────────────────────────────────
+function saveSketchTitle(el, sketchId) {
+    const newName = el.textContent.trim();
+    const origName = el.dataset.orig || '';
+    if (newName === origName) return;
+
+    if (!newName) {
+        if (window.Toast) Toast.show('Title cannot be empty', 'warn');
+        el.textContent = origName;
+        return;
+    }
+    
+    el.dataset.orig = newName;
+    
+    const fd = new URLSearchParams();
+    fd.append('action', 'update_sketch_name');
+    fd.append('sketch_id', sketchId);
+    fd.append('name', newName);
+
+    fetch('narseq_api.php', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(res => {
+            if (!res.success) {
+                if (window.Toast) Toast.show(res.message || 'Save failed', 'error');
+                el.textContent = origName;
+                el.dataset.orig = origName;
+            }
+        }).catch(err => {
+            if (window.Toast) Toast.show('Network error', 'error');
+            el.textContent = origName;
+            el.dataset.orig = origName;
+        });
+}
+
 // ── Drag & Drop Sequence Items ───────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     const container = document.getElementById('sequenceList');
     if (!container) return;
 
-    // ── Empty drop zone wiring ──────────────────────────────
     const emptyZone = document.getElementById('emptyDropZone');
 
     function refreshEmptyZone() {
@@ -1222,12 +1460,7 @@ document.addEventListener('DOMContentLoaded', () => {
         emptyZone.style.display = hasItems ? 'none' : 'flex';
     }
 
-    // Keep in sync after every insert / remove
-    const _origInsert = window.insertForgeItemToSequence;
-    // (refreshEmptyZone is also called inside renderInsertedItem — see below)
-
     if (emptyZone) {
-        // Pointer drag — highlight when forge clone is hovering over the zone
         emptyZone.addEventListener('pointerenter', () => {
             emptyZone.classList.add('drag-over');
         });
@@ -1236,19 +1469,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ── Patch renderInsertedItem to hide the zone after first drop ──
-    // Find the existing renderInsertedItem function and add ONE line at its end.
-    // The cleanest way without rewriting it: wrap it.
     const _origRender = window.renderInsertedItem;
     window.renderInsertedItem = function(res, insertIndex) {
         _origRender(res, insertIndex);
         refreshEmptyZone();
     };
 
-    // Also call refreshEmptyZone once on load to handle sequences that start empty
     refreshEmptyZone();
-
-    // ── END empty drop zone wiring ──────────────────────────────────
 
     let dragSrc = null;
 
@@ -1292,11 +1519,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Touch/Pointer Fallback for mobile devices
     let pointerDragSrc = null, pointerClone = null, pointerOffsetY = 0;
     let pointerForgeDragSrc = null, pointerForgeClone = null, forgeOffsetX = 0, forgeOffsetY = 0;
 
-    // 1. Existing Sequence Reorder Logic
     container.addEventListener('pointerdown', e => {
         const handle = e.target.closest('.drag-handle');
         if (!handle) return;
@@ -1312,7 +1537,6 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault(); 
     }, { passive: false });
 
-    // 2. New Filter Forge Drag Logic
     document.addEventListener('pointerdown', e => {
         const handle = e.target.closest('.ff-drag-indicator');
         if (!handle) return;
@@ -1334,19 +1558,15 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         document.body.appendChild(pointerForgeClone);
         
-        // Immediately close the modal so we can drop into the main UI underneath
         closeForgeModal();
 
-        // Lock pointer to this touch to prevent scrolling
         handle.setPointerCapture(e.pointerId);
         e.preventDefault();
     }, { passive: false });
 
     document.addEventListener('pointermove', e => {
-        // Prevent scroll on mobile while dragging anything
         if (pointerClone || pointerForgeClone) e.preventDefault();
 
-        // Moving sequence items (reorder)
         if (pointerClone && pointerDragSrc) {
             pointerClone.style.top = (e.clientY - pointerOffsetY) + 'px';
             container.querySelectorAll('.seq-item-wrap').forEach(w => w.classList.remove('drag-over-top', 'drag-over-bottom'));
@@ -1358,7 +1578,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Moving Forge results
         if (pointerForgeClone && pointerForgeDragSrc) {
             pointerForgeClone.style.left = (e.clientX - forgeOffsetX) + 'px';
             pointerForgeClone.style.top  = (e.clientY - forgeOffsetY) + 'px';
@@ -1368,12 +1587,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const emptyZone = document.getElementById('emptyDropZone');
 
-            // Use getBoundingClientRect for reliable hit-testing on Android
             const seqRect = container.getBoundingClientRect();
             const inSeq   = e.clientX >= seqRect.left && e.clientX <= seqRect.right &&
                             e.clientY >= seqRect.top  && e.clientY <= seqRect.bottom;
 
-            // Check empty drop zone hit
             if (emptyZone && emptyZone.style.display !== 'none') {
                 const zRect = emptyZone.getBoundingClientRect();
                 const onZone = e.clientX >= zRect.left && e.clientX <= zRect.right &&
@@ -1381,7 +1598,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 emptyZone.classList.toggle('drag-over', onZone);
             }
 
-            // Check existing seq-item-wrap hit via getBoundingClientRect
             const wraps = Array.from(container.querySelectorAll('.seq-item-wrap'));
             let hitWrap = null;
             for (const w of wraps) {
@@ -1402,8 +1618,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }, { passive: false });
 
     document.addEventListener('pointerup', e => {
-
-        // ── Drop Sequence Item (reorder) ─────────────────────────────
         if (pointerDragSrc) {
             if (pointerClone) { pointerClone.remove(); pointerClone = null; }
             pointerDragSrc.classList.remove('dragging');
@@ -1423,7 +1637,6 @@ document.addEventListener('DOMContentLoaded', () => {
             pointerDragSrc = null;
         }
 
-        // ── Drop Forge Item ──────────────────────────────────────────
         if (pointerForgeDragSrc) {
             const card = pointerForgeDragSrc;
             pointerForgeDragSrc = null;
@@ -1435,11 +1648,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const emptyZone = document.getElementById('emptyDropZone');
             if (emptyZone) emptyZone.classList.remove('drag-over');
 
-            // --- Hit detection via getBoundingClientRect (works on Android Chrome) ---
             let insertIndex = -1;
             let didLand = false;
 
-            // 1. Check existing seq-item-wrap elements
             const wraps = Array.from(container.querySelectorAll('.seq-item-wrap'));
             for (let i = 0; i < wraps.length; i++) {
                 const r = wraps[i].getBoundingClientRect();
@@ -1452,17 +1663,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // 2. Check empty drop zone
             if (!didLand && emptyZone && emptyZone.style.display !== 'none') {
                 const zRect = emptyZone.getBoundingClientRect();
                 if (e.clientX >= zRect.left && e.clientX <= zRect.right &&
                     e.clientY >= zRect.top  && e.clientY <= zRect.bottom) {
-                    insertIndex = -1; // append
+                    insertIndex = -1;
                     didLand = true;
                 }
             }
 
-            // 3. Fallback: anywhere inside the sequence container counts
             if (!didLand) {
                 const seqRect = container.getBoundingClientRect();
                 if (e.clientX >= seqRect.left && e.clientX <= seqRect.right &&
@@ -1490,7 +1699,6 @@ document.addEventListener('DOMContentLoaded', () => {
         fetch('narseq_api.php', { method: 'POST', body: fd })
             .then(r => r.json()).then(res => {
                 if (res.success) {
-                    // Update DOM metadata seamlessly
                     reindexSequenceVisuals();
                     if (window.Toast) Toast.show('Sequence reordered.', 'success');
                 } else {
@@ -1525,6 +1733,33 @@ function insertForgeItemToSequence(sketchId, frameId, insertIndex) {
         })
         .catch(err => {
             if (window.Toast) Toast.show('Network error inserting item', 'error');
+        });
+}
+
+function addMapRunToSequence(mapRunId) {
+    const id = mapRunId || (ffState.map_run ? ffState.map_run.id : null);
+    if (!id) return Toast.show('No map run selected', 'warn');
+
+    if (window.Toast) Toast.show('Adding all frames from map run...', 'info');
+
+    const fd = new URLSearchParams();
+    fd.append('action', 'insert_map_run_items');
+    fd.append('sequence_id', SEQ_ID);
+    fd.append('map_run_id', id);
+
+    fetch('narseq_api.php', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                if (window.Toast) Toast.show(`Added ${res.count} frames from Map Run #${id}.`, 'success');
+                closeForgeModal();
+                setTimeout(() => window.location.reload(), 400);
+            } else {
+                if (window.Toast) Toast.show(res.message || 'Failed to add map run frames', 'error');
+            }
+        })
+        .catch(err => {
+            if (window.Toast) Toast.show('Network error adding map run frames', 'error');
         });
 }
 
@@ -1563,10 +1798,8 @@ function renderInsertedItem(res, insertIndex) {
                     ${cycleBtns}
                 </div>
                 <div class="sketch-info">
-                    <div class="sketch-id">Item <span class="sketch-id-num">--</span> &bull; Sketch #${res.sketch.id}</div>
-                    <div class="sketch-title" onclick="openEntityModal('sketches', ${res.sketch.id}, '${safeName}')">
-                        ${res.sketch.name}
-                    </div>
+                    <div class="sketch-id" onclick="openEntityModal('sketches', ${res.sketch.id}, this.nextElementSibling.textContent.trim())" title="Open Details">Item <span class="sketch-id-num">--</span> &bull; Sketch #${res.sketch.id}</div>
+                    <div class="sketch-title" contenteditable="true" spellcheck="false" onfocus="this.dataset.orig = this.textContent.trim()" onblur="saveSketchTitle(this, ${res.sketch.id})" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">${res.sketch.name}</div>
                     <div class="sketch-desc">${safeDesc}</div>
                 </div>
             </div>
@@ -1607,7 +1840,6 @@ function removeSequenceItem(btn) {
     const wrap = btn.closest('.seq-item-wrap');
     if (!wrap) return;
     
-    // Disable button to prevent double-clicks
     btn.style.pointerEvents = 'none';
     btn.innerHTML = '⋯';
     
@@ -1622,14 +1854,12 @@ function removeSequenceItem(btn) {
         .then(r => r.json())
         .then(res => {
             if (res.success) {
-                // Smooth fade out
                 wrap.style.transition = 'all 0.3s ease';
                 wrap.style.opacity = '0';
                 wrap.style.transform = 'scale(0.95)';
                 setTimeout(() => {
                     wrap.remove();
                     reindexSequenceVisuals();
-                    // Restore empty state message if sequence is empty
                     if (document.querySelectorAll('.seq-item-wrap').length === 0) {
                         const emptyMsg = document.getElementById('emptyListMsg');
                         if (emptyMsg) emptyMsg.style.display = 'block';
@@ -1659,7 +1889,7 @@ function toggleMassMode() {
     const seqList = document.getElementById('sequenceList');
     if (seqList) seqList.classList.toggle('mass-mode-active', isMassMode);
     
-    document.querySelectorAll('.mass-action-btn').forEach(b => b.style.display = isMassMode ? 'block' : 'none');
+    document.querySelectorAll('.mass-action-btn').forEach(b => b.style.display = isMassMode ? 'inline-flex' : 'none');
     document.querySelectorAll('.default-mode-el').forEach(b => b.style.display = isMassMode ? 'none' : '');
     
     const toggleBtn = document.getElementById('massToggleBtn');
@@ -1771,7 +2001,7 @@ function submitMassCopy() {
                     setTimeout(() => window.location.reload(), 500);
                 } else {
                     closeMassCopyModal();
-                    toggleMassMode(); // Turn off and clear selection
+                    toggleMassMode();
                 }
             } else {
                 Toast.show(res.message || 'Operation failed', 'error');
@@ -1828,6 +2058,15 @@ function ffDebounceSearch(slot, q) {
                 }
                 dd.innerHTML = res.data.map(item => {
                     const safe = JSON.stringify(item).replace(/"/g, '&quot;');
+                    if (slot === 'map_run') {
+                        return `<div class="ff-dropdown-item" onclick="ffSelectItem('${slot}', ${safe})">
+                            <div style="display:flex; flex-direction:column; flex:1; min-width:0; padding-right:8px;">
+                                <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:500;">${item.label}</span>
+                                <span class="forge-dropdown-item-meta" style="font-size:0.65rem; color:var(--pl-text-dim); margin-top:2px;">${item.meta||''}</span>
+                            </div>
+                            <button class="pl-btn pl-btn-teal" style="padding:4px 8px; font-size:0.65rem; flex-shrink:0;" onclick="event.stopPropagation(); addMapRunToSequence(${item.id})">＋ Add All</button>
+                        </div>`;
+                    }
                     return `<div class="ff-dropdown-item" onclick="ffSelectItem('${slot}', ${safe})">
                         <span>${item.label}</span>
                         <span class="forge-dropdown-item-meta" style="font-size:0.65rem; color:var(--pl-text-dim); margin-left:8px;">${item.meta||''}</span>
@@ -1850,10 +2089,19 @@ function ffSelectItem(slot, item) {
         ffState[slot] = item;
     }
     
+    if (slot === 'map_run') {
+        const info = document.getElementById('ffMapRunSelectedInfo');
+        const lbl = document.getElementById('ffMapRunSelectedLabel');
+        if (info && lbl) {
+            lbl.textContent = item.label;
+            info.style.display = 'flex';
+        }
+    }
+
     document.getElementById(`ffSearch-${slot}`).value = '';
     document.getElementById(`ffDrop-${slot}`).classList.remove('open');
     renderActiveFilters();
-    switchForgeTab('results'); // Auto-switch to results
+    switchForgeTab('results');
 }
 
 function ffApplyVector() {
@@ -1889,6 +2137,10 @@ function removeFfFilter(key, index = null) {
         if (el) el.value = '';
     } else {
         ffState[key] = null;
+        if (key === 'map_run') {
+            const info = document.getElementById('ffMapRunSelectedInfo');
+            if (info) info.style.display = 'none';
+        }
     }
     renderActiveFilters();
     runForgeSearch(1);
@@ -1927,7 +2179,7 @@ function runForgeSearch(page) {
     p.set('action', 'list_frames');
     p.set('entity_type', 'sketches');
     p.set('filter_mode', 'intersection');
-    p.set('per_page', '9'); // Fixed exactly 9 for 3x3 layout to fit comfortably
+    p.set('per_page', '9');
     p.set('page', page);
 
     let hasFilter = false;
@@ -1949,7 +2201,6 @@ function runForgeSearch(page) {
     if (ffState.sketchId) { p.set('entity_id', ffState.sketchId); hasFilter = true; }
     if (ffState.frameId) { p.set('frame_id', ffState.frameId); hasFilter = true; }
 
-    // If no specific filters are applied, request newest frames first (frames.id DESC)
     if (!hasFilter) {
         p.set('sort', 'newest');
         p.set('sort_by', 'id');
@@ -2013,7 +2264,6 @@ function runForgeSearch(page) {
                 document.getElementById('ffNextBtn').disabled = (page >= ffTotalPages);
             }
 
-            // Re-initialize lightbox for the new dynamically loaded grid elements
             if (window.initForgeLightbox) window.initForgeLightbox();
         })
         .catch(err => {
@@ -2026,7 +2276,6 @@ function runForgeSearch(page) {
 function openSplitModal(el) {
     const wrap = el.closest('.seq-item-wrap');
     const wraps = Array.from(document.querySelectorAll('.seq-item-wrap'));
-    // Split will happen AFTER this element
     const index = wraps.indexOf(wrap) + 1; 
 
     document.getElementById('splitIndex').value = index;
@@ -2079,7 +2328,8 @@ function closeEntityModal() {
 </script>
 
 <?php
-echo $eruda ?? '';
 $content = ob_get_clean();
 $spw->renderLayout($content, $pageTitle, $spw->getProjectPath() . '/templates/curation.php');
 ?>
+
+

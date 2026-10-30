@@ -887,13 +887,11 @@ class DatabaseMigrationManager
                 ];
 
                 foreach ($parsed['foreign_keys'] as $fk) {
-                    // Add IF NOT EXISTS for MariaDB 10.6+ compatibility
-                    $safeDef = str_replace('CONSTRAINT `', 'CONSTRAINT IF NOT EXISTS `', $fk['definition']);
                     $statements[] = [
                         'type'             => 'ADD_FOREIGN_KEY',
                         'table'            => $table,
                         'constraint'       => $fk['name'],
-                        'sql'              => "ALTER TABLE `{$table}` ADD " . $safeDef . ";",
+                        'sql'              => "ALTER TABLE `{$table}` ADD " . $fk['definition'] . ";",
                         'safe'             => true,
                         'reversible'       => false,
                         'priority'         => 5,

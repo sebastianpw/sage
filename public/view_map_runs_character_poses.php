@@ -614,7 +614,7 @@ function getPaginationUrl($page, $search) {
 
     <!-- Header Section -->
     <div class="header-compact">
-        <a href="sql_crud_character_poses.php" class="entity-icon-link" title="Character Poses CRUD"><?php echo $iconChar; ?></a>
+        <a href="cruzz.php?entity=character_poses" class="entity-icon-link" title="Character Poses CRUD"><?php echo $iconChar; ?></a>
         <a href="gallery_character_poses_nu.php" class="entity-icon-link" title="Character Poses Gallery">▦</a>
         <h2 style="margin:0; font-size:1.2rem; color:var(--text);">Character Poses Map Runs</h2>
         <?php if ($schedulerId): ?>

@@ -2,6 +2,14 @@
 // public/dashboard.php
 require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
+
+// Redirect to new SAGE UI if accessed bare
+if (empty($_GET) && empty($_POST)) {
+    header("Location: sage.php");
+    exit;
+}
+$isTabMode = !empty($_GET['tab_mode']);
+
 $dbname = $spw->getDbName();
 $items =[];
 require 'sage_entities_items_array.php';
@@ -504,11 +512,13 @@ foreach ($tokenFiles as $key => $filename) {
     <?php echo \App\Core\SpwBase::getInstance()->getJquery(); ?>
 </head>
 <body>
-    <?php require_once __DIR__ . '/forge_tool.php'; ?>
+    <?php if (!$isTabMode): ?>
+        <?php require_once __DIR__ . '/forge_tool.php'; ?>
+    <?php endif; ?>
 
     <!-- ── THEATRICAL HEADER ── -->
-    
-   <div class="dashboard-header-image">
+    <?php if (!$isTabMode): ?>
+    <div class="dashboard-header-image">
         <img src="theatrical.jpg" alt="Starlight Guardians Theatrical Poster">
         <div style="position:absolute; top:12px; right:16px; display:flex; gap:8px; align-items:center;">
         
@@ -525,6 +535,7 @@ foreach ($tokenFiles as $key => $filename) {
             
         </div>
     </div>
+    <?php endif; ?>
     
     
     <?php /*
@@ -842,9 +853,16 @@ foreach ($tokenFiles as $key => $filename) {
                             <a href="kg_travel.php" class="link-card"><div class="link-card-title">🛩️ KG Travel</div></a>
                             -->
                             
-                            
+                             
                 
                            
+                                                      
+                            <a href="mermaids.php" class="link-card"><div class="link-card-title">🧜‍♀️ Mermaids</div></a>
+                
+                
+                
+                
+                
                             <a href="kg_narrative.php" class="link-card"><div class="link-card-title">📜 KG Narrative</div></a>
                 
                             
@@ -887,6 +905,48 @@ foreach ($tokenFiles as $key => $filename) {
                             <a href="view_md_categories.php" class="link-card"><div class="link-card-title">📖 Scripts Lib</div></a>
                             
 
+                            
+                            
+
+                           
+                           
+                            <a href="chatty.php" class="link-card"><div class="link-card-title">💬 Chatty</div></a>
+                            
+                            
+                            
+                           
+                           
+                           
+                            <a href="wtf.php" class="link-card"><div class="link-card-title">🛝 Wtf</div></a>
+                            
+                          
+                   
+                            
+                            <a href="wrish.php" class="link-card"><div class="link-card-title">🧞 Wrish</div></a>
+                            
+                   
+                            
+                            <a href="splash.php" class="link-card"><div class="link-card-title">💧 Splash</div></a>
+                           
+                             
+                             
+                            
+                            <a href="splashu.php" class="link-card"><div class="link-card-title">🌊 Splashu</div></a>
+                           
+                             
+                             
+                             
+                             
+                             
+                             
+                             
+                             
+                            
+                            <a href="sqlish.php" class="link-card"><div class="link-card-title">💦 Sqlish</div></a>
+                            
+                             
+                           
+                            
                         
                             <a href="wroom.php" class="link-card"><div class="link-card-title">🏎️ Wroom</div></a>
                             
@@ -1040,31 +1100,43 @@ foreach ($tokenFiles as $key => $filename) {
         
         <div class="multi-button-group">
             <a href="view_map_runs_sketches.php" class="multi-button-main">🪄 Sketches</a>
-            <a href="sql_crud_sketches.php" class="multi-button-action">CRUD</a>
+            <a href="cruzz.php?entity=sketches" class="multi-button-action">CRUD</a>
             <a href="enhanimaticism.php?entity_type=sketches&map_run_dis=1" class="multi-button-action">NHX</a>
             <button class="multi-button-action run-btn runBtn" data-id="15">🌀</button>
         </div>
         
         <div class="multi-button-group">
             <a href="view_video_admin.php" class="multi-button-main">🎥 Animatics</a>
-            <a href="animatics_crud.php" class="multi-button-action">CRUD</a>
+            <a href="cruzz.php?entity=animatics" class="multi-button-action">CRUD</a>
             <a href="enhanimaticism.php?entity_type=animatics&map_run_dis=1" class="multi-button-action">NHX</a>
             <button class="multi-button-action run-btn runBtn" data-id="42">🌀</button>
         </div>
         
         <div class="multi-button-group">
             <a href="view_map_runs_generatives.php" class="multi-button-main">⚡ Generatives</a>
-            <a href="sql_crud_generatives.php" class="multi-button-action">CRUD</a>
+            <a href="cruzz.php?entity=generatives" class="multi-button-action">CRUD</a>
             <a href="enhanimaticism.php?entity_type=generatives&map_run_dis=1" class="multi-button-action">NHX</a>
             <button class="multi-button-action run-btn runBtn" data-id="10">🌀</button>
         </div>
         
         <div class="multi-button-group">
             <a href="gallery_composites_nu.php" class="multi-button-main">🧩 Composites</a>
-            <a href="sql_crud_composites.php" class="multi-button-action">CRUD</a>
+            <a href="cruzz.php?entity=composites" class="multi-button-action">CRUD</a>
             <a href="enhanimaticism.php?entity_type=composites&map_run_dis=1" class="multi-button-action">NHX</a>
             <button class="multi-button-action run-btn runBtn" data-id="24">🌀</button>
         </div>
+        
+        
+        
+        <a href="meshes.php" class="multi-button-main">📦 Meshes</a>
+        
+       <div class="multi-button-group">
+            <a href="view_map_runs_dimensionals.php" class="multi-button-main">📦 Dimensionals</a>
+            <a href="cruzz.php?entity=dimensionals" class="multi-button-action">CRUD</a>
+            <a href="enhanimaticism.php?entity_type=dimensionals&map_run_dis=1" class="multi-button-action">NHX</a>
+            <button class="multi-button-action run-btn runBtn" data-id="87">🌀</button>
+        </div>
+        
         
         <div class="multi-button-group">
             <a href="upload_spawns.php" class="multi-button-main">🌱 Spawns</a>
@@ -1075,14 +1147,14 @@ foreach ($tokenFiles as $key => $filename) {
         
         <div class="multi-button-group">
             <a href="gallery_prompt_matrix_blueprints_nu.php" class="multi-button-main">🌌 Blueprints</a>
-            <a href="sql_crud_prompt_matrix_blueprints.php" class="multi-button-action">CRUD</a>
+            <a href="cruzz.php?entity=prompt_matrix_blueprints" class="multi-button-action">CRUD</a>
             <a href="enhanimaticism.php?entity_type=prompt_matrix_blueprints&map_run_dis=1" class="multi-button-action">NHX</a>
             <button class="multi-button-action run-btn runBtn" data-id="23">🌀</button>
         </div>
         
         <div class="multi-button-group">
             <a href="gallery_controlnet_maps_nu.php" class="multi-button-main">☠️ Controlnet</a>
-            <a href="sql_crud_controlnet_maps.php" class="multi-button-action">CRUD</a>
+            <a href="cruzz.php?entity=controlnet_maps" class="multi-button-action">CRUD</a>
             <a href="enhanimaticism.php?entity_type=controlnet_maps&map_run_dis=1" class="multi-button-action">NHX</a>
             <button class="multi-button-action run-btn runBtn" data-id="20">🌀</button>
         </div>
@@ -1098,70 +1170,70 @@ foreach ($tokenFiles as $key => $filename) {
         
         <div class="multi-button-group">
             <a href="view_map_runs_characters.php" class="multi-button-main">🦸 Characters</a>
-            <a href="sql_crud_characters.php" class="multi-button-action">CRUD</a>
+            <a href="cruzz.php?entity=characters" class="multi-button-action">CRUD</a>
             <a href="enhanimaticism.php?entity_type=characters&map_run_dis=1" class="multi-button-action">NHX</a>
             <button class="multi-button-action run-btn runBtn" data-id="11">🌀</button>
         </div>
         
         <div class="multi-button-group">
             <a href="view_map_runs_factions.php" class="multi-button-main">🎌 Factions</a>
-            <a href="sql_crud_factions.php" class="multi-button-action">CRUD</a>
+            <a href="cruzz.php?entity=factions" class="multi-button-action">CRUD</a>
             <a href="enhanimaticism.php?entity_type=factions&map_run_dis=1" class="multi-button-action">NHX</a>
-            <button class="multi-button-action run-btn runBtn" data-id="11">🌀</button>
+            <button class="multi-button-action run-btn runBtn" data-id="76">🌀</button>
         </div>
         
         <div class="multi-button-group">
             <a href="view_map_runs_character_poses.php" class="multi-button-main">🤸 Poses</a>
-            <a href="sql_crud_character_poses.php" class="multi-button-action">CRUD</a>
+            <a href="cruzz.php?entity=character_poses" class="multi-button-action">CRUD</a>
             <a href="enhanimaticism.php?entity_type=character_poses&map_run_dis=1" class="multi-button-action">NHX</a>
             <button class="multi-button-action run-btn runBtn" data-id="19">🌀</button>
         </div>
         
         <div class="multi-button-group">
             <a href="view_map_runs_character_anima_poses.php" class="multi-button-main">🤹 Anima Poses</a>
-            <a href="sql_crud_character_anima_poses.php" class="multi-button-action">CRUD</a>
+            <a href="cruzz.php?entity=character_anima_poses" class="multi-button-action">CRUD</a>
             <a href="enhanimaticism.php?entity_type=character_anima_poses&map_run_dis=1" class="multi-button-action">NHX</a>
             <button class="multi-button-action run-btn runBtn" data-id="52">🌀</button>
         </div>
         
         <div class="multi-button-group">
             <a href="view_map_runs_character_expressions.php" class="multi-button-main">🧑‍🎤 Expressions</a>
-            <a href="sql_crud_character_expressions.php" class="multi-button-action">CRUD</a>
+            <a href="cruzz.php?entity=character_expressions" class="multi-button-action">CRUD</a>
             <a href="enhanimaticism.php?entity_type=character_expressions&map_run_dis=1" class="multi-button-action">NHX</a>
             <button class="multi-button-action run-btn runBtn" data-id="46">🌀</button>
         </div>
         
         <div class="multi-button-group">
             <a href="view_map_runs_animas.php" class="multi-button-main">🐾 Animas</a>
-            <a href="sql_crud_animas.php" class="multi-button-action">CRUD</a>
+            <a href="cruzz.php?entity=animas" class="multi-button-action">CRUD</a>
             <a href="enhanimaticism.php?entity_type=animas&map_run_dis=1" class="multi-button-action">NHX</a>
             <button class="multi-button-action run-btn runBtn" data-id="12">🌀</button>
         </div>
         
         <div class="multi-button-group">
             <a href="view_map_runs_locations.php" class="multi-button-main">🗺️ Locations</a>
-            <a href="sql_crud_locations.php" class="multi-button-action">CRUD</a>
+            <a href="cruzz.php?entity=locations" class="multi-button-action">CRUD</a>
             <a href="enhanimaticism.php?entity_type=locations&map_run_dis=1" class="multi-button-action">NHX</a>
             <button class="multi-button-action run-btn runBtn" data-id="13">🌀</button>
         </div>
         
         <div class="multi-button-group">
             <a href="view_map_runs_backgrounds.php" class="multi-button-main">🏞️ Backgrounds</a>
-            <a href="sql_crud_backgrounds.php" class="multi-button-action">CRUD</a>
+            <a href="cruzz.php?entity=backgrounds" class="multi-button-action">CRUD</a>
             <a href="enhanimaticism.php?entity_type=backgrounds&map_run_dis=1" class="multi-button-action">NHX</a>
             <button class="multi-button-action run-btn runBtn" data-id="16">🌀</button>
         </div>
         
         <div class="multi-button-group">
             <a href="view_map_runs_artifacts.php" class="multi-button-main">🏺 Artifacts</a>
-            <a href="sql_crud_artifacts.php" class="multi-button-action">CRUD</a>
+            <a href="cruzz.php?entity=artifacts" class="multi-button-action">CRUD</a>
             <a href="enhanimaticism.php?entity_type=artifacts&map_run_dis=1" class="multi-button-action">NHX</a>
             <button class="multi-button-action run-btn runBtn" data-id="18">🌀</button>
         </div>
         
         <div class="multi-button-group">
             <a href="view_map_runs_vehicles.php" class="multi-button-main">🛸 Vehicles</a>
-            <a href="sql_crud_vehicles.php" class="multi-button-action">CRUD</a>
+            <a href="cruzz.php?entity=vehicles" class="multi-button-action">CRUD</a>
             <a href="enhanimaticism.php?entity_type=vehicles&map_run_dis=1" class="multi-button-action">NHX</a>
             <button class="multi-button-action run-btn runBtn" data-id="17">🌀</button>
         </div>
@@ -1335,8 +1407,10 @@ foreach ($tokenFiles as $key => $filename) {
                         <div class="link-grid">
                         
                         
-                        
-                       
+                            <a href="griditor.php" class="link-card"><div class="link-card-title">▦ Griditor</div></a>
+                                                
+                                                
+                      
                         
                             <a href="view_scrollmagic_rating.php" class="link-card"><div class="link-card-title">⭐ ScrollMagic</div></a>
 
@@ -1391,7 +1465,7 @@ foreach ($tokenFiles as $key => $filename) {
                             <a href="import_frames_to_storyboard.php" class="link-card"><div class="link-card-title">🧚 Mass Import Frames2Storyboard</div></a>
                             
                             
-                            <a href="view_stoboimp.php" class="link-card"><div class="link-card-title">🧞 Mass Import 2 Frames2Storyboard</div></a>
+                            <a href="view_stoboimp.php" class="link-card"><div class="link-card-title">🐉 Mass Import 2 Frames2Storyboard</div></a>
                             
                             
                             
@@ -1428,6 +1502,35 @@ foreach ($tokenFiles as $key => $filename) {
                             
                             
                        
+                      
+                      
+                      
+                             
+                        
+                            <a href="continuity_crud.php" class="link-card"><div class="link-card-title">🪞 Continuity</div></a>
+                      
+                    
+                   
+     
+                            <a href="ai_idea_manager.php" class="link-card"><div class="link-card-title">⌖ AIM</div></a>
+                    
+                    
+                      
+     
+                            <a href="idea_manager.php" class="link-card"><div class="link-card-title">💡 Ideas</div></a>
+                    
+                    
+                      
+                       
+                            <a href="cvbatch.php" class="link-card"><div class="link-card-title">👀 CV Batch</div></a>
+                      
+                      
+                      
+                        
+                            <a href="continuity.php" class="link-card"><div class="link-card-title">🍓 Continuity</div></a>
+                      
+                            
+                        
                        
                             <a href="sketchup.php" class="link-card"><div class="link-card-title">🍅 Sketchup</div></a>
                       
@@ -1444,6 +1547,11 @@ foreach ($tokenFiles as $key => $filename) {
                             
                            
                             <a href="pytoon/index.php" class="link-card"><div class="link-card-title">💥 Pytoon</div></a>
+                            
+                           
+                        
+                            <a href="tiktok_forge.php" class="link-card"><div class="link-card-title">📱 TikTok</div></a>
+                      
                             
                             
                             
@@ -1726,3 +1834,7 @@ foreach ($tokenFiles as $key => $filename) {
 
 <?php
 /* 🧨🐙🍄🐦‍🔥 */
+
+
+
+

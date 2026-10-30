@@ -558,10 +558,10 @@ iframe.frame-viewer { width: 100%; height: 100%; border: none; }
             padding:20px 24px; overflow-y:auto; flex:1;
             font-size:0.95rem; line-height:1.7; color:var(--text);
         ">
-            <!-- Visual Gallery Container -->
+            <!-- Visual Gallery Container (Auto) -->
             <div id="mVisuals" class="visual-container">
                 <h3 style="margin:0 0 10px 0; font-size:1rem; display:flex; justify-content:space-between; align-items:center; color: var(--accent);">
-                    <span>🖼️ Visual Sketch Preview</span>
+                    <span>🖼️ Lore Visual Preview</span>
                     <span id="sketchTitle" style="font-weight:normal; color:var(--text-muted); font-size:0.9rem; display:flex; align-items:center;"></span>
                 </h3>
                 <div class="swiper pswp-gallery" id="sketchSwiper" style="width:100%; height:240px; margin-bottom:10px;">
@@ -570,6 +570,20 @@ iframe.frame-viewer { width: 100%; height: 100%; border: none; }
                     <div class="swiper-button-prev" style="color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.8);"></div>
                 </div>
                 <textarea id="sketchDesc" readonly style="width:100%; font-size:0.85rem; color:var(--text-muted); background:var(--bg); border:1px solid var(--border); padding: 8px; border-radius: 4px; resize:vertical; height:60px; outline:none;" placeholder="Sketch Description..."></textarea>
+            </div>
+
+            <!-- Visual Gallery Container (Manual) -->
+            <div id="mManualVisuals" class="visual-container">
+                <h3 style="margin:0 0 10px 0; font-size:1rem; display:flex; justify-content:space-between; align-items:center; color: var(--orange);">
+                    <span>🖼️ Assigned Sketches</span>
+                    <span id="manualSketchTitle" style="font-weight:normal; color:var(--text-muted); font-size:0.9rem; display:flex; align-items:center;"></span>
+                </h3>
+                <div class="swiper pswp-gallery" id="manualSketchSwiper" style="width:100%; height:240px; margin-bottom:10px;">
+                    <div class="swiper-wrapper" id="manualSketchWrapper"></div>
+                    <div class="swiper-button-next" style="color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.8);"></div>
+                    <div class="swiper-button-prev" style="color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.8);"></div>
+                </div>
+                <textarea id="manualSketchDesc" readonly style="width:100%; font-size:0.85rem; color:var(--text-muted); background:var(--bg); border:1px solid var(--border); padding: 8px; border-radius: 4px; resize:vertical; height:60px; outline:none;" placeholder="Sketch Description..."></textarea>
             </div>
 
             <div id="details-text-content">
@@ -639,6 +653,7 @@ let selectedNode = null;
 let hoveredNode = null;
 let searchMatches = null; // null = no search active; Set = active filter
 let visualSwiper = null;
+let manualVisualSwiper = null;
 
 const typeColors = {
     'note': '#64748b', 'relationship': '#ec4899', 'character': '#3b82f6',
@@ -661,7 +676,9 @@ function escHtml(s) {
 function updateSizes() {
     graph.forEachNode((node, attrs) => {
         const degree = graph.degree(node);
-        graph.setNodeAttribute(node, 'size', 1 + Math.sqrt(degree) * 2);
+        // Changed the baseline size from 1 to 6 so isolated nodes are easily tappable.
+        // You can increase the '6' to '8' if you want them even larger!
+        graph.setNodeAttribute(node, 'size', 2 + Math.sqrt(degree) * 1.5); 
     });
     document.getElementById('stat-nodes').textContent = graph.order;
     document.getElementById('stat-edges').textContent = graph.size;
@@ -1099,48 +1116,86 @@ function openNodePanel(nodeId) {
 // ═══════════════════════════════════════════════
 // VISUAL FETCHING AND MODALS
 // ═══════════════════════════════════════════════
-function fetchVisuals(name) {
+function fetchVisuals(name, nodeId) {
     const container = document.getElementById('mVisuals');
     const wrapper = document.getElementById('sketchWrapper');
     container.style.display = 'none';
     wrapper.innerHTML = '';
     
+    const mContainer = document.getElementById('mManualVisuals');
+    const mWrapper = document.getElementById('manualSketchWrapper');
+    mContainer.style.display = 'none';
+    mWrapper.innerHTML = '';
+
     $.post('kg_api.php', {
         action: 'fetch_visuals',
-        entity_name: name
+        entity_name: name,
+        node_id: nodeId
     }, res => {
-        if (res.ok && res.sketch && res.sketch.frames && res.sketch.frames.length > 0) {
-            let curationBadge = '';
-            if (res.sketch.curation) {
-                const cData = escapeHtmlAttr(JSON.stringify(res.sketch.curation));
-                curationBadge = `<span class="badge-curator curation-pill-trigger" data-curation="${cData}" title="Quality Score: ${res.sketch.curation.score}">🕵️ Analysis (${res.sketch.curation.score})</span>`;
+        if (res.ok) {
+            // Auto Sketch
+            if (res.sketch && res.sketch.frames && res.sketch.frames.length > 0) {
+                let curationBadge = '';
+                if (res.sketch.curation) {
+                    const cData = escapeHtmlAttr(JSON.stringify(res.sketch.curation));
+                    curationBadge = `<span class="badge-curator curation-pill-trigger" data-curation="${cData}" title="Quality Score: ${res.sketch.curation.score}">🕵️ Analysis (${res.sketch.curation.score})</span>`;
+                }
+
+                document.getElementById('sketchTitle').innerHTML = escapeHtml(res.sketch.name || '') + curationBadge;
+                document.getElementById('sketchDesc').value = res.sketch.description || '';
+                
+                let slides = '';
+                res.sketch.frames.forEach(f => {
+                    const safeUrl = escapeHtml(f.filename);
+                    slides += `
+                        <div class="swiper-slide">
+                            <a href="${safeUrl}" data-pswp-width="1024" data-pswp-height="1024" target="_blank">
+                                <img src="${safeUrl}" loading="lazy" onload="this.parentElement.dataset.pswpWidth = this.naturalWidth; this.parentElement.dataset.pswpHeight = this.naturalHeight;">
+                            </a>
+                            <div class="f-view-btn" onclick="event.stopPropagation(); event.preventDefault(); openFrameModal(${f.id})"><i class="bi bi-arrows-fullscreen"></i></div>
+                        </div>
+                    `;
+                });
+                wrapper.innerHTML = slides;
+                container.style.display = 'flex';
+
+                if (visualSwiper) { visualSwiper.destroy(true, true); }
+                setTimeout(() => {
+                    visualSwiper = new Swiper('#sketchSwiper', {
+                        slidesPerView: 'auto', spaceBetween: 10, freeMode: true,
+                        navigation: { nextEl: '#mVisuals .swiper-button-next', prevEl: '#mVisuals .swiper-button-prev' },
+                    });
+                }, 50);
             }
 
-            document.getElementById('sketchTitle').innerHTML = escapeHtml(res.sketch.name || '') + curationBadge;
-            document.getElementById('sketchDesc').value = res.sketch.description || '';
-            
-            let slides = '';
-            res.sketch.frames.forEach(f => {
-                const safeUrl = escapeHtml(f.filename);
-                slides += `
-                    <div class="swiper-slide">
-                        <a href="${safeUrl}" data-pswp-width="1024" data-pswp-height="1024" target="_blank">
-                            <img src="${safeUrl}" loading="lazy" onload="this.parentElement.dataset.pswpWidth = this.naturalWidth; this.parentElement.dataset.pswpHeight = this.naturalHeight;">
-                        </a>
-                        <div class="f-view-btn" onclick="event.stopPropagation(); event.preventDefault(); openFrameModal(${f.id})"><i class="bi bi-arrows-fullscreen"></i></div>
-                    </div>
-                `;
-            });
-            wrapper.innerHTML = slides;
-            container.style.display = 'flex';
-
-            if (visualSwiper) { visualSwiper.destroy(true, true); }
-            setTimeout(() => {
-                visualSwiper = new Swiper('#sketchSwiper', {
-                    slidesPerView: 'auto', spaceBetween: 10, freeMode: true,
-                    navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' },
+            // Manual Sketches
+            if (res.manual_frames && res.manual_frames.length > 0) {
+                document.getElementById('manualSketchTitle').innerHTML = escapeHtml(res.manual_names || '');
+                document.getElementById('manualSketchDesc').value = res.manual_descriptions || '';
+                
+                let slides = '';
+                res.manual_frames.forEach(f => {
+                    const safeUrl = escapeHtml(f.filename);
+                    slides += `
+                        <div class="swiper-slide">
+                            <a href="${safeUrl}" data-pswp-width="1024" data-pswp-height="1024" target="_blank">
+                                <img src="${safeUrl}" loading="lazy" onload="this.parentElement.dataset.pswpWidth = this.naturalWidth; this.parentElement.dataset.pswpHeight = this.naturalHeight;">
+                            </a>
+                            <div class="f-view-btn" onclick="event.stopPropagation(); event.preventDefault(); openFrameModal(${f.id})"><i class="bi bi-arrows-fullscreen"></i></div>
+                        </div>
+                    `;
                 });
-            }, 50);
+                mWrapper.innerHTML = slides;
+                mContainer.style.display = 'flex';
+
+                if (manualVisualSwiper) { manualVisualSwiper.destroy(true, true); }
+                setTimeout(() => {
+                    manualVisualSwiper = new Swiper('#manualSketchSwiper', {
+                        slidesPerView: 'auto', spaceBetween: 10, freeMode: true,
+                        navigation: { nextEl: '#mManualVisuals .swiper-button-next', prevEl: '#mManualVisuals .swiper-button-prev' },
+                    });
+                }, 50);
+            }
         }
     }, 'json').fail(err => console.error('Error fetching visuals:', err));
 }
@@ -1619,7 +1674,7 @@ function openDetailsModal(nodeId, addToHistory = true) {
     document.getElementById('modalDetails').style.display = 'flex';
     document.getElementById('details-body').scrollTop = 0;
 
-    fetchVisuals(attrs.label);
+    fetchVisuals(attrs.label, nodeId);
 
     $.get('kg_api.php?action=get_node&id=' + nodeId, res => {
         if (!res.ok) {
@@ -1881,3 +1936,7 @@ function createEdge() {
 $content = ob_get_clean();
 $spw->renderLayout($content, $pageTitle, $spw->getProjectPath() . '/templates/curation.php');
 ?>
+
+
+
+

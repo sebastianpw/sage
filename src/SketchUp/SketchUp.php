@@ -16,6 +16,7 @@ class SketchUp {
     public function generateExportData(array $config): array {
         $sketchIds = $config['sketch_ids'] ?? [];
         $ranges = $config['sketch_ranges'] ?? [];
+        $mapRunIds = $config['map_run_ids'] ?? [];
         
         // 1. Gather all unique sketch IDs
         $finalSketchIds = [];
@@ -30,6 +31,29 @@ class SketchUp {
                 $stmt->execute([$start, $end]);
                 while ($id = $stmt->fetchColumn()) {
                     $finalSketchIds[(int)$id] = true;
+                }
+            }
+        }
+        foreach ($mapRunIds as $mId) {
+            $mId = (int)$mId;
+            if ($mId > 0) {
+                // Get sketches directly from frames connected to this map_run
+                $stmt = $this->pdo->prepare("SELECT DISTINCT entity_id FROM frames WHERE map_run_id = ? AND entity_type = 'sketches'");
+                $stmt->execute([$mId]);
+                while ($id = $stmt->fetchColumn()) {
+                    if ($id) $finalSketchIds[(int)$id] = true;
+                }
+                
+                // Get sketches indirectly via frames_2_sketches mapping just in case
+                $stmt2 = $this->pdo->prepare("
+                    SELECT DISTINCT f2s.to_id 
+                    FROM frames f 
+                    JOIN frames_2_sketches f2s ON f2s.from_id = f.id 
+                    WHERE f.map_run_id = ?
+                ");
+                $stmt2->execute([$mId]);
+                while ($id = $stmt2->fetchColumn()) {
+                    if ($id) $finalSketchIds[(int)$id] = true;
                 }
             }
         }

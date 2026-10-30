@@ -746,6 +746,22 @@ html, body {
     .workspace-body { grid-template-columns: 1fr; grid-template-rows: 1fr auto 1fr; }
     .result-panel { grid-row: 3; grid-column: 1; border-left: none; border-top: 1px solid var(--border); }
 }
+
+/* ── DISPLAY-AREA / ORACLE CHECKBOX LIST (mobile-safe multi-select) ── */
+.areas-check-list {
+    max-height: 140px; overflow-y: auto;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 4px;
+}
+.areas-check-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: 4px; cursor: pointer;
+    font-family: var(--mono); font-size: 0.78rem; color: var(--text);
+    transition: background 0.12s;
+}
+.areas-check-row:hover { background: var(--card-hover); }
+.areas-check-row input[type="checkbox"] { accent-color: var(--amber); flex-shrink: 0; }
+.areas-check-row .area-key { color: var(--text-dim); font-size: 0.7rem; margin-left: auto; }
 </style>
 </head>
 <body>
@@ -934,9 +950,17 @@ html, body {
                     <select id="editModel" class="form-select"></select>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Display Areas</label>
-                    <select id="editAreas" class="form-select" multiple size="3"></select>
-                    <div class="form-hint">Ctrl/Cmd+click to multi-select</div>
+                    <label class="form-label">Display Areas
+                        <span style="float:right; font-weight:normal; text-transform:none; letter-spacing:0; font-size:0.7rem;">
+                            <a href="#" onclick="event.preventDefault();Forge.selectAllAreas(true);"
+                               style="color:var(--amber); text-decoration:none;">All</a>
+                            &nbsp;·&nbsp;
+                            <a href="#" onclick="event.preventDefault();Forge.selectAllAreas(false);"
+                               style="color:var(--text-dim); text-decoration:none;">None</a>
+                        </span>
+                    </label>
+                    <div id="editAreas" class="areas-check-list"></div>
+                    <div class="form-hint">Tap to toggle. Autopilot uses the <code>rapidcreate</code> area.</div>
                 </div>
             </div>
             <div class="form-group">
@@ -965,10 +989,16 @@ html, body {
                 </div>
                 <div class="form-group">
                     <label class="form-label">Source Dictionaries
-                        <span class="param-type">multi-select</span>
+                        <span style="float:right; font-weight:normal; text-transform:none; letter-spacing:0; font-size:0.7rem;">
+                            <a href="#" onclick="event.preventDefault();Forge.selectAllOracleDicts(true);"
+                               style="color:var(--amber); text-decoration:none;">All</a>
+                            &nbsp;·&nbsp;
+                            <a href="#" onclick="event.preventDefault();Forge.selectAllOracleDicts(false);"
+                               style="color:var(--text-dim); text-decoration:none;">None</a>
+                        </span>
                     </label>
-                    <select id="editOracleDicts" class="form-select" multiple size="4" style="font-size:0.8rem;"></select>
-                    <div class="form-hint">Hold Ctrl/Cmd to select multiple. Leave empty to disable Oracle.</div>
+                    <div id="editOracleDicts" class="areas-check-list"></div>
+                    <div class="form-hint">Tap to toggle. Leave empty to disable Oracle.</div>
                 </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
                     <div class="form-group">
@@ -1711,29 +1741,55 @@ const Forge = (() => {
         document.getElementById('genEditModal').classList.add('open');
     }
 
+    // Renders the Display Areas as a tap-friendly checkbox list — works
+    // reliably on mobile Chrome where <select multiple> is a trap.
     function populateAreasSelect(selectedIds) {
         const sel = document.getElementById('editAreas');
+        if (!sel) return;
+        const ids = (selectedIds || []).map(String);
         sel.innerHTML = _areas.map(a => {
-            const val = String(a.id);
-            const selected = selectedIds.includes(val) ? 'selected' : '';
-            return `<option value="${val}" ${selected}>${escHtml(a.label || a.area_key)}</option>`;
-        }).join('');
+            const val     = String(a.id);
+            const checked = ids.includes(val) ? 'checked' : '';
+            const key     = escHtml(a.area_key || a.key || '');
+            return `
+                <label class="areas-check-row">
+                    <input type="checkbox" value="${val}" ${checked}>
+                    <span>${escHtml(a.label || a.area_key)}</span>
+                    <span class="area-key">${key}</span>
+                </label>`;
+        }).join('') || `<div style="padding:8px;color:var(--text-dim);font-size:0.75rem;">No areas configured</div>`;
     }
-    
 
-    // Populate Oracle dictionaries select.
-    // _dictionaries is loaded once at init. selectedIds = array of int/string ids.
+    // Bulk-toggle every display-area checkbox. Called from the All/None links.
+    function selectAllAreas(check) {
+        document.querySelectorAll('#editAreas input[type="checkbox"]')
+            .forEach(cb => { cb.checked = !!check; });
+    }
+
+    // Renders the Oracle source dictionaries as a tap-friendly checkbox list,
+    // matching the Display Areas pattern. Avoids the flaky Android native
+    // multi-select picker (which has its own "Select all" that doesn't propagate).
     function populateOracleDicts(selectedIds, _unused) {
         const sel = document.getElementById('editOracleDicts');
         if (!sel) return;
         const ids = (selectedIds || []).map(String);
         sel.innerHTML = _dictionaries.map(d => {
-            const selected = ids.includes(String(d.id)) ? 'selected' : '';
-            return `<option value="${d.id}" ${selected}>${escHtml(d.title)}</option>`;
+            const checked = ids.includes(String(d.id)) ? 'checked' : '';
+            return `
+                <label class="areas-check-row">
+                    <input type="checkbox" value="${d.id}" ${checked}>
+                    <span>${escHtml(d.title)}</span>
+                </label>`;
         }).join('');
         if (sel.innerHTML === '') {
-            sel.innerHTML = '<option disabled style="color:var(--text-dim);">No dictionaries available</option>';
+            sel.innerHTML = `<div style="padding:8px;color:var(--text-dim);font-size:0.75rem;">No dictionaries available</div>`;
         }
+    }
+
+    // Bulk-toggle every oracle-dictionary checkbox. Called from the All/None links.
+    function selectAllOracleDicts(check) {
+        document.querySelectorAll('#editOracleDicts input[type="checkbox"]')
+            .forEach(cb => { cb.checked = !!check; });
     }
 
     async function saveGenerator() {
@@ -1744,8 +1800,9 @@ const Forge = (() => {
         const isPublic    = document.getElementById('editIsPublic').checked;
         const isActive    = document.getElementById('editIsActive').checked;
         const listOrder   = parseInt(document.getElementById('editListOrder').value) || 0;
-        const areaOpts    = document.getElementById('editAreas');
-        const areaIds     = Array.from(areaOpts.selectedOptions).map(o => parseInt(o.value));
+        const areaIds     = Array.from(
+            document.querySelectorAll('#editAreas input[type="checkbox"]:checked')
+        ).map(cb => parseInt(cb.value, 10));
 
         if (!title) { toast('Title is required', 'error'); return; }
 
@@ -1760,8 +1817,9 @@ const Forge = (() => {
         }
 
         // Oracle config — only send if dictionaries are selected
-        const dictOpts     = document.getElementById('editOracleDicts');
-        const dictIds      = Array.from(dictOpts.selectedOptions).map(o => parseInt(o.value));
+        const dictIds      = Array.from(
+            document.querySelectorAll('#editOracleDicts input[type="checkbox"]:checked')
+        ).map(cb => parseInt(cb.value, 10));
         const oracleConfig = dictIds.length > 0 ? {
             dictionary_ids: dictIds,
             num_words:  parseInt(document.getElementById('editOracleNumWords').value)  || 200,
@@ -1909,6 +1967,8 @@ const Forge = (() => {
         openNewGeneratorModal,
         saveGenerator,
         deleteCurrentGenerator,
+        selectAllAreas,
+        selectAllOracleDicts,
         closeModal,
     };
 })();

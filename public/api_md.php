@@ -3,6 +3,8 @@
 require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
 
+const PYAPI_URL = 'http://127.0.0.1:8009';
+
 header('Content-Type: application/json');
 
 function jsonResponse($status, $message, $data = []) {
@@ -62,6 +64,73 @@ try {
             $newId = $pdo->lastInsertId();
 
             jsonResponse('success', 'Imported', ['id' => $newId]);
+        }
+
+        // --- EXPORT MD TO PDF VIA PYAPI ---
+        if ($action === 'export_pdf') {
+            $markdownText = $_POST['markdown_text'] ?? '';
+            $pageSize     = $_POST['page_size'] ?? 'A4';
+            $orientation  = $_POST['orientation'] ?? 'portrait';
+            $fontFamily   = $_POST['font_family'] ?? 'Helvetica';
+            $fontSize     = $_POST['font_size'] ?? 12;
+            $title        = $_POST['title'] ?? 'Document';
+
+            if (empty($markdownText)) {
+                $rawInput = json_decode(file_get_contents('php://input'), true);
+                if (is_array($rawInput)) {
+                    $markdownText = $rawInput['markdown_text'] ?? '';
+                    $pageSize     = $rawInput['page_size'] ?? $pageSize;
+                    $orientation  = $rawInput['orientation'] ?? $orientation;
+                    $fontFamily   = $rawInput['font_family'] ?? $fontFamily;
+                    $fontSize     = $rawInput['font_size'] ?? $fontSize;
+                    $title        = $rawInput['title'] ?? $title;
+                }
+            }
+
+            $postFields = [
+                'markdown_text' => $markdownText,
+                'page_size'     => $pageSize,
+                'orientation'   => $orientation,
+                'font_family'   => $fontFamily,
+                'font_size'     => (string)$fontSize,
+                'title'         => $title,
+            ];
+
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, rtrim(PYAPI_URL, '/') . '/md-pdf/export');
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $postFields);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_HEADER, true);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+            $err = curl_error($ch);
+            curl_close($ch);
+
+            if ($err || $httpCode >= 400 || !$response) {
+                http_response_code($httpCode >= 400 ? $httpCode : 500);
+                header('Content-Type: text/plain');
+                echo "Failed to generate PDF: " . ($err ?: "PyAPI returned HTTP " . $httpCode);
+                exit;
+            }
+
+            $rawHeaders = substr($response, 0, $headerSize);
+            $body = substr($response, $headerSize);
+
+            $contentDisposition = 'attachment; filename="export.pdf"';
+            if (preg_match_all('/^Content-Disposition:\s*(.*)$/mi', $rawHeaders, $matches)) {
+                $contentDisposition = trim(end($matches[1]));
+            }
+
+            header('Access-Control-Expose-Headers: Content-Disposition');
+            header('Content-Type: application/pdf');
+            header('Content-Disposition: ' . $contentDisposition);
+            header('Content-Length: ' . strlen($body));
+            echo $body;
+            exit;
         }
 
         $input = json_decode(file_get_contents('php://input'), true);

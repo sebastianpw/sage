@@ -30,6 +30,7 @@ try {
 // -------------------------------------------------------
 if ($action === 'fetch_visuals') {
     $entityName = trim($input['entity_name'] ?? '');
+    $nodeId     = (int)($input['node_id'] ?? 0);
     
     $sqlHistory = "
         SELECT slh.sketch_id, s.name, s.description,
@@ -121,11 +122,52 @@ if ($action === 'fetch_visuals') {
         }
     }
 
+    // --- MANUAL SKETCHES VIA kg_node_items ---
+    $manualFrames = [];
+    $manualNames = [];
+    $manualDescriptions = [];
+
+    if ($nodeId > 0) {
+        $manualStmt = $pdo->prepare("
+            SELECT s.id, s.name, s.description 
+            FROM kg_node_items kni 
+            JOIN sketches s ON s.id = kni.item_id 
+            WHERE kni.node_id = ? AND kni.item_type = 'sketch'
+            ORDER BY kni.sort_order ASC, kni.id ASC
+        ");
+        $manualStmt->execute([$nodeId]);
+        $manualSketches = $manualStmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        foreach($manualSketches as $ms) {
+            $manualNames[] = $ms['name'];
+            if (!empty($ms['description'])) {
+                $manualDescriptions[] = $ms['description'];
+            }
+            
+            $fStmt = $pdo->prepare("
+                SELECT f.id, f.filename
+                FROM frames f
+                WHERE (f.entity_type = 'sketches' AND f.entity_id = ?)
+                   OR f.id IN (SELECT from_id FROM frames_2_sketches WHERE to_id = ?)
+                ORDER BY f.id DESC
+            ");
+            $fStmt->execute([$ms['id'], $ms['id']]);
+            $frames = $fStmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            foreach($frames as $f) {
+                $manualFrames[] = $f;
+            }
+        }
+    }
+
     kg_json(true, [
-        'sketch'     => $sketchData,
-        'kg_node_id' => $kgNodeId,
-        'ag_node_id' => $agNodeId,
-        'ag_doc_id'  => $loreDocId ?? 0,
+        'sketch'              => $sketchData,
+        'manual_frames'       => $manualFrames,
+        'manual_names'        => implode(' | ', array_unique($manualNames)),
+        'manual_descriptions' => implode("\n\n---\n\n", array_filter($manualDescriptions)),
+        'kg_node_id'          => $kgNodeId,
+        'ag_node_id'          => $agNodeId,
+        'ag_doc_id'           => $loreDocId ?? 0,
     ]);
 }
 
@@ -261,21 +303,22 @@ if ($action === 'fetch_visuals') {
     // SAVE NODE
     // -------------------------------------------------------
     if ($action === 'save_node') {
-        $id          = (int)($input['id'] ?? 0);
-        $name        = trim($input['name'] ?? '');
-        $content     = $input['content'] ?? '';
-        $description = $input['description'] ?? '';
-        $keywords    = $input['keywords'] ?? '';
-        $nodeType    = trim($input['node_type'] ?? 'note');
-        $catId       = !empty($input['category_id']) ? (int)$input['category_id'] : null;
+        $id             = (int)($input['id'] ?? 0);
+        $name           = trim($input['name'] ?? '');
+        $content        = $input['content'] ?? '';
+        $continuityData = $input['continuity_data'] ?? null;
+        $description    = $input['description'] ?? '';
+        $keywords       = $input['keywords'] ?? '';
+        $nodeType       = trim($input['node_type'] ?? 'note');
+        $catId          = !empty($input['category_id']) ? (int)$input['category_id'] : null;
 
         if ($id) {
-            $pdo->prepare("UPDATE kg_nodes SET name=?, content=?, description=?, keywords=?, node_type=?, category_id=?, updated_at=NOW() WHERE id=?")
-                ->execute([$name, $content, $description, $keywords, $nodeType, $catId, $id]);
+            $pdo->prepare("UPDATE kg_nodes SET name=?, content=?, continuity_data=?, description=?, keywords=?, node_type=?, category_id=?, updated_at=NOW() WHERE id=?")
+                ->execute([$name, $content, $continuityData, $description, $keywords, $nodeType, $catId, $id]);
             kg_json(true,['id' => $id]);
         } else {
-            $pdo->prepare("INSERT INTO kg_nodes (name, content, description, keywords, node_type, category_id) VALUES (?,?,?,?,?,?)")
-                ->execute([$name, $content, $description, $keywords, $nodeType, $catId]);
+            $pdo->prepare("INSERT INTO kg_nodes (name, content, continuity_data, description, keywords, node_type, category_id) VALUES (?,?,?,?,?,?,?)")
+                ->execute([$name, $content, $continuityData, $description, $keywords, $nodeType, $catId]);
             kg_json(true, ['id' => $pdo->lastInsertId()]);
         }
     }
@@ -377,6 +420,29 @@ if ($action === 'fetch_visuals') {
         $stmt->execute([$q, $q, $q]);
         kg_json(true, ['results' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     }
+    
+    // -------------------------------------------------------
+    // GET TIMELINE MATRIX
+    // -------------------------------------------------------
+    if ($action === 'get_timeline_matrix') {
+        $stmt = $pdo->query("SELECT id, name, continuity_data FROM kg_nodes WHERE status='active' AND continuity_data IS NOT NULL");
+        $nodes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $matrixData = [];
+        foreach ($nodes as $n) {
+            if (!$n['continuity_data']) continue;
+            $cd = json_decode($n['continuity_data'], true);
+            if (!$cd || empty($cd['milestones'])) continue;
+            
+            $matrixData[] = [
+                'id' => $n['id'],
+                'name' => $n['name'],
+                'tag_type' => $cd['tag_type'] ?? 'EXTRA',
+                'milestones' => $cd['milestones']
+            ];
+        }
+        kg_json(true, ['matrix' => $matrixData]);
+    }
 
     // -------------------------------------------------------
     // EXPORT SNAPSHOT
@@ -407,7 +473,7 @@ if ($action === 'fetch_visuals') {
 
         $nodesRaw = $pdo->query("
             SELECT id, category_id, name, node_type, keywords,
-                   sort_order, status, created_at, updated_at,
+                   sort_order, status, created_at, updated_at, continuity_data,
                    CHAR_LENGTH(COALESCE(content,'')) as content_chars
             FROM kg_nodes
             WHERE status = 'active'
@@ -415,7 +481,7 @@ if ($action === 'fetch_visuals') {
         ")->fetchAll(PDO::FETCH_ASSOC);
 
         $nodeFields =['id','category_id','name','node_type','keywords',
-                       'sort_order','status','created_at','updated_at',
+                       'sort_order','status','created_at','updated_at', 'continuity_data',
                        'content_chars','content_words_approx','content_status'];
         $nodeRows   = [];
         foreach ($nodesRaw as $n) {
@@ -436,6 +502,7 @@ if ($action === 'fetch_visuals') {
                 $n['status'],
                 $n['created_at'],
                 $n['updated_at'],
+                $n['continuity_data'],
                 $chars,
                 $chars > 0 ? (int)round($chars / 5.5) : 0,
                 $status,
@@ -467,7 +534,7 @@ if ($action === 'fetch_visuals') {
 
         $totalNodes = count($nodeRows);
         $byStatus   =['empty'=>0,'stub'=>0,'partial'=>0,'filled'=>0];
-        foreach ($nodeRows as $r) $byStatus[$r[11]]++;
+        foreach ($nodeRows as $r) $byStatus[$r[12]]++;
 
         $snapshot =[
             'export_meta' =>[
@@ -822,9 +889,9 @@ if ($action === 'fetch_visuals') {
         $placeholders = implode(',', array_fill(0, count($nodeIds), '?'));
 
         $cols = $withContent
-            ? "id, category_id, name, node_type, keywords, sort_order, status, created_at, updated_at, content,
+            ? "id, category_id, name, node_type, keywords, sort_order, status, created_at, updated_at, content, continuity_data,
                CHAR_LENGTH(COALESCE(content,'')) as content_chars"
-            : "id, category_id, name, node_type, keywords, sort_order, status, created_at, updated_at,
+            : "id, category_id, name, node_type, keywords, sort_order, status, created_at, updated_at, continuity_data,
                CHAR_LENGTH(COALESCE(content,'')) as content_chars";
 
         $stmt = $pdo->prepare("
@@ -838,9 +905,9 @@ if ($action === 'fetch_visuals') {
 
         $nodeFields = $withContent
             ?['id','category_id','name','node_type','keywords','sort_order','status',
-               'created_at','updated_at','content','content_chars','content_words_approx','content_status']
+               'created_at','updated_at','content','continuity_data','content_chars','content_words_approx','content_status']
             :['id','category_id','name','node_type','keywords','sort_order','status',
-               'created_at','updated_at','content_chars','content_words_approx','content_status'];
+               'created_at','updated_at','continuity_data','content_chars','content_words_approx','content_status'];
 
         $nodeRows     = [];
         $catIdsNeeded =[];
@@ -866,6 +933,7 @@ if ($action === 'fetch_visuals') {
                 $n['updated_at'],
             ];
             if ($withContent) $row[] = $n['content'] ?? '';
+            $row[] = $n['continuity_data'] ?? null;
             $row[] = $chars;
             $row[] = $chars > 0 ? (int)round($chars / 5.5) : 0;
             $row[] = $status;
@@ -918,7 +986,7 @@ if ($action === 'fetch_visuals') {
         }
 
         $byStatus   =['empty'=>0,'stub'=>0,'partial'=>0,'filled'=>0];
-        $statusIdx  = $withContent ? 12 : 11;
+        $statusIdx  = $withContent ? 13 : 12;
         foreach ($nodeRows as $r) $byStatus[$r[$statusIdx]]++;
 
         $snapshot = [
@@ -987,4 +1055,3 @@ function kg_node_icon(string $type): string {
     };
 }
 ?>
-

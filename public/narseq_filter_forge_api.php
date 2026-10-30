@@ -2,43 +2,6 @@
 // public/narseq_filter_forge_api.php
 // ─────────────────────────────────────────────────────────────────────────────
 // FILTER FORGE API — Unified, reusable filter + result API for SAGE AI
-//
-// All endpoints return the same JSON envelope:
-// {
-//   "status":  "success" | "error",
-//   "action":  <string>,
-//   "meta":    { total, page, per_page, pages, entity_type, filter_summary[] },
-//   "data":    [ { frame_id, filename, entity_id, entity_name, entity_type,
-//                  is_imported, is_enhanced, in_storyboard, in_narrative_seq,
-//                  in_kg, map_run_id } ],
-//   "message": <string|null>
-// }
-//
-// Actions (via GET ?action=...):
-//   list_frames          — filtered frame result set (primary consumer)
-//   list_entities        — filtered entity list (no frames)
-//   list_filter_options  — autocomplete / picker data for each filter type
-//   check_membership     — check if frame/entity is in storyboard/seq/graph
-//   resolve_relationships — resolve entity relationships via KG
-//
-// Filter parameters (all optional, combinable):
-//   entity_type          — e.g. sketches, characters, locations …
-//   fuzz_id[]            — fuzz_candidates.id (array support)
-//   doc_id               — documentations.id
-//   doc_entity_name      — specific entity name within doc
-//   doc_entity_names[]   — multiple entity names (OR within doc, AND with other filters)
-//   kg_node_id           — kg_nodes.id
-//   seq_id               — narrative_sequences.id
-//   storyboard_id        — storyboards.id
-//   vector_text          — semantic search string (hits ChromaDB on tablet)
-//   map_run_id           — direct map run filter
-//   entity_id            — direct entity id filter
-//   frame_id             — direct frame id filter
-//   search[]             — full-text search (array support)
-//   sort                 — id | latest_frame | entity_id
-//   page                 — 1-based page number (default 1)
-//   per_page             — results per page (default 50, max 200)
-//   include_membership   — 1 = add in_storyboard/in_narrative_seq/in_kg flags
 // ─────────────────────────────────────────────────────────────────────────────
 
 require_once __DIR__ . '/bootstrap.php';
@@ -102,9 +65,6 @@ $sort          = $_GET['sort']          ?? 'id';
 $page          = max(1, (int)($_GET['page']     ?? 1));
 $perPage       = min(200, max(1, (int)($_GET['per_page'] ?? 50)));
 $inclMembership= !empty($_GET['include_membership']);
-// filter mode: how to combine forge filters
-// 'intersection' = AND across all active filters (default)
-// 'union'        = OR across all active filters
 $filterMode    = ($_GET['filter_mode'] ?? 'intersection') === 'union' ? 'union' : 'intersection';
 
 // ── FILTER OPTIONS (picker / autocomplete) ───────────────────────────
@@ -146,9 +106,58 @@ exit;
 
 
 // ═════════════════════════════════════════════════════════════════════
+// HELPER: PARSE NARRATIVE SEQUENCE DATA
+// Extracts distinct sketch_ids, frame_ids, and sketch_ids without frame
+// ═════════════════════════════════════════════════════════════════════
+function getNarrativeSequenceItems(PDO $pdo, int $seqId): array {
+    $stmt = $pdo->prepare("SELECT sequence_data FROM narrative_sequences WHERE id = ?");
+    $stmt->execute([$seqId]);
+    $raw = $stmt->fetchColumn();
+    if (!$raw) return ['sketch_ids' => [], 'frame_ids' => [], 'sketch_ids_without_frame' => []];
+
+    $data = json_decode($raw, true);
+    if (!is_array($data)) return ['sketch_ids' => [], 'frame_ids' => [], 'sketch_ids_without_frame' => []];
+
+    $sketchIds = [];
+    $frameIds  = [];
+    $sketchWithoutFrame = [];
+
+    foreach ($data as $item) {
+        if (is_numeric($item)) {
+            $sId = (int)$item;
+            $sketchIds[] = $sId;
+            $sketchWithoutFrame[] = $sId;
+        } elseif (is_array($item)) {
+            $sId = !empty($item['sketch_id']) ? (int)$item['sketch_id'] : (!empty($item['sketchId']) ? (int)$item['sketchId'] : null);
+            $fId = !empty($item['frame_id']) ? (int)$item['frame_id'] : (!empty($item['frameId']) ? (int)$item['frameId'] : null);
+
+            if ($fId) {
+                $frameIds[] = $fId;
+            }
+            if ($sId) {
+                $sketchIds[] = $sId;
+                if (!$fId) {
+                    $sketchWithoutFrame[] = $sId;
+                }
+            } elseif ($fId) {
+                $stmtF = $pdo->prepare("SELECT entity_id FROM frames WHERE id = ?");
+                $stmtF->execute([$fId]);
+                $eid = $stmtF->fetchColumn();
+                if ($eid) $sketchIds[] = (int)$eid;
+            }
+        }
+    }
+
+    return [
+        'sketch_ids' => array_values(array_unique($sketchIds)),
+        'frame_ids'  => array_values(array_unique($frameIds)),
+        'sketch_ids_without_frame' => array_values(array_unique($sketchWithoutFrame))
+    ];
+}
+
+
+// ═════════════════════════════════════════════════════════════════════
 // CORE: INTERSECTION ENGINE
-// Accepts multiple optional filter sources; returns array of entity IDs
-// (or null = no restriction from this set of filters).
 // ═════════════════════════════════════════════════════════════════════
 function computeForgeIntersection(
     PDO    $pdo,
@@ -167,7 +176,6 @@ function computeForgeIntersection(
     string  $filterMode = 'intersection'
 ): ?array {
 
-    // Collect all active per-source ID sets
     $sets = [];
 
     // ── 1. Direct entity_id ───────────────────────────────────────────
@@ -208,7 +216,6 @@ function computeForgeIntersection(
     if ($docId) {
         if ($entityType === 'sketches') {
             if (!empty($docEntityNames)) {
-                // Whole section: OR-match array of entity names
                 $ph   = implode(',', array_fill(0, count($docEntityNames), '?'));
                 $stmt = $pdo->prepare(
                     "SELECT DISTINCT sketch_id FROM sketch_lore_history
@@ -217,7 +224,6 @@ function computeForgeIntersection(
                 $stmt->execute(array_merge([$docId], $docEntityNames));
                 $sets[] = $stmt->fetchAll(PDO::FETCH_COLUMN);
             } elseif ($docEntityName) {
-                // Exact match first, then LIKE fallback
                 $stmt = $pdo->prepare(
                     "SELECT DISTINCT sketch_id FROM sketch_lore_history
                      WHERE doc_id = ? AND entity_name = ?"
@@ -234,7 +240,6 @@ function computeForgeIntersection(
                 }
                 $sets[] = $ids;
             } else {
-                // Whole document
                 $stmt = $pdo->prepare(
                     "SELECT DISTINCT sketch_id FROM sketch_lore_history WHERE doc_id = ?"
                 );
@@ -242,7 +247,6 @@ function computeForgeIntersection(
                 $sets[] = $stmt->fetchAll(PDO::FETCH_COLUMN);
             }
         }
-        // For non-sketch entities: no sketch_lore_history link → no restriction
     }
 
     // ── 4. KG Node ────────────────────────────────────────────────────
@@ -255,7 +259,6 @@ function computeForgeIntersection(
         ];
         $singularType = $singularMap[$entityType] ?? rtrim($entityType, 's');
 
-        // Primary: sketch_lore_history.entity_name = kg_nodes.name
         if ($entityType === 'sketches') {
             $nodeNameStmt = $pdo->prepare("SELECT name FROM kg_nodes WHERE id = ?");
             $nodeNameStmt->execute([$kgNodeId]);
@@ -269,7 +272,6 @@ function computeForgeIntersection(
             }
         }
 
-        // Secondary: direct kg_node_items links
         $stmt2 = $pdo->prepare(
             "SELECT DISTINCT item_id FROM kg_node_items
              WHERE node_id = ? AND item_type = ? AND item_id IS NOT NULL"
@@ -280,7 +282,6 @@ function computeForgeIntersection(
             $foundIds = array_unique(array_merge($foundIds, $direct));
         }
 
-        // Tertiary: via fuzz_candidates linked to this kg_node
         $stmt3 = $pdo->prepare(
             "SELECT DISTINCT m.source_row_id FROM fuzz_mentions m
              JOIN fuzz_candidates c ON m.candidate_id = c.id
@@ -297,18 +298,8 @@ function computeForgeIntersection(
 
     // ── 5. Narrative Sequence ─────────────────────────────────────────
     if ($seqId && $entityType === 'sketches') {
-        $stmt = $pdo->prepare(
-            "SELECT CASE
-               WHEN JSON_TYPE(jt.val) = 'INTEGER'
-                 THEN JSON_VALUE(jt.val, '$')
-                 ELSE JSON_VALUE(jt.val, '$.sketch_id')
-             END
-             FROM narrative_sequences ns,
-             JSON_TABLE(ns.sequence_data, '$[*]' COLUMNS(val JSON PATH '$')) jt
-             WHERE ns.id = ?"
-        );
-        $stmt->execute([$seqId]);
-        $sets[] = array_filter($stmt->fetchAll(PDO::FETCH_COLUMN));
+        $seqInfo = getNarrativeSequenceItems($pdo, $seqId);
+        $sets[]  = $seqInfo['sketch_ids'];
     }
 
     // ── 6. Storyboard ─────────────────────────────────────────────────
@@ -324,7 +315,6 @@ function computeForgeIntersection(
 
     // ── 7. Vector / Semantic Text (ChromaDB on tablet) ────────────────
     if ($vectorText) {
-        // PyApiVectorService may not exist in all environments — degrade gracefully
         $vectorIds = [];
         if (class_exists('\App\Core\PyApiVectorService')) {
             try {
@@ -340,9 +330,7 @@ function computeForgeIntersection(
                         }
                     }
                 }
-            } catch (\Throwable $e) {
-                // Tablet may be offline — no restriction
-            }
+            } catch (\Throwable $e) {}
         }
         $sets[] = $vectorIds;
     }
@@ -359,7 +347,6 @@ function computeForgeIntersection(
     
     // ── Strip non-searchable sketches from every source set ───────────
     if ($entityType === 'sketches' && !empty($sets)) {
-        // Collect all unique candidate IDs across sets
         $allCandidates = array_unique(array_merge(...array_map(fn($s) => array_map('intval', $s), $sets)));
         if (!empty($allCandidates)) {
             $ph = implode(',', $allCandidates);
@@ -375,7 +362,7 @@ function computeForgeIntersection(
     }
 
     // ── COMBINE SETS ──────────────────────────────────────────────────
-    if (empty($sets)) return null; // No active filters
+    if (empty($sets)) return null;
 
     if (count($sets) === 1) {
         return array_values(array_map('intval', $sets[0]));
@@ -386,11 +373,10 @@ function computeForgeIntersection(
         return array_values(array_unique(array_map('intval', $merged)));
     }
 
-    // Intersection (AND): successive intersections
     $result = array_map('intval', $sets[0]);
     for ($i = 1; $i < count($sets); $i++) {
         $result = array_values(array_intersect($result, array_map('intval', $sets[$i])));
-        if (empty($result)) return []; // Short-circuit: nothing passes
+        if (empty($result)) return [];
     }
     return $result;
 }
@@ -439,7 +425,6 @@ function _listFilterOptions(PDO $pdo, string $mode, string $q, string $entityTyp
             break;
 
         case 'doc_entities':
-            // Returns grouped entity sections for a specific doc
             $docId = (int)($_GET['doc_id'] ?? 0);
             if (!$docId) {
                 _respond('list_filter_options', [], 0, 1, 1, $entityType, []);
@@ -482,7 +467,6 @@ function _listFilterOptions(PDO $pdo, string $mode, string $q, string $entityTyp
             return;
 
         case 'kg':
-            // Only nodes with sketch links (same logic as enhanimaticism)
             $sql = "SELECT kn.id, kn.name, kn.node_type
                     FROM kg_nodes kn
                     WHERE kn.status = 'active'
@@ -504,13 +488,18 @@ function _listFilterOptions(PDO $pdo, string $mode, string $q, string $entityTyp
 
         case 'seq':
             $sql = "SELECT id, name, description FROM narrative_sequences ";
-            if ($q) { $sql .= "WHERE name LIKE ? "; $params[] = "%$q%"; }
+            if ($q !== '') {
+                $sql .= "WHERE (name LIKE ? OR id = ? OR description LIKE ?) ";
+                $params[] = "%$q%";
+                $params[] = (int)$q;
+                $params[] = "%$q%";
+            }
             $sql .= "ORDER BY id DESC LIMIT 80";
             $stmt = $pdo->prepare($sql);
             $stmt->execute($params);
             $items = array_map(fn($r) => [
                 'id'    => (int)$r['id'],
-                'label' => $r['name'],
+                'label' => $r['name'] ?: 'Untitled Sequence',
                 'meta'  => mb_substr($r['description'] ?? '', 0, 60),
                 'type'  => 'seq',
             ], $stmt->fetchAll(PDO::FETCH_ASSOC));
@@ -531,19 +520,31 @@ function _listFilterOptions(PDO $pdo, string $mode, string $q, string $entityTyp
             break;
 
         case 'map_run':
-            $sql = "SELECT id, note, entity_type, created_at FROM map_runs
-                    WHERE entity_type = ? ";
+            $sql = "SELECT id, note, entity_type, created_at FROM map_runs WHERE entity_type = ? ";
             $params = [$entityType];
             if ($q) { $sql .= "AND (note LIKE ? OR id = ?) "; $params[] = "%$q%"; $params[] = (int)$q; }
             $sql .= "ORDER BY id DESC LIMIT 80";
             $stmt = $pdo->prepare($sql);
             $stmt->execute($params);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $counts = [];
+            if (!empty($rows)) {
+                $mrIds = array_column($rows, 'id');
+                $inClause = implode(',', array_fill(0, count($mrIds), '?'));
+                $stmtC = $pdo->prepare("SELECT map_run_id, COUNT(*) AS cnt FROM frames WHERE map_run_id IN ($inClause) AND entity_type = ? GROUP BY map_run_id");
+                $stmtC->execute(array_merge($mrIds, [$entityType]));
+                foreach ($stmtC->fetchAll(PDO::FETCH_ASSOC) as $c) {
+                    $counts[(int)$c['map_run_id']] = (int)$c['cnt'];
+                }
+            }
+
             $items = array_map(fn($r) => [
                 'id'    => (int)$r['id'],
                 'label' => '#' . $r['id'] . ' — ' . ($r['note'] ?: 'No note'),
-                'meta'  => substr($r['created_at'], 0, 10),
+                'meta'  => substr($r['created_at'], 0, 10) . ' · ' . ($counts[(int)$r['id']] ?? 0) . ' frames',
                 'type'  => 'map_run',
-            ], $stmt->fetchAll(PDO::FETCH_ASSOC));
+            ], $rows);
             break;
 
         case 'entity':
@@ -597,8 +598,6 @@ function _listFrames(
 
     $intersectIds = null;
     if ($hasEntityFilters) {
-        // Calculate intersection purely for entity constraints.
-        // We pass null for storyboard, map_run, and frame to avoid dropping standalone frames.
         $intersectIds = computeForgeIntersection(
             $pdo, $entityType, $fuzzIds, $docId, $docEntityName, $docEntityNames,
             $kgNodeId, $seqId, null, $vectorText, null, $entityId, null, $filterMode
@@ -614,7 +613,6 @@ function _listFrames(
 
     $where  = "f.entity_type = " . $pdo->quote($entityType);
 
-    // Only enforce searchable if we are browsing generally. If a specific frame/storyboard/run is requested, bypass it.
     if ($entityType === 'sketches' && !$hasFrameFilters) {
         $where .= " AND e.searchable = 1";
     }
@@ -625,6 +623,20 @@ function _listFrames(
 
     if ($frameId) {
         $where .= " AND f.id = " . (int)$frameId;
+    }
+
+    // ── Specifically enforce Narrative Sequence explicit frame_ids ──
+    if ($seqId && $entityType === 'sketches') {
+        $seqInfo = getNarrativeSequenceItems($pdo, $seqId);
+        if (!empty($seqInfo['frame_ids'])) {
+            $fIn = implode(',', array_map('intval', $seqInfo['frame_ids']));
+            if (!empty($seqInfo['sketch_ids_without_frame'])) {
+                $sIn = implode(',', array_map('intval', $seqInfo['sketch_ids_without_frame']));
+                $where .= " AND (f.id IN ($fIn) OR (f.entity_id IN ($sIn) AND f.entity_type = 'sketches'))";
+            } else {
+                $where .= " AND f.id IN ($fIn)";
+            }
+        }
     }
 
     if ($hasEntityFilters) {
@@ -797,7 +809,6 @@ function _listEntities(
              FROM $table WHERE $where ORDER BY $orderBy LIMIT $perPage OFFSET $offset";
     $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
-    // Normalise: cast id and frame_count
     $data = array_map(function($r) use ($entityType) {
         $r['id']          = (int)$r['id'];
         $r['frame_count'] = (int)($r['frame_count'] ?? 0);
@@ -810,11 +821,8 @@ function _listEntities(
                                   $kgNodeId, $seqId, $storyboardId, $vectorText, $mapRunId, $entityId, $frameId, $searchTerms));
 }
 
-
-
-
 // ═════════════════════════════════════════════════════════════════════
-// CHECK MEMBERSHIP — is a frame in storyboard / narrative seq / KG?
+// CHECK MEMBERSHIP
 // ═════════════════════════════════════════════════════════════════════
 function _checkMembership(PDO $pdo, array $frameIds): void {
     if (empty($frameIds)) {
@@ -858,9 +866,8 @@ function _checkMembership(PDO $pdo, array $frameIds): void {
     _respond('check_membership', $data, count($data), 1, 1, '', []);
 }
 
-
 // ═════════════════════════════════════════════════════════════════════
-// RESOLVE RELATIONSHIPS — walk KG from a node with BFS hops
+// RESOLVE RELATIONSHIPS
 // ═════════════════════════════════════════════════════════════════════
 function _resolveRelationships(PDO $pdo, int $nodeId, int $hops, string $entityType): void {
     if (!$nodeId) {
@@ -868,7 +875,6 @@ function _resolveRelationships(PDO $pdo, int $nodeId, int $hops, string $entityT
         return;
     }
 
-    // BFS over kg_node_items.relationship links
     $visited = [];
     $queue   = [$nodeId];
     $edges   = [];
@@ -905,7 +911,6 @@ function _resolveRelationships(PDO $pdo, int $nodeId, int $hops, string $entityT
         array_push($visited, ...(array_map('intval', $queue)));
     }
 
-    // Also return entity IDs linked to all visited nodes (for frame lookup)
     $allNodes = array_unique(array_merge([$nodeId], $visited));
     $in2      = implode(',', $allNodes);
     $singularMap = [
@@ -930,11 +935,9 @@ function _resolveRelationships(PDO $pdo, int $nodeId, int $hops, string $entityT
     _respond('resolve_relationships', [$data], 1, 1, 1, $entityType, []);
 }
 
-
 // ═════════════════════════════════════════════════════════════════════
 // HELPERS
 // ═════════════════════════════════════════════════════════════════════
-
 function _buildFilterSummary(
     array  $fuzzIds,
     ?int   $docId,

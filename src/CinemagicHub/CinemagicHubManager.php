@@ -60,8 +60,14 @@ class CinemagicHubManager
                 ADD COLUMN IF NOT EXISTS `seo_keywords` TEXT DEFAULT NULL,
                 ADD COLUMN IF NOT EXISTS `seo_description` TEXT DEFAULT NULL,
                 ADD COLUMN IF NOT EXISTS `pdf_full_upright` TINYINT(1) NOT NULL DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS `pdf_full_landscape` TINYINT(1) NOT NULL DEFAULT 0,
                 ADD COLUMN IF NOT EXISTS `pdf_disable_texts` TINYINT(1) NOT NULL DEFAULT 0,
-                ADD COLUMN IF NOT EXISTS `pdf_disable_fuki` TINYINT(1) NOT NULL DEFAULT 0;
+                ADD COLUMN IF NOT EXISTS `pdf_disable_fuki` TINYINT(1) NOT NULL DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS `pdf_layout` VARCHAR(50) NOT NULL DEFAULT 'sgtac',
+                ADD COLUMN IF NOT EXISTS `pdf_page_size` VARCHAR(50) NOT NULL DEFAULT 'A4',
+                ADD COLUMN IF NOT EXISTS `web_disable_texts` TINYINT(1) NOT NULL DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS `web_disable_fuki` TINYINT(1) NOT NULL DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS `is_adult_18_plus` TINYINT(1) NOT NULL DEFAULT 0;
             ");
             $this->pdo->exec("
                 ALTER TABLE `cinemagics_2_sequences`
@@ -216,6 +222,7 @@ class CinemagicHubManager
             unset($season);
 
             // Also fetch cinemagics not yet assigned to any season in this series.
+            // This fetches the global pool (like the seasonless state) but includes any orphaned episodes in this series too.
             $unSeasonedStmt = $this->pdo->prepare("
                 SELECT c.id, c.name
                 FROM cinemagics c
@@ -232,7 +239,7 @@ class CinemagicHubManager
             return [
                 'success'              => true,
                 'series'               => $series,
-                'seasons'              => [],         // legacy key
+                'seasons'              => [],         // legacy key — empty when layer is active
                 'series_seasons'       => $seasons,
                 'unseasoned_cinemagics'=> $unSeasonedCinemagics,
             ];
@@ -277,20 +284,27 @@ class CinemagicHubManager
         $langs  = $data['supported_languages'] ?? 'en';
         $hasSeasonsLayer = isset($data['has_seasons']) ? (int)$data['has_seasons'] : 0;
         $pdfFullUpright  = isset($data['pdf_full_upright']) ? (int)$data['pdf_full_upright'] : 0;
+        $pdfFullLandscape= isset($data['pdf_full_landscape']) ? (int)$data['pdf_full_landscape'] : 0;
         $pdfDisableTexts = isset($data['pdf_disable_texts']) ? (int)$data['pdf_disable_texts'] : 0;
         $pdfDisableFuki  = isset($data['pdf_disable_fuki']) ? (int)$data['pdf_disable_fuki'] : 0;
+        $pdfLayout       = $data['pdf_layout'] ?? 'sgtac';
+        $pdfPageSize     = $data['pdf_page_size'] ?? 'A4';
+        
+        $webDisableTexts = isset($data['web_disable_texts']) ? (int)$data['web_disable_texts'] : 0;
+        $webDisableFuki  = isset($data['web_disable_fuki']) ? (int)$data['web_disable_fuki'] : 0;
+        $isAdult18Plus   = isset($data['is_adult_18_plus']) ? (int)$data['is_adult_18_plus'] : 0;
         
         $script   = !empty($data['landing_page_script']) ? trim($data['landing_page_script']) : null;
         $seoKw    = $data['seo_keywords'] ?? null;
         $seoDesc  = $data['seo_description'] ?? null;
 
         if ($id) {
-            $stmt = $this->pdo->prepare("UPDATE cinemagic_series SET title=?, description=?, status=?, sort_order=?, asset_url_prefix=?, cover_image_url=?, template=?, supported_languages=?, landing_page_script=?, seo_keywords=?, seo_description=?, has_seasons=?, pdf_full_upright=?, pdf_disable_texts=?, pdf_disable_fuki=?, updated_at=NOW() WHERE id=?");
-            $stmt->execute([$title, $desc, $status, $sort, $prefix, $cover, $tmpl, $langs, $script, $seoKw, $seoDesc, $hasSeasonsLayer, $pdfFullUpright, $pdfDisableTexts, $pdfDisableFuki, $id]);
+            $stmt = $this->pdo->prepare("UPDATE cinemagic_series SET title=?, description=?, status=?, sort_order=?, asset_url_prefix=?, cover_image_url=?, template=?, supported_languages=?, landing_page_script=?, seo_keywords=?, seo_description=?, has_seasons=?, pdf_full_upright=?, pdf_full_landscape=?, pdf_disable_texts=?, pdf_disable_fuki=?, pdf_layout=?, pdf_page_size=?, web_disable_texts=?, web_disable_fuki=?, is_adult_18_plus=?, updated_at=NOW() WHERE id=?");
+            $stmt->execute([$title, $desc, $status, $sort, $prefix, $cover, $tmpl, $langs, $script, $seoKw, $seoDesc, $hasSeasonsLayer, $pdfFullUpright, $pdfFullLandscape, $pdfDisableTexts, $pdfDisableFuki, $pdfLayout, $pdfPageSize, $webDisableTexts, $webDisableFuki, $isAdult18Plus, $id]);
             return ['success' => true, 'id' => $id];
         } else {
-            $stmt = $this->pdo->prepare("INSERT INTO cinemagic_series (title, description, status, sort_order, asset_url_prefix, cover_image_url, template, supported_languages, landing_page_script, seo_keywords, seo_description, has_seasons, pdf_full_upright, pdf_disable_texts, pdf_disable_fuki, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
-            $stmt->execute([$title, $desc, $status, $sort, $prefix, $cover, $tmpl, $langs, $script, $seoKw, $seoDesc, $hasSeasonsLayer, $pdfFullUpright, $pdfDisableTexts, $pdfDisableFuki]);
+            $stmt = $this->pdo->prepare("INSERT INTO cinemagic_series (title, description, status, sort_order, asset_url_prefix, cover_image_url, template, supported_languages, landing_page_script, seo_keywords, seo_description, has_seasons, pdf_full_upright, pdf_full_landscape, pdf_disable_texts, pdf_disable_fuki, pdf_layout, pdf_page_size, web_disable_texts, web_disable_fuki, is_adult_18_plus, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
+            $stmt->execute([$title, $desc, $status, $sort, $prefix, $cover, $tmpl, $langs, $script, $seoKw, $seoDesc, $hasSeasonsLayer, $pdfFullUpright, $pdfFullLandscape, $pdfDisableTexts, $pdfDisableFuki, $pdfLayout, $pdfPageSize, $webDisableTexts, $webDisableFuki, $isAdult18Plus]);
             return ['success' => true, 'id' => (int)$this->pdo->lastInsertId()];
         }
     }
@@ -299,6 +313,7 @@ class CinemagicHubManager
     {
         $stmt = $this->pdo->prepare("DELETE FROM cinemagic_series WHERE id = ?");
         $stmt->execute([$id]);
+        // Also clean up series seasons
         $stmt2 = $this->pdo->prepare("DELETE FROM cinemagic_series_seasons WHERE series_id = ?");
         $stmt2->execute([$id]);
         return ['success' => true];
@@ -347,6 +362,7 @@ class CinemagicHubManager
             $stmt->execute([$title, $sort, $id, $seriesId]);
             return ['success' => true, 'id' => $id];
         } else {
+            // Auto sort_order = max + 1
             $maxStmt = $this->pdo->prepare("SELECT COALESCE(MAX(sort_order),0)+1 FROM cinemagic_series_seasons WHERE series_id=?");
             $maxStmt->execute([$seriesId]);
             $sort = (int)$maxStmt->fetchColumn();
@@ -358,6 +374,7 @@ class CinemagicHubManager
 
     public function deleteSeriesSeason(int $seriesId, int $seasonId): array
     {
+        // Detach cinemagics from this season (set season_id = NULL, keep them in series)
         $stmt = $this->pdo->prepare("UPDATE cinemagic_series_2_cinemagics SET season_id = NULL WHERE series_id = ? AND season_id = ?");
         $stmt->execute([$seriesId, $seasonId]);
 
@@ -368,15 +385,18 @@ class CinemagicHubManager
 
     public function assignCinemagicToSeriesSeason(int $seriesId, int $cinemagicId, int $seasonId): array
     {
+        // First ensure the cinemagic is attached to the series at all
         $checkStmt = $this->pdo->prepare("SELECT 1 FROM cinemagic_series_2_cinemagics WHERE series_id=? AND cinemagic_id=?");
         $checkStmt->execute([$seriesId, $cinemagicId]);
         if (!$checkStmt->fetchColumn()) {
+            // Auto-attach
             $maxStmt = $this->pdo->prepare("SELECT COALESCE(MAX(sort_order),0)+1 FROM cinemagic_series_2_cinemagics WHERE series_id=?");
             $maxStmt->execute([$seriesId]);
             $order = (int)$maxStmt->fetchColumn();
             $iStmt = $this->pdo->prepare("INSERT IGNORE INTO cinemagic_series_2_cinemagics (series_id, cinemagic_id, sort_order, season_id) VALUES (?,?,?,?)");
             $iStmt->execute([$seriesId, $cinemagicId, $order, $seasonId]);
         } else {
+            // Update season assignment
             $uStmt = $this->pdo->prepare("UPDATE cinemagic_series_2_cinemagics SET season_id=? WHERE series_id=? AND cinemagic_id=?");
             $uStmt->execute([$seasonId, $seriesId, $cinemagicId]);
         }
@@ -385,6 +405,7 @@ class CinemagicHubManager
 
     public function removeCinemagicFromSeriesSeason(int $seriesId, int $cinemagicId): array
     {
+        // Remove from series entirely
         $stmt = $this->pdo->prepare("DELETE FROM cinemagic_series_2_cinemagics WHERE series_id=? AND cinemagic_id=?");
         $stmt->execute([$seriesId, $cinemagicId]);
         return ['success' => true];
@@ -439,6 +460,10 @@ class CinemagicHubManager
     
     // ── Local PDFs ───────────────────────────────────────────────────────────────
 
+    /**
+     * Returns actual physical PDF files for a given series, ensuring we only 
+     * return the absolute latest generated files without DB job duplicates.
+     */
     public function getCinemagicPdfsForSeries(int $seriesId): array
     {
         $publicPathAbs = \App\Core\SpwBase::getInstance()->getPublicPath();
@@ -560,6 +585,9 @@ class CinemagicHubManager
         $xml .= '</urlset>';
         return $xml;
     }
+    
+    
+    
 
     // ── Asset / Frame Picker ──────────────────────────────────────────────────────
 
@@ -727,6 +755,13 @@ class CinemagicHubManager
         $stmtSer->execute([$seqId]);
         $series = $stmtSer->fetch(\PDO::FETCH_ASSOC);
         $seriesId = $series ? (int)$series['id'] : null;
+        
+        $webDisableTexts = false;
+        $webDisableFuki  = false;
+        if ($series) {
+            $webDisableTexts = !empty($series['web_disable_texts']);
+            $webDisableFuki  = !empty($series['web_disable_fuki']);
+        }
 
         // Fetch Episode Specific Meta 
         $epMeta = [];
@@ -926,6 +961,10 @@ class CinemagicHubManager
                 $desc = $sketchRow['description'] ?? $sketchRow['desc'] ?? $sketchRow['prompt'] ?? '';
                 if (!empty(trim($desc))) $overrideTexts = [trim($desc)];
             }
+            
+            if ($webDisableTexts) {
+                $overrideTexts = [];
+            }
 
             $frames[] = [
                 'id'                => $sid,
@@ -935,7 +974,7 @@ class CinemagicHubManager
                 'original_filename' => $filename,
                 'filename'          => $filename,
                 'overlay_texts'     => array_map('htmlspecialchars', $overrideTexts),
-                'fuki_texts'        => $fukiTexts[$sid] ?? []
+                'fuki_texts'        => $webDisableFuki ? [] : ($fukiTexts[$sid] ?? [])
             ];
         }
 
@@ -1273,12 +1312,27 @@ HTML;
         $descHtml  = $desc ? '<p class="seq-desc">' . $desc . '</p>' : '';
         $bodyClass = $showNav ? ' class="has-ep-nav"' : '';
 
+        $gaCode = '';
+        if (empty($epData['is_preview'])) {
+            $gaCode = <<<HTML
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-SBSTRVS0NR"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-SBSTRVS0NR');
+</script>
+HTML;
+        }
+
         return <<<HTML
 <!doctype html>
 <html lang="{$langCode}">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>{$title}{$titleSuffix}</title>
     <meta name="keywords" content="{$metaKw}">
     <meta name="description" content="{$metaDesc}">
@@ -1301,6 +1355,11 @@ HTML;
         .panel-img { width: 100%; height: auto; display: block; margin: 0; box-shadow: 0 4px 40px rgba(0,0,0,0.8); border-radius: 2px; }
         .text-blocks { width: 100%; padding: 50px 20px 30px; box-sizing: border-box; display: flex; flex-direction: column; gap: 35px; align-items: center; }
         .story-text { font-size: 1.25rem; line-height: 1.8; font-weight: 400; text-align: center; max-width: 650px; color: var(--text-color); letter-spacing: 0.5px; text-shadow: 0 2px 6px rgba(0,0,0,0.9); }
+        
+        /* MD Bullet List Fix */
+        .story-text ul { display: inline-block; text-align: left; padding-left: 20px; margin: 10px auto; }
+        .story-text li { margin-bottom: 6px; }
+
         .observe-me { opacity: 0; transform: translateY(25px); transition: opacity 1s cubic-bezier(0.25, 1, 0.5, 1), transform 1s cubic-bezier(0.25, 1, 0.5, 1); }
         .observe-me.visible { opacity: 1; transform: translateY(0); }
         .end-mark { margin: 60px 0 30px; font-family: var(--font-title); color: var(--accent-color); font-size: 1.5rem; letter-spacing: 4px; opacity: 0.4; text-align: center; }
@@ -1425,27 +1484,10 @@ window.addEventListener('resize', () => {
     });
 });
 </script>
+{$gaCode}
+</body>
+</html>
 HTML;
-
-        // Append Google Analytics if not in preview mode
-        if (empty($epData['is_preview'])) {
-            $html .= <<<HTML
-
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-SBSTRVS0NR"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-SBSTRVS0NR');
-</script>
-
-HTML;
-        }
-
-        $html .= "</body>\n</html>";
-        return $html;
     }
 
 
@@ -1473,6 +1515,7 @@ HTML;
                    so_en.name_overlay AS en_name, so_lang.name_overlay AS lang_name,
                    cs.cover_image_url, ns.sequence_data, cs.chapter_label,
                    css.title AS super_season_title,
+                   c.id AS cinemagic_id,
                    sc.cover_image_url AS cm_cover_image_url
             FROM cinemagic_series_2_cinemagics sc
             LEFT JOIN cinemagic_series_seasons css ON css.id = sc.season_id
@@ -1520,6 +1563,43 @@ HTML;
         $previewBadge = $isPreview
             ? "<div style='position:absolute;top:20px;left:50%;transform:translateX(-50%);background:var(--accent-color);color:#000;padding:6px 16px;border-radius:4px;font-family:var(--font-title);font-size:0.7rem;font-weight:bold;letter-spacing:2px;z-index:999;text-transform:uppercase;'>Preview Mode</div>"
             : "";
+
+        $adultGateHtml = '';
+        if (!empty($series['is_adult_18_plus'])) {
+            $adultGateHtml = <<<HTML
+<div id="adult-gate-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;transition:opacity 0.4s;font-family:'Lora',serif;">
+    <div style="background:#0d0d11;border:1px solid rgba(255,255,255,0.1);border-radius:8px;max-width:500px;padding:30px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,0.8);">
+        <div style="font-family:'Cinzel',serif;font-size:1.4rem;color:#f59e0b;margin-bottom:12px;letter-spacing:1px;font-weight:600;">18+ MATURE CONTENT</div>
+        <div style="font-size:1rem;color:#b0b0be;line-height:1.6;margin-bottom:24px;">
+            This series is intended for adults and may contain graphic violence, disturbing imagery, strong language, sexual themes, drug use, or other mature subject matter.
+        </div>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+            <button id="adult-gate-enter" style="background:#f59e0b;color:#000;border:none;padding:10px 18px;font-family:'Space Mono',monospace;font-size:0.8rem;font-weight:700;text-transform:uppercase;cursor:pointer;border-radius:4px;transition:all 0.2s;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">I am 18 or older - Enter</button>
+            <button onclick="window.location.href='/index.html';" style="background:#131318;color:#b0b0be;border:1px solid rgba(255,255,255,0.1);padding:10px 18px;font-family:'Space Mono',monospace;font-size:0.8rem;text-transform:uppercase;cursor:pointer;border-radius:4px;transition:all 0.2s;" onmouseover="this.style.background='#1f1f28';this.style.color='#f0f0f4'" onmouseout="this.style.background='#131318';this.style.color='#b0b0be'">Go Back</button>
+        </div>
+    </div>
+</div>
+<script>
+    if (sessionStorage.getItem('adult_confirmed') === '1') {
+        var overlay = document.getElementById('adult-gate-overlay');
+        if (overlay) overlay.style.display = 'none';
+    } else {
+        document.body.style.overflow = 'hidden';
+        document.getElementById('adult-gate-enter').addEventListener('click', function() {
+            var overlay = document.getElementById('adult-gate-overlay');
+            if (overlay) {
+                overlay.style.opacity = '0';
+                setTimeout(function() {
+                    overlay.remove();
+                }, 400);
+            }
+            sessionStorage.setItem('adult_confirmed', '1');
+            document.body.style.overflow = '';
+        });
+    }
+</script>
+HTML;
+        }
 
         // Build hierarchy for seasons/cinemagics
         $hierarchy = [];
@@ -1604,6 +1684,14 @@ HTML;
                     $epLinks .= "<a class='ep-link' href='{$href}'>" . $linkLabel . "</a>";
                 }
 
+                $cmId = $eps[0]['cinemagic_id'];
+                $suffix = $langCode === 'en' ? '' : '_' . $langCode;
+                $cfHref = $isPreview
+                    ? "api.php?action=preview_coverflow&series_id={$seriesId}&cinemagic_id={$cmId}&lang={$langCode}"
+                    : "coverflow_{$cmId}{$suffix}.html";
+                
+                $cfTrigger = "<a class='cf-trigger' href='#' data-src='{$cfHref}' onclick='openCoverflow(event, this)'><span>&#10022;</span> Browse in 3D Coverflow</a>";
+
                 $cmNameSafe = htmlspecialchars($cmName);
                 $tocHtml .= <<<HTML
 <div class="cm-block">
@@ -1611,6 +1699,7 @@ HTML;
     <div class="cm-info">
         <div class="cm-pre">Cinemagic Collection</div>
         <div class="cm-title">{$cmNameSafe}</div>
+        {$cfTrigger}
         <div class="cm-ep-list">
             {$epLinks}
         </div>
@@ -1674,6 +1763,14 @@ HTML;
         .ep-link { display: inline-flex; align-items: flex-start; gap: 8px; color: var(--text-color); opacity: 0.85; text-decoration: none; font-size: 0.95rem; transition: color 0.2s, transform 0.2s, opacity 0.2s; line-height: 1; margin-bottom: 0px; }
 .ep-link:hover { color: var(--accent-color); opacity: 1; transform: translateX(4px); }
         .ep-link::before { content: '▶'; font-size: 0.6rem; color: var(--accent-color); opacity: 0.6; margin-top: 6px; }
+        .cf-trigger { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-title); font-size: 0.65rem; color: var(--accent-color); text-transform: uppercase; letter-spacing: 2px; text-decoration: none; margin-bottom: 16px; opacity: 0.8; transition: opacity 0.2s, transform 0.2s; }
+        .cf-trigger:hover { opacity: 1; transform: translateX(4px); }
+        .cf-trigger span { font-size: 0.8rem; }
+        .cf-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 9999; display: flex; flex-direction: column; opacity: 0; pointer-events: none; transition: opacity 0.3s; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+        .cf-modal.active { opacity: 1; pointer-events: auto; }
+        .cf-modal-close { position: absolute; top: 20px; right: 20px; background: transparent; border: none; color: #fff; font-size: 2rem; cursor: pointer; z-index: 10001; line-height: 1; opacity: 0.7; transition: opacity 0.2s; }
+        .cf-modal-close:hover { opacity: 1; }
+        .cf-iframe { width: 100%; height: 100%; border: none; flex: 1; background: transparent; }
         ";
 
         $topRightHtml = '';
@@ -1681,7 +1778,6 @@ HTML;
             $topRightHtml = '<div class="top-actions">' . $langHtml . '</div>';
         }
 
-        
         if ($template === 'hero_backdrop' && $cover) {
             $heroBgTag = $firstEpHref
                 ? "<a href='{$firstEpHref}' class='hero-bg' aria-label='Read first episode'></a>"
@@ -1710,6 +1806,7 @@ HTML;
     </style>
 </head>
 <body>
+    {$adultGateHtml}
     {$previewBadge}
     {$topRightHtml}
     {$heroBgTag}
@@ -1768,6 +1865,7 @@ HTML;
     </style>
 </head>
 <body>
+    {$adultGateHtml}
     {$previewBadge}
     {$topRightHtml}
     <div class="content">
@@ -1776,6 +1874,24 @@ HTML;
         <p class="series-desc">{$desc}</p>
         <div class="toc">{$tocHtml}</div>
     </div>
+    <div class="cf-modal" id="cf-modal">
+        <button class="cf-modal-close" onclick="closeCoverflow()">&#10005;</button>
+        <iframe class="cf-iframe" id="cf-iframe" src=""></iframe>
+    </div>
+    <script>
+    function openCoverflow(e, el) {
+        e.preventDefault();
+        const iframe = document.getElementById('cf-iframe');
+        iframe.src = el.getAttribute('data-src');
+        document.getElementById('cf-modal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+    function closeCoverflow() {
+        document.getElementById('cf-modal').classList.remove('active');
+        document.getElementById('cf-iframe').src = '';
+        document.body.style.overflow = '';
+    }
+    </script>
     {$gaCode}
 </body>
 </html>
@@ -1783,7 +1899,7 @@ HTML;
     }
 
 
-// ── Rollout and Export Zip Generation ─────────────────────────────────────────
+    // ── Rollout and Export Zip Generation ─────────────────────────────────────────
 
     public function exportSeriesZip(int $seriesId, string $publicPathAbs, bool $excludeAssets = false): ?string
     {
@@ -1809,7 +1925,9 @@ HTML;
         $seasonFilter = $hasSeasons ? " AND sc.season_id IS NOT NULL " : "";
 
         $epStmt = $this->pdo->prepare("
-            SELECT ns.id, ns.name, c.name as season_name, sc.cover_image_url AS cm_cover_image_url
+            
+            SELECT ns.id, ns.name, c.name as season_name, sc.cover_image_url AS cm_cover_image_url, c.id AS cinemagic_id
+
             FROM cinemagic_series_2_cinemagics sc
             JOIN cinemagics_2_sequences cs ON cs.cinemagic_id = sc.cinemagic_id
             JOIN narrative_sequences ns ON ns.id = cs.sequence_id
@@ -1901,6 +2019,13 @@ HTML;
             $zip->addFromString("{$scriptName}{$suffix}.html", $this->renderSeriesIndexHtml(
                 $seriesId, false, $urlPrefix, $makeRel, $repoAssetsPath, $lang, $langs
             ));
+
+            // Generate Static Coverflow Files for ZIP
+            $cmIds = array_unique(array_column($episodes, 'cinemagic_id'));
+            foreach ($cmIds as $cmId) {
+                $cfHtml = $this->renderCoverflowHtml($seriesId, $cmId, $lang, false, $urlPrefix, $makeRel, $repoAssetsPath);
+                $zip->addFromString("coverflow_{$cmId}{$suffix}.html", $cfHtml);
+            }
         }
 
         $zip->close();
@@ -1934,7 +2059,8 @@ HTML;
         $seasonFilter = $hasSeasons ? " AND sc.season_id IS NOT NULL " : "";
 
         $epStmt = $this->pdo->prepare("
-            SELECT ns.id, ns.name, c.name as season_name, sc.cover_image_url AS cm_cover_image_url
+            SELECT ns.id, ns.name, c.name as season_name, sc.cover_image_url AS cm_cover_image_url, c.id AS cinemagic_id
+            
             FROM cinemagic_series_2_cinemagics sc
             JOIN cinemagics_2_sequences cs ON cs.cinemagic_id = sc.cinemagic_id
             JOIN narrative_sequences ns ON ns.id = cs.sequence_id
@@ -2024,6 +2150,13 @@ HTML;
             file_put_contents($outDir . "/{$scriptName}{$suffix}.html", $this->renderSeriesIndexHtml(
                 $seriesId, false, $urlPrefix, $makeRel, $repoAssetsPath, $lang, $langs
             ));
+
+            // Generate Static Coverflow Files for GitHub
+            $cmIds = array_unique(array_column($episodes, 'cinemagic_id'));
+            foreach ($cmIds as $cmId) {
+                $cfHtml = $this->renderCoverflowHtml($seriesId, $cmId, $lang, false, $urlPrefix, $makeRel, $repoAssetsPath);
+                file_put_contents($outDir . "/coverflow_{$cmId}{$suffix}.html", $cfHtml);
+            }
         }
 
         $payload = [
@@ -2283,7 +2416,7 @@ HTML;
             return $exportData;
         }
 
-        $stmtS = $this->pdo->prepare("SELECT title, asset_url_prefix, pdf_full_upright, pdf_disable_texts, pdf_disable_fuki FROM cinemagic_series WHERE id = ?");
+        $stmtS = $this->pdo->prepare("SELECT title, asset_url_prefix, pdf_full_upright, pdf_full_landscape, pdf_disable_texts, pdf_disable_fuki, pdf_layout, pdf_page_size FROM cinemagic_series WHERE id = ?");
         $stmtS->execute([$seriesId]);
         $series = $stmtS->fetch(\PDO::FETCH_ASSOC);
         if (!$series) {
@@ -2320,8 +2453,11 @@ HTML;
             'cover_frame_id'           => $exportData['cover_frame_id'],
             'frames'                   => $safeFrames,
             'pdf_full_upright'         => (bool)($series['pdf_full_upright'] ?? false),
+            'pdf_full_landscape'       => (bool)($series['pdf_full_landscape'] ?? false),
             'pdf_disable_texts'        => (bool)($series['pdf_disable_texts'] ?? false),
-            'pdf_disable_fuki'         => (bool)($series['pdf_disable_fuki'] ?? false)
+            'pdf_disable_fuki'         => (bool)($series['pdf_disable_fuki'] ?? false),
+            'pdf_layout'               => $series['pdf_layout'] ?? 'sgtac',
+            'pdf_page_size'            => $series['pdf_page_size'] ?? 'A4'
         ];
 
         
@@ -2463,5 +2599,249 @@ HTML;
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_exec($ch);
         curl_close($ch);
+    }
+
+    public function renderCoverflowHtml(
+        int    $seriesId,
+        int    $cinemagicId,
+        string $langCode          = 'en',
+        bool   $isPreview         = false,
+        string $urlPrefix         = '',
+        bool   $makeLocalRelative = false,
+        string $repoAssetPath     = ''
+    ): string {
+        $stmtS = $this->pdo->prepare("SELECT title, description, cover_image_url, pdf_page_size FROM cinemagic_series WHERE id = ?");
+        $stmtS->execute([$seriesId]);
+        $series = $stmtS->fetch(\PDO::FETCH_ASSOC);
+        if (!$series) return 'Series not found.';
+
+        $isSquare = (strtolower($series['pdf_page_size'] ?? '') === 'square');
+
+        $epStmt = $this->pdo->prepare("
+            SELECT ns.id, ns.name, c.name as season_name,
+                   cs.cover_image_url, ns.sequence_data, cs.chapter_label,
+                   css.title AS super_season_title,
+                   so_en.name_overlay AS en_name, so_lang.name_overlay AS lang_name
+            FROM cinemagic_series_2_cinemagics sc
+            LEFT JOIN cinemagic_series_seasons css ON css.id = sc.season_id
+            JOIN cinemagics_2_sequences cs ON cs.cinemagic_id = sc.cinemagic_id
+            JOIN narrative_sequences ns ON ns.id = cs.sequence_id
+            JOIN cinemagics c ON c.id = sc.cinemagic_id
+            LEFT JOIN sequence_overlay_texts so_en ON so_en.sequence_id = ns.id AND so_en.language_code = 'en'
+            LEFT JOIN sequence_overlay_texts so_lang ON so_lang.sequence_id = ns.id AND so_lang.language_code = ?
+            WHERE sc.series_id = ? AND sc.cinemagic_id = ?
+            ORDER BY cs.sort_order ASC, ns.id ASC
+        ");
+        $epStmt->execute([$langCode, $seriesId, $cinemagicId]);
+        $episodes = $epStmt->fetchAll(\PDO::FETCH_ASSOC);
+
+        if (empty($episodes)) return 'No episodes found.';
+
+        $superTitle = $episodes[0]['super_season_title'] ?: '';
+        $cmName     = $episodes[0]['season_name'] ?: 'Extras';
+
+        foreach ($episodes as &$ep) {
+            $cover = $ep['cover_image_url'] ?: '';
+            if (!$cover) {
+                $items = json_decode($ep['sequence_data'] ?? '[]', true) ?: [];
+                if (!empty($items)) {
+                    $first = $items[0];
+                    $sid = is_array($first) ? (int)($first['sketch_id']??0) : (int)$first;
+                    $fid = is_array($first) ? (int)($first['frame_id']??0) : 0;
+                    if ($fid) {
+                        $fStmt = $this->pdo->prepare("SELECT filename FROM frames WHERE id = ?");
+                        $fStmt->execute([$fid]);
+                        $cover = $fStmt->fetchColumn();
+                    } else if ($sid) {
+                        $fStmt = $this->pdo->prepare("SELECT f.filename FROM frames f INNER JOIN frames_2_sketches m ON m.from_id = f.id WHERE f.entity_id = ? ORDER BY f.id DESC LIMIT 1");
+                        $fStmt->execute([$sid]);
+                        $cover = $fStmt->fetchColumn();
+                    }
+                }
+            }
+            if ($cover) {
+                if ($repoAssetPath !== '') {
+                    $cover = rtrim($urlPrefix, '/') . '/' . trim($repoAssetPath, '/') . '/' . basename($cover);
+                } elseif ($makeLocalRelative) {
+                    $cover = 'assets/' . basename($cover);
+                } elseif ($urlPrefix) {
+                    $cover = rtrim($urlPrefix, '/') . '/' . ltrim($cover, '/');
+                } else {
+                    $cover = str_starts_with($cover, '/') ? $cover : '/' . $cover;
+                }
+            }
+            $ep['resolved_cover'] = $cover;
+            
+            $epName = $ep['name'];
+            if (!empty($ep['en_name'])) $epName = $ep['en_name'];
+            if ($langCode !== 'en' && !empty($ep['lang_name'])) $epName = $ep['lang_name'];
+            $ep['final_name'] = $epName;
+        }
+        unset($ep);
+
+        $suffix = $langCode === 'en' ? '' : '_' . $langCode;
+
+        $itemsHtml = '';
+        foreach ($episodes as $idx => $ep) {
+            $href = $isPreview
+                ? "api.php?action=preview_episode&series_id={$seriesId}&seq_id={$ep['id']}&lang={$langCode}"
+                : "ep_{$ep['id']}{$suffix}.html";
+                
+            $cover = $ep['resolved_cover'] ?: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="300"><rect width="100%" height="100%" fill="%23222"/></svg>';
+            $epLabel = $ep['chapter_label'] ?: 'Episode ' . ($idx + 1);
+            $safeLabel = htmlspecialchars($epLabel);
+            $safeName  = htmlspecialchars($ep['final_name']);
+            $safeCover = htmlspecialchars($cover);
+            
+            $itemsHtml .= <<<HTML
+            <a class="cf-item" href="{$href}" target="_top" data-index="{$idx}">
+                <img class="cf-img" src="{$safeCover}" alt="Cover" loading="lazy">
+                <div class="cf-info">
+                    <div class="cf-label">{$safeLabel}</div>
+                    <div class="cf-title">{$safeName}</div>
+                </div>
+            </a>
+HTML;
+        }
+
+        $safeCmName = htmlspecialchars($cmName);
+        $safeSuperTitle = $superTitle && $superTitle !== 'Season' ? '<div class="cf-super-title">' . htmlspecialchars($superTitle) . '</div>' : '';
+        $w = $isSquare ? '260px' : '220px';
+        $h = $isSquare ? '1/1' : '3/4';
+        $mw = $isSquare ? '220px' : '170px';
+        $bShift = $isSquare ? '75' : '65';
+        $mbShift = $isSquare ? '85' : '75';
+        $infoBtm = $isSquare ? '-80px' : '-65px';
+
+        return <<<HTML
+<!DOCTYPE html>
+<html lang="{$langCode}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Coverflow — {$safeCmName}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+    <style>
+        :root { --bg-color: #020202; --text-color: #e5e0d8; --accent-color: #cda434; --font-title: 'Cinzel', serif; --font-body: 'Lora', serif; }
+        body, html { margin: 0; padding: 0; background-color: var(--bg-color); background-image: radial-gradient(circle at 50% 0%, #15151a 0%, #020202 60%); color: var(--text-color); font-family: var(--font-body); overflow: hidden; width: 100vw; height: 100vh; display: flex; flex-direction: column; }
+        .header { text-align: center; padding: 30px 20px 10px; flex-shrink: 0; }
+        .cf-super-title { font-family: var(--font-title); font-size: 0.75rem; letter-spacing: 4px; color: var(--accent-color); opacity: 0.8; text-transform: uppercase; }
+        .cf-cm-title { font-family: var(--font-title); font-size: 1.8rem; color: var(--text-color); margin-top: 4px; letter-spacing: 2px; }
+        .cf-stage { position: relative; width: 100%; flex: 1; perspective: 1200px; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+        .cf-track { position: absolute; left: 50%; top: 45%; transform-style: preserve-3d; }
+        .cf-item { position: absolute; width: {$w}; aspect-ratio: {$h}; transform-origin: center center; transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease, filter 0.4s ease; cursor: pointer; border-radius: 4px; background: #111; -webkit-box-reflect: below 2px linear-gradient(transparent 75%, rgba(255,255,255,0.3)); }
+        @media (max-width: 600px) { .cf-item { width: {$mw}; } }
+        .cf-item:not(.active) { filter: brightness(0.4) saturate(0.5); }
+        .cf-item.active { box-shadow: 0 10px 40px rgba(0,0,0,0.8), 0 0 0 1px rgba(205,164,52,0.4); filter: brightness(1.1); }
+        .cf-img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; display: block; pointer-events: none; }
+        .cf-info { position: absolute; bottom: {$infoBtm}; left: 50%; transform: translateX(-50%); text-align: center; width: 320px; opacity: 0; transition: opacity 0.3s ease; pointer-events: none; }
+        .cf-item.active .cf-info { opacity: 1; transition-delay: 0.15s; }
+        .cf-label { font-family: var(--font-title); font-size: 0.65rem; letter-spacing: 2px; color: var(--accent-color); text-transform: uppercase; margin-bottom: 6px; }
+        .cf-title { font-family: var(--font-body); font-size: 1.1rem; color: var(--text-color); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
+        .cf-arrow { position: absolute; top: 45%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); color: var(--text-color); display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 1000; transition: background 0.2s, border-color 0.2s, color 0.2s; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+        .cf-arrow:hover { background: rgba(205,164,52,0.2); border-color: var(--accent-color); color: var(--accent-color); }
+        .cf-arrow.prev { left: 20px; }
+        .cf-arrow.next { right: 20px; }
+        .cf-arrow svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; }
+        @media (max-width: 768px) { .cf-arrow { display: none; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        {$safeSuperTitle}
+        <div class="cf-cm-title">{$safeCmName}</div>
+    </div>
+    <div class="cf-stage" id="stage-main">
+        <button class="cf-arrow prev"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <button class="cf-arrow next"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>
+        <div class="cf-track">
+            {$itemsHtml}
+        </div>
+    </div>
+    <script>
+    class Coverflow {
+        constructor(stageElement) {
+            this.stage = stageElement;
+            this.track = stageElement.querySelector('.cf-track');
+            this.items = Array.from(stageElement.querySelectorAll('.cf-item'));
+            this.btnPrev = stageElement.querySelector('.cf-arrow.prev');
+            this.btnNext = stageElement.querySelector('.cf-arrow.next');
+            this.currentIndex = 0;
+            this.total = this.items.length;
+            if (this.total === 0) return;
+            this.init();
+        }
+        init() {
+            this.update();
+            if (this.btnPrev) this.btnPrev.addEventListener('click', () => this.goPrev());
+            if (this.btnNext) this.btnNext.addEventListener('click', () => this.goNext());
+            this.items.forEach((item, i) => {
+                item.addEventListener('click', (e) => {
+                    if (this.currentIndex !== i) {
+                        e.preventDefault();
+                        this.goTo(i);
+                    }
+                });
+            });
+            let startX = 0, currentX = 0, isSwiping = false;
+            this.stage.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; isSwiping = true; }, { passive: true });
+            this.stage.addEventListener('touchmove', (e) => { if (!isSwiping) return; currentX = e.touches[0].clientX; }, { passive: true });
+            this.stage.addEventListener('touchend', (e) => {
+                if (!isSwiping) return;
+                isSwiping = false;
+                const deltaX = currentX - startX;
+                if (Math.abs(deltaX) > 40) {
+                    if (deltaX < 0) this.goNext(); else this.goPrev();
+                }
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowRight') this.goNext();
+                if (e.key === 'ArrowLeft')  this.goPrev();
+            });
+        }
+        goTo(index) {
+            if (index < 0) index = 0;
+            if (index >= this.total) index = this.total - 1;
+            if (this.currentIndex !== index) {
+                this.currentIndex = index;
+                this.update();
+            }
+        }
+        goNext() { this.goTo(this.currentIndex + 1); }
+        goPrev() { this.goTo(this.currentIndex - 1); }
+        update() {
+            const isMobile = window.innerWidth <= 600;
+            const baseShift = isMobile ? {$bShift} : {$mbShift}; 
+            const stepShift = isMobile ? 18 : 22; 
+            const zPush = -120; 
+            const zStep = -40;  
+            const rotation = 55;
+            this.items.forEach((item, i) => {
+                const offset = i - this.currentIndex;
+                const absOffset = Math.abs(offset);
+                const sign = Math.sign(offset);
+                const isActive = absOffset === 0;
+                let x = 0, z = 0, rotY = 0, opacity = 1;
+                if (!isActive) {
+                    x = sign * (baseShift + (absOffset - 1) * stepShift);
+                    z = zPush + (absOffset - 1) * zStep;
+                    rotY = -sign * rotation;
+                    if (absOffset > 3) opacity = 0;
+                    else if (absOffset === 3) opacity = 0.3;
+                }
+                item.style.transform = `translate(-50%, -50%) translateX(\${x}%) translateZ(\${z}px) rotateY(\${rotY}deg)`;
+                item.style.zIndex = 100 - absOffset;
+                item.style.opacity = opacity;
+                item.style.pointerEvents = opacity > 0 ? 'auto' : 'none';
+                if (isActive) item.classList.add('active');
+                else item.classList.remove('active');
+            });
+        }
+    }
+    new Coverflow(document.getElementById('stage-main'));
+    </script>
+</body>
+</html>
+HTML;
     }
 }

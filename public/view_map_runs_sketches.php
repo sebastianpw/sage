@@ -409,7 +409,7 @@ function getIngredientIcon($type) {
 
     <!-- Header Section -->
     <div class="header-compact">
-        <a href="sql_crud_sketches.php" class="entity-icon-link" title="Sketches CRUD"><?php echo $iconChar; ?></a>
+        <a href="cruzz.php?entity=sketches" class="entity-icon-link" title="Sketches CRUD"><?php echo $iconChar; ?></a>
         <a href="gallery_sketches_nu.php" class="entity-icon-link" title="Sketches Gallery">▦</a>
         <h2 style="margin:0; font-size:1.2rem; color:var(--text);">Sketches Map Runs</h2>
         <?php if ($schedulerId): ?>
