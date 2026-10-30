@@ -37,6 +37,7 @@ if (!$userId) { header('Location: /login.php'); exit; }
   --card:         #111820;
   --card-hover:   #151f2b;
   --border:       #1c2535;
+  --border-glow:  #2a3a52;
   --text:         #c8d4e8;
   --text-dim:     #5a6a80;
   --text-bright:  #e8f0ff;
@@ -61,6 +62,7 @@ if (!$userId) { header('Location: /login.php'); exit; }
   --card:         #ffffff;
   --card-hover:   #f8fafc;
   --border:       #d0d8e8;
+  --border-glow:  #9ca3af;
   --text:         #1a2233;
   --text-dim:     #7a8aaa;
   --text-bright:  #000000;
@@ -83,13 +85,46 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 /* Flyouts */
 .flyout { position: fixed; top: 52px; bottom: 0; width: min(340px, 88vw); background: var(--surface); border-color: var(--border); z-index: 500; display: flex; flex-direction: column; overflow: hidden; transition: transform 0.28s cubic-bezier(0.25, 1, 0.5, 1); box-shadow: 0 0 40px rgba(0,0,0,0.6); }
 .flyout-left { left: 0; border-right: 1px solid var(--border); transform: translateX(-100%); }
-.flyout-right { right: 0; border-left: 1px solid var(--border); transform: translateX(100%); width: min(500px, 92vw); }
+.flyout-right { right: 0; border-left: 1px solid var(--border); transform: translateX(100%); width: min(520px, 94vw); }
 .flyout.open { transform: translateX(0); }
 .flyout-backdrop { position: fixed; inset: 52px 0 0 0; background: rgba(0,0,0,0.5); z-index: 499; display: none; backdrop-filter: blur(2px); }
 .flyout-backdrop.visible { display: block; }
 .flyout-head { padding: 12px 14px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
 .flyout-title { font-family: var(--mono); font-size: 0.72rem; color: var(--purple); text-transform: uppercase; letter-spacing: 2px; }
-.flyout-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; }
+.flyout-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; min-height: 0; }
+
+/* ── 3-Split Independent Scroll Panes for Right Flyout ── */
+#flyoutRight .flyout-body {
+  overflow: hidden;
+  padding: 8px;
+  gap: 8px;
+}
+.sidebar-pane {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  overflow: hidden;
+}
+.sidebar-pane-title {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+  flex-shrink: 0;
+}
+.sidebar-pane-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+}
 
 /* Main Chat Structure */
 .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
@@ -151,8 +186,8 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .btn-rename:hover { color: var(--purple); background: var(--purple-dim); }
 
 /* Tree & Working Set specific */
-.kg-tree-container { flex: 1; overflow-y: auto; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 0; margin-top: 10px; }
-.kg-tree-node { display: flex; align-items: center; gap: 6px; padding: 4px 10px; cursor: pointer; user-select: none; font-size: 0.85rem; border-radius: 4px; margin: 1px 4px; transition: background 0.1s; position: relative; }
+.kg-tree-container { padding: 2px 0; }
+.kg-tree-node { display: flex; align-items: center; gap: 6px; padding: 4px 6px; cursor: pointer; user-select: none; font-size: 0.82rem; border-radius: 4px; margin: 1px 0; transition: background 0.1s; position: relative; }
 .kg-tree-node:hover { background: rgba(167,139,250,0.08); }
 .kg-node-toggle { width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 0.65rem; color: var(--text-dim); cursor: pointer; border-radius: 3px; transition: transform 0.15s; }
 .kg-node-toggle.open { transform: rotate(90deg); }
@@ -163,17 +198,17 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .is-folder > .kg-node-label { font-weight: 600; color: var(--text); }
 .is-node > .kg-node-label { color: var(--text-dim); }
 
-.node-actions { display: none; position: absolute; right: 10px; gap: 4px; }
+.node-actions { display: none; position: absolute; right: 6px; gap: 4px; }
 .kg-tree-node:hover .node-actions { display: flex; }
-.tree-btn { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text-dim); cursor: pointer; font-size: 11px; padding: 2px 6px; font-family: var(--mono); }
+.tree-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; color: var(--text-dim); cursor: pointer; font-size: 11px; padding: 2px 6px; font-family: var(--mono); }
 .tree-btn:hover { border-color: var(--purple); color: var(--purple); }
 
-.mg-type-pill { font-size: 0.6rem; padding: 2px 6px; border-radius: 6px; text-transform: uppercase; font-family: var(--mono); font-weight: 700; border: 1px solid var(--border); background: var(--bg); }
+.mg-type-pill { font-size: 0.6rem; padding: 2px 6px; border-radius: 6px; text-transform: uppercase; font-family: var(--mono); font-weight: 700; border: 1px solid var(--border); background: var(--surface); }
 
-/* Reservations & Working Set */
-.res-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; margin-bottom: 8px; font-family: var(--mono); font-size: 0.75rem; }
+/* Reservations & Working Set Cards */
+.res-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; margin-bottom: 6px; font-family: var(--mono); font-size: 0.75rem; }
 .res-card:hover { border-color: var(--border-glow); }
-.res-title { font-weight: 700; color: var(--amber); margin-bottom: 4px; text-transform: uppercase; }
+.res-title { font-weight: 700; color: var(--amber); margin-bottom: 2px; text-transform: uppercase; font-size: 0.72rem; }
 
 /* Typing loader */
 .typing { display: flex; gap: 4px; align-items: center; height: 16px; }
@@ -211,7 +246,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
     <div style="display:flex; gap:8px;">
       <button class="btn-icon" onclick="window.agentChat.downloadChat()" title="Download Chat Logs"><i class="bi bi-download"></i></button>
       <button class="btn-icon" onclick="window.agentChat.newSession()" title="New Project"><i class="bi bi-plus-lg"></i></button>
-      <button class="btn-icon" onclick="window.agentChat.toggleFlyout('right')" title="View Graph Tree & IDs"><i class="bi bi-diagram-2"></i></button>
+      <button class="btn-icon" onclick="window.agentChat.toggleFlyout('right')" title="View Graph Explorer"><i class="bi bi-diagram-2"></i></button>
     </div>
   </header>
 
@@ -241,7 +276,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
     </div>
   </div>
 
-  <!-- Right Flyout: KG Tree & ID Blocks -->
+  <!-- Right Flyout: Independent 33% 3-Split Panes -->
   <div class="flyout flyout-right" id="flyoutRight">
     <div class="flyout-head">
       <span class="flyout-title">Graph Explorer</span>
@@ -249,18 +284,26 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
     </div>
     <div class="flyout-body">
       
-      <!-- Session Working Set -->
-      <div style="font-family:var(--mono); font-size:0.65rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Session Working Set</div>
-      <div id="workingSetList" style="margin-bottom: 16px;"></div>
+      <!-- Pane 1: Session Working Set (33%) -->
+      <div class="sidebar-pane">
+        <div class="sidebar-pane-title">Session Working Set</div>
+        <div class="sidebar-pane-scroll" id="workingSetList"></div>
+      </div>
 
-      <!-- Reservations -->
-      <div style="font-family:var(--mono); font-size:0.65rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">ID Reservations</div>
-      <div id="reservationsList"></div>
+      <!-- Pane 2: ID Reservations (33%) -->
+      <div class="sidebar-pane">
+        <div class="sidebar-pane-title">ID Reservations</div>
+        <div class="sidebar-pane-scroll" id="reservationsList"></div>
+      </div>
 
-      <!-- Tree -->
-      <div style="font-family:var(--mono); font-size:0.65rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin: 16px 0 8px;">Graph Nodes</div>
-      <input type="text" class="ctx-input" placeholder="Search tree..." oninput="filterKgTree(this.value)">
-      <div class="kg-tree-container" id="kgTreeWrap"></div>
+      <!-- Pane 3: Graph Tree (33%) -->
+      <div class="sidebar-pane">
+        <div class="sidebar-pane-title" style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+          <span>Graph Nodes</span>
+          <input type="text" class="ctx-input" style="padding: 2px 6px; font-size: 0.7rem; width: 140px; height: 22px;" placeholder="Search tree..." oninput="filterKgTree(this.value)">
+        </div>
+        <div class="sidebar-pane-scroll kg-tree-container" id="kgTreeWrap"></div>
+      </div>
       
     </div>
   </div>
@@ -508,7 +551,6 @@ function openMiniGraph(id) {
 function closeIframeModal(id) {
     document.getElementById(id).classList.remove('open');
     document.querySelector(`#${id} iframe`).src = '';
-    // Reload tree incase they edited something in the iframe
     loadKgTree(); 
 }
 </script>
