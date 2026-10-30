@@ -6,12 +6,6 @@
 require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
 
-
-
-
-
-
-
 use App\UI\Modules\ModuleRegistry;
 
 $spw = \App\Core\SpwBase::getInstance();
@@ -53,22 +47,11 @@ if (!$storyId) {
                 </a>
                 
                 <button onclick="deleteStory(<?= $s['id'] ?>, <?= htmlspecialchars(json_encode($s['title']), ENT_QUOTES, 'UTF-8') ?>)"
-        title="Delete story"
-        style="flex-shrink:0;width:38px;height:38px;border:none;border-left:1px solid var(--border);background:transparent;color:#f05060;cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;transition:background .15s;"
-        onmouseover="this.style.background='rgba(240,80,96,.12)'" onmouseout="this.style.background='transparent'">
-    <i class="bi bi-trash"></i>
-</button>
-                
-                <?php /*
-                <button onclick="deleteStory(<?= $s['id'] ?>, <?= json_encode($s['title']) ?>)"
                         title="Delete story"
                         style="flex-shrink:0;width:38px;height:38px;border:none;border-left:1px solid var(--border);background:transparent;color:#f05060;cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;transition:background .15s;"
                         onmouseover="this.style.background='rgba(240,80,96,.12)'" onmouseout="this.style.background='transparent'">
                     <i class="bi bi-trash"></i>
                 </button>
-                */ ?>
-                
-                
             </div>
         <?php endforeach; ?>
         <?php if (empty($stories)): ?>
@@ -274,7 +257,6 @@ ob_start();
     --pl-group-border:#c0d8e0;
 }
 
-
 body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', system-ui, sans-serif; margin: 0; padding: 0; transition: background .2s, color .2s; }
 
 /* ── Nav ──────────────────────────────────────────────────────────────────── */
@@ -285,7 +267,7 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
 .pl-nav-link:hover { color:var(--pl-amber); border-color:var(--pl-amber); }
 .pl-nav-link.primary { color:#000; background:var(--pl-amber); border-color:var(--pl-amber); font-weight:bold; }
 
-/* ── Nav icon buttons (collapse-all, export-all) ─────────────────────────── */
+/* ── Nav icon buttons ────────────────────────────────────────────────────── */
 .pl-nav-icon-btn {
     width:32px; height:32px; border-radius:4px;
     border:1px solid var(--pl-border); background:var(--pl-surface);
@@ -401,20 +383,13 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
 .beat-entity-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
 .beat-entity-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 12px; font-size: .7rem; font-family: 'Space Mono', monospace; border: 1px solid; }
 
-
-
 .chip-char { background: rgba(251,146,60,.1); border-color: var(--pl-amber); color: var(--pl-amber); }
 .chip-fact { background: rgba(74,222,128,.1); border-color: var(--pl-green); color: var(--pl-green); }
 .chip-loc  { background: rgba(96,165,250,.1); border-color: var(--pl-teal);  color: var(--pl-teal);  }
 .chip-anim { background: rgba(244,63,94,.1);  border-color: var(--pl-anim);  color: var(--pl-anim);  }
-
 .chip-sket { background: rgba(168,85,247,.1); border-color: var(--pl-sket);  color: var(--pl-sket);  }
 .chip-kg   { background: rgba(59,130,246,.1); border-color: var(--pl-kg);    color: var(--pl-kg);    }
 .chip-remove { background: none; border: none; cursor: pointer; color: inherit; opacity: .6; font-size: .75rem; padding: 0; line-height: 1; transition: opacity .15s; }
-
-
-
-
 .chip-remove:hover { opacity: 1; }
 
 .entity-add-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
@@ -424,14 +399,8 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
 .entity-type-tab.active-fact { border-color: var(--pl-green); color: var(--pl-green); background: rgba(74,222,128,.1); }
 .entity-type-tab.active-loc  { border-color: var(--pl-teal);  color: var(--pl-teal);  background: rgba(96,165,250,.1);  }
 .entity-type-tab.active-anim { border-color: var(--pl-anim);  color: var(--pl-anim);  background: rgba(244,63,94,.1);  }
-
-
-
 .entity-type-tab.active-sket { border-color: var(--pl-sket);  color: var(--pl-sket);  background: rgba(168,85,247,.1); }
 .entity-type-tab.active-kg   { border-color: var(--pl-kg);    color: var(--pl-kg);    background: rgba(59,130,246,.1); }
-
-
-
 
 .entity-search-wrap { position: relative; flex: 1; min-width: 140px; }
 .entity-search-input { width: 100%; background: var(--pl-surface); color: var(--pl-text); border: 1px solid var(--pl-border); border-radius: 4px; padding: 6px 10px; font-family: 'Syne', sans-serif; font-size: .8rem; box-sizing: border-box; }
@@ -518,8 +487,65 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
 #sceneFilterAc .sfac-item:hover,
 #sceneFilterAc .sfac-item.sfac-active { background:rgba(245,166,35,.1); color:var(--pl-amber); }
 #sceneFilterAc .sfac-num { color:var(--pl-text-dim); font-size:.6rem; margin-right:5px; }
-</style>
 
+/* ── Reading Mode Styling ─────────────────────────────────────────────────── */
+#plush-reader-view {
+    display: none;
+    max-width: 740px;
+    margin: 0 auto;
+    padding: 30px 16px 140px;
+    font-family: 'Syne', system-ui, sans-serif;
+}
+.read-scene {
+    margin-bottom: 44px;
+    padding-bottom: 30px;
+    border-bottom: 1px solid var(--pl-border);
+}
+.read-scene:last-child {
+    border-bottom: none;
+}
+.read-scene-meta {
+    font-family: 'Space Mono', monospace;
+    font-size: .68rem;
+    color: var(--pl-amber);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+}
+.read-scene-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    margin: 0 0 8px;
+    color: var(--pl-text);
+    line-height: 1.3;
+}
+.read-scene-synopsis {
+    font-size: .88rem;
+    color: var(--pl-text-dim);
+    font-style: italic;
+    line-height: 1.5;
+    margin-bottom: 22px;
+    padding-left: 12px;
+    border-left: 2px solid var(--pl-teal);
+}
+.read-group-title {
+    font-family: 'Space Mono', monospace;
+    font-size: .75rem;
+    color: var(--pl-teal);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 22px 0 10px;
+    opacity: .85;
+}
+.read-block {
+    margin-bottom: 16px;
+    font-size: 1.02rem;
+    line-height: 1.7;
+    color: var(--pl-text);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+</style>
 
 <!-- ── Nav ─────────────────────────────────────────────────────────────────── -->
 <div class="pl-nav">
@@ -534,24 +560,23 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
                onfocus="this.style.borderColor='var(--pl-amber)';sfAcSearch(this.value)"
                onblur="this.style.borderColor='var(--pl-border)';setTimeout(sfAcHide,200)"
                onkeydown="sfAcKeydown(event)"
-               style="background:var(--pl-card);color:var(--pl-text);border:1px solid var(--pl-border);border-radius:4px;padding:5px 8px;font-family:'Space Mono',monospace;font-size:.7rem;width:120px;outline:none;transition:border-color .2s;">
+               style="background:var(--pl-card);color:var(--pl-text);border:1px solid var(--pl-border);border-radius:4px;padding:5px 8px;font-family:'Space Mono',monospace;font-size:.7rem;width:110px;outline:none;transition:border-color .2s;">
         <div id="sceneFilterAc"></div>
     </div>
 
-    <!-- CHANGE 1: language select shows code only -->
-    <select id="editor-lang-select" onchange="window.location.href='?id=<?= $storyId ?>&lang='+this.value" class="pl-nav-link" style="appearance:auto;background:var(--pl-card);">
-        <?php foreach ($allLanguages as $l): ?>
-            <option value="<?= $l['code'] ?>" <?= $l['code'] === $editLang ? 'selected' : '' ?>><?= strtoupper($l['code']) ?></option>
-        <?php endforeach; ?>
-    </select>
-    <button class="pl-nav-link" onclick="openLangModal()" title="System Languages">
-        <i class="bi bi-globe"></i>
+    <!-- System Languages Modal Trigger -->
+    <button class="pl-nav-link" onclick="openLangModal()" title="Languages & Switcher">
+        <i class="bi bi-globe"></i> <?= strtoupper($editLang) ?>
     </button>
-    <!-- CHANGE 2: Collapse All toggle button -->
+    <!-- Reading Mode toggle button -->
+    <button class="pl-nav-icon-btn" id="readModeBtn" onclick="toggleReadMode()" title="Toggle Reading Mode">
+        <i class="bi bi-book" id="readModeIcon"></i>
+    </button>
+    <!-- Collapse / Expand all blocks -->
     <button class="pl-nav-icon-btn" id="collapseAllBtn" onclick="toggleCollapseAll()" title="Collapse / Expand all blocks">
         <i class="bi bi-arrows-collapse" id="collapseAllIcon"></i>
     </button>
-    <!-- CHANGE 3: Export All button -->
+    <!-- Export all blocks -->
     <button class="pl-nav-icon-btn" id="exportAllBtn" onclick="exportAll()" title="Export all blocks">
         <i class="bi bi-download"></i>
     </button>
@@ -603,6 +628,9 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
         </div>
     </div>
 </div>
+
+<!-- ── Reading Mode Container ──────────────────────────────────────────────── -->
+<div id="plush-reader-view"></div>
 
 <!-- ── Editor Workspace ─────────────────────────────────────────────────────── -->
 <div class="workspace <?= $editLang !== 'en' ? 'lang-not-en' : '' ?>" id="plush-workspace">
@@ -660,13 +688,11 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
                             <div class="overlay-block" data-block-id="<?= $blockId ?>" data-display-order="<?= $dispOrder ?>" data-group-id="0" data-text-content="<?= htmlspecialchars($textVal) ?>">
                                 <div class="drag-handle" title="Drag to reorder"><i class="bi bi-grip-vertical"></i></div>
                                 <span class="block-ref">[<?= $sceneId ?> . 0 . <span class="ref-order"><?= $dispOrder ?></span>]</span>
-                                <!-- CHANGE 4: collapsed preview div -->
                                 <div class="pl-collapsed-preview" title="<?= htmlspecialchars($textVal) ?>"><?= htmlspecialchars($previewText) ?></div>
                                 <?php $bgColor = !empty($b['bg_color']) ? 'background-color:' . htmlspecialchars($b['bg_color']) . ' !important;' : ''; ?>
                                 <textarea class="overlay-text" style="<?= $bgColor ?>" placeholder="<?= $editLang === 'en' ? 'Type highlight text…' : htmlspecialchars($b['text_content']) ?>"><?= htmlspecialchars($textVal) ?></textarea>
                                 <div class="action-btns">
                                     <button class="color-btn" title="Set Color"><i class="bi bi-palette"></i></button>
-                                    <!-- CHANGE 4: per-block export button -->
                                     <button class="export-block-btn" title="Export this block"><i class="bi bi-download"></i></button>
                                     <button class="del-btn" title="Delete Block"><i class="bi bi-trash"></i></button>
                                 </div>
@@ -676,24 +702,9 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
                                 $chipsHtml = '';
                                 foreach ($bTags as $tag) {
                                     $cls = $tag['entity_type'] === 'characters' ? 'chip-char' : ($tag['entity_type'] === 'factions' ? 'chip-fact' : ($tag['entity_type'] === 'locations' ? 'chip-loc' : ($tag['entity_type'] === 'animas' ? 'chip-anim' : ($tag['entity_type'] === 'sketches' ? 'chip-sket' : 'chip-kg'))));
-
-                                    
-                                    
-                                    
                                     $lbl = htmlspecialchars($tag['entity_label']);
                                     $chipsHtml .= "<span class=\"beat-entity-chip $cls\" data-tag-id=\"{$tag['id']}\" data-entity-type=\"{$tag['entity_type']}\" data-entity-id=\"{$tag['entity_id']}\" data-entity-label=\"{$lbl}\">
-                                    
-                                    
-                                    
                                         <span class=\"chip-label\" style=\"cursor:pointer;\" onclick=\"openEntityModal('".htmlspecialchars($tag['entity_type'])."','{$tag['entity_id']}','".addslashes($tag['entity_label'])."')\">{$lbl}</span>
-                                   
-                                   
-                                        <!--
-                                        <span class=\"chip-label\" style=\"cursor:pointer;\" onclick=\"openEntityModal('".htmlspecialchars($tag['entity_type'])."','{$tag['entity_id']}','{$lbl}')\">{$lbl}</span>
-                                        -->
-                                        
-                                        
-                                        
                                         <button class=\"chip-remove\" onclick=\"removeBlockEntityTag({$tag['id']},{$blockId})\" title=\"Remove\"><i class=\"bi bi-x\"></i></button>
                                     </span>";
                                 }
@@ -706,15 +717,9 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
                                         <button class="entity-type-tab" id="tab-fact-<?= $blockId ?>" onclick="setEntityTab(<?= $blockId ?>,'factions')">Fac</button>
                                         <button class="entity-type-tab" id="tab-loc-<?= $blockId ?>"  onclick="setEntityTab(<?= $blockId ?>,'locations')">Loc</button>
                                         <button class="entity-type-tab" id="tab-anim-<?= $blockId ?>" onclick="setEntityTab(<?= $blockId ?>,'animas')">Anim</button>
-                                        
-                                        
-                                        
                                         <button class="entity-type-tab" id="tab-sket-<?= $blockId ?>" onclick="setEntityTab(<?= $blockId ?>,'sketches')">Sket</button>
                                         <button class="entity-type-tab" id="tab-kg-<?= $blockId ?>" onclick="setEntityTab(<?= $blockId ?>,'kg_nodes')">KG</button>
                                     </div>
-                                    
-                                    
-                                    
                                     
                                     <div class="entity-search-wrap">
                                         <input class="entity-search-input" type="text" placeholder="Search entity references…" id="esearch-<?= $blockId ?>"
@@ -771,13 +776,11 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
                             <div class="overlay-block" data-block-id="<?= $blockId ?>" data-display-order="<?= $dispOrder ?>" data-group-id="<?= $gid ?>" data-text-content="<?= htmlspecialchars($textVal) ?>">
                                 <div class="drag-handle" title="Drag to reorder"><i class="bi bi-grip-vertical"></i></div>
                                 <span class="block-ref">[<?= $sceneId ?> . <?= $gid ?> . <span class="ref-order"><?= $dispOrder ?></span>]</span>
-                                <!-- CHANGE 4: collapsed preview div -->
                                 <div class="pl-collapsed-preview" title="<?= htmlspecialchars($textVal) ?>"><?= htmlspecialchars($previewText) ?></div>
                                 <?php $bgColor = !empty($b['bg_color']) ? 'background-color:' . htmlspecialchars($b['bg_color']) . ' !important;' : ''; ?>
                                 <textarea class="overlay-text" style="<?= $bgColor ?>" placeholder="<?= $editLang === 'en' ? 'Type highlight text…' : htmlspecialchars($b['text_content']) ?>"><?= htmlspecialchars($textVal) ?></textarea>
                                 <div class="action-btns">
                                     <button class="color-btn" title="Set Color"><i class="bi bi-palette"></i></button>
-                                    <!-- CHANGE 4: per-block export button -->
                                     <button class="export-block-btn" title="Export this block"><i class="bi bi-download"></i></button>
                                     <button class="del-btn" title="Delete Block"><i class="bi bi-trash"></i></button>
                                 </div>
@@ -787,20 +790,9 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
                                 $chipsHtml = '';
                                 foreach ($bTags as $tag) {
                                     $cls = $tag['entity_type'] === 'characters' ? 'chip-char' : ($tag['entity_type'] === 'factions' ? 'chip-fact' : ($tag['entity_type'] === 'locations' ? 'chip-loc' : ($tag['entity_type'] === 'animas' ? 'chip-anim' : ($tag['entity_type'] === 'sketches' ? 'chip-sket' : 'chip-kg'))));
-
-                                    
                                     $lbl = htmlspecialchars($tag['entity_label']);
                                     $chipsHtml .= "<span class=\"beat-entity-chip $cls\" data-tag-id=\"{$tag['id']}\" data-entity-type=\"{$tag['entity_type']}\" data-entity-id=\"{$tag['entity_id']}\" data-entity-label=\"{$lbl}\">
-                                    
-                                    
                                         <span class=\"chip-label\" style=\"cursor:pointer;\" onclick=\"openEntityModal('".htmlspecialchars($tag['entity_type'])."','{$tag['entity_id']}','".addslashes($tag['entity_label'])."')\">{$lbl}</span>
-                                    
-                                    
-                                        <!--
-                                        <span class=\"chip-label\" style=\"cursor:pointer;\" onclick=\"openEntityModal('".htmlspecialchars($tag['entity_type'])."','{$tag['entity_id']}','{$lbl}')\">{$lbl}</span>
-                                        -->
-                                        
-                                        
                                         <button class=\"chip-remove\" onclick=\"removeBlockEntityTag({$tag['id']},{$blockId})\" title=\"Remove\"><i class=\"bi bi-x\"></i></button>
                                     </span>";
                                 }
@@ -813,14 +805,9 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
                                         <button class="entity-type-tab" id="tab-fact-<?= $blockId ?>" onclick="setEntityTab(<?= $blockId ?>,'factions')">Fac</button>
                                         <button class="entity-type-tab" id="tab-loc-<?= $blockId ?>"  onclick="setEntityTab(<?= $blockId ?>,'locations')">Loc</button>
                                         <button class="entity-type-tab" id="tab-anim-<?= $blockId ?>" onclick="setEntityTab(<?= $blockId ?>,'animas')">Anim</button>
-                                        
-                                        
-                                       <button class="entity-type-tab" id="tab-sket-<?= $blockId ?>" onclick="setEntityTab(<?= $blockId ?>,'sketches')">Sket</button>
+                                        <button class="entity-type-tab" id="tab-sket-<?= $blockId ?>" onclick="setEntityTab(<?= $blockId ?>,'sketches')">Sket</button>
                                         <button class="entity-type-tab" id="tab-kg-<?= $blockId ?>" onclick="setEntityTab(<?= $blockId ?>,'kg_nodes')">KG</button>
                                     </div>
-                                    
-                                    
-                                    
                                     
                                     <div class="entity-search-wrap">
                                         <input class="entity-search-input" type="text" placeholder="Search entity references…" id="esearch-<?= $blockId ?>"
@@ -877,27 +864,40 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
     <button class="add-story-scene-btn" data-action="add-scene">+ Add New Scene</button>
 </div>
 
-<!-- ── Language Manager Modal ─────────────────────────────────────────────── -->
+<!-- ── Language Manager & Switcher Modal ───────────────────────────────────── -->
 <div class="modal-backdrop" id="langModalBackdrop" onmousedown="if(event.target===this)closeLangModal()">
     <div class="modal-box">
         <div class="modal-header">
-            <div class="modal-title">System Languages</div>
+            <div class="modal-title">Languages</div>
             <button class="modal-close" onclick="closeLangModal()">&#10005;</button>
         </div>
+
+        <!-- Language Switcher relocated here to save navbar space -->
+        <div style="margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid var(--pl-border); display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <label style="font-family:'Space Mono',monospace; font-size:.72rem; color:var(--pl-text-dim); text-transform:uppercase; letter-spacing:1px;">Active Language</label>
+            <select id="modal-lang-select" onchange="window.location.href='?id=<?= $storyId ?>&lang='+this.value" class="pl-nav-link" style="appearance:auto; background:var(--pl-card); font-weight:bold; color:var(--pl-amber); padding:5px 8px;">
+                <?php foreach ($allLanguages as $l): ?>
+                    <option value="<?= $l['code'] ?>" <?= $l['code'] === $editLang ? 'selected' : '' ?>><?= htmlspecialchars($l['name']) ?> (<?= strtoupper($l['code']) ?>)</option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div style="font-family:'Space Mono',monospace; font-size:.7rem; color:var(--pl-text-dim); margin-bottom:8px; text-transform:uppercase; letter-spacing:1px;">Add System Language</div>
         <div style="display:flex;gap:8px;margin-bottom:16px;">
             <input type="text" id="lang-code" placeholder="Code" maxlength="2" style="width:60px;text-transform:lowercase;background:var(--pl-card);color:var(--pl-text);border:1px solid var(--pl-border);border-radius:4px;padding:6px;font-family:'Space Mono',monospace;">
             <input type="text" id="lang-name" placeholder="Language Name" style="flex:1;background:var(--pl-card);color:var(--pl-text);border:1px solid var(--pl-border);border-radius:4px;padding:6px;font-family:'Syne',sans-serif;">
             <button class="pl-btn pl-btn-primary" onclick="saveLanguage()">Save</button>
         </div>
-        <div id="lang-list" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;"></div>
+        <div id="lang-list" style="display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;"></div>
     </div>
 </div>
 
-<!-- ── Entity Details Modal ─────────────────────────────────────────────── -->
+<!-- ── Entity Details / Mini-Graph Modal ─────────────────────────────────── -->
 <div class="modal-backdrop" id="entity-modal-backdrop" onmousedown="if(event.target===this)closeEntityModal()">
-    <div class="modal-box" style="max-width:700px; height:85vh; display:flex; flex-direction:column; padding:0; overflow:hidden;">
-        <div class="modal-header" style="padding:10px 14px; border-bottom:1px solid var(--pl-border); margin-bottom:0; background:var(--pl-surface);">
-            <span class="modal-title" id="entityModalTitle">Entity Details</span>
+    <div class="modal-box" id="entityModalBox" style="width:100%; max-width:700px; height:85vh; display:flex; flex-direction:column; padding:0; overflow:hidden; transition:max-width .2s, height .2s; margin:8px;">
+        <div class="modal-header" style="padding:10px 14px; border-bottom:1px solid var(--pl-border); margin-bottom:0; background:var(--pl-surface); display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span class="modal-title" id="entityModalTitle" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px;">Entity Details</span>
+            <div id="entityModalActions" style="display:flex; align-items:center; gap:4px; margin-left:auto; flex-wrap:wrap;"></div>
             <button class="modal-close" onclick="closeEntityModal()">&#10005;</button>
         </div>
         <iframe id="entity-iframe" src="about:blank" style="flex:1; border:none; width:100%; background:var(--pl-card);"></iframe>
@@ -1091,7 +1091,6 @@ window.setBlockColor = function(color) {
 };
 
 // ── Scene filter autocomplete ─────────────────────────────────────────────
-// Data embedded server-side: no extra fetch needed.
 const SCENE_LIST = <?= json_encode(array_map(fn($s) => [
     'id'    => (int)$s['id'],
     'title' => $s['title'],
@@ -1168,9 +1167,13 @@ window.filterScenes = function(q) {
         const num   = sb.querySelector('.scene-num')?.textContent.toLowerCase() || '';
         sb.style.display = (title.includes(term) || num.includes(term)) ? '' : 'none';
     });
+    // If currently in reading mode, update reader view content as well
+    if (isReadMode) {
+        renderReaderViewContent();
+    }
 };
 
-// ── CHANGE 5: Collapse All toggle ────────────────────────────────────────────
+// ── Collapse All toggle ───────────────────────────────────────────────────────
 let allCollapsed = false;
 
 window.toggleCollapseAll = function() {
@@ -1179,7 +1182,6 @@ window.toggleCollapseAll = function() {
     blocks.forEach(block => {
         if (allCollapsed) {
             block.classList.add('pl-collapsed');
-            // Update preview text from current textarea value
             const ta = block.querySelector('.overlay-text');
             const preview = block.querySelector('.pl-collapsed-preview');
             if (ta && preview) {
@@ -1198,9 +1200,91 @@ window.toggleCollapseAll = function() {
     icon.className = allCollapsed ? 'bi bi-arrows-expand' : 'bi bi-arrows-collapse';
 };
 
-// ── CHANGE 6: Export helpers ──────────────────────────────────────────────────
+// ── Reading Mode Logic ────────────────────────────────────────────────────────
+let isReadMode = false;
 
-// Collect block data from DOM for a single block element
+function renderReaderViewContent() {
+    const readerView = document.getElementById('plush-reader-view');
+    let html = '';
+    const sceneBlocks = document.querySelectorAll('#plush-workspace .scene-block');
+
+    sceneBlocks.forEach(sb => {
+        if (sb.style.display === 'none') return; // respect scene filter
+
+        const numEl      = sb.querySelector('.scene-num');
+        const titleEl    = sb.querySelector('.scene-title');
+        const synopsisEl = sb.querySelector('.scene-synopsis');
+
+        const numText      = numEl ? numEl.textContent.trim() : '';
+        const titleText    = titleEl ? titleEl.textContent.trim() : '';
+        const synopsisText = synopsisEl ? synopsisEl.textContent.trim() : '';
+
+        html += `<div class="read-scene">`;
+        if (numText) html += `<div class="read-scene-meta">${escHtml(numText)}</div>`;
+        if (titleText) html += `<h2 class="read-scene-title">${escHtml(titleText)}</h2>`;
+        if (synopsisText) html += `<div class="read-scene-synopsis">${escHtml(synopsisText)}</div>`;
+
+        const groups = sb.querySelectorAll('.highlight-group');
+        groups.forEach(g => {
+            const isDefault = g.classList.contains('is-default');
+            const labelInput = g.querySelector('.group-label-input');
+            const labelVal = labelInput ? labelInput.value.trim() : '';
+
+            if (!isDefault && labelVal) {
+                html += `<div class="read-group-title">${escHtml(labelVal)}</div>`;
+            }
+
+            const blocks = g.querySelectorAll('.overlay-block');
+            blocks.forEach(b => {
+                const ta = b.querySelector('.overlay-text');
+                const textVal = ta ? ta.value.trim() : (b.dataset.textContent || '').trim();
+                if (textVal) {
+                    html += `<div class="read-block">${escHtml(textVal)}</div>`;
+                }
+            });
+        });
+
+        html += `</div>`;
+    });
+
+    readerView.innerHTML = html || '<div style="text-align:center; padding:60px 20px; color:var(--pl-text-dim); font-family:\'Space Mono\',monospace;">No text blocks to display.</div>';
+}
+
+window.toggleReadMode = function() {
+    isReadMode = !isReadMode;
+    const workspace    = document.getElementById('plush-workspace');
+    const readerView   = document.getElementById('plush-reader-view');
+    const colPanel     = document.querySelector('.collection-panel');
+    const addSceneWrap = document.querySelector('.add-story-scene-wrap');
+    const btn          = document.getElementById('readModeBtn');
+    const icon         = document.getElementById('readModeIcon');
+
+    if (isReadMode) {
+        renderReaderViewContent();
+
+        workspace.style.display    = 'none';
+        if (colPanel) colPanel.style.display = 'none';
+        if (addSceneWrap) addSceneWrap.style.display = 'none';
+        readerView.style.display   = 'block';
+
+        btn.classList.add('active');
+        icon.className = 'bi bi-pencil-square';
+        btn.title = 'Exit Reading Mode (Return to Editor)';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+        readerView.style.display   = 'none';
+        readerView.innerHTML       = '';
+        workspace.style.display    = '';
+        if (colPanel) colPanel.style.display = '';
+        if (addSceneWrap) addSceneWrap.style.display = '';
+
+        btn.classList.remove('active');
+        icon.className = 'bi bi-book';
+        btn.title = 'Toggle Reading Mode';
+    }
+};
+
+// ── Export helpers ────────────────────────────────────────────────────────────
 function collectBlockData(blockEl) {
     const blockId    = blockEl.dataset.blockId;
     const groupId    = blockEl.dataset.groupId;
@@ -1212,7 +1296,6 @@ function collectBlockData(blockEl) {
     const ta = blockEl.querySelector('.overlay-text');
     const text = ta ? ta.value : (blockEl.dataset.textContent || '');
 
-    // Collect entity chips grouped by table (entity_type)
     const entityMap = {};
     blockEl.querySelectorAll('.beat-entity-chip').forEach(chip => {
         const type  = chip.dataset.entityType  || '';
@@ -1234,7 +1317,6 @@ function collectBlockData(blockEl) {
     };
 }
 
-// Trigger a browser download of text content as a file
 function triggerDownload(filename, content) {
     const blob = new Blob([content], { type: 'application/json;charset=utf-8' });
     const url  = URL.createObjectURL(blob);
@@ -1246,7 +1328,6 @@ function triggerDownload(filename, content) {
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
 }
 
-// Export a single block (called from per-block button)
 window.exportBlock = function(blockEl) {
     const data = collectBlockData(blockEl);
     const filename = 'plush_block_' + (data.block_id || 'x') + '_scene_' + (data.scene_id || 'x') + '.json';
@@ -1254,7 +1335,6 @@ window.exportBlock = function(blockEl) {
     Toast.show('Block exported.', 'success');
 };
 
-// Export all blocks (scoped to visible scene-blocks when filter is active)
 window.exportAll = function() {
     const visibleBlocks = [];
     document.querySelectorAll('#plush-workspace .scene-block').forEach(sb => {
@@ -1285,17 +1365,10 @@ const blockEntityTypes = {};
 
 window.setEntityTab = function(blockId, type) {
     blockEntityTypes[blockId] = type;
-['char','fact','loc','anim','sket','kg'].forEach(t => {
+    ['char','fact','loc','anim','sket','kg'].forEach(t => {
         const tab = document.getElementById(`tab-${t}-${blockId}`);
         if (!tab) return;
         const tType = t === 'char' ? 'characters' : t === 'fact' ? 'factions' : t === 'loc' ? 'locations' : t === 'anim' ? 'animas' : t === 'sket' ? 'sketches' : 'kg_nodes';
-
-
-
-        
-        
-        
-        
         tab.className = 'entity-type-tab' + (tType === type ? ` active-${t}` : '');
     });
     const inp = document.getElementById('esearch-' + blockId);
@@ -1316,7 +1389,6 @@ window.entitySearchInput = function(blockId, q) {
                         <span style="color:var(--pl-text-dim);font-family:'Space Mono',monospace;font-size:.65rem;margin-right:6px;">#${r.id}</span>${escHtml(r.name)}
                     </div>`
                 ).join('');
-                // Bind via pointerdown after inserting to DOM — avoids inline string escaping issues
                 ac.querySelectorAll('.entity-ac-item').forEach(item => {
                     item.addEventListener('pointerdown', () => addEntityTag(blockId, item.dataset.entityId, item.dataset.entityName));
                 });
@@ -1324,7 +1396,6 @@ window.entitySearchInput = function(blockId, q) {
             });
     }, 280);
 };
-
 
 window.hideAC = function(blockId) {
     const ac = document.getElementById('eac-' + blockId);
@@ -1348,24 +1419,8 @@ window.addEntityTag = function(blockId, entityId, entityLabel) {
             if (!chipsEl) return;
             chipsEl.innerHTML = res2.entities.map(tag => {
                 const cls = tag.entity_type === 'characters' ? 'chip-char' : tag.entity_type === 'factions' ? 'chip-fact' : tag.entity_type === 'locations' ? 'chip-loc' : tag.entity_type === 'animas' ? 'chip-anim' : tag.entity_type === 'sketches' ? 'chip-sket' : 'chip-kg';
-
-
-                
-                
-                
                 return `<span class="beat-entity-chip ${cls}" data-tag-id="${tag.id}" data-entity-type="${escHtml(tag.entity_type)}" data-entity-id="${tag.entity_id}" data-entity-label="${escHtml(tag.entity_label)}">
-                
-                
-                
-                <span class="chip-label" style="cursor:pointer;" onclick="openEntityModal('${escHtml(tag.entity_type)}','${tag.entity_id}','${escHtml(tag.entity_label.replace(/'/g, "\\'"))}')">${escHtml(tag.entity_label)}</span>
-                
-                
-                <!--
-                    <span class="chip-label" style="cursor:pointer;" onclick="openEntityModal('${escHtml(tag.entity_type)}','${tag.entity_id}','${escHtml(tag.entity_label).replace(/'/g, "\\'")}')">${escHtml(tag.entity_label)}</span>
-                -->
-                    
-                    
-                    
+                    <span class="chip-label" style="cursor:pointer;" onclick="openEntityModal('${escHtml(tag.entity_type)}','${tag.entity_id}','${escHtml(tag.entity_label.replace(/'/g, "\\'"))}')">${escHtml(tag.entity_label)}</span>
                     <button class="chip-remove" onclick="removeBlockEntityTag(${tag.id},${blockId})" title="Remove"><i class="bi bi-x"></i></button>
                 </span>`;
             }).join('');
@@ -1388,17 +1443,62 @@ window.removeBlockEntityTag = function(tagId, blockId) {
     });
 };
 
+// ── Open Entity / Mini-Graph Modal ────────────────────────────────────────────
 window.openEntityModal = function(entityType, entityId, label) {
-    const url = `entity_form.php?entity_type=${encodeURIComponent(entityType)}&entity_id=${encodeURIComponent(entityId)}&view=modal`;
-    document.getElementById('entity-iframe').src = url;
-    document.getElementById('entityModalTitle').textContent = label + ' — ' + entityType;
+    const iframe = document.getElementById('entity-iframe');
+    const modalBox = document.getElementById('entityModalBox');
+    const actionsBar = document.getElementById('entityModalActions');
+    if (actionsBar) actionsBar.innerHTML = '';
+
+    if (entityType === 'kg_nodes' || entityType === 'kg_node') {
+        if (modalBox) {
+            modalBox.style.maxWidth = 'min(1100px, 96vw)';
+            modalBox.style.height = '88vh';
+        }
+        const miniGraphUrl = `mini_graph.php?graph=kg&node_id=${encodeURIComponent(entityId)}`;
+        iframe.src = miniGraphUrl;
+        document.getElementById('entityModalTitle').innerHTML = `🔮 ${escHtml(label)} <span style="font-size:.7rem; color:var(--pl-text-dim); font-weight:normal;">#${entityId}</span>`;
+
+        if (actionsBar) {
+            actionsBar.innerHTML = `
+                <a href="kg_view.php?node_id=${encodeURIComponent(entityId)}" target="_blank" class="pl-nav-link" style="padding:3px 7px; font-size:.65rem; border-radius:3px;" title="Open in Tree View">
+                    <i class="bi bi-list"></i> Tree
+                </a>
+                <a href="kg_graph.php" target="_blank" class="pl-nav-link" style="padding:3px 7px; font-size:.65rem; border-radius:3px;" title="Open in Full Visualizer">
+                    <i class="bi bi-diagram-3"></i> Graph
+                </a>
+                <a href="${miniGraphUrl}" target="_blank" class="pl-nav-link" style="padding:3px 7px; font-size:.65rem; border-radius:3px;" title="Open Mini-Graph in new tab">
+                    <i class="bi bi-box-arrow-up-right"></i>
+                </a>
+            `;
+        }
+    } else {
+        if (modalBox) {
+            modalBox.style.maxWidth = 'min(700px, 96vw)';
+            modalBox.style.height = '85vh';
+        }
+        const formUrl = `entity_form.php?entity_type=${encodeURIComponent(entityType)}&entity_id=${encodeURIComponent(entityId)}&view=modal`;
+        iframe.src = formUrl;
+        document.getElementById('entityModalTitle').textContent = `${label} — ${entityType}`;
+
+        if (actionsBar) {
+            actionsBar.innerHTML = `
+                <a href="${formUrl}" target="_blank" class="pl-nav-link" style="padding:3px 7px; font-size:.65rem; border-radius:3px;" title="Open in new tab">
+                    <i class="bi bi-box-arrow-up-right"></i>
+                </a>
+            `;
+        }
+    }
+
     document.getElementById('entity-modal-backdrop').classList.add('active');
 };
+
 window.closeEntityModal = function() {
     document.getElementById('entity-modal-backdrop').classList.remove('active');
     document.getElementById('entity-iframe').src = 'about:blank';
+    const actionsBar = document.getElementById('entityModalActions');
+    if (actionsBar) actionsBar.innerHTML = '';
 };
-
 
 // ── Create overlay block element ─────────────────────────────────────────────
 function createBlockElement(blockId, displayOrder, groupId, sceneId, textContent) {
@@ -1426,12 +1526,9 @@ function createBlockElement(blockId, displayOrder, groupId, sceneId, textContent
                 <button class="entity-type-tab" id="tab-fact-${blockId}" onclick="setEntityTab(${blockId},'factions')">Fac</button>
                 <button class="entity-type-tab" id="tab-loc-${blockId}"  onclick="setEntityTab(${blockId},'locations')">Loc</button>
                 <button class="entity-type-tab" id="tab-anim-${blockId}" onclick="setEntityTab(${blockId},'animas')">Anim</button>
-                
                 <button class="entity-type-tab" id="tab-sket-${blockId}" onclick="setEntityTab(${blockId},'sketches')">Sket</button>
                 <button class="entity-type-tab" id="tab-kg-${blockId}" onclick="setEntityTab(${blockId},'kg_nodes')">KG</button>
             </div>
-            
-            
             
             <div class="entity-search-wrap">
                 <input class="entity-search-input" type="text" placeholder="Search entity references…" id="esearch-${blockId}" oninput="entitySearchInput(${blockId},this.value)" onfocus="entitySearchInput(${blockId},this.value)" onblur="setTimeout(()=>hideAC(${blockId}),200)">
@@ -1442,7 +1539,6 @@ function createBlockElement(blockId, displayOrder, groupId, sceneId, textContent
     ta.value = textContent || '';
     ta.addEventListener('input', function() {
         autoResize(this);
-        // Keep data-text-content in sync for export
         div.dataset.textContent = this.value;
         debounceSave(blockId, sceneId, groupId, displayOrder, this.value);
     });
@@ -1479,7 +1575,6 @@ function addBlock(sceneId, groupId, afterBlockId, insertBeforeEl) {
             if (!res.success) { Toast.show('Failed to add block.', 'error'); return; }
             const el = createBlockElement(res.block_id, res.display_order, groupId || 0, sceneId, '');
             const addRow = createInlineAddRow(sceneId, groupId || 0, res.block_id, (groupId > 0));
-            // If currently collapsed, new block inherits collapsed state
             if (allCollapsed) el.classList.add('pl-collapsed');
             if (insertBeforeEl && insertBeforeEl.parentNode) {
                 const container = insertBeforeEl.parentNode;
@@ -1611,7 +1706,6 @@ function bindInlineAddRow(row) {
     if (groupBtn) groupBtn.addEventListener('click', () => addGroup(sceneId, row.dataset.afterGroupId || 0, row));
 }
 
-// Bind add-group rows
 function bindAddGroupRow(row) {
     const sceneId = parseInt(row.dataset.sceneId, 10);
     const btn = row.querySelector('.inline-add-btn.group');
@@ -1639,7 +1733,6 @@ document.querySelectorAll('.overlay-block').forEach(el => {
     setTimeout(() => autoResize(ta), 50);
     ta.addEventListener('input', function() {
         autoResize(this);
-        // Keep data-text-content in sync for export
         el.dataset.textContent = this.value;
         debounceSave(blockId, sceneId, groupId, dispOrder, this.value);
     });
@@ -1649,7 +1742,6 @@ document.querySelectorAll('.overlay-block').forEach(el => {
     const eb = el.querySelector('.export-block-btn');
     if (eb) eb.addEventListener('click', () => exportBlock(el));
 });
-
 
 // Bind all existing inline-add-rows
 document.querySelectorAll('.inline-add-row.add-element-btn').forEach(bindInlineAddRow);
@@ -1823,11 +1915,6 @@ window.deleteLanguage = function(code) {
 </script>
 
 <?php
-
-
-//echo $eruda ?? "";
-
-
 $content = ob_get_clean();
 $spw->renderLayout($content, $pageTitle, $spw->getProjectPath() . '/templates/curation.php');
 ?>

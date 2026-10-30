@@ -35,6 +35,17 @@ class TaskRunnerScheduler extends AbstractScheduler
                 // Process due tasks
                 $this->processDueTasks();
 
+                // WTF — Work The Flow: advance any running+auto_advance runs by one
+                // step each, once per tick. This intentionally lives here instead of
+                // as a scheduled_tasks row: it's a cheap DB-only nudge (no process,
+                // no PID, no lock, no per-run log file needed), and it rides the
+                // heartbeat loop that already runs unconditionally every tick with
+                // zero log noise of its own. If a WTF step happens to trigger a real
+                // scheduler_task under the hood, that sub-task still gets its own
+                // task_runs row and log files exactly as before — nothing about
+                // that path changed. See App\Wtf\WorkflowExecutor::advanceAllAutoRuns().
+                $this->advanceWtfRuns();
+
             } catch (\Throwable $e) {
                 $logger->log('ERROR', [
                     "Scheduler loop error",
@@ -44,6 +55,63 @@ class TaskRunnerScheduler extends AbstractScheduler
             }
 
             sleep($this->sleepInterval);
+        }
+    }
+
+    /**
+     * Advance WTF auto-advance runs. Deliberately silent on the common case
+     * (nothing to do) — only genuine state transitions inside WorkflowExecutor
+     * (step_started, step_done, step_failed, run_paused, run_completed, etc.)
+     * produce a wtf_run_events row, and those are visible in the WTF UI itself,
+     * not in the scheduler's own log file. This method never writes to the
+     * scheduler log — that's the whole point of moving this off a
+     * scheduled_tasks row in the first place.
+     */
+    protected function advanceWtfRuns(): void
+    {
+        static $classesLoaded = false;
+
+        if (!$classesLoaded) {
+            // Lazily require WTF's classes the first time this fires, so a
+            // fresh install that hasn't set up WTF at all doesn't pay any
+            // cost or risk any fatal include error on every scheduler tick.
+            $base = dirname(__DIR__, 2); // project root (src/Core -> project root)
+            $files = [
+                $base . '/src/Wtf/StepHandlerInterface.php',
+                $base . '/src/Wtf/Handlers/ManualHandler.php',
+                $base . '/src/Wtf/Handlers/NoopDelayHandler.php',
+                $base . '/src/Wtf/Handlers/SchedulerTaskHandler.php',
+                $base . '/src/Service/GeneratorRepository.php',
+                $base . '/src/Service/WrishEngine.php',
+                $base . '/src/Wtf/Handlers/WrishRunHandler.php',
+                $base . '/src/Wtf/HandlerRegistry.php',
+                $base . '/src/Wtf/WorkflowExecutor.php',
+            ];
+            foreach ($files as $f) {
+                if (file_exists($f)) {
+                    require_once $f;
+                }
+            }
+            $classesLoaded = true;
+        }
+
+        if (!class_exists('\App\Wtf\WorkflowExecutor')) {
+            // WTF not installed on this instance — nothing to do, no error.
+            return;
+        }
+
+        try {
+            $executor = new \App\Wtf\WorkflowExecutor();
+            $executor->advanceAllAutoRuns();
+        } catch (\Throwable $e) {
+            // A genuine problem advancing WTF runs (e.g. a handler class
+            // missing) IS worth a log line, since it's not the "nothing to
+            // do" common case — but it must never crash the main scheduler
+            // loop, since task scheduling is the higher-priority job here.
+            $this->spw->getSchedulerFileLogger()->log('ERROR', [
+                "WTF advanceAllAutoRuns() failed",
+                "message" => $e->getMessage(),
+            ]);
         }
     }
 
@@ -319,3 +387,4 @@ class TaskRunnerScheduler extends AbstractScheduler
         ]);
     }
 }
+

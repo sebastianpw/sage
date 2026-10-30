@@ -2,7 +2,7 @@
 AIProvider Service - Python wrapper for AIProvider.php
 Exposes AI provider functionality through FastAPI endpoints
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
 import subprocess
@@ -17,12 +17,52 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["aiprovider"])
 
 # Configuration: paths relative to pyapi/
-PROJECT_ROOT = Path(__file__).resolve().parents[1]  # pyapi/
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
 PHP_RUNNER = PROJECT_ROOT.parent / "bash" / "ai_query_runner.php"
+CHATTY_BG_RUNNER = PROJECT_ROOT.parent / "bash" / "chatty_bg_runner.php"
+AGENT_BG_RUNNER = PROJECT_ROOT.parent / "bash" / "agent_bg_runner.php"
 
 # Ensure the PHP runner exists
 if not PHP_RUNNER.exists():
     logger.error(f"PHP runner not found at {PHP_RUNNER}")
+
+class AgentBgRequest(BaseModel):
+    module: str
+    session_id: str
+    user_id: int
+
+# =============================================================================
+# UNIVERSAL AGENT BACKGROUND TASK
+# =============================================================================
+
+@router.post("/agent_bg")
+def run_agent_bg(req: AgentBgRequest, background_tasks: BackgroundTasks):
+    def _run_task():
+        try:
+            logger.info(f"Starting agent_bg for module '{req.module}', session '{req.session_id}' (user {req.user_id})")
+            result = subprocess.run(
+                ["php", str(AGENT_BG_RUNNER), req.module, req.session_id, str(req.user_id)],
+                capture_output=True,
+                text=True,
+                timeout=1800
+            )
+            logger.info(f"Finished agent_bg for {req.module} (Exit Code: {result.returncode})")
+            if result.returncode != 0:
+                logger.error(f"agent_bg stderr: {result.stderr}")
+            if result.stdout:
+                logger.debug(f"agent_bg stdout: {result.stdout}")
+        except subprocess.TimeoutExpired:
+            logger.error(f"agent_bg timed out after 1800s for {req.module}")
+        except Exception as e:
+            logger.error(f"Exception in _run_task for agent_bg: {e}")
+
+    if not AGENT_BG_RUNNER.exists():
+        logger.error(f"agent_bg_runner.php not found at {AGENT_BG_RUNNER}")
+        raise HTTPException(status_code=500, detail="agent_bg_runner.php not found")
+
+    background_tasks.add_task(_run_task)
+    return {"status": "queued", "module": req.module, "session_id": req.session_id}
 
 # =============================================================================
 # PYDANTIC REQUEST MODELS
@@ -58,6 +98,49 @@ class AIStreamPromptRequest(BaseModel):
     system_prompt: Optional[str] = Field(None, description="Optional system prompt")
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0, description="Temperature (0.0-2.0)")
     max_tokens: Optional[int] = Field(None, ge=1, description="Maximum tokens to generate")
+
+
+
+class ChattyBgRequest(BaseModel):
+    session_id: str
+    user_id: int
+
+# =============================================================================
+# CHATTY BACKGROUND TASK (DECOUPLED 30 MIN PROCESSOR)
+# =============================================================================
+
+@router.post("/chatty_bg")
+def run_chatty_bg(req: ChattyBgRequest, background_tasks: BackgroundTasks):
+    def _run_task():
+        try:
+            logger.info(f"Starting chatty_bg for session {req.session_id} (user {req.user_id})")
+            result = subprocess.run(
+                ["php", str(CHATTY_BG_RUNNER), req.session_id, str(req.user_id)],
+                capture_output=True,
+                text=True,
+                timeout=1800 # 30 Minute strict limit
+            )
+            
+            logger.info(f"Finished chatty_bg for session {req.session_id} (Exit Code: {result.returncode})")
+            
+            if result.returncode != 0:
+                logger.error(f"chatty_bg stderr: {result.stderr}")
+                
+            if result.stdout:
+                logger.debug(f"chatty_bg stdout: {result.stdout}")
+                
+        except subprocess.TimeoutExpired:
+            logger.error(f"chatty_bg timed out after 1800s for session {req.session_id}")
+        except Exception as e:
+            logger.error(f"Exception in _run_task for chatty_bg: {e}")
+
+    if not CHATTY_BG_RUNNER.exists():
+        logger.error(f"chatty_bg_runner.php not found at {CHATTY_BG_RUNNER}")
+        raise HTTPException(status_code=500, detail="chatty_bg_runner.php not found")
+
+    # Pass entirely to background to instantly unlock the PHP interface
+    background_tasks.add_task(_run_task)
+    return {"status": "queued", "session_id": req.session_id}
 
 
 # =============================================================================

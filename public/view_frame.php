@@ -38,9 +38,18 @@ if (isset($_POST['action']) && $_POST['action'] === 'analyze_frame') {
         if (empty($prompt)) {
             $prompt = $defaultPrompt;
         }
+
+        // 2. Get CV model from user selection (new), falling back to the
+        // PyApiCVService default ("openai-fast") if none/empty is supplied.
+        // Note: this is a TEXT/CV-capable Pollinations model, not an image-gen model.
+        $model = trim($_POST['model'] ?? '');
         
-        // 2. Perform analysis
-        $result = $cv->analyze($absPath, $prompt);
+        // 3. Perform analysis
+        if ($model !== '') {
+            $result = $cv->analyze($absPath, $prompt, $model);
+        } else {
+            $result = $cv->analyze($absPath, $prompt);
+        }
 
         echo json_encode(['status' => 'success', 'data' => $result]);
     } catch (Exception $e) {

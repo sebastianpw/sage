@@ -27,7 +27,7 @@ try {
             $compositeId = (int)($_POST['composite_id'] ?? 0);
             $name        = trim($_POST['name'] ?? 'Untitled Panel Strip');
             $width       = (int)($_POST['canvas_width']  ?? 1024);
-            $height      = (int)($_POST['canvas_height'] ?? 1448);
+            $height      = (int)($_POST['canvas_height'] ?? 1536);
             $bgColor     = trim($_POST['bg_color'] ?? '#000000');
 
             if (!$compositeId) throw new Exception('composite_id required');
@@ -235,7 +235,7 @@ try {
             $arrId       = (int)($_POST['arrangement_id'] ?? 0);
             $sceneJson   = $_POST['scene_json'] ?? '';
             $width       = (int)($_POST['canvas_width']  ?? 1024);
-            $height      = (int)($_POST['canvas_height'] ?? 1448);
+            $height      = (int)($_POST['canvas_height'] ?? 1536);
             $bgColor     = trim($_POST['bg_color'] ?? '#000000');
             $pyapiUrl    = rtrim($_POST['pyapi_url'] ?? 'http://127.0.0.1:8009', '/');
 
@@ -344,6 +344,256 @@ try {
             break;
         }
 
+        // ── Direct Render Sequence (Headless render directly from Narrative Sequence) ─
+
+        case 'direct_render_sequence': {
+            $seqId       = (int)($_POST['sequence_id'] ?? 0);
+            $width       = max(100, (int)($_POST['canvas_width']  ?? 1024));
+            $height      = max(100, (int)($_POST['canvas_height'] ?? 1536));
+            $rows        = max(1, (int)($_POST['rows'] ?? 3));
+            $cols        = max(1, (int)($_POST['cols'] ?? 3));
+            $gutter      = max(0, (int)($_POST['gutter'] ?? 10));
+            $bgColor     = trim($_POST['bg_color'] ?? '#000000');
+            $pyapiUrl    = rtrim($_POST['pyapi_url'] ?? 'http://127.0.0.1:8009', '/');
+
+            if (!$seqId) throw new Exception('sequence_id required');
+
+            // 1. Fetch sequence
+            $stmt = $pdo->prepare("SELECT * FROM narrative_sequences WHERE id = ?");
+            $stmt->execute([$seqId]);
+            $seq = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$seq) throw new Exception('Sequence not found');
+
+            $seqData = json_decode($seq['sequence_data'] ?? '[]', true);
+            if (!is_array($seqData) || empty($seqData)) {
+                throw new Exception('Sequence is empty or contains invalid data');
+            }
+
+            // 2. Resolve all frames preserving sequence order & distinct frame instances
+            $sketchFramesStmt = $pdo->prepare("
+                SELECT f.id, f.filename, f.name 
+                FROM frames f 
+                JOIN frames_2_sketches fs ON f.id = fs.from_id 
+                WHERE fs.to_id = ? 
+                ORDER BY f.id ASC
+            ");
+            $frameStmt = $pdo->prepare("SELECT id, filename, name FROM frames WHERE id = ?");
+            $usedSketchFrameIndices = [];
+            $framesToUse = [];
+
+            foreach ($seqData as $item) {
+                $frameId = null;
+                $sketchId = null;
+
+                if (is_array($item)) {
+                    $frameId  = !empty($item['frame_id']) ? (int)$item['frame_id'] : null;
+                    $sketchId = !empty($item['sketch_id']) ? (int)$item['sketch_id'] : null;
+                } else {
+                    $sketchId = (int)$item;
+                }
+
+                $frameRow = null;
+                if ($frameId) {
+                    $frameStmt->execute([$frameId]);
+                    $frameRow = $frameStmt->fetch(PDO::FETCH_ASSOC);
+                }
+
+                if (!$frameRow && $sketchId) {
+                    $sketchFramesStmt->execute([$sketchId]);
+                    $allFrames = $sketchFramesStmt->fetchAll(PDO::FETCH_ASSOC);
+                    if (!empty($allFrames)) {
+                        $idx = $usedSketchFrameIndices[$sketchId] ?? 0;
+                        $frameRow = $allFrames[$idx % count($allFrames)];
+                        $usedSketchFrameIndices[$sketchId] = $idx + 1;
+                    }
+                }
+
+                if ($frameRow) {
+                    $framesToUse[] = $frameRow;
+                }
+            }
+
+            if (empty($framesToUse)) {
+                throw new Exception('No frames could be resolved from this sequence.');
+            }
+
+            $pdo->beginTransaction();
+
+            // 3. Create composite & link frames
+            $compName = "Import: " . $seq['name'];
+            $compDesc = "Auto-imported from Narrative Sequence #$seqId";
+            $cStmt = $pdo->prepare("INSERT INTO composites (name, description) VALUES (?, ?)");
+            $cStmt->execute([$compName, $compDesc]);
+            $newCompId = (int)$pdo->lastInsertId();
+
+            $linkStmt = $pdo->prepare("INSERT IGNORE INTO composite_frames (composite_id, frame_id) VALUES (?, ?)");
+            foreach ($framesToUse as $f) {
+                $linkStmt->execute([$newCompId, (int)$f['id']]);
+            }
+
+            // 4. Create canvas
+            $stmtCanv = $pdo->prepare("
+                INSERT INTO bang_canvases (composite_id, name, canvas_width, canvas_height, bg_color)
+                VALUES (?, ?, ?, ?, ?)
+            ");
+            $stmtCanv->execute([$newCompId, $compName, $width, $height, $bgColor]);
+            $canvasId = (int)$pdo->lastInsertId();
+
+            // 5. Build grid panel elements with automatic cover scale
+            $publicPathAbs = rtrim($spw->getProjectPath() . '/public', '/');
+            $cw = ($width - ($cols + 1) * $gutter) / $cols;
+            $ch = ($height - ($rows + 1) * $gutter) / $rows;
+            $elements = [];
+
+            foreach ($framesToUse as $i => $f) {
+                $r = floor($i / $cols);
+                $c = $i % $cols;
+                $x = $gutter + $c * ($cw + $gutter);
+                $y = $gutter + $r * ($ch + $gutter);
+
+                // Auto-calculate cover scale based on natural image size
+                $imgScale = 1.0;
+                $localImgPath = $publicPathAbs . '/' . ltrim($f['filename'], '/');
+                if (file_exists($localImgPath)) {
+                    $imgSize = @getimagesize($localImgPath);
+                    if (!empty($imgSize[0]) && !empty($imgSize[1])) {
+                        $imgScale = max($cw / $imgSize[0], $ch / $imgSize[1]);
+                    }
+                }
+
+                $elements[] = [
+                    'uid'                    => 'el_' . ($i + 1) . '_' . time(),
+                    'type'                   => 'panel',
+                    'elem_name'              => 'Panel',
+                    'x'                      => round($x),
+                    'y'                      => round($y),
+                    'rotation'               => 0,
+                    'scaleX'                 => 1.0,
+                    'scaleY'                 => 1.0,
+                    'opacity'                => 1.0,
+                    'z_index'                => $i,
+                    'isLocked'               => false,
+                    'panel_type'             => 'rectangular',
+                    'angle_left_deg'         => 0,
+                    'angle_right_deg'        => 0,
+                    'width'                  => round($cw),
+                    'height'                 => round($ch),
+                    'stroke_color'           => '#888888',
+                    'stroke_width'           => 3,
+                    'fill_color'             => 'transparent',
+                    'border_style'           => 'solid',
+                    'innerImageFilename'     => $f['filename'],
+                    'innerImageFrameId'      => (int)$f['id'],
+                    'innerImageX'            => 0,
+                    'innerImageY'            => 0,
+                    'innerImageScale'        => $imgScale,
+                    'innerImageIndependent'  => false,
+                    'innerImageDragUnlocked' => false,
+                ];
+            }
+
+            $sceneData = [
+                'canvas_width'  => $width,
+                'canvas_height' => $height,
+                'bg_color'      => $bgColor,
+                'elements'      => $elements,
+            ];
+            $sceneJson = json_encode($sceneData);
+
+            // 6. Create arrangement & sync elements
+            $aStmt = $pdo->prepare("
+                INSERT INTO bang_arrangements (canvas_id, composite_id, name, scene_json, is_active)
+                VALUES (?, ?, 'Draft', ?, 1)
+            ");
+            $aStmt->execute([$canvasId, $newCompId, $sceneJson]);
+            $arrId = (int)$pdo->lastInsertId();
+
+            _syncElementIndex($pdo, $arrId, $canvasId, $sceneData);
+
+            $pdo->commit();
+
+            // 7. Render via PyAPI
+            $renderElements = $elements;
+            foreach ($renderElements as &$el) {
+                if (!empty($el['innerImageFilename'])) {
+                    $fn = ltrim($el['innerImageFilename'], '/');
+                    $el['innerImageAbsPath'] = $publicPathAbs . '/' . $fn;
+                }
+            }
+            unset($el);
+
+            $payload = [
+                'canvas_width'  => $width,
+                'canvas_height' => $height,
+                'bg_color'      => $bgColor,
+                'elements'      => $renderElements,
+            ];
+
+            $ch = curl_init("$pyapiUrl/bang/render");
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 120);
+
+            $response  = curl_exec($ch);
+            $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            if ($curlError) throw new Exception("cURL error: $curlError");
+            if ($httpCode !== 200) throw new Exception("PyAPI error HTTP $httpCode: $response");
+
+            $pyRes = json_decode($response, true);
+            if (!$pyRes || empty($pyRes['temp_path']) || !file_exists($pyRes['temp_path'])) {
+                throw new Exception("Invalid PyAPI response: $response");
+            }
+
+            // 8. Register frame in database & link backward to composite
+            $fm = FramesManager::getInstance();
+            $framesDirAbs = rtrim($spw->getFramesDir(), '/');
+            $framesDirRel = rtrim($spw->getFramesDirRel(), '/');
+            if (!is_dir($framesDirAbs)) mkdir($framesDirAbs, 0777, true);
+
+            $basename    = $fm->getNextFrameBasenameFromDB();
+            $filename    = $basename . '.png';
+            $finalPath   = $framesDirAbs . '/' . $filename;
+            $filenameRel = $framesDirRel . '/' . $filename;
+
+            if (!rename($pyRes['temp_path'], $finalPath)) {
+                if (copy($pyRes['temp_path'], $finalPath)) unlink($pyRes['temp_path']);
+                else throw new Exception("Failed to move rendered file");
+            }
+
+            $pdo->beginTransaction();
+
+            $mapRunId = $fm->createMapRun('composites', "BANG! Render: $compName");
+
+            $style_id = 999;
+            $stmtF = $pdo->prepare("INSERT INTO frames (map_run_id, name, filename, prompt, entity_type, entity_id, style, style_id, created_at) VALUES (?, ?, ?, ?, 'composites', ?, 'bang', $style_id, NOW())");
+            $stmtF->execute([$mapRunId, $basename, $filenameRel, "BANG! Panel Strip — Composite #$newCompId", $newCompId]);
+            $newFrameId = (int)$pdo->lastInsertId();
+
+            $pdo->prepare("INSERT IGNORE INTO frames_2_composites (from_id, to_id) VALUES (?, ?)")
+                ->execute([$newFrameId, $newCompId]);
+
+            $pdo->prepare("INSERT INTO bang_exports (canvas_id, arrangement_id, frame_id, composite_id, export_width, export_height, status) VALUES (?, ?, ?, ?, ?, ?, 'done')")
+                ->execute([$canvasId, $arrId, $newFrameId, $newCompId, $width, $height]);
+
+            $pdo->commit();
+
+            echo json_encode([
+                'success'        => true,
+                'frame_id'       => $newFrameId,
+                'filename'       => $filenameRel,
+                'composite_id'   => $newCompId,
+                'canvas_id'      => $canvasId,
+                'arrangement_id' => $arrId,
+                'message'        => "BANG! Panel Strip rendered — Frame #$newFrameId",
+            ]);
+            break;
+        }
+
         // ── Font Registry ────────────────────────────────────────────────────
 
         case 'list_fonts': {
@@ -383,9 +633,21 @@ try {
             ]);
             break;
         }
-        
-        
-       
+
+        // ── Create a new, empty composite (for "Add New" button) ─────────────
+
+        case 'create_composite': {
+            $name = trim($_POST['name'] ?? '');
+            if ($name === '') $name = 'New Composites ' . time();
+
+            $stmt = $pdo->prepare("INSERT INTO composites (name) VALUES (?)");
+            $stmt->execute([$name]);
+            $newId = (int)$pdo->lastInsertId();
+
+            echo json_encode(['success' => true, 'composite_id' => $newId]);
+            break;
+        }
+
         // ── Narrative Sequence Import (for Picker Tabs) ──────────────────────
 
         case 'list_narrative_sequences': {
@@ -407,7 +669,6 @@ try {
             $countStmt->execute($params);
             $total = (int)$countStmt->fetchColumn();
 
-            
             $stmt = $pdo->prepare("SELECT id, name, sequence_data FROM narrative_sequences WHERE $wc ORDER BY id DESC LIMIT $limit OFFSET $offset");
             $stmt->execute($params);
             $seqs = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -427,7 +688,9 @@ try {
         }
 
         case 'import_narrative_sequence': {
-            $seqId = (int)($_POST['sequence_id'] ?? 0);
+            $seqId  = (int)($_POST['sequence_id'] ?? 0);
+            $width  = (int)($_POST['canvas_width']  ?? 1024);
+            $height = (int)($_POST['canvas_height'] ?? 1536);
             if (!$seqId) throw new Exception('sequence_id required');
 
             // 1. Fetch the sequence
@@ -450,38 +713,46 @@ try {
             $cStmt->execute([$compName, $compDesc]);
             $newCompId = (int)$pdo->lastInsertId();
 
-            // 3. Resolve frames and link them
-            $linkStmt = $pdo->prepare("INSERT IGNORE INTO composite_frames (composite_id, frame_id) VALUES (?, ?)");
-            
-            // Prepare statement for legacy fallback (get latest frame for sketch)
-            $fallbackStmt = $pdo->prepare("
+            // 3. Create canvas record with requested width and height
+            $stmtCanv = $pdo->prepare("
+                INSERT INTO bang_canvases (composite_id, name, canvas_width, canvas_height, bg_color)
+                VALUES (?, ?, ?, ?, '#000000')
+            ");
+            $stmtCanv->execute([$newCompId, $compName, $width, $height]);
+            $newCanvasId = (int)$pdo->lastInsertId();
+
+            // 4. Resolve frames and link them (advancing through all frames per sketch if needed)
+            $sketchFramesStmt = $pdo->prepare("
                 SELECT f.id 
                 FROM frames f 
                 JOIN frames_2_sketches fs ON f.id = fs.from_id 
                 WHERE fs.to_id = ? 
-                ORDER BY f.id DESC LIMIT 1
+                ORDER BY f.id ASC
             ");
+            $usedSketchFrameIndices = [];
+            $linkStmt = $pdo->prepare("INSERT IGNORE INTO composite_frames (composite_id, frame_id) VALUES (?, ?)");
 
             foreach ($seqData as $item) {
                 $frameId = null;
                 $sketchId = null;
 
                 if (is_array($item)) {
-                    // Modern format: {"sketch_id": 123, "frame_id": 456}
                     $frameId  = !empty($item['frame_id']) ? (int)$item['frame_id'] : null;
                     $sketchId = !empty($item['sketch_id']) ? (int)$item['sketch_id'] : null;
                 } else {
-                    // Legacy format: just an integer sketch ID
                     $sketchId = (int)$item;
                 }
 
-                // If no hardcoded frame ID is present, fetch the latest one for the sketch
                 if (!$frameId && $sketchId) {
-                    $fallbackStmt->execute([$sketchId]);
-                    $frameId = $fallbackStmt->fetchColumn();
+                    $sketchFramesStmt->execute([$sketchId]);
+                    $allFrames = $sketchFramesStmt->fetchAll(PDO::FETCH_COLUMN);
+                    if (!empty($allFrames)) {
+                        $idx = $usedSketchFrameIndices[$sketchId] ?? 0;
+                        $frameId = (int)$allFrames[$idx % count($allFrames)];
+                        $usedSketchFrameIndices[$sketchId] = $idx + 1;
+                    }
                 }
 
-                // If we successfully resolved a frame, link it to the new composite
                 if ($frameId) {
                     $linkStmt->execute([$newCompId, (int)$frameId]);
                 }
@@ -489,13 +760,13 @@ try {
 
             $pdo->commit();
 
-            echo json_encode(['success' => true, 'composite_id' => $newCompId]);
+            echo json_encode([
+                'success'      => true,
+                'composite_id' => $newCompId,
+                'canvas_id'    => $newCanvasId
+            ]);
             break;
         }
-
-        
-        
-        
 
         default:
             throw new Exception("Unknown action: $action");

@@ -27,8 +27,9 @@ echo "=========================================="
 # Move into source directory so relative paths in JSON work perfectly
 cd "$SRC_DIR" || exit 1
 
-# 1. Parse the 'excludes' from JSON into an array for rsync
-EXCLUDE_ARGS=()
+# 1. Parse the 'excludes' from JSON into an array for rsync.
+#    Always exclude all *.bak files globally, then append JSON excludes.
+EXCLUDE_ARGS=(--exclude='*.bak')
 while IFS= read -r exclude; do
     EXCLUDE_ARGS+=("--exclude=$exclude")
 done < <(jq -r '.excludes[]' "$CONFIG_FILE")

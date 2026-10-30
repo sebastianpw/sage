@@ -80,7 +80,7 @@ try {
         $fuzzCandId  = (int)($_GET['fuzz_cand_id'] ?? 0);
         $searchQuery = trim($_GET['search_query'] ?? '');
         $page        = max(1, (int)($_GET['page'] ?? 1));
-        $limit       = 24; // Fits perfectly in a 3-column grid
+        $limit       = 15; // Fits perfectly in a 3-column grid
         $offset      = ($page - 1) * $limit;
         
         $whereParts = [];
@@ -119,12 +119,12 @@ try {
             $params[] = $like;
             $params[] = $like;
             $params[] = $like;
-        } else {
-            echo json_encode(['status' => 'success', 'data' => [], 'total' => 0, 'total_pages' => 1, 'page' => 1]);
-            exit;
-        }
+        } 
+        // Removed the "else { exit; }" block so it naturally fetches ALL videos!
 
         $where = $whereParts ? 'WHERE ' . implode(' AND ', $whereParts) : '';
+
+        
         
         // 1. Get total count
         $countSql = "SELECT COUNT(*) FROM videos v $where";

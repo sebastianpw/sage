@@ -265,7 +265,7 @@ $allTasks = $pdo->query("SELECT id, name, args FROM scheduled_tasks ORDER BY nam
 
     <div class="header-bar">
         <div class="header-title"><h1>🚀 Control Deck</h1></div>
-        <div style="padding-right:45px;"><a href="scheduler_view.php" class="btn btn-secondary btn-sm">Full Scheduler</a></div>
+        <div style="padding-right:45px;"><a href="scheduler_forge.php" class="btn btn-secondary btn-sm">Full Scheduler</a></div>
     </div>
 
     <!-- EXPANDABLE LOG CONSOLE -->

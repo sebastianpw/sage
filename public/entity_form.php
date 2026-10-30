@@ -184,37 +184,48 @@ if ($entityType === 'animatics') {
 }
 
 // ── Frame sections ──
-$frames = []; $specialFrames = []; $compositeFrames = []; $depthFrames = [];
+$frames = []; $specialFrames = []; $compositeFrames = []; $sketchFrames = []; $depthFrames = [];
 if (!$isAudioEntity) {
-    // Direct frames
-    $stmt = $mysqli->prepare("SELECT id,name,filename,depth_map_filename FROM frames WHERE entity_type=? AND entity_id=? ORDER BY id DESC");
-    if ($stmt) {
-        $stmt->bind_param('si', $entityType, $entityId);
-        $stmt->execute();
-        foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
-            $frames[] = $row;
-            if (!empty($row['depth_map_filename'])) $depthFrames[] = ['id'=>$row['id'],'name'=>($row['name']?:'Frame '.$row['id']).' (Depth)','filename'=>$row['depth_map_filename']];
-        }
-        $stmt->close();
-    }
-    // Mapped frames
+        // Frames lookup: Use indexed mapping table directly (instant)
     $fmTable = "frames_2_{$entityType}";
     $checkFM = $mysqli->query("SHOW TABLES LIKE '$fmTable'");
     if ($checkFM && $checkFM->num_rows > 0) {
-        $stmt = $mysqli->prepare("SELECT f.id,f.name,f.filename,f.depth_map_filename FROM frames f JOIN $fmTable m ON f.id=m.from_id WHERE m.to_id=? ORDER BY f.id DESC");
+        $stmt = $mysqli->prepare("SELECT f.id, f.name, f.filename, f.depth_map_filename FROM frames f JOIN `{$fmTable}` m ON f.id = m.from_id WHERE m.to_id = ? ORDER BY f.id DESC");
         if ($stmt) {
             $stmt->bind_param('i', $entityId);
             $stmt->execute();
-            $existingIds = array_column($frames, 'id');
             foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
-                if (!in_array($row['id'], $existingIds)) {
-                    $frames[] = $row; $existingIds[] = $row['id'];
-                    if (!empty($row['depth_map_filename'])) $depthFrames[] = ['id'=>$row['id'],'name'=>($row['name']?:'Frame '.$row['id']).' (Depth)','filename'=>$row['depth_map_filename']];
+                $frames[] = $row;
+                if (!empty($row['depth_map_filename'])) {
+                    $depthFrames[] = [
+                        'id' => $row['id'],
+                        'name' => ($row['name'] ?: 'Frame ' . $row['id']) . ' (Depth)',
+                        'filename' => $row['depth_map_filename']
+                    ];
+                }
+            }
+            $stmt->close();
+        }
+    } else {
+        // Fallback only if no mapping table exists
+        $stmt = $mysqli->prepare("SELECT id, name, filename, depth_map_filename FROM frames WHERE entity_type = ? AND entity_id = ? ORDER BY id DESC");
+        if ($stmt) {
+            $stmt->bind_param('si', $entityType, $entityId);
+            $stmt->execute();
+            foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+                $frames[] = $row;
+                if (!empty($row['depth_map_filename'])) {
+                    $depthFrames[] = [
+                        'id' => $row['id'],
+                        'name' => ($row['name'] ?: 'Frame ' . $row['id']) . ' (Depth)',
+                        'filename' => $row['depth_map_filename']
+                    ];
                 }
             }
             $stmt->close();
         }
     }
+    
     // Special frames (img2img / cnmap)
     foreach (['img2img_frame_id' => 'img2img', 'cnmap_frame_id' => 'cnmap'] as $col => $key) {
         if (!empty($entity[$col])) {
@@ -232,6 +243,20 @@ if (!$isAudioEntity) {
             $dIds = array_column($depthFrames, 'id');
             foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
                 $compositeFrames[] = $row;
+                if (!empty($row['depth_map_filename']) && !in_array($row['id'], $dIds)) { $depthFrames[] = ['id'=>$row['id'],'name'=>($row['name']?:'Frame '.$row['id']).' (Depth)','filename'=>$row['depth_map_filename']]; $dIds[] = $row['id']; }
+            }
+            $stmt->close();
+        }
+    }
+    // Sketch frames
+    if ($entityType === 'sketches') {
+        $stmt = $mysqli->prepare("SELECT f.id,f.name,f.filename,f.depth_map_filename FROM sketch_frames sf JOIN frames f ON f.id=sf.frame_id WHERE sf.sketch_id=? ORDER BY sf.created_at DESC,f.id DESC");
+        if ($stmt) {
+            $stmt->bind_param('i', $entityId);
+            $stmt->execute();
+            $dIds = array_column($depthFrames, 'id');
+            foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+                $sketchFrames[] = $row;
                 if (!empty($row['depth_map_filename']) && !in_array($row['id'], $dIds)) { $depthFrames[] = ['id'=>$row['id'],'name'=>($row['name']?:'Frame '.$row['id']).' (Depth)','filename'=>$row['depth_map_filename']]; $dIds[] = $row['id']; }
             }
             $stmt->close();
@@ -517,6 +542,7 @@ textarea.field-input.expanded{
 .f-badge-img2img{background:rgba(139,92,246,0.75);color:#fff;}
 .f-badge-cnmap{background:rgba(245,158,11,0.75);color:#000;}
 .f-badge-composite{background:rgba(0,229,160,0.7);color:#000;}
+.f-badge-sketch{background:rgba(236,72,153,0.7);color:#fff;}
 .f-badge-depth{background:rgba(100,100,200,0.7);color:#fff;}
 /* special grid (3-col fixed for source images) */
 .frames-grid-special{
@@ -1011,6 +1037,32 @@ Amplitude.init({ songs: <?= json_encode(array_map(fn($a)=>['name'=>$a['name']?:'
 </div>
 <?php endif; ?>
 
+<!-- ════════════ SKETCH FRAMES ════════════ -->
+<?php if (!$isAudioEntity && !empty($sketchFrames)): ?>
+<div class="ent-section always-open" id="section-sketch">
+    <div class="ent-section-hd" style="cursor:default;">
+        <div class="hd-left"><span class="hd-icon">🪄</span> Sketch Frames (<?= count($sketchFrames) ?>)</div>
+    </div>
+    <div class="ent-section-body">
+        <div class="frames-grid-en pswp-gallery" id="pswp-sketch">
+            <?php foreach ($sketchFrames as $sf):
+                $file = '/'.ltrim($sf['filename'],'/');
+                $name = htmlspecialchars($sf['name']?:'Frame '.$sf['id']);
+            ?>
+            <div class="f-card-en img-wrapper" data-frame-id="<?= $sf['id'] ?>" data-entity="<?= htmlspecialchars($entityType) ?>" data-entity-id="<?= $entityId ?>" data-type="sketch">
+                <a href="<?= htmlspecialchars($file) ?>" class="f-link-en pswp-gallery-item" data-pswp-src="<?= htmlspecialchars($file) ?>" data-pswp-width="1024" data-pswp-height="1024">
+                    <img src="<?= htmlspecialchars($file) ?>" alt="<?= $name ?>" loading="lazy" onload="this.parentElement.dataset.pswpWidth = this.naturalWidth; this.parentElement.dataset.pswpHeight = this.naturalHeight;">
+                </a>
+                <span class="f-badge f-badge-sketch">S</span>
+                <div class="f-gear-wrap"><?php /* gear injected by GearMenu.attach */ ?></div>
+                <div class="f-label-en"><span><?= $name ?></span></div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- ════════════ FRAMES ════════════ -->
 <?php if (!$isAudioEntity && !empty($frames)): ?>
 <div class="ent-section always-open" id="section-frames">
@@ -1178,6 +1230,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initPswpGallery('pswp-frames');
     initPswpGallery('pswp-depth');
     initPswpGallery('pswp-composite');
+    initPswpGallery('pswp-sketch');
     initPswpGallery('pswp-special');
 });
 
@@ -1246,3 +1299,8 @@ document.addEventListener('keydown', e => { if(e.key === 'Escape') closeIframeMo
 
 </body>
 </html>
+
+
+
+
+

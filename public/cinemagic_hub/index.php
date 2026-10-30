@@ -176,7 +176,7 @@ input:checked + .toggle-slider:before { background: var(--amber); transform: tra
 .container-item-meta { font-size: 10px; color: var(--text-muted); display: flex; justify-content: space-between; margin-top: 2px; }
 
 .picker-grid-frames { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; padding: 10px; overflow-y: auto; flex: 1; }
-.picker-grid-frames .f-card { aspect-ratio: 1; border: 2px solid var(--border); border-radius: 4px; overflow: hidden; position: relative; cursor: pointer; transition: 0.15s; background: var(--bg-void); }
+.picker-grid-frames .f-card { min-height:120px; aspect-ratio: 1; border: 2px solid var(--border); border-radius: 4px; overflow: hidden; position: relative; cursor: pointer; transition: 0.15s; background: var(--bg-void); }
 .picker-grid-frames .f-card:hover { border-color: var(--amber); }
 .picker-grid-frames .f-card.selected { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber); }
 .picker-grid-frames .f-card img { width: 100%; height: 100%; object-fit: cover; }
@@ -403,10 +403,25 @@ input:checked + .toggle-slider:before { background: var(--amber); transform: tra
                             </div>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Magazine Template</label>
+                            <label class="form-label">Magazine HTML Template</label>
                             <select class="form-control" id="series-template">
                                 <option value="default">Classic Elegance (Centered)</option>
                                 <option value="hero_backdrop">Cinematic Immersive (Backdrop)</option>
+                            </select>
+                            
+                            <label class="form-label" style="margin-top:12px;">PDF Layout Template</label>
+                            <select class="form-control" id="series-pdf-layout">
+                                <option value="sgtac">SGTAC (Dark Base, Gold Accents)</option>
+                                <option value="light_minimal">Light Minimal (White Base, Clean)</option>
+                                <option value="manga_classic">Manga Classic (Cream Base, Bold Black)</option>
+                                <option value="anime_bleed">Anime Full Bleed (Black, No Margins)</option>
+                            </select>
+
+                            <label class="form-label" style="margin-top:12px;">PDF Page Size</label>
+                            <select class="form-control" id="series-pdf-page-size">
+                                <option value="A4">Standard A4 (Upright)</option>
+                                <option value="A4_landscape">Standard A4 (Landscape)</option>
+                                <option value="square">A4 Width Square (210x210mm)</option>
                             </select>
                             
                             <label class="toggle-wrap" style="margin-top:12px;" title="Render upright images full height in PDF exports">
@@ -415,6 +430,14 @@ input:checked + .toggle-slider:before { background: var(--amber); transform: tra
                                     <span class="toggle-slider"></span>
                                 </span>
                                 <span class="toggle-label">PDF: Full-Page Upright Images</span>
+                            </label>
+                            
+                            <label class="toggle-wrap" style="margin-top:6px;" title="Render landscape images full height/width in PDF exports">
+                                <span class="toggle-switch">
+                                    <input type="checkbox" id="series-pdf-landscape">
+                                    <span class="toggle-slider"></span>
+                                </span>
+                                <span class="toggle-label">PDF: Full-Page Landscape Images</span>
                             </label>
                             
                             <label class="toggle-wrap" style="margin-top:6px;" title="Do not render standard text blocks below images">
@@ -431,6 +454,31 @@ input:checked + .toggle-slider:before { background: var(--amber); transform: tra
                                     <span class="toggle-slider"></span>
                                 </span>
                                 <span class="toggle-label">PDF: Disable Fuki Texts</span>
+                            </label>
+
+                            <!-- WEB SWITCHES -->
+                            <label class="toggle-wrap" style="margin-top:16px; border-top: 1px solid var(--border); padding-top: 12px;" title="Do not render standard text blocks in the web reader">
+                                <span class="toggle-switch">
+                                    <input type="checkbox" id="series-web-disable-texts">
+                                    <span class="toggle-slider"></span>
+                                </span>
+                                <span class="toggle-label">Web: Disable Text Blocks</span>
+                            </label>
+
+                            <label class="toggle-wrap" style="margin-top:6px;" title="Do not render Fuki/Speech bubbles in the web reader">
+                                <span class="toggle-switch">
+                                    <input type="checkbox" id="series-web-disable-fuki">
+                                    <span class="toggle-slider"></span>
+                                </span>
+                                <span class="toggle-label">Web: Disable Fuki Texts</span>
+                            </label>
+
+                            <label class="toggle-wrap" style="margin-top:16px; border-top: 1px solid var(--border); padding-top: 12px;" title="Require 18+ adult confirmation on the series landing page">
+                                <span class="toggle-switch">
+                                    <input type="checkbox" id="series-is-adult">
+                                    <span class="toggle-slider"></span>
+                                </span>
+                                <span class="toggle-label">18+ Adult Warning</span>
                             </label>
                         </div>
                     </div>
@@ -643,6 +691,7 @@ input:checked + .toggle-slider:before { background: var(--amber); transform: tra
         </div>
     </div>
 </div>
+
 
 <!-- Episode Meta Bottom Sheet Modal -->
 <div class="sb-picker-backdrop" id="epMetaBackdrop" onmousedown="if(event.target===this) closeEpisodeMetaModal()">
@@ -949,10 +998,19 @@ async function openSeriesEditor(id = null, btn = null) {
         document.getElementById('series-script').value     = '';
         document.getElementById('series-seo-kw').value     = '';
         document.getElementById('series-seo-desc').value   = '';
+        
+        document.getElementById('series-pdf-layout').value = 'sgtac';
+        document.getElementById('series-pdf-page-size').value = 'A4';
         document.getElementById('has-seasons-toggle').checked = false;
+
         document.getElementById('series-pdf-upright').checked = false;
+        document.getElementById('series-pdf-landscape').checked = false;
         document.getElementById('series-pdf-disable-texts').checked = false;
         document.getElementById('series-pdf-disable-fuki').checked = false;
+        document.getElementById('series-web-disable-texts').checked = false;
+        document.getElementById('series-web-disable-fuki').checked = false;
+        document.getElementById('series-is-adult').checked = false;
+
         renderLangCheckboxes('en');
         actionEls.forEach(e => document.getElementById(e).style.display = 'none');
     } else {
@@ -971,13 +1029,21 @@ async function openSeriesEditor(id = null, btn = null) {
         document.getElementById('series-desc').value     = s.description || '';
         document.getElementById('series-script').value   = s.landing_page_script || '';
         document.getElementById('series-seo-kw').value   = s.seo_keywords || '';
+        
         document.getElementById('series-seo-desc').value = s.seo_description || '';
+        document.getElementById('series-pdf-layout').value = s.pdf_layout || 'sgtac';
+        document.getElementById('series-pdf-page-size').value = s.pdf_page_size || 'A4';
 
         const hasSeasonsLayer = parseInt(s.has_seasons || 0) === 1;
+
         document.getElementById('has-seasons-toggle').checked = hasSeasonsLayer;
         document.getElementById('series-pdf-upright').checked = parseInt(s.pdf_full_upright || 0) === 1;
+        document.getElementById('series-pdf-landscape').checked = parseInt(s.pdf_full_landscape || 0) === 1;
         document.getElementById('series-pdf-disable-texts').checked = parseInt(s.pdf_disable_texts || 0) === 1;
         document.getElementById('series-pdf-disable-fuki').checked = parseInt(s.pdf_disable_fuki || 0) === 1;
+        document.getElementById('series-web-disable-texts').checked = parseInt(s.web_disable_texts || 0) === 1;
+        document.getElementById('series-web-disable-fuki').checked = parseInt(s.web_disable_fuki || 0) === 1;
+        document.getElementById('series-is-adult').checked = parseInt(s.is_adult_18_plus || 0) === 1;
 
         renderLangCheckboxes(s.supported_languages || 'en');
         renderSeasonsArea(data, hasSeasonsLayer, s.id);
@@ -1208,8 +1274,14 @@ async function saveSeries(silent = false) {
     const langs = Array.from(document.querySelectorAll('.lang-cb:checked')).map(cb => cb.value).join(',');
     const hasSeasonsLayer = document.getElementById('has-seasons-toggle').checked ? 1 : 0;
     const pdfFullUpright  = document.getElementById('series-pdf-upright').checked ? 1 : 0;
+    const pdfFullLandscape = document.getElementById('series-pdf-landscape').checked ? 1 : 0;
     const pdfDisableTexts = document.getElementById('series-pdf-disable-texts').checked ? 1 : 0;
     const pdfDisableFuki  = document.getElementById('series-pdf-disable-fuki').checked ? 1 : 0;
+    const webDisableTexts = document.getElementById('series-web-disable-texts').checked ? 1 : 0;
+    const webDisableFuki  = document.getElementById('series-web-disable-fuki').checked ? 1 : 0;
+    const isAdult18Plus   = document.getElementById('series-is-adult').checked ? 1 : 0;
+    const pdfLayout       = document.getElementById('series-pdf-layout').value;
+    const pdfPageSize     = document.getElementById('series-pdf-page-size').value;
     const payload = {
         action:              'save_series',
         id:                  document.getElementById('series-id').value,
@@ -1226,9 +1298,16 @@ async function saveSeries(silent = false) {
         seo_description:     document.getElementById('series-seo-desc').value.trim(),
         has_seasons:         hasSeasonsLayer,
         pdf_full_upright:    pdfFullUpright,
+        pdf_full_landscape:  pdfFullLandscape,
         pdf_disable_texts:   pdfDisableTexts,
         pdf_disable_fuki:    pdfDisableFuki,
+        pdf_layout:          pdfLayout,
+        pdf_page_size:       pdfPageSize,
+        web_disable_texts:   webDisableTexts,
+        web_disable_fuki:    webDisableFuki,
+        is_adult_18_plus:    isAdult18Plus,
     };
+
     if (!payload.title) return toast('Title required', 'error');
     const data = await api(payload);
     if (data.success) {
@@ -1744,4 +1823,3 @@ function fmtBytes(b) {
 
 </body>
 </html>
-

@@ -1,3 +1,4 @@
+# bash/genhance_db.sh
 #!/bin/bash
 
 # -----------------------------
@@ -11,6 +12,49 @@ MYSQL_ARGS=$("$SCRIPT_DIR"/db_name.sh main-conn)
 # Load token
 # -----------------------------
 export PAI_TOKEN=$(cat "$SCRIPT_DIR/../token/.pollinationsaitoken")
+export FREEIMAGE_KEY=$(cat "$SCRIPT_DIR/../token/.freeimage_key")
+
+# ------------------------------------------------------------------------------
+# Helper: Upload Image Chain (Pollinations -> Freeimage -> Litterbox)
+# ------------------------------------------------------------------------------
+upload_image_chain() {
+    local filepath="$1"
+    local final_url=""
+    
+    # 1. Pollinations
+    local polli_resp
+    polli_resp=$(curl -s -X POST "https://media.pollinations.ai/upload" -H "Authorization: Bearer $PAI_TOKEN" -F "file=@$filepath")
+    if [[ "$polli_resp" == http* ]]; then
+        final_url="$polli_resp"
+    else
+        local polli_url
+        polli_url=$(echo "$polli_resp" | jq -r '.url // empty' 2>/dev/null)
+        if [[ "$polli_url" == http* ]]; then
+            final_url="$polli_url"
+        fi
+    fi
+    
+    # 2. Freeimage
+    if [ -z "$final_url" ] || [ "$final_url" == "null" ]; then
+        local fi_resp fi_url
+        fi_resp=$(curl -s -X POST "https://freeimage.host/api/1/upload" -F "key=$FREEIMAGE_KEY" -F "action=upload" -F "source=@$filepath" -F "format=json")
+        fi_url=$(echo "$fi_resp" | jq -r '.image.url' 2>/dev/null)
+        if [ -n "$fi_url" ] && [ "$fi_url" != "null" ]; then
+            final_url="$fi_url"
+        fi
+    fi
+    
+    # 3. Litterbox
+    if [ -z "$final_url" ] || [ "$final_url" == "null" ]; then
+        local lb_resp
+        lb_resp=$(curl -s -F "reqtype=fileupload" -F "time=1h" -F "fileToUpload=@$filepath" https://litterbox.catbox.moe/resources/internals/api.php)
+        if [[ "$lb_resp" == http* ]]; then
+            final_url="$lb_resp"
+        fi
+    fi
+    
+    echo "$final_url"
+}
 
 # -----------------------------
 # Load project roots
@@ -38,8 +82,6 @@ USE_TURBO=false
 DB_USER="root"
 MAX_RETRIES=3
 RETRY_DELAY=3
-
-export FREEIMAGE_KEY=$(cat "$SCRIPT_DIR/../token/.freeimage_key")
 
 # -----------------------------
 # Usage / Arguments
@@ -151,13 +193,8 @@ fi
 # -----------------------------
 IMAGE_URL=""
 if [ -n "$IMG2IMG_FILENAME" ] && [ -f "$IMG2IMG_FILENAME" ]; then
-  echo "Uploading source image $IMG2IMG_FILENAME to Freeimage.host..."
-  response=$(curl -s -X POST "https://freeimage.host/api/1/upload" \
-    -F "key=$FREEIMAGE_KEY" \
-    -F "action=upload" \
-    -F "source=@$IMG2IMG_FILENAME" \
-    -F "format=json")
-  IMAGE_URL=$(echo "$response" | jq -r '.image.url')
+  echo "Uploading source image (Pollinations -> Freeimage -> Litterbox)..."
+  IMAGE_URL=$(upload_image_chain "$IMG2IMG_FILENAME")
   
   if [ -z "$IMAGE_URL" ] || [ "$IMAGE_URL" = "null" ]; then
     echo "Failed to upload source image."
@@ -189,20 +226,14 @@ if [ -n "$ENHANCEMENT_ID" ] && [ "$ENHANCEMENT_ID" -gt 0 ]; then
         extra_frame_abs_path="$PROJECT_ROOT/public/$extra_frame_filename"
         
         if [ -f "$extra_frame_abs_path" ]; then
-          echo "Uploading additional frame $extra_frame_id to Freeimage.host..."
-          response=$(curl -s -X POST "https://freeimage.host/api/1/upload" \
-            -F "key=$FREEIMAGE_KEY" \
-            -F "action=upload" \
-            -F "source=@$extra_frame_abs_path" \
-            -F "format=json")
-          
-          extra_frame_url=$(echo "$response" | jq -r '.image.url')
+          echo "Uploading additional frame $extra_frame_id (Pollinations -> Freeimage -> Litterbox)..."
+          extra_frame_url=$(upload_image_chain "$extra_frame_abs_path")
           
           if [ -n "$extra_frame_url" ] && [ "$extra_frame_url" != "null" ]; then
             echo "Uploaded additional frame $extra_frame_id: $extra_frame_url"
             uploaded_extra_urls+=("$extra_frame_url")
           else
-            echo "WARNING: Failed to upload additional frame $extra_frame_id. Response: $response"
+            echo "WARNING: Failed to upload additional frame $extra_frame_id."
           fi
         else
           echo "WARNING: Additional frame file not found: $extra_frame_abs_path"

@@ -14,6 +14,22 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 try {
     switch ($action) {
 
+        case 'update_sketch_name':
+            $sketchId = (int)($_POST['sketch_id'] ?? 0);
+            $newName = trim($_POST['name'] ?? '');
+            
+            if (!$sketchId || !$newName) {
+                throw new Exception('Sketch ID and name are required.');
+            }
+            
+            $pdo->beginTransaction();
+            $stmt = $pdo->prepare("UPDATE sketches SET name = ? WHERE id = ?");
+            $stmt->execute([$newName, $sketchId]);
+            $pdo->commit();
+            
+            echo json_encode(['success' => true]);
+            break;
+
         case 'list_storyboards':
             $q = trim($_GET['q'] ?? '');
             $sql = "SELECT id, name, description FROM storyboards";
@@ -76,9 +92,7 @@ try {
             }
             break;
             
-            
-            
-case 'edit_sequence':
+        case 'edit_sequence':
             $id = (int)($_POST['sequence_id'] ?? 0);
             $name = trim($_POST['name'] ?? '');
             $catId = (int)($_POST['category_id'] ?? 0);
@@ -107,8 +121,6 @@ case 'edit_sequence':
             $pdo->prepare("DELETE FROM narrative_sequences WHERE id = ?")->execute([$id]);
             echo json_encode(['success' => true]);
             break;
-
-            
 
         case 'get_sequences_list':
             $page = max(1, (int)($_GET['page'] ?? 1));
@@ -139,7 +151,6 @@ case 'edit_sequence':
 
             $whereSql = implode(' AND ', $where);
 
-            
             try {
                 $countStmt = $pdo->prepare("SELECT COUNT(*) FROM narrative_sequences WHERE $whereSql");
                 $countStmt->execute($params);
@@ -446,6 +457,55 @@ case 'edit_sequence':
             $pdo->commit();
             echo json_encode(['success' => true]);
             break;
+
+        case 'insert_map_run_items':
+            $sequenceId = (int)($_POST['sequence_id'] ?? 0);
+            $mapRunId   = (int)($_POST['map_run_id'] ?? 0);
+
+            if (!$sequenceId || !$mapRunId) {
+                throw new Exception('Sequence ID and Map Run ID are required.');
+            }
+
+            $pdo->beginTransaction();
+            $stmt = $pdo->prepare("SELECT sequence_data FROM narrative_sequences WHERE id = ? FOR UPDATE");
+            $stmt->execute([$sequenceId]);
+            $json = $stmt->fetchColumn();
+            
+            if ($json === false) throw new Exception('Sequence not found.');
+            
+            $data = json_decode($json ?? '[]', true) ?: [];
+
+            // Query frames associated with map_run_id
+            $stmtF = $pdo->prepare("
+                SELECT id AS frame_id, entity_id AS sketch_id
+                FROM frames
+                WHERE map_run_id = ? AND entity_type = 'sketches' AND entity_id IS NOT NULL AND entity_id > 0
+                ORDER BY id ASC
+            ");
+            $stmtF->execute([$mapRunId]);
+            $frames = $stmtF->fetchAll(PDO::FETCH_ASSOC);
+
+            if (empty($frames)) {
+                $pdo->rollBack();
+                throw new Exception('No sketch frames found for this Map Run.');
+            }
+
+            $addedCount = 0;
+            foreach ($frames as $fr) {
+                $data[] = [
+                    'sketch_id' => (int)$fr['sketch_id'],
+                    'frame_id'  => (int)$fr['frame_id']
+                ];
+                $addedCount++;
+            }
+
+            $upd = $pdo->prepare("UPDATE narrative_sequences SET sequence_data = ? WHERE id = ?");
+            $upd->execute([json_encode($data, JSON_UNESCAPED_UNICODE), $sequenceId]);
+
+            $pdo->commit();
+
+            echo json_encode(['success' => true, 'count' => $addedCount]);
+            break;
             
         case 'insert_sequence_item':
             $sequenceId = (int)($_POST['sequence_id'] ?? 0);
@@ -684,7 +744,7 @@ case 'edit_sequence':
             // Parse sequence data array
             $itemIds = json_decode($seq['sequence_data'] ?? '[]', true) ?: [];
             
-             // Pre-fetch all sketch data
+            // Pre-fetch all sketch data
             $sketchIds = [];
             foreach ($itemIds as $item) {
                 $sid = is_array($item) ? (int)($item['sketch_id'] ?? 0) : (int)$item;
@@ -740,4 +800,3 @@ case 'edit_sequence':
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => $e->getMessage()]);
 }
-

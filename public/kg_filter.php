@@ -287,6 +287,8 @@ const MODES = {
     },
 };
 
+const FILTER_STATE_API = 'kg_filter_state_api.php';
+
 let currentMode = 'live';
 let kgfRawTree  = [];
 let kgfChecked  = new Set();
@@ -319,7 +321,7 @@ function switchMode(mode) {
 }
 
 // ══════════════════════════════════════════════
-// LOCALSTORAGE HELPERS
+// LOCALSTORAGE HELPERS (+ server mirror)
 // ══════════════════════════════════════════════
 function kgfLoadFromStorage() {
     try {
@@ -339,6 +341,19 @@ function kgfSaveToStorage(ids) {
         } else {
             localStorage.setItem(MODES[currentMode].storageKey, JSON.stringify(Array.from(ids)));
         }
+    } catch(e) {}
+    // Mirror to server so non-browser consumers (cli_autopilot.php) can read
+    // the same selection. Fire-and-forget — a failed mirror must never block
+    // the UI.
+    try {
+        fetch(FILTER_STATE_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                mode: currentMode,
+                ids:  ids === null ? null : Array.from(ids),
+            }),
+        }).catch(() => {});
     } catch(e) {}
 }
 
@@ -365,14 +380,32 @@ function kgfLoadTree() {
     const wrap = document.getElementById('kgf-tree-wrap');
     wrap.innerHTML = '<div class="kgf-picker-loading">Loading…</div>';
 
+    // Prefer localStorage (instant). If it's empty — fresh browser, cleared
+    // storage, or a different device — fall back to the server-side mirror so
+    // the UI stays in sync with what the CLI autopilot already sees.
+    const localStored = kgfLoadFromStorage();
+    const storedPromise = (localStored !== null)
+        ? Promise.resolve(localStored)
+        : fetch(FILTER_STATE_API + '?mode=' + encodeURIComponent(currentMode))
+            .then(r => r.json())
+            .then(j => {
+                if (!j.ok || j.ids === null) return null;
+                const ids = j.ids.map(String);
+                try {
+                    localStorage.setItem(MODES[currentMode].storageKey, JSON.stringify(ids));
+                } catch(e) {}
+                return new Set(ids);
+            })
+            .catch(() => null);
+
     fetch(MODES[currentMode].api + '?action=fetch_tree')
         .then(r => r.json())
-        .then(res => {
+        .then(async (res) => {
             if (!res.ok) { wrap.innerHTML = '<div class="kgf-picker-loading">Failed to load tree.</div>'; return; }
             kgfRawTree = res.tree;
 
-            // Restore checked state from localStorage
-            const stored = kgfLoadFromStorage();
+            // Restore checked state (localStorage or server mirror)
+            const stored = await storedPromise;
             if (stored !== null) {
                 kgfChecked = new Set();
                 // Seed leaf nodes

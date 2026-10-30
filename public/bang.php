@@ -23,8 +23,6 @@ if ($compositeId) {
 }
 
 // ── If no composite_id, show the composite picker ────────────────────────────
-
-// ── If no composite_id, show the composite picker ────────────────────────────
 if (!$composite) {
     ob_start();
     ?>
@@ -66,10 +64,8 @@ if (!$composite) {
     .pg-btn:hover:not(:disabled) { border-color: var(--amber); color: var(--amber); }
     .pg-btn:disabled { opacity: 0.3; cursor: default; }
     
-   
     .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 300000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
     .modal-backdrop.active { display: flex; }
-    
     </style>
 
     <div class="picker-wrap">
@@ -93,6 +89,7 @@ if (!$composite) {
             </p>
             <div class="search-row">
                 <input type="text" class="search-input" id="compSearch" placeholder="Search composites by name or ID…" oninput="debounceSearch()" autofocus>
+                <button class="pg-btn" id="addNewCompositeBtn" onclick="createNewComposite()" style="white-space:nowrap; color:var(--amber); border-color:var(--amber); font-weight:bold;">+ Add New</button>
             </div>
             <div id="compGrid" class="composite-grid"></div>
             <div class="pagination" id="pagination" style="display:none;">
@@ -117,13 +114,25 @@ if (!$composite) {
                 <button class="pg-btn" id="seqPgNext" onclick="loadSequences(currentSeqPage + 1)">Next →</button>
             </div>
         </div>
-        
-        
-        
     </div>
     
-    
-   
+    <!-- New Composite Modal -->
+    <div class="modal-backdrop" id="newCompositeModal" onmousedown="if(event.target===this) closeNewCompositeModal()">
+        <div class="modal-box" style="max-width:380px; background:var(--card); border:1px solid var(--border); border-radius:8px; padding:20px; margin:auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <div style="font-family:'Space Mono',monospace; font-weight:bold; color:var(--amber);">NEW COMPOSITE</div>
+                <button onclick="closeNewCompositeModal()" style="background:none; border:none; color:var(--muted); cursor:pointer; font-size:1.2rem;">✕</button>
+            </div>
+
+            <div style="font-size:0.65rem; color:var(--muted); text-transform:uppercase; margin-bottom:4px;">Name</div>
+            <input type="text" id="newCompositeName" class="search-input" style="width:100%;" placeholder="Composite name…">
+
+            <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:14px;">
+                <button id="newCompositeCreateBtn" onclick="submitNewComposite()" style="background:var(--amber); color:#000; border:none; border-radius:4px; padding:10px; width:100%; font-family:'Space Mono',monospace; font-weight:bold; cursor:pointer; text-transform:uppercase;">Create</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Sequence Import Modal -->
     <div class="modal-backdrop" id="importSeqModal" onmousedown="if(event.target===this) closeImportSeqModal()">
         <div class="modal-box" style="max-width:400px; background:var(--card); border:1px solid var(--border); border-radius:8px; padding:20px; margin:auto;">
@@ -133,6 +142,17 @@ if (!$composite) {
             </div>
             
             <div id="importSeqMeta" style="margin-bottom:15px; font-size:0.9rem; color:var(--text); line-height:1.4;"></div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px;">
+                <div>
+                    <div style="font-size:0.65rem; color:var(--muted); text-transform:uppercase; margin-bottom:4px;">Width (px)</div>
+                    <input type="number" id="importCanvasW" class="search-input" value="1024" min="100" style="width:100%;">
+                </div>
+                <div>
+                    <div style="font-size:0.65rem; color:var(--muted); text-transform:uppercase; margin-bottom:4px;">Height (px)</div>
+                    <input type="number" id="importCanvasH" class="search-input" value="1536" min="100" style="width:100%;">
+                </div>
+            </div>
             
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:15px; font-family:'Space Mono',monospace; font-size:0.8rem; color:var(--text);">
                 <input type="checkbox" id="importOptGrid" checked onchange="document.getElementById('importGridConfig').style.display = this.checked ? 'block' : 'none'">
@@ -152,7 +172,6 @@ if (!$composite) {
             </div>
         </div>
     </div>
-    
 
     <script>
     function switchTab(tab) {
@@ -172,6 +191,42 @@ if (!$composite) {
         clearTimeout(searchTimer);
         searchTimer = setTimeout(() => loadComposites(1), 300);
     }
+
+    function createNewComposite() {
+        const defaultName = 'New Composites ' + Math.floor(Date.now() / 1000);
+        document.getElementById('newCompositeName').value = defaultName;
+        document.getElementById('newCompositeModal').classList.add('active');
+    }
+
+    function closeNewCompositeModal() {
+        document.getElementById('newCompositeModal').classList.remove('active');
+    }
+
+    async function submitNewComposite() {
+        const name = document.getElementById('newCompositeName').value.trim();
+        const btn = document.getElementById('newCompositeCreateBtn');
+        btn.disabled = true;
+        btn.textContent = 'Creating…';
+        try {
+            const fd = new FormData();
+            fd.append('action', 'create_composite');
+            fd.append('name', name);
+            const r = await fetch('bang_api.php', { method: 'POST', body: fd });
+            const res = await r.json();
+            if (res.success) {
+                window.location.href = `bang.php?composite_id=${res.composite_id}`;
+            } else {
+                alert(res.message || 'Could not create composite');
+                btn.disabled = false;
+                btn.textContent = 'Create';
+            }
+        } catch (e) {
+            alert('Network error while creating composite');
+            btn.disabled = false;
+            btn.textContent = 'Create';
+        }
+    }
+
     async function loadComposites(page) {
         currentPage = page;
         const q = document.getElementById('compSearch').value.trim();
@@ -219,7 +274,6 @@ if (!$composite) {
         } else {
             grid.innerHTML = res.sequences.map(s => `
                <div class="comp-card" onclick="openImportSeqModal(${s.id}, '${escAttr(s.name)}', ${s.frame_count})">
-
                     <div class="comp-card-id">#${s.id}</div>
                     <div class="comp-card-name">${escHtml(s.name)}</div>
                     <div style="padding:0 12px 14px; font-size:0.7rem; color:var(--amber); font-weight:bold;">+ Import to BANG!</div>
@@ -234,13 +288,15 @@ if (!$composite) {
         document.getElementById('seqPgNext').disabled = page >= totalSeqPages;
     }
 
-
     let activeImportSeqId = null;
 
     function openImportSeqModal(id, name, frameCount) {
         activeImportSeqId = id;
         document.getElementById('importSeqMeta').innerHTML = `<b>#${id} — ${name}</b><br><span style="color:var(--muted); font-size:0.8rem;">Contains ${frameCount} frames</span>`;
         
+        document.getElementById('importCanvasW').value = 1024;
+        document.getElementById('importCanvasH').value = 1536;
+
         // Auto-suggest grid dimensions based on frame count
         const rc = Math.ceil(Math.sqrt(frameCount));
         document.getElementById('importGridR').value = Math.max(1, Math.ceil(frameCount / rc)) || 3;
@@ -256,16 +312,24 @@ if (!$composite) {
 
     async function executeSequenceImport() {
         if (!activeImportSeqId) return;
+        const wVal = parseInt(document.getElementById('importCanvasW').value) || 1024;
+        const hVal = parseInt(document.getElementById('importCanvasH').value) || 1536;
+
         const fd = new FormData();
         fd.append('action', 'import_narrative_sequence');
         fd.append('sequence_id', activeImportSeqId);
+        fd.append('canvas_width', wVal);
+        fd.append('canvas_height', hVal);
         
         document.body.style.cursor = 'wait';
         try {
             const r = await fetch('bang_api.php', { method: 'POST', body: fd });
             const res = await r.json();
             if (res.success) {
-                let url = `bang.php?composite_id=${res.composite_id}`;
+                let url = `bang.php?composite_id=${res.composite_id}&w=${wVal}&h=${hVal}`;
+                if (res.canvas_id) {
+                    url += `&canvas_id=${res.canvas_id}`;
+                }
                 if (document.getElementById('importOptGrid').checked) {
                     url += `&grid=1&r=${document.getElementById('importGridR').value}&c=${document.getElementById('importGridC').value}&g=${document.getElementById('importGridG').value}&seq_id=${activeImportSeqId}`;
                 }
@@ -322,9 +386,6 @@ $fStmt = $pdo->prepare("SELECT f.id, f.filename, f.name FROM composite_frames cf
 $fStmt->execute([$compositeId]);
 $compositeFrames = $fStmt->fetchAll(PDO::FETCH_ASSOC);
 
-
-
-
 // If importing a sequence grid, resolve the exact ordered frames from the JSON array
 $importedFrames = [];
 $importSeqId = isset($_GET['seq_id']) ? (int)$_GET['seq_id'] : 0;
@@ -357,6 +418,8 @@ $existingCanvases = $pdo->prepare("SELECT id, name, canvas_width, canvas_height,
 $existingCanvases->execute([$compositeId]);
 $existingCanvases = $existingCanvases->fetchAll(PDO::FETCH_ASSOC);
 
+$reqW = isset($_GET['w']) ? (int)$_GET['w'] : 0;
+$reqH = isset($_GET['h']) ? (int)$_GET['h'] : 0;
 
 // Safely encode JSON
 $jsCanvas       = json_encode($canvas);
@@ -709,7 +772,7 @@ body { font-family: var(--font-body); background: var(--bg-void); color: var(--t
     </div>
 
     <!-- Floating Properties Panel -->
-    <div class="floating-props" id="propsPanel" style="display:none;">
+    <div class="floating-props" id="propsPanel" style="display:none; height: 700px !important;">
         <div class="props-header" id="propsHeaderDrag">
             Properties (Drag me)
             <button class="btn-icon" onclick="toggleProps()" style="width:24px;height:24px;">
@@ -732,13 +795,17 @@ body { font-family: var(--font-body); background: var(--bg-void); color: var(--t
                     <input type="checkbox" id="keepRatioCheck" checked onchange="tr.keepRatio(this.checked); uiLayer.batchDraw(); saveState();"> Keep Ratio
                 </label>
             </div>
-            <div class="layers-list" id="layersList"></div>
+            <div class="layers-order-row" style="display:flex; gap:8px; padding:8px 14px; border-bottom:1px solid var(--border);">
+                <button class="btn btn-secondary" style="flex:1; justify-content:center;" onclick="selectedNode && selectedNode.moveUp(); contentLayer.batchDraw(); renderLayerList(); saveState();">▲ Layer Up</button>
+                <button class="btn btn-secondary" style="flex:1; justify-content:center;" onclick="selectedNode && selectedNode.moveDown(); contentLayer.batchDraw(); renderLayerList(); saveState();">▼ Layer Down</button>
+            </div>
+            <div class="layers-list" id="layersList" style="height: 150px !important;"></div>
         </div>
     </div>
 
     <!-- Status Bar (Top Right) -->
     <div class="status-bar">
-        <div class="status-item"><i class="bi bi-arrows-fullscreen"></i> <span id="statusSize">1024 × 1448</span></div>
+        <div class="status-item"><i class="bi bi-arrows-fullscreen"></i> <span id="statusSize">1024 × 1536</span></div>
         <div class="status-item"><i class="bi bi-layers"></i> <span id="statusElemCount">0</span></div>
         <div class="status-item" id="statusSelected" style="display:none;"><i class="bi bi-cursor"></i> <span id="statusSelectedName">—</span></div>
         <div class="status-item" style="margin-left:10px;">
@@ -751,7 +818,6 @@ body { font-family: var(--font-body); background: var(--bg-void); color: var(--t
 
 </div><!-- /.bang-layout -->
 <div id="toast-container"></div>
-
 
 <!-- ── Canvas Settings Modal ─────────────────────────────────────────────── -->
 <div class="modal-backdrop" id="canvasModal" onmousedown="if(event.target===this) closeCanvasSettings()">
@@ -772,7 +838,7 @@ body { font-family: var(--font-body); background: var(--bg-void); color: var(--t
             </div>
             <div class="form-group">
                 <label class="form-label">Height (px)</label>
-                <input type="number" class="prop-input" id="csHeight" value="1448">
+                <input type="number" class="prop-input" id="csHeight" value="1536">
             </div>
         </div>
         <div class="form-group">
@@ -818,6 +884,20 @@ body { font-family: var(--font-body); background: var(--bg-void); color: var(--t
         </div>
     </div>
 </div>
+
+<!-- ── Progress / Result Modal (Save & Export) ────────────────────────────── -->
+<div class="modal-backdrop" id="progressModal" style="z-index:400000;">
+    <div class="modal-box" style="max-width:360px; text-align:center;">
+        <div id="progressSpinner" style="font-size:2.2rem; margin-bottom:12px; animation: progressSpin 1s linear infinite; display:inline-block;">⟳</div>
+        <div id="progressIcon" style="font-size:2.2rem; margin-bottom:12px; display:none;"></div>
+        <div class="modal-title" id="progressTitle" style="display:block; margin-bottom:8px;">Working…</div>
+        <div id="progressMessage" style="font-size:0.85rem; color:var(--muted); margin-bottom:18px; line-height:1.5;">Please wait.</div>
+        <button class="btn btn-secondary" id="progressCancelBtn" style="width:100%; justify-content:center;" onclick="closeProgressModal()">Cancel</button>
+    </div>
+</div>
+<style>
+@keyframes progressSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+</style>
 
 <!-- ── Layout Presets Modal ──────────────────────────────────────────────── -->
 <div class="modal-backdrop" id="presetsModal" onmousedown="if(event.target===this) closePresetsModal()">
@@ -963,8 +1043,8 @@ const COMPOSITE_FRAMES = <?= $jsFrames ?>;
 
 let CANVAS_ID   = <?= $jsCanvasId  ?> || null;
 let ARR_ID      = <?= $jsArrId     ?> || null;
-let CANVAS_W    = <?= $canvas ? (int)$canvas['canvas_width']  : 1024  ?>;
-let CANVAS_H    = <?= $canvas ? (int)$canvas['canvas_height'] : 1448 ?>;
+let CANVAS_W    = <?= $canvas ? (int)$canvas['canvas_width']  : ($reqW > 0 ? $reqW : 1024)  ?>;
+let CANVAS_H    = <?= $canvas ? (int)$canvas['canvas_height'] : ($reqH > 0 ? $reqH : 1536) ?>;
 let BG_COLOR    = '<?= $canvas ? htmlspecialchars($canvas['bg_color'] ?? '#000000') : '#000000' ?>';
 let CANVAS_NAME = '<?= $canvas ? htmlspecialchars($canvas['name'] ?? '') : '' ?>';
 
@@ -1108,7 +1188,7 @@ bgLayer.draw();
 const tr = new Konva.Transformer({
     nodes: [],
     keepRatio: true,
-    anchorSize: 24, 
+    anchorSize: 48, 
     boundBoxFunc: (oldBox, newBox) => {
         if (Math.abs(newBox.width) < 10 || Math.abs(newBox.height) < 10) return oldBox;
         return newBox;
@@ -1120,7 +1200,25 @@ uiLayer.add(tr);
 contentLayer.on('dragend', (e) => {
     if (e.target.hasName('element') || e.target.hasName('innerImage')) saveState();
 });
-tr.on('transformend', () => saveState());
+tr.on('transformend', () => {
+    tr.nodes().forEach(node => {
+        if (node.getAttr('elemType') === 'panel' && node.getAttr('innerImageIndependent')) {
+            const sX = node.scaleX();
+            const sY = node.scaleY();
+            if (sX !== 1 || sY !== 1) {
+                const newW = Math.max(10, node.width() * sX);
+                const newH = Math.max(10, node.height() * sY);
+                node.width(newW);
+                node.height(newH);
+                node.scaleX(1);
+                node.scaleY(1);
+                updatePanelShapes(node);
+            }
+        }
+    });
+    contentLayer.batchDraw();
+    saveState();
+});
 
 // Group Locked Elements Drag Syncing
 contentLayer.on('dragstart', (e) => {
@@ -1222,7 +1320,6 @@ function renderLayerList() {
         const isActive = el === selectedNode;
         const isLocked = el.getAttr('isLocked');
         const type = el.getAttr('elemType') || 'image';
-        // Map icon based on type. (Legacy gitaigo or diagonal mapped appropriately)
         const icon = { image:'🖼', balloon:'🗨', shout:'💢', thought:'💭', whisper:'🗯', sfx:'⚡', caption:'📝', panel:'▭', speed_lines:'≡', impact_frame:'✸', gitaigo:'〜', diagonal_panel:'╱' }[type] || '▫';
         const name = el.getAttr('elemName') || type || 'Element';
         return `<div class="layer-item ${isActive ? 'active' : ''}" onclick="selectNodeById('${el.id()}')">
@@ -1293,6 +1390,7 @@ function selectNode(node) {
     document.getElementById('statusSelected').style.display = '';
     document.getElementById('statusSelectedName').textContent = name;
 }
+
 // ── Unique ID helper ─────────────────────────────────────────────────────────
 function uid() { return 'el_' + (++elementCounter) + '_' + Date.now(); }
 
@@ -1628,7 +1726,7 @@ function addPanel(opts = {}) {
     
     group.setAttr('elemType', 'panel');
     group.setAttr('elemName', 'Panel');
-    group.setAttr('panelType', opts.panelType || 'rectangular'); // rectangular | diagonal
+    group.setAttr('panelType', opts.panelType || 'rectangular');
     group.setAttr('anglLeftDeg', opts.angle_left_deg !== undefined ? opts.angle_left_deg : 8);
     group.setAttr('anglRightDeg', opts.angle_right_deg !== undefined ? opts.angle_right_deg : 8);
     group.setAttr('strokeColor', '#888888');
@@ -1642,6 +1740,7 @@ function addPanel(opts = {}) {
     group.setAttr('innerImageX', 0);
     group.setAttr('innerImageY', 0);
     group.setAttr('innerImageScale', 1.0);
+    group.setAttr('innerImageIndependent', false);
 
     const bg = new Konva.Shape({ fill: group.getAttr('fillColor'), name: 'panelBg' });
     const clipGroup = new Konva.Group({ name: 'clipGroup' });
@@ -1666,7 +1765,6 @@ function updatePanelShapes(group) {
     const w = group.width() || group.getAttr('dpW') || 400;
     const h = group.height() || group.getAttr('dpH') || 300;
     
-    // Ensure Konva group dimensions are up to date
     group.width(w);
     group.height(h);
     
@@ -1801,7 +1899,6 @@ function _applyBorderStyleStroke(ctx, pts, style, sw) {
         ctx.stroke();
     }
 }
-
 
 // ── Speed Lines ───────────────────────────────────────────────────────────────
 function addSpeedLines() {
@@ -2355,24 +2452,24 @@ function renderPropertiesFor(node) {
             <div class="prop-group">
                 <label class="prop-label">Position X / Y</label>
                 <div class="prop-row">
-                    <input type="number" class="prop-input" id="px" value="${Math.round(node.x())}" oninput="node && node.x(+this.value); contentLayer.batchDraw()" ${isLocked?'disabled':''}>
-                    <input type="number" class="prop-input" id="py" value="${Math.round(node.y())}" oninput="node && node.y(+this.value); contentLayer.batchDraw()" ${isLocked?'disabled':''}>
+                    <input type="number" class="prop-input" id="px" value="${Math.round(node.x())}" oninput="selectedNode && selectedNode.x(+this.value); contentLayer.batchDraw()" ${isLocked?'disabled':''}>
+                    <input type="number" class="prop-input" id="py" value="${Math.round(node.y())}" oninput="selectedNode && selectedNode.y(+this.value); contentLayer.batchDraw()" ${isLocked?'disabled':''}>
                 </div>
             </div>
             <div class="prop-group">
                 <label class="prop-label">Scale X / Y</label>
                 <div class="prop-row">
-                    <input type="number" step="0.01" class="prop-input" id="psx" value="${node.scaleX().toFixed(3)}" oninput="node && node.scaleX(+this.value); contentLayer.batchDraw()" ${isLocked?'disabled':''}>
-                    <input type="number" step="0.01" class="prop-input" id="psy" value="${node.scaleY().toFixed(3)}" oninput="node && node.scaleY(+this.value); contentLayer.batchDraw()" ${isLocked?'disabled':''}>
+                    <input type="number" step="0.01" class="prop-input" id="psx" value="${node.scaleX().toFixed(3)}" oninput="selectedNode && selectedNode.scaleX(+this.value); contentLayer.batchDraw()" ${isLocked?'disabled':''}>
+                    <input type="number" step="0.01" class="prop-input" id="psy" value="${node.scaleY().toFixed(3)}" oninput="selectedNode && selectedNode.scaleY(+this.value); contentLayer.batchDraw()" ${isLocked?'disabled':''}>
                 </div>
             </div>
             <div class="prop-group">
                 <label class="prop-label">Rotation (°)</label>
-                <input type="number" step="0.5" class="prop-input" value="${node.rotation().toFixed(1)}" oninput="node && node.rotation(+this.value); contentLayer.batchDraw()" ${isLocked?'disabled':''}>
+                <input type="number" step="0.5" class="prop-input" value="${node.rotation().toFixed(1)}" oninput="selectedNode && selectedNode.rotation(+this.value); contentLayer.batchDraw()" ${isLocked?'disabled':''}>
             </div>
             <div class="prop-group">
                 <label class="prop-label">Opacity</label>
-                <input type="range" min="0" max="1" step="0.01" value="${node.opacity()}" oninput="node && node.opacity(+this.value); contentLayer.batchDraw()">
+                <input type="range" min="0" max="1" step="0.01" value="${node.opacity()}" oninput="selectedNode && selectedNode.opacity(+this.value); contentLayer.batchDraw()">
             </div>
             <div class="prop-group">
                 <label class="prop-label">Layer Order</label>
@@ -2404,7 +2501,7 @@ function renderPropertiesFor(node) {
             </div>
             <div class="prop-group">
                 <label class="prop-label">Dialogue Text</label>
-                <textarea class="prop-textarea" id="bText" oninput="if(selectedNode && selectedNode.getAttr('kTextRef')) { selectedNode.getAttr('kTextRef').text(this.value); contentLayer.batchDraw(); }">${kText ? escHtml(kText.text()) : ''}</textarea>
+                <textarea class="prop-textarea" oninput="if(selectedNode && selectedNode.getAttr('kTextRef')) { selectedNode.getAttr('kTextRef').text(this.value); contentLayer.batchDraw(); }">${kText ? escHtml(kText.text()) : ''}</textarea>
             </div>
             <div class="prop-group">
                 <label class="prop-label">Font</label>
@@ -2605,6 +2702,13 @@ function renderPropertiesFor(node) {
                 <label class="prop-label">Fill (transparent = none)</label>
                 <input type="color" class="prop-color-swatch" value="${node.getAttr('fillColor')}" oninput="selectedNode && selectedNode.setAttr('fillColor', this.value); updatePanelShapes(selectedNode); contentLayer.batchDraw()">
             </div>
+            <div class="prop-group">
+                <label class="prop-label">Layer Order</label>
+                <div class="prop-row">
+                    <button class="btn btn-secondary" onclick="selectedNode && selectedNode.moveUp(); contentLayer.batchDraw(); renderLayerList(); saveState();">▲ Up</button>
+                    <button class="btn btn-secondary" onclick="selectedNode && selectedNode.moveDown(); contentLayer.batchDraw(); renderLayerList(); saveState();">▼ Down</button>
+                </div>
+            </div>
             
             ${pType !== 'diagonal' ? `
             <div class="prop-divider" style="margin-top:10px;"></div>
@@ -2627,7 +2731,13 @@ function renderPropertiesFor(node) {
             <div class="prop-group">
                 <label class="prop-label">Modify Inner Mask</label>
                 <label style="font-size:0.75rem; display:flex; align-items:center; gap:6px; cursor:pointer;">
-                    <input type="checkbox" onchange="togglePanelImageDrag(selectedNode, this.checked)"> Unlock Touch Dragging
+                    <input type="checkbox" ${node.getAttr('innerImageDragUnlocked') ? 'checked' : ''} onchange="if(selectedNode){ selectedNode.setAttr('innerImageDragUnlocked', this.checked); togglePanelImageDrag(selectedNode, this.checked); saveState(); }"> Unlock Touch Dragging
+                </label>
+            </div>
+            <div class="prop-group" style="padding:6px; background:var(--bg-hover); border-radius:var(--r); border:1px solid var(--border);">
+                <label style="font-size:0.75rem; display:flex; align-items:center; gap:6px; cursor:pointer; color:var(--text);">
+                    <input type="checkbox" ${node.getAttr('innerImageIndependent') ? 'checked' : ''} onchange="if(selectedNode){ selectedNode.setAttr('innerImageIndependent', this.checked); saveState(); }">
+                    Resize Panel Independently
                 </label>
             </div>
             <div class="prop-group">
@@ -2641,7 +2751,33 @@ function renderPropertiesFor(node) {
                     <input type="number" class="prop-input" value="${Math.round(node.getAttr('innerImageY'))}" oninput="updatePanelImageTransform(selectedNode, 'y', +this.value)">
                 </div>
             </div>
-            <button class="btn btn-secondary" style="width:100%; justify-content:center; color:var(--red);" onclick="clearPanelImage(selectedNode)">Remove Image</button>
+
+            <div class="prop-divider" style="margin-top:6px;"></div>
+            <div class="prop-section-title">Match Panel ↔ Frame</div>
+            <div class="prop-group">
+                <button class="btn btn-secondary" style="width:100%; justify-content:center;" onclick="matchPanelToFrame(selectedNode)">Match Panel to Frame</button>
+            </div>
+            <div class="prop-group prop-row">
+                <button class="btn btn-secondary" style="justify-content:center;" onclick="matchFrameToPanelHeight(selectedNode)">Match Frame to Panel Height</button>
+                <button class="btn btn-secondary" style="justify-content:center;" onclick="matchFrameToPanelWidth(selectedNode)">Match Frame to Panel Width</button>
+            </div>
+
+            <div class="prop-divider" style="margin-top:6px;"></div>
+            <div class="prop-section-title">Align Frame in Panel</div>
+            <div class="prop-row">
+                <button class="btn btn-secondary" style="justify-content:center;" title="Align Left" onclick="alignFrameInPanel(selectedNode, 'left')">⇤ Left</button>
+                <button class="btn btn-secondary" style="justify-content:center;" title="Align Right" onclick="alignFrameInPanel(selectedNode, 'right')">Right ⇥</button>
+            </div>
+            <div class="prop-row">
+                <button class="btn btn-secondary" style="justify-content:center;" title="Align Top" onclick="alignFrameInPanel(selectedNode, 'top')">⤒ Top</button>
+                <button class="btn btn-secondary" style="justify-content:center;" title="Align Bottom" onclick="alignFrameInPanel(selectedNode, 'bottom')">Bottom ⤓</button>
+            </div>
+            <div class="prop-row">
+                <button class="btn btn-secondary" style="justify-content:center;" title="Center Horizontal" onclick="alignFrameInPanel(selectedNode, 'center_h')">↔ Center H</button>
+                <button class="btn btn-secondary" style="justify-content:center;" title="Center Vertical" onclick="alignFrameInPanel(selectedNode, 'center_v')">↕ Center V</button>
+            </div>
+
+            <button class="btn btn-secondary" style="width:100%; justify-content:center; color:var(--red); margin-top:10px;" onclick="clearPanelImage(selectedNode)">Remove Image</button>
             ` : ''}
         `;
     } else if (type === 'speed_lines') {
@@ -2818,7 +2954,9 @@ function getSceneJSON() {
                 innerImageFrameId:  node.getAttr('innerImageFrameId'),
                 innerImageX:        node.getAttr('innerImageX'),
                 innerImageY:        node.getAttr('innerImageY'),
-                innerImageScale:    node.getAttr('innerImageScale')
+                innerImageScale:    node.getAttr('innerImageScale'),
+                innerImageIndependent:   node.getAttr('innerImageIndependent') || false,
+                innerImageDragUnlocked:  node.getAttr('innerImageDragUnlocked') || false,
             });
         } else if (type === 'speed_lines') {
             Object.assign(base, {
@@ -2972,7 +3110,6 @@ function loadSceneJSON(json, skipSave = false) {
             group.on('click tap', () => selectNode(group));
             contentLayer.add(group); contentLayer.batchDraw(); renderLayerList();
         } else if (type === 'panel') {
-            // Legacy diagonal mapping if loaded from older JSON
             const pType = el.type === 'diagonal_panel' ? 'diagonal' : (el.panel_type || 'rectangular');
             
             const group = new Konva.Group({ id: el.uid || uid(), name: 'element', x: el.x || el.dpX || 0, y: el.y || el.dpY || 0, width: el.width || el.dpW || CANVAS_W-40, height: el.height || el.dpH || 400, rotation: el.rotation || 0, scaleX: el.scaleX || 1, scaleY: el.scaleY || 1, opacity: el.opacity ?? 1, draggable: true });
@@ -2992,6 +3129,8 @@ function loadSceneJSON(json, skipSave = false) {
             group.setAttr('innerImageX', el.innerImageX || 0);
             group.setAttr('innerImageY', el.innerImageY || 0);
             group.setAttr('innerImageScale', el.innerImageScale || 1.0);
+            group.setAttr('innerImageIndependent', el.innerImageIndependent || false);
+            group.setAttr('innerImageDragUnlocked', el.innerImageDragUnlocked || false);
 
             const bg = new Konva.Shape({ fill: group.getAttr('fillColor'), name: 'panelBg' });
             const clipGroup = new Konva.Group({ name: 'clipGroup' });
@@ -3012,7 +3151,7 @@ function loadSceneJSON(json, skipSave = false) {
                         scaleX: group.getAttr('innerImageScale'),
                         scaleY: group.getAttr('innerImageScale'),
                         name: 'innerImage',
-                        draggable: false 
+                        draggable: !!group.getAttr('innerImageDragUnlocked')
                     });
                     kImg.on('dragmove', () => {
                         group.setAttr('innerImageX', kImg.x());
@@ -3080,12 +3219,15 @@ function loadSceneJSON(json, skipSave = false) {
 
 // ── Save / Load ───────────────────────────────────────────────────────────────
 async function saveArrangement() {
+    openProgressModal('Saving…', 'Saving your panel strip arrangement.');
+
     if (!CANVAS_ID) {
         const res = await api('bang_api.php', {
             action: 'create_canvas', composite_id: COMPOSITE_ID,
             name: CANVAS_NAME || 'Panel Strip', canvas_width: CANVAS_W, canvas_height: CANVAS_H, bg_color: BG_COLOR,
         });
-        if (!res.success) return toast(res.message || 'Canvas create failed', 'error');
+        if (progressCancelled) return;
+        if (!res.success) return progressError('Save Failed', res.message || 'Canvas create failed');
         CANVAS_ID = res.canvas_id;
         ARR_ID    = res.arrangement_id;
         history.replaceState(null, '', `bang.php?composite_id=${COMPOSITE_ID}&canvas_id=${CANVAS_ID}`);
@@ -3095,8 +3237,9 @@ async function saveArrangement() {
         action: 'save_arrangement', canvas_id: CANVAS_ID, composite_id: COMPOSITE_ID,
         arrangement_id: ARR_ID || '', name: 'Draft', scene_json: getSceneJSON(),
     });
-    if (res.success) { ARR_ID = res.arrangement_id; toast('Saved!', 'success'); } 
-    else toast(res.message || 'Save failed', 'error');
+    if (progressCancelled) return;
+    if (res.success) { ARR_ID = res.arrangement_id; progressSuccess('Saved!', 'Your panel strip arrangement was saved successfully.'); }
+    else progressError('Save Failed', res.message || 'Save failed');
 }
 
 async function saveArrangementAs() {
@@ -3104,12 +3247,15 @@ async function saveArrangementAs() {
     if (!name) return toast('Enter a name', 'error');
     if (!CANVAS_ID) return toast('Save the canvas first (use Save button)', 'error');
 
+    openProgressModal('Saving…', `Saving arrangement as "${name}".`);
+
     const res = await api('bang_api.php', {
         action: 'save_arrangement', canvas_id: CANVAS_ID, composite_id: COMPOSITE_ID,
         arrangement_id: '', name, scene_json: getSceneJSON(),
     });
-    if (res.success) { ARR_ID = res.arrangement_id; toast('Saved as: ' + name, 'success'); loadArrangementList(); }
-    else toast(res.message || 'Failed', 'error');
+    if (progressCancelled) return;
+    if (res.success) { ARR_ID = res.arrangement_id; progressSuccess('Saved!', `Saved as: ${name}`); loadArrangementList(); }
+    else progressError('Save Failed', res.message || 'Failed');
 }
 
 async function loadArrangementList() {
@@ -3153,7 +3299,7 @@ async function exportRender() {
     const pyapiUrl = localStorage.getItem('sage_pyapi_url') || 'http://127.0.0.1:8009';
 
     const sceneJson = getSceneJSON();
-    toast('Sending to PyAPI…', 'info');
+    openProgressModal('Rendering…', 'Sending your panel strip to PyAPI for rendering.');
 
     const res = await api('bang_api.php', {
         action:        'export_render',
@@ -3167,8 +3313,9 @@ async function exportRender() {
         pyapi_url:     pyapiUrl,
     });
 
-    if (res.success) toast(`Rendered! Frame #${res.frame_id}`, 'success');
-    else toast('Render failed: ' + (res.message || 'Unknown error'), 'error');
+    if (progressCancelled) return;
+    if (res.success) progressSuccess('Rendered!', `Frame #${res.frame_id} was created successfully.`);
+    else progressError('Render Failed', res.message || 'Unknown error');
 }
 
 // ── Canvas Settings ───────────────────────────────────────────────────────────
@@ -3185,7 +3332,7 @@ function closeCanvasSettings() { document.getElementById('canvasModal').classLis
 async function applyCanvasSettings() {
     const name  = document.getElementById('csName').value.trim() || 'Panel Strip';
     const w     = Math.max(100, parseInt(document.getElementById('csWidth').value)  || 1024);
-    const h     = Math.max(100, parseInt(document.getElementById('csHeight').value) || 1448);
+    const h     = Math.max(100, parseInt(document.getElementById('csHeight').value) || 1536);
     const bg    = document.getElementById('csBgColor').value || '#000000';
     CANVAS_NAME = name; BG_COLOR    = bg;
     resizeCanvas(w, h, bg);
@@ -3296,7 +3443,6 @@ function renderActiveFilters() {
     if (!hasAny) bar.innerHTML = '<div style="font-size:0.7rem; color:var(--muted); font-style:italic;">No active filters.</div>';
 }
 
-
 function assignImageToPanel(group, frameId, filename) {
     group.setAttr('innerImageFrameId', frameId);
     group.setAttr('innerImageFilename', filename);
@@ -3315,7 +3461,6 @@ function assignImageToPanel(group, frameId, filename) {
         const pW = group.width() || group.getAttr('dpW') || 400;
         const pH = group.height() || group.getAttr('dpH') || 300;
         
-        // "Cover" scaling: scale to fill the panel without distorting
         const scaleX = pW / imgObj.width;
         const scaleY = pH / imgObj.height;
         const scale = Math.max(scaleX, scaleY);
@@ -3327,7 +3472,7 @@ function assignImageToPanel(group, frameId, filename) {
             x: 0, y: 0,
             scaleX: scale, scaleY: scale,
             name: 'innerImage',
-            draggable: false
+            draggable: !!group.getAttr('innerImageDragUnlocked')
         });
         kImg.on('dragmove', () => {
             group.setAttr('innerImageX', kImg.x());
@@ -3342,8 +3487,105 @@ function assignImageToPanel(group, frameId, filename) {
     };
 }
 
+// ── Panel ↔ Frame matching helpers ────────────────────────────────────────────
+function _getInnerImgAndDims(group) {
+    const img = group.findOne('.innerImage');
+    if (!img) return null;
+    const imgNode = img.image();
+    const naturalW = imgNode ? (imgNode.naturalWidth || imgNode.width || img.width()) : img.width();
+    const naturalH = imgNode ? (imgNode.naturalHeight || imgNode.height || img.height()) : img.height();
+    return { img, naturalW, naturalH };
+}
 
+function matchPanelToFrame(group) {
+    if (!group) return;
+    const info = _getInnerImgAndDims(group);
+    if (!info) { toast('No frame assigned to this panel', 'error'); return; }
+    const { img, naturalW, naturalH } = info;
+    const scale = group.getAttr('innerImageScale') || 1;
+    const frameW = naturalW * scale;
+    const frameH = naturalH * scale;
 
+    group.width(Math.max(10, Math.round(frameW)));
+    group.height(Math.max(10, Math.round(frameH)));
+    group.setAttr('innerImageX', 0);
+    group.setAttr('innerImageY', 0);
+    img.x(0);
+    img.y(0);
+
+    updatePanelShapes(group);
+    contentLayer.batchDraw();
+    if (selectedNode === group) renderPropertiesFor(group);
+    saveState();
+    toast('Panel matched to frame', 'success');
+}
+
+function matchFrameToPanelHeight(group) {
+    if (!group) return;
+    const info = _getInnerImgAndDims(group);
+    if (!info) { toast('No frame assigned to this panel', 'error'); return; }
+    const { img, naturalH } = info;
+    const panelH = group.height();
+    const newScale = panelH / naturalH;
+
+    group.setAttr('innerImageScale', newScale);
+    img.scaleX(newScale);
+    img.scaleY(newScale);
+
+    contentLayer.batchDraw();
+    if (selectedNode === group) renderPropertiesFor(group);
+    saveState();
+    toast('Frame matched to panel height', 'success');
+}
+
+function matchFrameToPanelWidth(group) {
+    if (!group) return;
+    const info = _getInnerImgAndDims(group);
+    if (!info) { toast('No frame assigned to this panel', 'error'); return; }
+    const { img, naturalW } = info;
+    const panelW = group.width();
+    const newScale = panelW / naturalW;
+
+    group.setAttr('innerImageScale', newScale);
+    img.scaleX(newScale);
+    img.scaleY(newScale);
+
+    contentLayer.batchDraw();
+    if (selectedNode === group) renderPropertiesFor(group);
+    saveState();
+    toast('Frame matched to panel width', 'success');
+}
+
+function alignFrameInPanel(group, mode) {
+    if (!group) return;
+    const info = _getInnerImgAndDims(group);
+    if (!info) { toast('No frame assigned to this panel', 'error'); return; }
+    const { img, naturalW, naturalH } = info;
+    const scale = group.getAttr('innerImageScale') || 1;
+    const frameW = naturalW * scale;
+    const frameH = naturalH * scale;
+    const panelW = group.width();
+    const panelH = group.height();
+
+    let x = img.x();
+    let y = img.y();
+
+    if (mode === 'left')      x = 0;
+    else if (mode === 'right')     x = panelW - frameW;
+    else if (mode === 'top')       y = 0;
+    else if (mode === 'bottom')    y = panelH - frameH;
+    else if (mode === 'center_h')  x = (panelW - frameW) / 2;
+    else if (mode === 'center_v')  y = (panelH - frameH) / 2;
+
+    img.x(x);
+    img.y(y);
+    group.setAttr('innerImageX', x);
+    group.setAttr('innerImageY', y);
+
+    contentLayer.batchDraw();
+    if (selectedNode === group) renderPropertiesFor(group);
+    saveState();
+}
 
 function handleForgeImageSelect(frameId, filename, name) {
     if (assigningToPanel) {
@@ -3358,61 +3600,6 @@ function handleForgeImageSelect(frameId, filename, name) {
         closeForgeModal();
     }
 }
-
-
-/*
-function handleForgeImageSelect(frameId, filename, name) {
-    if (assigningToPanel) {
-        const group = contentLayer.findOne('#' + assigningToPanel);
-        if (group && group.getAttr('elemType') === 'panel') {
-            group.setAttr('innerImageFrameId', frameId);
-            group.setAttr('innerImageFilename', filename);
-            group.setAttr('innerImageX', 0);
-            group.setAttr('innerImageY', 0);
-            group.setAttr('innerImageScale', 1.0);
-            
-            const clipGroup = group.findOne('.clipGroup') || group; 
-            const oldImg = group.findOne('.innerImage');
-            if (oldImg) oldImg.destroy();
-
-            const imgObj = new Image();
-            imgObj.crossOrigin = 'anonymous';
-            imgObj.src = filename;
-            imgObj.onload = () => {
-                const scale = group.width() ? (group.width() / imgObj.width) : 1;
-                group.setAttr('innerImageScale', scale);
-
-                const kImg = new Konva.Image({
-                    image: imgObj,
-                    x: 0, y: 0,
-                    scaleX: scale, scaleY: scale,
-                    name: 'innerImage',
-                    draggable: false
-                });
-                kImg.on('dragmove', () => {
-                    group.setAttr('innerImageX', kImg.x());
-                    group.setAttr('innerImageY', kImg.y());
-                    if (selectedNode === group) renderPropertiesFor(group);
-                });
-                
-                clipGroup.add(kImg);
-
-                contentLayer.batchDraw();
-                if (selectedNode === group) renderPropertiesFor(group);
-                saveState();
-            };
-        }
-        assigningToPanel = null;
-        closeForgeModal();
-    } else {
-        addImageElement(frameId, filename, name);
-        closeForgeModal();
-    }
-}
-*/
-
-
-
 
 function runForgeSearch(page) {
     ffCurrentPage = page;
@@ -3519,6 +3706,50 @@ async function api(url, data) {
         console.error("Fetch Network Error:", err);
         return { success: false, message: 'Network communication failed' };
     }
+}
+
+// ── Progress / Result Modal (Save & Export) ───────────────────────────────────
+let progressCancelled = false;
+
+function openProgressModal(title, message) {
+    progressCancelled = false;
+    document.getElementById('progressSpinner').style.display = 'inline-block';
+    document.getElementById('progressIcon').style.display = 'none';
+    document.getElementById('progressTitle').textContent = title;
+    document.getElementById('progressMessage').textContent = message;
+    const btn = document.getElementById('progressCancelBtn');
+    btn.textContent = 'Cancel';
+    btn.onclick = closeProgressModal;
+    document.getElementById('progressModal').classList.add('active');
+}
+
+function progressSuccess(title, message) {
+    document.getElementById('progressSpinner').style.display = 'none';
+    const icon = document.getElementById('progressIcon');
+    icon.style.display = 'inline-block';
+    icon.textContent = '✅';
+    document.getElementById('progressTitle').textContent = title;
+    document.getElementById('progressMessage').textContent = message;
+    const btn = document.getElementById('progressCancelBtn');
+    btn.textContent = 'OK';
+    btn.onclick = closeProgressModal;
+}
+
+function progressError(title, message) {
+    document.getElementById('progressSpinner').style.display = 'none';
+    const icon = document.getElementById('progressIcon');
+    icon.style.display = 'inline-block';
+    icon.textContent = '⚠️';
+    document.getElementById('progressTitle').textContent = title;
+    document.getElementById('progressMessage').textContent = message;
+    const btn = document.getElementById('progressCancelBtn');
+    btn.textContent = 'OK';
+    btn.onclick = closeProgressModal;
+}
+
+function closeProgressModal() {
+    progressCancelled = true;
+    document.getElementById('progressModal').classList.remove('active');
 }
 
 function toast(msg, type = 'info') {

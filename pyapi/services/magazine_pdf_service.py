@@ -20,6 +20,7 @@ import io
 import json
 import logging
 import os
+import re
 import shutil
 import tempfile
 import threading
@@ -187,8 +188,11 @@ class MagazineJobMeta(BaseModel):
     localized_sequence_names: Dict[str, str] = {}
     localized_descriptions: Dict[str, str] = {}
     pdf_full_upright: bool = False
+    pdf_full_landscape: bool = False
     pdf_disable_texts: bool = False
     pdf_disable_fuki: bool = False
+    pdf_layout: str = "sgtac"
+    pdf_page_size: str = "A4"
 
 
 # ---------------------------------------------------------------------------
@@ -203,6 +207,29 @@ def _image_path(job_id: str, frame_id: int) -> Optional[Path]:
         if p.exists():
             return p
     return None
+
+
+def _markdown_to_reportlab(text: str) -> str:
+    """
+    Safely converts basic markdown (**bold**, *italic*, - bullets) 
+    into ReportLab-compatible XML tags.
+    """
+    # 1. Escape HTML reserved chars EXCEPT the ones we actually want
+    text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    
+    # 2. Bold and Italic
+    text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
+    text = re.sub(r'__(.+?)__', r'<b>\1</b>', text)
+    text = re.sub(r'\*(.+?)\*', r'<i>\1</i>', text)
+    text = re.sub(r'_(.+?)_', r'<i>\1</i>', text)
+    
+    # 3. Bullets (Convert lines starting with - or * into a bullet char)
+    text = re.sub(r'(?m)^[\-\*]\s+(.+)$', r'&bull; \1', text)
+    
+    # 4. Linebreaks
+    text = text.replace('\n', '<br/>')
+    
+    return text
 
 
 # ---------------------------------------------------------------------------
@@ -222,7 +249,7 @@ class FrameImageWithFuki(Flowable):
     A custom ReportLab Flowable that draws a base image and then layers 
     absolute positioned Fuki texts on top of it.
     """
-    def __init__(self, img_path: str, fuki_list: List[Dict[str, Any]], body_w: float, default_max_h: float, full_page_max_h: float = None, pdf_full_upright: bool = False):
+    def __init__(self, img_path: str, fuki_list: List[Dict[str, Any]], body_w: float, default_max_h: float, full_page_max_h: float = None, pdf_full_upright: bool = False, pdf_full_landscape: bool = False, pdf_page_size: str = "A4"):
         Flowable.__init__(self)
         self.hAlign = 'CENTER' # Forces ReportLab layout engine to horizontally center this flowable
         
@@ -230,10 +257,19 @@ class FrameImageWithFuki(Flowable):
         self.fuki_list = fuki_list
         
         is_upright = self.img.imageHeight > self.img.imageWidth
+        is_square = self.img.imageHeight == self.img.imageWidth
+        
         if pdf_full_upright and is_upright and full_page_max_h is not None:
+            max_h = full_page_max_h
+        elif pdf_full_landscape and not is_upright and not is_square and full_page_max_h is not None:
             max_h = full_page_max_h
         else:
             max_h = default_max_h
+            
+        # In square mode, we want square and landscape images to fill the width.
+        # But we must respect the max_h boundary so it doesn't break the page.
+        if pdf_page_size.lower() == 'square' and not is_upright and full_page_max_h is not None:
+            max_h = full_page_max_h
         
         scale = body_w / self.img.imageWidth
         self.img.drawWidth = body_w
@@ -247,7 +283,7 @@ class FrameImageWithFuki(Flowable):
         else:
             self.scale = scale
             
-        self.width = self.img.drawWidth
+        self.width = self.img.drawWidth - 0.01  # Prevent micro-pixel float rounding overflow
         self.height = self.img.drawHeight
 
     def wrap(self, availWidth, availHeight):
@@ -370,9 +406,58 @@ def _build_pdf_for_language(
     from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
     PAGE_W, PAGE_H = A4
-    MARGIN = 14 * mm
-    BODY_W = PAGE_W - 2 * MARGIN
-    FRAME_H = PAGE_H - 2 * MARGIN - 6 * mm
+    
+    # Strictly define page dimensions BEFORE generating layout frames
+    if getattr(meta, 'pdf_page_size', 'A4').lower() == 'square':
+        PAGE_H = PAGE_W
+    elif getattr(meta, 'pdf_page_size', 'A4').lower() == 'a4_landscape':
+        PAGE_W, PAGE_H = PAGE_H, PAGE_W
+    
+    # ── PDF Layout Profiles ───────────────────────────────────────────────────
+    layout_style = meta.pdf_layout
+    is_bleed     = (layout_style == 'anime_bleed')
+    
+    if layout_style == 'light_minimal':
+        bg_color    = "#ffffff"
+        line_color  = "#e5e5e5"
+        title_color = "#111111"
+        sub_color   = "#555555"
+        desc_color  = "#333333"
+        text_color  = "#111111"
+        page_color  = "#999999"
+        line_width  = 0.5
+    elif layout_style == 'manga_classic':
+        bg_color    = "#fcfcfc"
+        line_color  = "#000000"
+        title_color = "#000000"
+        sub_color   = "#333333"
+        desc_color  = "#222222"
+        text_color  = "#000000"
+        page_color  = "#000000"
+        line_width  = 1.0
+    elif is_bleed:
+        bg_color    = "#000000"
+        line_color  = "#000000" # Hidden
+        title_color = "#ffffff"
+        sub_color   = "#cccccc"
+        desc_color  = "#aaaaaa"
+        text_color  = "#ffffff"
+        page_color  = "#000000" # Hidden
+        line_width  = 0
+    else: # sgtac (default)
+        bg_color    = "#0d0d11"
+        line_color  = "#f59e0b"
+        title_color = "#f59e0b"
+        sub_color   = "#b0b0be"
+        desc_color  = "#c8b88a"
+        text_color  = "#a8a8ac"
+        page_color  = "#6b6b80"
+        line_width  = 0.5
+
+    # ── Dynamic Margins ──
+    MARGIN  = 0 if is_bleed else 14 * mm
+    BODY_W  = PAGE_W - 2 * MARGIN
+    FRAME_H = PAGE_H - 2 * MARGIN - (0 if is_bleed else 6 * mm)
 
     # ── Font selection ────────────────────────────────────────────────────────
     use_custom = _register_fonts()
@@ -387,7 +472,7 @@ def _build_pdf_for_language(
         "MagTitle",
         fontName=f_title, fontSize=29, leading=35,
         alignment=TA_CENTER,
-        textColor=colors.HexColor("#f59e0b"),
+        textColor=colors.HexColor(title_color),
         spaceAfter=6,
         tracking=120,
     )
@@ -395,7 +480,7 @@ def _build_pdf_for_language(
         "MagSubtitle",
         fontName=f_title, fontSize=16, leading=21,
         alignment=TA_CENTER,
-        textColor=colors.HexColor("#b0b0be"),
+        textColor=colors.HexColor(sub_color),
         spaceAfter=4,
         tracking=60,
     )
@@ -403,7 +488,7 @@ def _build_pdf_for_language(
         "LangBadge",
         fontName=f_title, fontSize=11, leading=15,
         alignment=TA_CENTER,
-        textColor=colors.HexColor("#f59e0b"),
+        textColor=colors.HexColor(title_color),
         spaceAfter=16,
         tracking=180,
     )
@@ -411,45 +496,47 @@ def _build_pdf_for_language(
         "MagDesc",
         fontName=f_italic, fontSize=14, leading=20,
         alignment=TA_LEFT,
-        textColor=colors.HexColor("#c8b88a"),
+        textColor=colors.HexColor(desc_color),
         spaceAfter=8,
     )
     style_overlay = ParagraphStyle(
         "OverlayText",
         fontName=f_body, fontSize=13, leading=18,
         alignment=TA_LEFT,
-        textColor=colors.HexColor("#a8a8ac"),
+        textColor=colors.HexColor(text_color),
         spaceBefore=4, spaceAfter=2,
-        leftIndent=20, rightIndent=20,
     )
 
     # ── Document ──────────────────────────────────────────────────────────────
-    def dark_page(canvas_obj, doc):
+    def draw_page_bg(canvas_obj, doc):
         canvas_obj.saveState()
-        canvas_obj.setFillColor(colors.HexColor("#0d0d11"))
+        canvas_obj.setFillColor(colors.HexColor(bg_color))
         canvas_obj.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
-        canvas_obj.setStrokeColor(colors.HexColor("#f59e0b"))
-        canvas_obj.setLineWidth(0.5)
-        canvas_obj.line(MARGIN, 8 * mm, PAGE_W - MARGIN, 8 * mm)
-        canvas_obj.setFont(f_title, 10)
-        canvas_obj.setFillColor(colors.HexColor("#6b6b80"))
-        canvas_obj.drawCentredString(PAGE_W / 2, 5 * mm, str(doc.page))
+        
+        if not is_bleed:
+            canvas_obj.setStrokeColor(colors.HexColor(line_color))
+            canvas_obj.setLineWidth(line_width)
+            canvas_obj.line(MARGIN, 8 * mm, PAGE_W - MARGIN, 8 * mm)
+            canvas_obj.setFont(f_title, 10)
+            canvas_obj.setFillColor(colors.HexColor(page_color))
+            canvas_obj.drawCentredString(PAGE_W / 2, 5 * mm, str(doc.page))
+            
         canvas_obj.restoreState()
 
     frame_main = Frame(
-        MARGIN, MARGIN + 6 * mm,
+        MARGIN, MARGIN + (0 if is_bleed else 6 * mm),
         BODY_W, FRAME_H,
         id="main",
         leftPadding=0, bottomPadding=0, rightPadding=0, topPadding=0
     )
-    page_tpl = PageTemplate(id="main", frames=[frame_main], onPage=dark_page)
+    page_tpl = PageTemplate(id="main", frames=[frame_main], onPage=draw_page_bg)
 
     doc = BaseDocTemplate(
-        str(out_path), pagesize=A4, pageTemplates=[page_tpl],
+        str(out_path), pagesize=(PAGE_W, PAGE_H), pageTemplates=[page_tpl],
         title=f"{meta.series_title} — {actual_seq_name}",
         author="SAGE AI", subject=lang.upper(),
         leftMargin=MARGIN, rightMargin=MARGIN,
-        topMargin=MARGIN, bottomMargin=MARGIN + 6 * mm,
+        topMargin=MARGIN, bottomMargin=MARGIN + (0 if is_bleed else 6 * mm),
     )
 
     story = []
@@ -460,17 +547,21 @@ def _build_pdf_for_language(
         cover_img_path = _image_path(job_id, meta.cover_frame_id)
 
     is_upright_cover = False
+    is_square_cover = False
 
     if cover_img_path:
         try:
             img = RLImage(str(cover_img_path))
             is_upright_cover = img.imageHeight > img.imageWidth
+            is_square_cover = img.imageHeight == img.imageWidth
 
-            cover_pad  = 6
+            cover_pad  = 0 if is_bleed else 6
             cover_max_w = BODY_W - (2 * cover_pad)
             cover_max_h = FRAME_H - (2 * cover_pad)
 
-            if is_upright_cover:
+            if is_upright_cover or getattr(meta, 'pdf_page_size', 'A4').lower() == 'square':
+                max_h = cover_max_h
+            elif getattr(meta, 'pdf_full_landscape', False) and not is_upright_cover and not is_square_cover:
                 max_h = cover_max_h
             else:
                 max_h = PAGE_H * 0.42
@@ -482,13 +573,19 @@ def _build_pdf_for_language(
             img.hAlign = 'CENTER'
             story.append(img)
 
-            if not is_upright_cover:
+            if not is_upright_cover and getattr(meta, 'pdf_page_size', 'A4').lower() != 'square' and not getattr(meta, 'pdf_full_landscape', False):
                 story.append(Spacer(1, 8 * mm))
 
         except Exception as e:
             logger.warning("Cover image load failed for job %s: %s", job_id, e)
 
-    if not is_upright_cover:
+    # Only show the text intro if the cover isn't filling the page OR if there was no cover at all
+    # On Square format, cover fills the page always, so text is skipped.
+    if not ((is_upright_cover and meta.pdf_full_upright) or (not is_upright_cover and not is_square_cover and getattr(meta, 'pdf_full_landscape', False)) or getattr(meta, 'pdf_page_size', 'A4').lower() == 'square'):
+        if is_bleed and ((is_upright_cover and meta.pdf_full_upright) or (not is_upright_cover and not is_square_cover and getattr(meta, 'pdf_full_landscape', False))):
+            # If it's bleed, an upright cover or full landscape cover filled the page, push text to next page
+            story.append(PageBreak())
+            
         story.append(Paragraph(meta.series_title, style_title))
         story.append(Paragraph(actual_seq_name,   style_subtitle))
         story.append(Paragraph(lang.upper(),       style_lang_badge))
@@ -506,11 +603,15 @@ def _build_pdf_for_language(
         img_path = _image_path(job_id, frame.frame_id)
         
         is_upright = False
+        is_square = False
+        img_w = BODY_W # Default fallback
+        
         if img_path:
             try:
                 ir = ImageReader(str(img_path))
-                img_w, img_h = ir.getSize()
-                is_upright = img_h > img_w
+                orig_w, orig_h = ir.getSize()
+                is_upright = orig_h > orig_w
+                is_square = orig_h == orig_w
             except Exception:
                 pass
 
@@ -527,8 +628,8 @@ def _build_pdf_for_language(
                 else:
                     fuki_list = frame.fuki_texts.get(lang) or frame.fuki_texts.get("en") or []
                 
-                if is_upright and meta.pdf_full_upright:
-                    fp_max_h = FRAME_H - (1 * mm) # Fill the frame exactly
+                if (is_upright and meta.pdf_full_upright) or (not is_upright and not is_square and getattr(meta, 'pdf_full_landscape', False)) or getattr(meta, 'pdf_page_size', 'A4').lower() == 'square':
+                    fp_max_h = FRAME_H - 0.1 # Safely fill the frame exactly
                 else:
                     fp_max_h = PAGE_H * 0.55
                 
@@ -538,29 +639,42 @@ def _build_pdf_for_language(
                     body_w=BODY_W - 0.1, 
                     default_max_h=PAGE_H * 0.55,
                     full_page_max_h=fp_max_h,
-                    pdf_full_upright=meta.pdf_full_upright
+                    pdf_full_upright=meta.pdf_full_upright,
+                    pdf_full_landscape=getattr(meta, 'pdf_full_landscape', False),
+                    pdf_page_size=getattr(meta, 'pdf_page_size', 'A4')
                 )
+                img_w = img_flowable.width
                 story.append(img_flowable)
             except Exception as e:
                 logger.warning("Frame image load failed frame_id=%d: %s", frame.frame_id, e)
         
         if texts:
-            if is_upright and meta.pdf_full_upright:
+            if (is_upright and meta.pdf_full_upright) or (not is_upright and not is_square and getattr(meta, 'pdf_full_landscape', False)) or getattr(meta, 'pdf_page_size', 'A4').lower() == 'square':
                 # Push text to the next page to leave the image alone on its page
                 story.append(PageBreak())
             else:
-                # Keep text on the same page, under the square/landscape image
+                # Keep text on the same page, under the image
                 story.append(Spacer(1, 10))
             
+            # Calculate exactly how much margin is needed so the text is the exact same width as the image
+            extra_margin = max(0, (BODY_W - img_w) / 2.0)
+            
+            dynamic_style = ParagraphStyle(
+                f"Overlay_{idx}",
+                parent=style_overlay,
+                leftIndent=extra_margin,
+                rightIndent=extra_margin
+            )
+            
             for line in texts:
-                story.append(Paragraph(line.strip(), style_overlay))
+                md_line = _markdown_to_reportlab(line.strip())
+                story.append(Paragraph(md_line, dynamic_style))
 
         # Always ensure the NEXT frame (image + text) starts fresh at the top of a new page.
         if idx < len(meta.frames) - 1:
             story.append(PageBreak())
 
     doc.build(story)
-
 
 def _build_job(job_id: str, meta: MagazineJobMeta) -> None:
     """

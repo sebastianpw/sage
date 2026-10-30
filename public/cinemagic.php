@@ -1,7 +1,7 @@
 <?php
-// public/cinematic.php
+// public/cinemagic.php
 // Cinematic story presentation — dynamic rendering.
-// Incorporates Fuki absolute positioning text overlay integration.
+// Incorporates Fuki absolute positioning text overlay integration and Markdown parsing.
 
 require_once __DIR__ . '/bootstrap.php';
 require __DIR__ . '/env_locals.php';
@@ -35,6 +35,22 @@ function resolveFrameThumb(array $row, int $frameId = 0): string {
     return $frameId > 0 ? 'view_frame.php?frame_id=' . $frameId : '';
 }
 
+function parseMarkdown(string $text): string {
+    $text = htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+    // Bold
+    $text = preg_replace('/\*\*(.+?)\*\*/s', '<strong>$1</strong>', $text);
+    $text = preg_replace('/__(.+?)__/s', '<strong>$1</strong>', $text);
+    // Italic
+    $text = preg_replace('/\*(.+?)\*/s', '<em>$1</em>', $text);
+    $text = preg_replace('/_(.+?)_/s', '<em>$1</em>', $text);
+    // Bullet Lists (Convert to HTML list)
+    $text = preg_replace('/^[\-\*]\s+(.+)$/m', '<ul><li>$1</li></ul>', $text);
+    // Clean up adjacent ul tags
+    $text = preg_replace('/<\/ul>\s*<ul>/', '', $text);
+    
+    return nl2br($text);
+}
+
 // 1. Fetch the sequence
 $seqId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $table = 'narrative_sequences';
@@ -61,7 +77,7 @@ $availableLangs    = ['en'];
 
 try {
     $stmtCM = $pdo->prepare(
-        "SELECT c.id, c.name, s.supported_languages
+        "SELECT c.id, c.name, s.supported_languages, s.web_disable_texts, s.web_disable_fuki
          FROM cinemagics c
          JOIN cinemagics_2_sequences cs ON cs.cinemagic_id = c.id
          LEFT JOIN cinemagic_series_2_cinemagics sc ON sc.cinemagic_id = c.id
@@ -73,7 +89,13 @@ try {
     $stmtCM->execute([$seqId]);
     $cinemagicInfo = $stmtCM->fetch(PDO::FETCH_ASSOC);
 
+    $webDisableTexts = false;
+    $webDisableFuki  = false;
+
     if ($cinemagicInfo) {
+        $webDisableTexts = !empty($cinemagicInfo['web_disable_texts']);
+        $webDisableFuki  = !empty($cinemagicInfo['web_disable_fuki']);
+
         $langsRaw = $cinemagicInfo['supported_languages'] ?? 'en';
         $availableLangs = array_filter(array_map('trim', explode(',', $langsRaw)));
         if (!in_array('en', $availableLangs)) array_unshift($availableLangs, 'en');
@@ -240,23 +262,29 @@ foreach ($itemIds as $idx => $item) {
         if (!empty(trim($desc))) $overrideTexts = [trim($desc)];
     }
 
+    if ($webDisableTexts) {
+        $overrideTexts = [];
+    }
+
     $frames[] = [
         'id'            => $sid, 
         'thumb'         => $activeThumb, 
         'overlay_texts' => $overrideTexts,
-        'fuki_texts'    => $fukiTexts[$sid] ?? []
+        'fuki_texts'    => $webDisableFuki ? [] : ($fukiTexts[$sid] ?? [])
     ];
 }
 
 $prevEp = ($currentEpisodeIdx > 0) ? $cinemagicEpisodes[$currentEpisodeIdx - 1] : null;
 $nextEp = ($currentEpisodeIdx < count($cinemagicEpisodes) - 1) ? $cinemagicEpisodes[$currentEpisodeIdx + 1] : null;
 ?>
+
 <!doctype html>
-<html lang="en">
+<html lang="<?= $langCode ?>">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title><?= htmlspecialchars($seq['name']) ?><?= $cinemagicInfo ? ' — ' . htmlspecialchars($cinemagicInfo['name']) : '' ?></title>
+
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -296,6 +324,10 @@ $nextEp = ($currentEpisodeIdx < count($cinemagicEpisodes) - 1) ? $cinemagicEpiso
         .text-blocks { width: 100%; padding: 50px 20px 30px; box-sizing: border-box; display: flex; flex-direction: column; gap: 35px; align-items: center; }
         .story-text { font-size: 1.25rem; line-height: 1.8; font-weight: 400; text-align: center; max-width: 650px; color: var(--text-color); letter-spacing: 0.5px; text-shadow: 0 2px 6px rgba(0,0,0,0.9); }
         
+        /* MD Bullet List Fix */
+        .story-text ul { display: inline-block; text-align: left; padding-left: 20px; margin: 10px auto; }
+        .story-text li { margin-bottom: 6px; }
+
         .observe-me { opacity: 0; transform: translateY(25px); transition: opacity 1s cubic-bezier(0.25, 1, 0.5, 1), transform 1s cubic-bezier(0.25, 1, 0.5, 1); }
         .observe-me.visible { opacity: 1; transform: translateY(0); }
         .end-mark { margin: 60px 0 120px; font-family: var(--font-title); color: var(--accent-color); font-size: 1.5rem; letter-spacing: 4px; opacity: 0.4; }
@@ -385,7 +417,7 @@ $nextEp = ($currentEpisodeIdx < count($cinemagicEpisodes) - 1) ? $cinemagicEpiso
             <?php if (!empty($f['overlay_texts'])): ?>
                 <div class="text-blocks">
                     <?php foreach ($f['overlay_texts'] as $txt): ?>
-                        <div class="story-text observe-me"><?= nl2br(htmlspecialchars($txt)) ?></div>
+                        <div class="story-text observe-me"><?= parseMarkdown(html_entity_decode($txt)) ?></div>
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
@@ -512,7 +544,6 @@ window.addEventListener('resize', () => {
 
 </body>
 </html>
-
 
 
 

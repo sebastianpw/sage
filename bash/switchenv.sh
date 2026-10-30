@@ -26,10 +26,13 @@ cp "$ENV_FILE" "$ENV_FILE.bak"
 # Update DB name in DATABASE_URL
 sed -i "s|\(/starlight_guardians_\)[^/?]*|\1${SUFFIX}|g" "$ENV_FILE"
 
-# Update FRAMES/AUDIOS/VIDEOS root lines in .env
+# Update root lines for all media types in .env
 sed -i "s|frames_starlightguardians_[^/]*|frames_starlightguardians_${SUFFIX}|g" "$ENV_FILE"
 sed -i "s|audios_starlightguardians_[^/]*|audios_starlightguardians_${SUFFIX}|g" "$ENV_FILE"
 sed -i "s|videos_starlightguardians_[^/]*|videos_starlightguardians_${SUFFIX}|g" "$ENV_FILE"
+sed -i "s|media_starlightguardians_[^/]*|media_starlightguardians_${SUFFIX}|g" "$ENV_FILE"
+sed -i "s|storyboards_starlightguardians_[^/]*|storyboards_starlightguardians_${SUFFIX}|g" "$ENV_FILE"
+sed -i "s|editorial_starlightguardians_[^/]*|editorial_starlightguardians_${SUFFIX}|g" "$ENV_FILE"
 
 if [ $? -ne 0 ]; then
     echo "✗ ERROR: Failed to update .env.local; restoring backup"
@@ -38,7 +41,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "✓ .env.local updated successfully"
-grep -E "DATABASE_URL|FRAMES_ROOT|AUDIOS_ROOT|VIDEOS_ROOT" "$ENV_FILE" || true
+grep -E "DATABASE_URL|FRAMES_ROOT|AUDIOS_ROOT|VIDEOS_ROOT|MEDIA_ROOT|STORYBOARDS_ROOT|EDITORIAL_ROOT" "$ENV_FILE" || true
 
 # ------------------------------------------------------------------------------
 # Updating Instance Symlinks (in /public)
@@ -52,17 +55,26 @@ if [ -d "$PUBLIC_DIR" ]; then
     # Define targets (assuming specific folders are siblings inside public/)
     VIDEO_TARGET="videos_starlightguardians_${SUFFIX}"
     AUDIO_TARGET="audios_starlightguardians_${SUFFIX}"
+    MEDIA_TARGET="media_starlightguardians_${SUFFIX}"
+    STORYBOARDS_TARGET="storyboards_starlightguardians_${SUFFIX}"
+    EDITORIAL_TARGET="editorial_starlightguardians_${SUFFIX}"
 
     # 1. Remove existing symlinks/folders
     rm -rf videos
     rm -rf audios
+    rm -rf media
+    rm -rf storyboards
+    rm -rf editorial
 
     # 2. Create new symlinks
     ln -s "$VIDEO_TARGET" videos
     ln -s "$AUDIO_TARGET" audios
+    ln -s "$MEDIA_TARGET" media
+    ln -s "$STORYBOARDS_TARGET" storyboards
+    ln -s "$EDITORIAL_TARGET" editorial
 
     echo "✓ Symlinks updated in public/:"
-    ls -l videos audios
+    ls -l videos audios media storyboards editorial
 else
     echo "✗ ERROR: Public directory not found at $PUBLIC_DIR"
 fi
@@ -77,3 +89,5 @@ else
 fi
 
 echo "Switch complete."
+
+

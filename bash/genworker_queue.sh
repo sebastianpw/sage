@@ -15,9 +15,52 @@ MYSQL_ARGS=$("$SCRIPT_DIR"/db_name.sh main-conn)
 
 PROCESS_LIMIT="${1:-4}"
 WORKER_SCOPE="${2:-global}"
+CURL_TIMEOUT=120
 
 export PAI_TOKEN=$(cat "$SCRIPT_DIR/../token/.pollinationsaitoken")
 export FREEIMAGE_KEY=$(cat "$SCRIPT_DIR/../token/.freeimage_key")
+
+# ------------------------------------------------------------------------------
+# Helper: Upload Image Chain (Pollinations -> Freeimage -> Litterbox)
+# ------------------------------------------------------------------------------
+upload_image_chain() {
+    local filepath="$1"
+    local final_url=""
+    
+    # 1. Pollinations
+    local polli_resp
+    polli_resp=$(curl -m "$CURL_TIMEOUT" -s -X POST "https://media.pollinations.ai/upload" -H "Authorization: Bearer $PAI_TOKEN" -F "file=@$filepath")
+    if [[ "$polli_resp" == http* ]]; then
+        final_url="$polli_resp"
+    else
+        local polli_url
+        polli_url=$(echo "$polli_resp" | jq -r '.url // empty' 2>/dev/null)
+        if [[ "$polli_url" == http* ]]; then
+            final_url="$polli_url"
+        fi
+    fi
+    
+    # 2. Freeimage
+    if [ -z "$final_url" ] || [ "$final_url" == "null" ]; then
+        local fi_resp fi_url
+        fi_resp=$(curl -m "$CURL_TIMEOUT" -s -X POST "https://freeimage.host/api/1/upload" -F "key=$FREEIMAGE_KEY" -F "action=upload" -F "source=@$filepath" -F "format=json")
+        fi_url=$(echo "$fi_resp" | jq -r '.image.url' 2>/dev/null)
+        if [ -n "$fi_url" ] && [ "$fi_url" != "null" ]; then
+            final_url="$fi_url"
+        fi
+    fi
+    
+    # 3. Litterbox
+    if [ -z "$final_url" ] || [ "$final_url" == "null" ]; then
+        local lb_resp
+        lb_resp=$(curl -m "$CURL_TIMEOUT" -s -F "reqtype=fileupload" -F "time=1h" -F "fileToUpload=@$filepath" https://litterbox.catbox.moe/resources/internals/api.php)
+        if [[ "$lb_resp" == http* ]]; then
+            final_url="$lb_resp"
+        fi
+    fi
+    
+    echo "$final_url"
+}
 
 if [ -f "$SCRIPT_DIR/load_root.sh" ]; then
   source "$SCRIPT_DIR/load_root.sh"
@@ -381,21 +424,13 @@ for i in "${!Q_IDS[@]}"; do
         # Upload primary image
         PRIMARY_IMAGE_URL=""
         if [ -n "$IMG2IMG_FILENAME" ] && [ -f "$IMG2IMG_FILENAME" ]; then
-            echo "Uploading source image to Freeimage.host..."
-            response=$(curl -s -X POST "https://freeimage.host/api/1/upload" -F "key=$FREEIMAGE_KEY" -F "action=upload" -F "source=@$IMG2IMG_FILENAME" -F "format=json")
-            PRIMARY_IMAGE_URL=$(echo "$response" | jq -r '.image.url')
+            echo "Uploading source image (Pollinations -> Freeimage -> Litterbox)..."
+            PRIMARY_IMAGE_URL=$(upload_image_chain "$IMG2IMG_FILENAME")
             if [ -n "$PRIMARY_IMAGE_URL" ] && [ "$PRIMARY_IMAGE_URL" != "null" ]; then
                 echo "Uploaded source image URL: $PRIMARY_IMAGE_URL"
             else
-                echo "Freeimage upload failed, falling back to litterbox..."
-                litter_response=$(curl -s -F "reqtype=fileupload" -F "time=1h" -F "fileToUpload=@$IMG2IMG_FILENAME" https://litterbox.catbox.moe/resources/internals/api.php)
-                if [[ "$litter_response" == http* ]]; then
-                    PRIMARY_IMAGE_URL="$litter_response"
-                    echo "Uploaded source image URL (fallback): $PRIMARY_IMAGE_URL"
-                else
-                    ERROR_MSG="Failed to upload primary source image."
-                    PRIMARY_IMAGE_URL=""
-                fi
+                ERROR_MSG="Failed to upload primary source image."
+                PRIMARY_IMAGE_URL=""
             fi
         fi
 
@@ -411,15 +446,9 @@ for i in "${!Q_IDS[@]}"; do
                     if [ -n "$extra_frame_filename" ] && [ "$extra_frame_filename" != "NULL" ]; then
                         extra_frame_abs_path="$PROJECT_ROOT/public/$extra_frame_filename"
                         if [ -f "$extra_frame_abs_path" ]; then
-                            response=$(curl -s -X POST "https://freeimage.host/api/1/upload" -F "key=$FREEIMAGE_KEY" -F "action=upload" -F "source=@$extra_frame_abs_path" -F "format=json")
-                            extra_frame_url=$(echo "$response" | jq -r '.image.url')
+                            extra_frame_url=$(upload_image_chain "$extra_frame_abs_path")
                             if [ -n "$extra_frame_url" ] && [ "$extra_frame_url" != "null" ]; then
                                 uploaded_extra_urls+=("$extra_frame_url")
-                            else
-                                litter_response=$(curl -s -F "reqtype=fileupload" -F "time=1h" -F "fileToUpload=@$extra_frame_abs_path" https://litterbox.catbox.moe/resources/internals/api.php)
-                                if [[ "$litter_response" == http* ]]; then
-                                    uploaded_extra_urls+=("$litter_response")
-                                fi
                             fi
                         fi
                     fi
@@ -440,20 +469,37 @@ for i in "${!Q_IDS[@]}"; do
                     if [ -n "$comp_frame_filename" ] && [ "$comp_frame_filename" != "NULL" ]; then
                         comp_frame_abs_path="$PROJECT_ROOT/public/$comp_frame_filename"
                         if [ -f "$comp_frame_abs_path" ]; then
-                            response=$(curl -s -X POST "https://freeimage.host/api/1/upload" -F "key=$FREEIMAGE_KEY" -F "action=upload" -F "source=@$comp_frame_abs_path" -F "format=json")
-                            comp_frame_url=$(echo "$response" | jq -r '.image.url')
+                            comp_frame_url=$(upload_image_chain "$comp_frame_abs_path")
                             if [ -n "$comp_frame_url" ] && [ "$comp_frame_url" != "null" ]; then
                                 uploaded_comp_urls+=("$comp_frame_url")
-                            else
-                                litter_response=$(curl -s -F "reqtype=fileupload" -F "time=1h" -F "fileToUpload=@$comp_frame_abs_path" https://litterbox.catbox.moe/resources/internals/api.php)
-                                if [[ "$litter_response" == http* ]]; then
-                                    uploaded_comp_urls+=("$litter_response")
-                                fi
                             fi
                         fi
                     fi
                 done
                 if [ ${#uploaded_comp_urls[@]} -gt 0 ]; then COMPOSITE_IMAGE_URLS=$(IFS=,; echo "${uploaded_comp_urls[*]}"); fi
+            fi
+        fi
+
+        # Check for sketches assigned frames
+        SKETCH_IMAGE_URLS=""
+        if [ "$MAPPING_ENTITY_TYPE" = "sketches" ]; then
+            mapfile -t sketch_frame_ids < <(mysql $MYSQL_ARGS -N -e "SELECT frame_id FROM sketch_frames WHERE sketch_id = $MAPPING_ENTITY_ID ORDER BY frame_id ASC;")
+            if [ ${#sketch_frame_ids[@]} -gt 0 ]; then
+                echo "Uploading sketch assigned frames..."
+                uploaded_sketch_urls=()
+                for sketch_frame_id in "${sketch_frame_ids[@]}"; do
+                    sketch_frame_filename=$(mysql $MYSQL_ARGS -N -e "SELECT filename FROM frames WHERE id = $sketch_frame_id LIMIT 1;" | tr -d '\r')
+                    if [ -n "$sketch_frame_filename" ] && [ "$sketch_frame_filename" != "NULL" ]; then
+                        sketch_frame_abs_path="$PROJECT_ROOT/public/$sketch_frame_filename"
+                        if [ -f "$sketch_frame_abs_path" ]; then
+                            sketch_frame_url=$(upload_image_chain "$sketch_frame_abs_path")
+                            if [ -n "$sketch_frame_url" ] && [ "$sketch_frame_url" != "null" ]; then
+                                uploaded_sketch_urls+=("$sketch_frame_url")
+                            fi
+                        fi
+                    fi
+                done
+                if [ ${#uploaded_sketch_urls[@]} -gt 0 ]; then SKETCH_IMAGE_URLS=$(IFS=,; echo "${uploaded_sketch_urls[*]}"); fi
             fi
         fi
 
@@ -466,6 +512,10 @@ for i in "${!Q_IDS[@]}"; do
             fi
         elif [ "$MAPPING_ENTITY_TYPE" = "composites" ]; then
             if [ -n "$COMPOSITE_IMAGE_URLS" ]; then IMAGE_URL="$COMPOSITE_IMAGE_URLS"
+            elif [ -n "$PRIMARY_IMAGE_URL" ]; then IMAGE_URL="$PRIMARY_IMAGE_URL"
+            fi
+        elif [ "$MAPPING_ENTITY_TYPE" = "sketches" ]; then
+            if [ -n "$SKETCH_IMAGE_URLS" ]; then IMAGE_URL="$SKETCH_IMAGE_URLS"
             elif [ -n "$PRIMARY_IMAGE_URL" ]; then IMAGE_URL="$PRIMARY_IMAGE_URL"
             fi
         else
@@ -549,7 +599,7 @@ for i in "${!Q_IDS[@]}"; do
                 attempt=1
                 gen_success=false
                 while [ $attempt -le $MAX_RETRIES ]; do
-                    curl -s -L -H "Authorization: Bearer $PAI_TOKEN" \
+                    curl -m "$CURL_TIMEOUT" -s -L -H "Authorization: Bearer $PAI_TOKEN" \
                       "$FULL_URL" \
                       -o "$outfile"
 

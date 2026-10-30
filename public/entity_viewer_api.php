@@ -15,6 +15,20 @@ $chef = new KitchenChef($pdo);
 $LIMIT = 10; // Items per page
 
 try {
+    if ($action === 'regenerate_entity') {
+        $entity_type = $_POST['entity_type'] ?? '';
+        $entity_id = filter_input(INPUT_POST, 'entity_id', FILTER_VALIDATE_INT);
+        
+        if (preg_match('/^[a-z_]+$/', $entity_type) && $entity_id) {
+            $stmt = $pdo->prepare("UPDATE `$entity_type` SET regenerate_images = 1 WHERE id = :id");
+            $success = $stmt->execute(['id' => $entity_id]);
+            echo json_encode(['ok' => $success]);
+        } else {
+            echo json_encode(['ok' => false, 'error' => 'Invalid parameters']);
+        }
+        exit;
+    }
+
     if ($action === 'fetch_content') {
         $type = $_POST['entity_type'] ?? 'characters';
         $mode = $_POST['mode'] ?? 'entity'; // 'entity' or 'map_run'

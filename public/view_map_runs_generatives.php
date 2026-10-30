@@ -614,7 +614,7 @@ function getPaginationUrl($page, $search) {
 
     <!-- Header Section -->
     <div class="header-compact">
-        <a href="sql_crud_generatives.php" class="entity-icon-link" title="Generatives CRUD"><?php echo $iconChar; ?></a>
+        <a href="cruzz.php?entity=generatives" class="entity-icon-link" title="Generatives CRUD"><?php echo $iconChar; ?></a>
         <a href="gallery_generatives_nu.php" class="entity-icon-link" title="Generatives Gallery">▦</a>
         <h2 style="margin:0; font-size:1.2rem; color:var(--text);">Generatives Map Runs</h2>
         <?php if ($schedulerId): ?>

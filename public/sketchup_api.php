@@ -29,6 +29,26 @@ try {
         echo json_encode(['ok' => true, 'results' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
         exit;
     }
+    
+    // ── Search Map Runs (Sketches only) ──
+    if ($action === 'search_map_runs') {
+        header('Content-Type: application/json; charset=utf-8');
+        $q = trim($input['q'] ?? '');
+        $limit = 20;
+        
+        if (empty($q)) {
+            $stmt = $pdo->prepare("SELECT id, note, created_at FROM map_runs WHERE entity_type = 'sketches' ORDER BY id DESC LIMIT $limit");
+            $stmt->execute();
+        } elseif (is_numeric($q)) {
+            $stmt = $pdo->prepare("SELECT id, note, created_at FROM map_runs WHERE entity_type = 'sketches' AND (id = ? OR note LIKE ?) ORDER BY id DESC LIMIT $limit");
+            $stmt->execute([(int)$q, "%$q%"]);
+        } else {
+            $stmt = $pdo->prepare("SELECT id, note, created_at FROM map_runs WHERE entity_type = 'sketches' AND note LIKE ? ORDER BY id DESC LIMIT $limit");
+            $stmt->execute(["%$q%"]);
+        }
+        echo json_encode(['ok' => true, 'results' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+        exit;
+    }
 
     // ── Search Narrative Sequences ──
     if ($action === 'search_narrative_sequences') {

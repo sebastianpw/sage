@@ -324,6 +324,7 @@ html, body { margin: 0; background: var(--bg); color: var(--text); font-family: 
     .btn-action { padding: 12px 20px; font-size: 0.85rem; min-width: 100px; }
 }
 .btn-action:disabled { opacity: 0.5; cursor: not-allowed; background: var(--border) !important; color: #888 !important; }
+.btn-regen { background: #3b82f6; color: #fff; }
 .btn-enhance { background: var(--amber); color: #000; }
 .btn-import { background: var(--purple); }
 .btn-stba { background: var(--teal); color: #000; }
@@ -602,9 +603,10 @@ iframe.frame-viewer { width: 100%; height: 100%; border: none; }
     <div class="eh-footer">
         <div class="ft-summary" id="footerSummary">0 selected</div>
         <div class="ft-actions">
+            <button class="btn-action btn-regen"   id="btnRegen"   disabled onclick="submitRegeneration()">Regen</button>
             <button class="btn-action btn-stba"    id="btnStba"    disabled onclick="openSbPickerForFrames()">STBA</button>
-            <button class="btn-action btn-enhance" id="btnEnhance" disabled onclick="submitEnhancement()">Enhance Frames</button>
-            <button class="btn-action btn-import"  id="btnImport"  disabled onclick="submitImport()">Import to Animatics</button>
+            <button class="btn-action btn-enhance" id="btnEnhance" disabled onclick="submitEnhancement()">Enhance</button>
+            <button class="btn-action btn-import"  id="btnImport"  disabled onclick="submitImport()">Imp2Ani</button>
         </div>
     </div>
 </div>
@@ -1936,7 +1938,8 @@ function selectItem(id, el) {
     grid.style.display = 'none';
     document.getElementById('gridActions').style.display = 'none';
     const queryParam = mapRunMode ? `map_run_id=${id}` : `entity_id=${id}`;
-    fetch(`?api_action=get_frames&${queryParam}&entity=${encodeURIComponent(currentEntity)}`).then(r => r.json()).then(res => {
+    const filtersJson = encodeURIComponent(JSON.stringify(forgeFilters));
+    fetch(`?api_action=get_frames&${queryParam}&entity=${encodeURIComponent(currentEntity)}&filters=${filtersJson}`).then(r => r.json()).then(res => {
         currentFrames = res.data;
         selectedFrameIds.clear();
         renderGrid();
@@ -2031,10 +2034,12 @@ function updateSummary() {
     document.getElementById('btnImport').disabled  = disabled;
     const btnStba = document.getElementById('btnStba');
     if (btnStba) btnStba.disabled = disabled;
+    const btnRegen = document.getElementById('btnRegen');
+    if (btnRegen) btnRegen.disabled = disabled;
 }
 
 function submitImport() {
-    performAction('submit_import', { frame_ids: Array.from(selectedFrameIds), entity: currentEntity }, 'Import to Animatics');
+    performAction('submit_import', { frame_ids: Array.from(selectedFrameIds), entity: currentEntity }, 'Imp2Ani');
 }
 
 function submitEnhancement() {
@@ -2043,18 +2048,30 @@ function submitEnhancement() {
     if (!prompt && !useEntityPrompt) { Toast.show('Enter instruction for enhancement', 'error'); return; }
     const extraFrames = confirmedReferenceFrames.map(f => f.id);
     const useD2i = document.getElementById('useDepth2Img').checked ? 1 : 0;
-    performAction('submit_enhancement', { frame_ids: Array.from(selectedFrameIds), description: prompt, entity: currentEntity, extra_frames: extraFrames, depth2img: useD2i, use_entity_prompt: useEntityPrompt }, 'Enhance Frames');
+    performAction('submit_enhancement', { frame_ids: Array.from(selectedFrameIds), description: prompt, entity: currentEntity, extra_frames: extraFrames, depth2img: useD2i, use_entity_prompt: useEntityPrompt }, 'Enhance');
+}
+
+function submitRegeneration() {
+    performAction('submit_regeneration', { frame_ids: Array.from(selectedFrameIds), entity: currentEntity }, 'Regen');
 }
 
 function performAction(action, data, btnText) {
-    const btnId = action === 'submit_import' ? 'btnImport' : 'btnEnhance';
-    const btn   = document.getElementById(btnId);
+    let btnId = 'btnEnhance';
+    if (action === 'submit_import') btnId = 'btnImport';
+    else if (action === 'submit_regeneration') btnId = 'btnRegen';
+
+    const btn = document.getElementById(btnId);
     btn.disabled = true; btn.textContent = 'Processing...';
     fetch('?api_action=' + action + '&entity=' + encodeURIComponent(currentEntity), {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
     }).then(r => r.json()).then(res => {
         if (res.status === 'success') {
-            Toast.show(`Success: ${res.count} frames processed`);
+            if (action === 'submit_regeneration') {
+                Toast.show(`Flagged ${res.entity_ids ? res.entity_ids.length : res.count} entities for regeneration`);
+            } else {
+                Toast.show(`Success: ${res.count} frames processed`);
+            }
+
             const processedIds = new Set(data.frame_ids.map(Number));
             if (action === 'submit_enhancement') {
                 addToHistory(data.description || '');

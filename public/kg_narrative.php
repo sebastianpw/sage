@@ -507,12 +507,17 @@ window.KgNarrativeApp = (function() {
 
     // ── Export preview ──
     function buildConfig() {
+        const exportKeys = Array.from(document.querySelectorAll('.kgn-export-key-cb'))
+                                .filter(cb => cb.checked)
+                                .map(cb => cb.value);
+
         return {
             focal_kg_node_id: focalNode ? focalNode.id : 0,
             hop_mode: currentMode,
             reading_mode: narrativeMode,
             manual_node_ids: potNodes.map(n => n.id),
-            include_edges: document.getElementById('kgnIncludeEdges').checked
+            include_edges: document.getElementById('kgnIncludeEdges').checked,
+            export_keys: exportKeys
         };
     }
 
@@ -522,6 +527,8 @@ window.KgNarrativeApp = (function() {
             document.getElementById('kgnPreviewGrid').style.display = 'none';
             document.getElementById('kgnWarnings').innerHTML = '';
             document.getElementById('btnExportJson').disabled = true;
+            const btnSql = document.getElementById('btnExportSql');
+            if (btnSql) btnSql.disabled = true;
             return;
         }
         fetch('kg_narrative_api.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'export_preview', config}) })
@@ -535,14 +542,16 @@ window.KgNarrativeApp = (function() {
 
             const warnEl = document.getElementById('kgnWarnings');
             let warnings = [];
-            if (res.warnings.nodes_without_sketch.length) warnings.push(`${res.warnings.nodes_without_sketch.length} node(s) have no matching sketch.`);
-            if (res.warnings.sketches_without_frame.length) warnings.push(`${res.warnings.sketches_without_frame.length} sketch(es) have no resolvable frame.`);
+            if (res.warnings.nodes_without_sketch && res.warnings.nodes_without_sketch.length) warnings.push(`${res.warnings.nodes_without_sketch.length} node(s) have no matching sketch.`);
+            if (res.warnings.sketches_without_frame && res.warnings.sketches_without_frame.length) warnings.push(`${res.warnings.sketches_without_frame.length} sketch(es) have no resolvable frame.`);
             if (res.warnings.over_node_threshold) warnings.push('Node count exceeds the recommended 25 — consider narrowing your selection.');
             if (res.warnings.over_sketch_threshold) warnings.push('Sketch count exceeds the recommended 15 — coherence may suffer.');
             if (res.warnings.over_frame_threshold) warnings.push('Frame count exceeds the recommended 40.');
             warnEl.innerHTML = warnings.map(w => `<div class="kgn-warning-line"><i class="bi bi-exclamation-triangle-fill"></i> ${w}</div>`).join('');
 
             document.getElementById('btnExportJson').disabled = false;
+            const btnSql = document.getElementById('btnExportSql');
+            if (btnSql) btnSql.disabled = false;
         });
     }
 
@@ -566,6 +575,31 @@ window.KgNarrativeApp = (function() {
             const a = document.createElement('a'); a.href = url; a.download = filename;
             document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
             if(window.Toast) Toast.show('Export successful! Paste this JSON to your AI of choice.', 'success');
+        })
+        .catch(e => { if(window.Toast) Toast.show(e.message, 'error'); })
+        .finally(() => { btn.disabled = false; btn.innerHTML = original; });
+    }
+
+    function exportSql() {
+        const config = buildConfig();
+        if (!potNodes.length) { if(window.Toast) Toast.show('Select at least one node before exporting.', 'warn'); return; }
+        const btn = document.getElementById('btnExportSql');
+        const original = btn.innerHTML;
+        btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Exporting...';
+
+        fetch('kg_narrative_api.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'export_sql', config}) })
+        .then(r => {
+            if (!r.ok) throw new Error('Network error');
+            const cd = r.headers.get('content-disposition');
+            let filename = 'kg_narrative_export.sql';
+            if (cd && cd.includes('filename=')) filename = cd.split('filename=')[1].replace(/"/g, '');
+            return r.blob().then(blob => ({blob, filename}));
+        })
+        .then(({blob, filename}) => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = filename;
+            document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+            if(window.Toast) Toast.show('SQL Export successful!', 'success');
         })
         .catch(e => { if(window.Toast) Toast.show(e.message, 'error'); })
         .finally(() => { btn.disabled = false; btn.innerHTML = original; });
@@ -661,7 +695,7 @@ window.KgNarrativeApp = (function() {
         openEntityModal, closeEntityModal,
         loadKgTree, toggleFolder, checkNode, checkFolder,
         setKgTreeFilter: (f) => { kgTreeFilter = f.trim().toLowerCase(); renderKgTree(); },
-        updatePreview, exportJson,
+        updatePreview, exportJson, exportSql,
         validateImport, saveSequence,
         setSection,
         _getPotNodes: () => potNodes
@@ -674,6 +708,9 @@ window.KgNarrativeApp = (function() {
     <span class="pl-nav-title"><i class="bi bi-signpost-split"></i> KG Narrative Export / Import</span>
     <button class="pl-nav-btn primary" id="btnExportJson" onclick="KgNarrativeApp.exportJson()" disabled title="Export JSON">
         <i class="bi bi-braces"></i> Export JSON
+    </button>
+    <button class="pl-nav-btn primary" id="btnExportSql" onclick="KgNarrativeApp.exportSql()" disabled title="Export SQL">
+        <i class="bi bi-database"></i> Export SQL
     </button>
 </div>
 
@@ -757,10 +794,27 @@ window.KgNarrativeApp = (function() {
             <div class="scene-header">
                 <h3 class="scene-title"><span class="kgn-step-tag">5</span> Export Preview</h3>
             </div>
-            <label class="su-check-label">
-                <input type="checkbox" id="kgnIncludeEdges" checked onchange="KgNarrativeApp.updatePreview()">
-                Include relationship edges between selected nodes
-            </label>
+            
+            <div style="margin-bottom: 12px;">
+                <label class="su-check-label">
+                    <input type="checkbox" id="kgnIncludeEdges" checked onchange="KgNarrativeApp.updatePreview()">
+                    Include edges of selected nodes
+                </label>
+            </div>
+
+            <div class="kgn-export-keys" style="margin-bottom: 12px; padding-top: 12px; border-top: 1px solid var(--pl-border);">
+                <div style="font-family:'Space Mono',monospace; font-size:.75rem; margin-bottom:8px; color:var(--pl-teal);">Include in JSON:</div>
+                <div style="display:flex; flex-wrap:wrap; gap:12px;">
+                    <label class="su-check-label"><input type="checkbox" class="kgn-export-key-cb" value="export_meta" checked onchange="KgNarrativeApp.updatePreview()"> export_meta</label>
+                    <label class="su-check-label"><input type="checkbox" class="kgn-export-key-cb" value="selection" checked onchange="KgNarrativeApp.updatePreview()"> selection</label>
+                    <label class="su-check-label"><input type="checkbox" class="kgn-export-key-cb" value="kg" checked onchange="KgNarrativeApp.updatePreview()"> kg</label>
+                    <label class="su-check-label"><input type="checkbox" class="kgn-export-key-cb" value="sketches" checked onchange="KgNarrativeApp.updatePreview()"> sketches</label>
+                    <label class="su-check-label"><input type="checkbox" class="kgn-export-key-cb" value="frames" checked onchange="KgNarrativeApp.updatePreview()"> frames</label>
+                    <label class="su-check-label"><input type="checkbox" class="kgn-export-key-cb" value="mappings" checked onchange="KgNarrativeApp.updatePreview()"> mappings</label>
+                    <label class="su-check-label"><input type="checkbox" class="kgn-export-key-cb" value="warnings" checked onchange="KgNarrativeApp.updatePreview()"> warnings</label>
+                    <label class="su-check-label"><input type="checkbox" class="kgn-export-key-cb" value="ai_instructions" checked onchange="KgNarrativeApp.updatePreview()"> ai_instructions</label>
+                </div>
+            </div>
 
             <div class="kgn-preview-grid" id="kgnPreviewGrid" style="display:none;">
                 <div class="kgn-preview-cell"><div class="num" id="cellNodes">0</div><div class="lbl">Nodes</div></div>

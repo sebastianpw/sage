@@ -130,6 +130,99 @@ try {
     }
 
     // ═════════════════════════════════════════════════════════════════════
+    // Helper: Parse narrative sequence items
+    // ═════════════════════════════════════════════════════════════════════
+    function getSequenceItems($pdo, $sequenceId) {
+        $stmt = $pdo->prepare("SELECT sequence_data FROM narrative_sequences WHERE id = ?");
+        $stmt->execute([(int)$sequenceId]);
+        $raw = $stmt->fetchColumn();
+        if (!$raw) return ['sketch_ids' => [], 'frame_ids' => [], 'sketch_ids_without_frame' => []];
+
+        $data = json_decode($raw, true);
+        if (!is_array($data)) return ['sketch_ids' => [], 'frame_ids' => [], 'sketch_ids_without_frame' => []];
+
+        $sketchIds = [];
+        $frameIds  = [];
+        $sketchWithoutFrame = [];
+
+        foreach ($data as $item) {
+            if (is_numeric($item)) {
+                $sId = (int)$item;
+                $sketchIds[] = $sId;
+                $sketchWithoutFrame[] = $sId;
+            } elseif (is_array($item)) {
+                $sId = !empty($item['sketch_id']) ? (int)$item['sketch_id'] : (!empty($item['sketchId']) ? (int)$item['sketchId'] : null);
+                $fId = !empty($item['frame_id']) ? (int)$item['frame_id'] : (!empty($item['frameId']) ? (int)$item['frameId'] : null);
+
+                if ($fId) {
+                    $frameIds[] = $fId;
+                }
+                if ($sId) {
+                    $sketchIds[] = $sId;
+                    if (!$fId) {
+                        $sketchWithoutFrame[] = $sId;
+                    }
+                } elseif ($fId) {
+                    $stmtF = $pdo->prepare("SELECT entity_id FROM frames WHERE id = ?");
+                    $stmtF->execute([$fId]);
+                    $eid = $stmtF->fetchColumn();
+                    if ($eid) $sketchIds[] = (int)$eid;
+                }
+            }
+        }
+
+        return [
+            'sketch_ids' => array_values(array_unique($sketchIds)),
+            'frame_ids'  => array_values(array_unique($frameIds)),
+            'sketch_ids_without_frame' => array_values(array_unique($sketchWithoutFrame))
+        ];
+    }
+
+    // ═════════════════════════════════════════════════════════════════════
+    // Helper: Compute Frame-level SQL condition for active Forge Filters
+    // ═════════════════════════════════════════════════════════════════════
+    function getForgeFrameCondition($pdo, $reqEntity, $filtersJson) {
+        $filters = json_decode($filtersJson, true);
+        if (empty($filters)) return null;
+
+        $frameConditions = [];
+
+        foreach ($filters as $f) {
+            $type = $f['type'] ?? '';
+            $id   = (int)($f['id'] ?? 0);
+            if (!$id) continue;
+
+            if ($type === 'seq' && $reqEntity === 'sketches') {
+                $seqInfo = getSequenceItems($pdo, $id);
+                if (!empty($seqInfo['frame_ids'])) {
+                    $fIn = implode(',', array_map('intval', $seqInfo['frame_ids']));
+                    if (!empty($seqInfo['sketch_ids_without_frame'])) {
+                        $sIn = implode(',', array_map('intval', $seqInfo['sketch_ids_without_frame']));
+                        $frameConditions[] = "(f.id IN ($fIn) OR (f.entity_id IN ($sIn) AND f.entity_type = 'sketches'))";
+                    } else {
+                        $frameConditions[] = "f.id IN ($fIn)";
+                    }
+                }
+            } elseif ($type === 'storyboard') {
+                $stmt = $pdo->prepare("
+                    SELECT DISTINCT sf.frame_id 
+                    FROM storyboard_frames sf 
+                    JOIN frames f ON f.id = sf.frame_id 
+                    WHERE sf.storyboard_id = ? AND f.entity_type = ?
+                ");
+                $stmt->execute([$id, $reqEntity]);
+                $sbFrames = $stmt->fetchAll(PDO::FETCH_COLUMN);
+                if (!empty($sbFrames)) {
+                    $fIn = implode(',', array_map('intval', $sbFrames));
+                    $frameConditions[] = "f.id IN ($fIn)";
+                }
+            }
+        }
+
+        return empty($frameConditions) ? null : implode(' AND ', $frameConditions);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════
     // Helper: Compute Intersection IDs based on Active Forge Filters
     // ═════════════════════════════════════════════════════════════════════
     function computeForgeIntersection($pdo, $reqEntity, $filtersJson) {
@@ -219,13 +312,8 @@ try {
                     $foundIds = array_unique(array_merge($foundIds, $viaFuzz));
                 }
             } elseif ($type === 'seq' && $reqEntity === 'sketches') {
-                $stmt = $pdo->prepare("
-                    SELECT CASE WHEN JSON_TYPE(jt.val) = 'INTEGER' THEN JSON_VALUE(jt.val, '$') ELSE JSON_VALUE(jt.val, '$.sketch_id') END
-                    FROM narrative_sequences ns, JSON_TABLE(ns.sequence_data, '$[*]' COLUMNS(val JSON PATH '$')) jt
-                    WHERE ns.id = ?
-                ");
-                $stmt->execute([$id]);
-                $foundIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+                $seqInfo = getSequenceItems($pdo, $id);
+                $foundIds = $seqInfo['sketch_ids'];
             } elseif ($type === 'storyboard') {
                 $stmt = $pdo->prepare("SELECT DISTINCT f.entity_id FROM frames f JOIN storyboard_frames sf ON f.id = sf.frame_id WHERE sf.storyboard_id = ? AND f.entity_type = ? AND f.entity_id IS NOT NULL");
                 $stmt->execute([$id, $reqEntity]);
@@ -275,9 +363,17 @@ try {
         }
 
         $total = $pdo->query("SELECT COUNT(*) FROM map_runs WHERE $where")->fetchColumn();
-        $sql   = "SELECT *, (SELECT COUNT(*) FROM frames WHERE map_run_id = map_runs.id) as frame_count 
-                  FROM map_runs WHERE $where ORDER BY id DESC LIMIT $limit OFFSET $offset";
+        $sql   = "SELECT * FROM map_runs WHERE $where ORDER BY id DESC LIMIT $limit OFFSET $offset";
         $rows  = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+
+        if (!empty($rows)) {
+            $runIds = array_column($rows, 'id');
+            $inIds = implode(',', $runIds);
+            $counts = $pdo->query("SELECT map_run_id, COUNT(id) FROM frames WHERE map_run_id IN ($inIds) GROUP BY map_run_id")->fetchAll(PDO::FETCH_KEY_PAIR);
+            foreach ($rows as &$r) {
+                $r['frame_count'] = $counts[$r['id']] ?? 0;
+            }
+        }
 
         echo json_encode(['status'=>'success', 'data'=>$rows, 'total'=>$total]);
         exit;
@@ -349,6 +445,12 @@ try {
                 $in = implode(',', array_map('intval', $intersectIds));
                 $where .= " AND f.entity_id IN ($in)";
             }
+        }
+
+        // Apply Frame-level restriction (e.g. from narrative_sequences or storyboards)
+        $frameCond = getForgeFrameCondition($pdo, $reqEntity, $_GET['filters'] ?? '[]');
+        if ($frameCond !== null) {
+            $where .= " AND $frameCond";
         }
 
         $table = "`" . str_replace('`', '', $reqEntity) . "`";
@@ -544,7 +646,7 @@ try {
         $pdo->prepare("UPDATE storyboards SET updated_at = NOW() WHERE id = ?")->execute([$sbId]);
         $pdo->commit();
 
-        echo json_encode(['status' => 'success', 'count' => $count, 'storyboard_name' => $sb['name']]);
+        echo json_encode(['status' => 'success', 'count' => count, 'storyboard_name' => $sb['name']]);
         exit;
     }
 
@@ -610,6 +712,12 @@ try {
         } else {
             echo json_encode(['status'=>'success', 'data'=>[]]);
             exit;
+        }
+
+        // Apply Frame-level restriction if active (e.g. sequence filter)
+        $frameCond = getForgeFrameCondition($pdo, $reqEntity, $_GET['filters'] ?? '[]');
+        if ($frameCond !== null) {
+            $cond .= " AND $frameCond";
         }
 
         $sql = "SELECT f.id as frame_id, f.filename, f.name, f.prompt,
@@ -795,10 +903,49 @@ try {
         exit;
     }
 
+    // 5. ACTION: SUBMIT REGENERATION (Regenerate parent entities from selected frames)
+    if ($action === 'submit_regeneration') {
+        $input = json_decode(file_get_contents('php://input'), true);
+        $frameIds = $input['frame_ids'] ?? [];
+        $reqEntity = $input['entity'] ?? $reqEntity;
+        if (!in_array($reqEntity, $allowedEntities, true)) $reqEntity = $entityType;
+
+        if (empty($frameIds)) throw new Exception("No frames selected.");
+
+        $idsStr = implode(',', array_map('intval', $frameIds));
+        
+        $sql = "SELECT DISTINCT entity_id FROM frames WHERE id IN ($idsStr) AND entity_type = ?";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$reqEntity]);
+        $entityIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        
+        if (empty($entityIds)) throw new Exception("No parent '$reqEntity' found for selected frames.");
+
+        $table = "`" . str_replace('`', '', $reqEntity) . "`";
+        
+        $stmtCols = $pdo->query("SHOW COLUMNS FROM $table");
+        $cols = $stmtCols->fetchAll(PDO::FETCH_COLUMN);
+        $regenCol = null;
+        if (in_array('regenerate_images', $cols)) $regenCol = 'regenerate_images';
+        elseif (in_array('regenerate_videos', $cols)) $regenCol = 'regenerate_videos';
+        elseif (in_array('regenerate_audios', $cols)) $regenCol = 'regenerate_audios';
+        elseif (in_array('regenerate', $cols)) $regenCol = 'regenerate';
+
+        if (!$regenCol) throw new Exception("Entity type '$reqEntity' does not support regeneration.");
+
+        $inIdsStr = implode(',', array_map('intval', $entityIds));
+        $hasUpdatedAt = in_array('updated_at', $cols);
+        $updateSql = "UPDATE $table SET `$regenCol` = 1" . ($hasUpdatedAt ? ", updated_at = NOW()" : "") . " WHERE id IN ($inIdsStr)";
+        
+        $count = $pdo->exec($updateSql);
+
+        echo json_encode(['status'=>'success', 'count'=>$count, 'entity_ids' => $entityIds]);
+        exit;
+    }
+
 } catch (Exception $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     echo json_encode(['status'=>'error', 'message'=>$e->getMessage()]);
     exit;
 }
 exit;
-

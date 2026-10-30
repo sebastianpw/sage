@@ -102,6 +102,7 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
 .beat-entity-chip { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:12px; font-size:.75rem; font-family:'Space Mono',monospace; border:1px solid; }
 .chip-sket { background:rgba(58,181,200,.1); border-color:var(--pl-teal); color:var(--pl-teal); }
 .chip-range { background:rgba(245,166,35,.1); border-color:var(--pl-amber); color:var(--pl-amber); }
+.chip-maprun { background:rgba(76,175,128,.1); border-color:var(--pl-green); color:var(--pl-green); }
 .chip-remove { background:none; border:none; cursor:pointer; color:inherit; opacity:.6; font-size:.8rem; padding:0; line-height:1; transition:opacity .15s; }
 .chip-remove:hover { opacity:1; }
 
@@ -152,8 +153,10 @@ body { background: var(--pl-bg); color: var(--pl-text); font-family: 'Syne', sys
 window.SketchUpApp = (function() {
     let selectedSketches = [];
     let sketchRanges = [];
+    let selectedMapRuns = [];
     let kgNodes = [];
     let searchTimeout = null;
+    let mapRunSearchTimeout = null;
 
     // ── Mode state ────────────────────────────────────────────────────────────
     // 'standard' | 'sequence' | 'plush'
@@ -221,6 +224,57 @@ window.SketchUpApp = (function() {
             <span class="beat-entity-chip chip-sket">
                 <span style="cursor:pointer;" onclick="SketchUpApp.openEntityModal('sketches', ${s.id}, '${s.name.replace(/'/g, "\\'")}')">#${s.id} ${s.name}</span>
                 <button class="chip-remove" onclick="SketchUpApp.removeSketch(${s.id})"><i class="bi bi-x"></i></button>
+            </span>
+        `).join('');
+    }
+
+    // ── Standard mode: Map Runs search ───────────────────────────────────────
+    function searchMapRuns(q) {
+        clearTimeout(mapRunSearchTimeout);
+        const ac = document.getElementById('mapRunAc');
+        mapRunSearchTimeout = setTimeout(() => {
+            fetch('sketchup_api.php', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({action:'search_map_runs', q})
+            }).then(r=>r.json()).then(res => {
+                if (res.ok) renderMapRunAutocomplete(res.results, ac);
+            });
+        }, 250);
+    }
+
+    function renderMapRunAutocomplete(results, ac) {
+        if (!results.length) { ac.style.display = 'none'; return; }
+        ac.innerHTML = results.map(r => {
+            const label = r.note ? r.note : (r.created_at || 'No note');
+            return `
+            <div class="su-ac-item" onclick="SketchUpApp.addMapRun(${r.id}, '${label.replace(/'/g, "\\'")}')">
+                <span style="color:var(--pl-text-dim); font-family:'Space Mono',monospace; font-size:0.7rem; margin-right:6px;">#${r.id}</span>
+                ${label}
+            </div>
+        `}).join('');
+        ac.style.display = 'block';
+    }
+
+    function addMapRun(id, note) {
+        if (!selectedMapRuns.find(m => m.id === id)) {
+            selectedMapRuns.push({id, note});
+            renderMapRunChips();
+        }
+        const inp = document.getElementById('mapRunSearch');
+        if(inp) inp.value = '';
+        document.getElementById('mapRunAc').style.display = 'none';
+    }
+
+    function removeMapRun(id) {
+        selectedMapRuns = selectedMapRuns.filter(m => m.id !== id);
+        renderMapRunChips();
+    }
+
+    function renderMapRunChips() {
+        document.getElementById('mapRunChips').innerHTML = selectedMapRuns.map(m => `
+            <span class="beat-entity-chip chip-maprun">
+                <span>Run: #${m.id} ${m.note}</span>
+                <button class="chip-remove" onclick="SketchUpApp.removeMapRun(${m.id})"><i class="bi bi-x"></i></button>
             </span>
         `).join('');
     }
@@ -410,6 +464,7 @@ window.SketchUpApp = (function() {
         const config = {
             sketch_ids: allSketchIds,
             sketch_ranges,
+            map_run_ids: selectedMapRuns.map(m => m.id),
             include_tables,
             include_frames,
             kg_nodes: include_kg ? kgNodes.map(n => n.id) : [],
@@ -419,7 +474,7 @@ window.SketchUpApp = (function() {
             plush_entities: currentMode === 'plush' ? resolvedPlushEntities : []
         };
 
-        if (!config.sketch_ids.length && !config.sketch_ranges.length && !config.kg_nodes.length && !config.plush_entities.length) {
+        if (!config.sketch_ids.length && !config.sketch_ranges.length && !config.map_run_ids.length && !config.kg_nodes.length && !config.plush_entities.length) {
             if(window.Toast) Toast.show('Please select at least one source to export.', 'warn');
             else alert('Please select at least one source to export.');
             return;
@@ -612,6 +667,7 @@ window.SketchUpApp = (function() {
     return {
         setMode,
         searchSketches, addSketch, removeSketch,
+        searchMapRuns, addMapRun, removeMapRun,
         addRange, removeRange, exportData,
         addKgNode, removeKgNode, openKgNodeGraph,
         kgToggleFolder, kgCheckNode, updateKgPreview, loadKgTree,
@@ -685,6 +741,20 @@ window.SketchUpApp = (function() {
                     <button class="pl-btn pl-btn-secondary" onclick="SketchUpApp.addRange()">+ Add Range</button>
                 </div>
             </div>
+        </div>
+
+        <div class="scene-block">
+            <div class="scene-header">
+                <h3 class="scene-title"><i class="bi bi-play-btn"></i> Map Runs (Sketches)</h3>
+            </div>
+            <p style="font-size:.8rem; color:var(--pl-text-dim); margin:0 0 12px; line-height:1.5;">
+                Resolves sketches linked to the specified map_runs via their generated frames. Shows latest on click.
+            </p>
+            <div class="su-ac-wrap">
+                <input type="text" id="mapRunSearch" class="su-input" placeholder="Search map run by ID or note (or click for latest)..." oninput="SketchUpApp.searchMapRuns(this.value)" onclick="SketchUpApp.searchMapRuns(this.value)">
+                <div id="mapRunAc" class="su-ac-dropdown"></div>
+            </div>
+            <div id="mapRunChips" class="beat-entity-chips"></div>
         </div>
     </div>
 
@@ -791,10 +861,13 @@ window.SketchUpApp = (function() {
 document.addEventListener('DOMContentLoaded', () => {
     // Hide AC on click outside
     document.addEventListener('click', (e) => {
-        // Standard sketch AC
-        const wrap = document.querySelector('.su-ac-wrap');
-        if (wrap && !wrap.contains(e.target)) {
-            ['sketchAc','seqAc','plushAc'].forEach(id => {
+        const wraps = document.querySelectorAll('.su-ac-wrap');
+        let clickedInside = false;
+        wraps.forEach(wrap => {
+            if (wrap.contains(e.target)) clickedInside = true;
+        });
+        if (!clickedInside) {
+            ['sketchAc','seqAc','plushAc','mapRunAc'].forEach(id => {
                 const ac = document.getElementById(id);
                 if (ac) ac.style.display = 'none';
             });
