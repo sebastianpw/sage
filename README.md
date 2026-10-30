@@ -1,4 +1,4 @@
-# SAGE 2.0 BETA
+# SAGE 3 UUKI
 
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Stable Diffusion](https://img.shields.io/badge/Stable_Diffusion-XL-blue?logo=stablediffusion)](https://stability.ai/stablediffusion)
@@ -11,13 +11,33 @@
 
 > Open-source multimedia AI orchestration platform for creative storytelling — runs fully on Android via Termux
 
-**SAGE** (Storyboard Animation Generation Environment) is an open-source multimedia AI orchestration and automation platform. It merges creative generation, development assistance, and intelligent orchestration under one cohesive system — fully runnable in Termux on Android.
+**SAGE** (Story Architecture & Generative Engine / Storyboard Animation Generation Environment) is an open-source multimedia AI orchestration and production automation platform. It unites narrative architecture, generative media creation, studio pipeline execution, and autonomous database interaction into one portable, mobile-first system designed to execute high-concept creative series entirely on an Android/Termux device.
 
+---
+
+## 🌟 What's New in SAGE 3 (UUKI Release)
+
+The **SAGE 3 UUKI** milestone transforms SAGE from a dense, complex workstation into a lean, highly adaptable production cockpit. Designed for solo-showrunners operating in responsive mobile and desktop environments alike, SAGE 3 introduces conversational database agents and an ultra-lean, profile-driven dashboard that tailors your workspace strictly to the task at hand.
+
+### 🎯 Lean, Profile-Driven Dashboard (`sage.php`)
+* **Task-Centric Custom Cockpits:** Switch between specialized, distraction-free dashboards (e.g., *Comic Production*, *Worldbuilding & Lore*, *Editorial*, or *Core Engine Operations*) with a single tap.
+* **Per-Profile State Persistence:** All shortcuts, custom tabs, visibility toggles, and Control Deck task runners are stored in isolated profile configurations in `sage_settings`, allowing unlimited customized production views without cluttering the global interface.
+
+### 💬 Conversational AI & Database Chat Interfaces (`chatty.php`)
+* **Direct Natural-Language DB Interaction:** Talk directly to your production database through interactive AI chat interfaces. The AI can inspect schema, query entities, curate concepts, surface unlinked assets, and execute transactional updates across your tables autonomously.
+* **Context-Grounding with Lore & Graph RAG:** Chat UIs bridge directly into ChromaDB vector collections, Princeton WordNet synsets, and Knowledge Graph nodes to provide instant, canon-compliant answers and narrative revisions during drafting sessions.
+
+### 🌀 Integrated Native Control Deck (Scheduler Runner)
+* **Native Console:** The control deck is now baked directly into the primary SAGE dashboard tab for lightning-fast generation.
+* **Buttery Drag-and-Drop Reordering:** Reorder task wrapper buttons using dedicated touch drag handles (`⣿`)
+* **Reactive Real-Time Log Console:** Expandable and auto-scrolling terminal drawer that watches output logs, auto-expands on execution, and streams execution telemetry from bash daemon scripts.
+* **Independent Pre-Seeded Wrappers:** Pre-configured with essential production triggers (Generative Sketched, Composites, Genhances, Workers, Diverse queues)
+ 
 ---
 
 ## ⚡ Quick Summary
 
-**THIS IS A BETA RELEASE. Only minor bugfixes left!**
+**THIS IS A PRODUCTION-READY RELEASE.**
 TRY AT YOUR OWN RISK.
 
 **Install in GitHub Codespaces terminal:**
@@ -51,6 +71,8 @@ Please like, share, subscribe...
 
 Rather than bridging disparate software, SAGE integrates the entire creative lifecycle: from prompting a world-building Knowledge Graph, to assembling beats in a virtual writer's room, generating thousands of frames, and bouncing composited video and multitrack audio natively in the browser.
 
+---
+
 ## 🚀 Core Subsystems
 
 ### 🏛️ Story Architecture & Lore
@@ -79,7 +101,8 @@ Rather than bridging disparate software, SAGE integrates the entire creative lif
 * **AnimeJSeq Viewer:** SAGE's cinematic playback interface for narrative sequences. A full-screen, scroll-driven gallery that presents generated sequences as immersive, animated visual experiences, complete with ambient blurred backgrounds and self-contained ZIP export modes.
 
 ### 🎨 Generative Asset Production
-* **Entity Gallery System:** A platform-wide architectural convention managing the CRUD, visual browsing, and batch-run review for every visual and narrative entity in the pipeline (Characters, Factions, Vehicles, Spawns, etc.), complete with PhotoSwipe galleries and GearMenu integrations.
+* **Creatives & Entities Cockpit:** A consolidated, high-density command deck linking all core production models (Sketches, Animatics, Generatives, Composites, Meshes, Blueprints, ControlNets) and World Entities (Characters, Factions, Poses, Anima Poses, Expressions, Animas, Locations, Backgrounds, Artifacts, Vehicles) with instant CRUD, NHX enhancement, and trigger actions.
+* **Entity Gallery System:** A platform-wide architectural convention managing the CRUD, visual browsing, and batch-run review for every visual and narrative entity in the pipeline, complete with PhotoSwipe galleries and GearMenu integrations.
 * **Entity Viewer:** A universal asset gallery and inspection interface. Provides a paginated, multi-mode browser for viewing frames across all major production entity types, grouped by entity or by generation batch (Map Run).
 * **LocaHub:** A unified location discovery and consolidation browser. Surfaces location entities scattered across five distinct data sources (canonical tables, Fuzz candidates, KG nodes, AG nodes, sketch ranges) and presents them in a single browsable interface for batch deduplication and migration into the core entity layer.
 * **Mass Import Tools:** SAGE's bulk ingestion layer. Provides a suite of dedicated views and drag-and-drop utilities for moving large quantities of external assets (images to spawns, audio to dialogue, video to animatics) into the relational production pipeline in a single operation.
@@ -134,7 +157,9 @@ Rather than bridging disparate software, SAGE integrates the entire creative lif
 * **Chroma Collections Admin & ChromaTool:** Vector database administration interfaces. Manage the registry of ChromaDB collection definitions and provide direct CRUD access to the embeddings that power SAGE's semantic search.
 * **Backup Forge:** The platform's infrastructure protection layer. A browser-based control panel for configuring, triggering, and monitoring the full backup pipeline, pushing media archives, database dumps, and codebase snapshots to remote destinations over SCP with SHA-256 verification.
 * **Recipe Forge:** A code-dump provenance and registry browser. Tracks every invocation of the platform's context-bundling scripts, recording exact file inclusions, content hashes, and CLI reproduction commands to ensure any AI prompt session can be precisely audited and recreated.
-* **Forge Tool, Clipboard & Control Deck:** A persistent, platform-wide floating action button (FAB) injecting a cross-module productivity layer. Includes a globally scoped clipboard manager and a curated launcher grid for triggering scheduled tasks with a single tap.
+* **Forge Tool & Global Clipboard:** A persistent, platform-wide floating action button (FAB) providing a globally scoped clipboard manager and dynamic cross-tool shortcuts on any page across the entire production suite.
+
+---
 
 ## 🛠️ Tech Stack & Architecture
 
@@ -147,6 +172,8 @@ SAGE is built for aggressive portability and offline-first resilience:
   * **AI/Inference:** Background removal (u2net/birefnet), ControlNet maps, Voice Cloning (so-vits-svc, Qwen3-TTS), and local Ollama daemon routing.
   * **RAG/Embeddings:** ChromaDB lifecycle management, fast embedding generation (MiniLM/CLIP), and O(N) TF-IDF sparse clustering for the Fuzz Forge.
 * **AI Integration:** Unified provider layer routing to Pollinations, Groq, Cerebras, Google Gemini, Mistral, and Cohere.
+
+---
 
 ## 📜 Notice
 
@@ -198,5 +225,3 @@ If you find SAGE useful, please consider:
 ---
 
 **Made with ❤️ for the creative coding community**
-
-
