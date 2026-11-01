@@ -129,6 +129,7 @@ html, body {
   box-shadow: 0 0 40px rgba(0,0,0,0.6);
 }
 .wi-flyout-left  { left: 0;  border-right: 1px solid var(--border); transform: translateX(-100%); }
+.wi-flyout-right { right: 0; border-left: 1px solid var(--border);  transform: translateX(100%); }
 .wi-flyout.open  { transform: translateX(0); }
 
 .wi-flyout-backdrop {
@@ -229,6 +230,14 @@ html, body {
 
 .empty-state { text-align: center; padding: 24px 12px; color: var(--text-dim); font-family: var(--mono); font-size: 0.75rem; }
 .empty-icon { font-size: 28px; opacity: 0.2; margin-bottom: 6px; }
+
+/* ── RIGHT FLYOUT — Chat Navigation ─────────────────────────────────────── */
+.chat-nav-list { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.chat-nav-item { padding: 9px 11px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: all 0.15s; }
+.chat-nav-item:hover { border-color: var(--violet); background: var(--violet-dim); }
+.chat-nav-time { font-family: var(--mono); font-size: 0.6rem; color: var(--text-dim); margin-bottom: 4px; }
+.chat-nav-snippet { font-family: var(--sans); font-size: 0.78rem; color: var(--text); line-height: 1.4; word-break: break-word; }
+.nav-empty { text-align: center; padding: 24px 16px; color: var(--text-dim); font-family: var(--mono); font-size: 0.75rem; }
 
 /* ── MAIN AREA ──────────────────────────────────────────────────────────── */
 .wi-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); min-height: 0; }
@@ -429,6 +438,9 @@ html, body {
     <button class="btn-icon-sm" onclick="Chatty.toggleTheme()" id="themeBtn" title="Toggle Theme" style="display:none;width:32px;height:32px;">
       <i class="bi bi-moon-stars"></i>
     </button>
+    <button class="wi-hamburger" id="hamburgerRight" onclick="Chatty.toggleFlyout('right')" title="Chat Navigation">
+      <i class="bi bi-list-nested"></i>
+    </button>
   </div>
 </header>
 
@@ -485,6 +497,22 @@ html, body {
         </button>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT FLYOUT — Chat Navigation -->
+<div class="wi-flyout wi-flyout-right" id="flyoutRight">
+  <div class="flyout-head">
+    <span class="flyout-head-title">Chat Navigation</span>
+    <button class="flyout-close" onclick="Chatty.closeFlyouts()"><i class="bi bi-x-lg"></i></button>
+  </div>
+  <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+    <div class="chat-nav-list" id="chatNavList">
+      <div class="nav-empty empty-state">
+        <div class="empty-icon">💬</div>
+        No AI messages yet.
+      </div>
     </div>
   </div>
 </div>
@@ -725,6 +753,58 @@ window.Chatty = (function() {
           });
       }
       conv.scrollTop = conv.scrollHeight;
+      renderChatNav();
+  }
+
+  function renderChatNav() {
+      const list = document.getElementById('chatNavList');
+      if (!list) return;
+
+      const aiMessages = _conversation.filter(m => m.role === 'assistant');
+      if (aiMessages.length === 0) {
+          list.innerHTML = `<div class="nav-empty empty-state"><div class="empty-icon">💬</div>No AI messages yet.</div>`;
+          return;
+      }
+
+      list.innerHTML = aiMessages.map((msg, idx) => {
+          let plainText = msg.content || '';
+          plainText = plainText.replace(/<[^>]*>?/gm, '').replace(/[*_#`]/g, '').trim();
+          let snippet = plainText.substring(0, 85).replace(/\n/g, ' ');
+          if (plainText.length > 85) snippet += '...';
+
+          return `
+              <div class="chat-nav-item" onclick="Chatty.scrollToMessage(${idx})">
+                  <div class="chat-nav-time">Beat ${idx + 1} • ${formatTime(msg.ts)}</div>
+                  <div class="chat-nav-snippet">${escHtml(snippet)}</div>
+              </div>
+          `;
+      }).join('');
+  }
+
+  function scrollToMessage(aiMsgIndex) {
+      const convNode = document.getElementById('conversation');
+      const aiNodes = Array.from(convNode.querySelectorAll('.msg-ai:not(.msg-loading)'));
+      
+      if (aiNodes[aiMsgIndex]) {
+          const targetNode = aiNodes[aiMsgIndex];
+          targetNode.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          
+          const bubble = targetNode.querySelector('.msg-bubble');
+          if (bubble) {
+              const oldTrans = bubble.style.transition;
+              const oldBox = bubble.style.boxShadow;
+              bubble.style.transition = 'box-shadow 0.3s ease';
+              bubble.style.boxShadow = '0 0 0 2px var(--violet), 0 0 20px var(--violet-glow)';
+              setTimeout(() => {
+                  bubble.style.boxShadow = oldBox;
+                  setTimeout(() => { bubble.style.transition = oldTrans; }, 300);
+              }, 1500);
+          }
+          
+          if (window.innerWidth <= 768) {
+              closeFlyouts();
+          }
+      }
   }
 
   async function sendMessage() {
@@ -1147,25 +1227,34 @@ window.Chatty = (function() {
   // ── Flyouts ──────────────────────────────────────────────────────────
   function toggleFlyout(side) {
     const openingLeft  = side === 'left';
+    const openingRight = side === 'right';
     const leftEl       = document.getElementById('flyoutLeft');
+    const rightEl      = document.getElementById('flyoutRight');
     const backdrop     = document.getElementById('flyoutBackdrop');
     const hLeft        = document.getElementById('hamburgerLeft');
+    const hRight       = document.getElementById('hamburgerRight');
 
     const leftOpen  = leftEl.classList.contains('open');
+    const rightOpen = rightEl.classList.contains('open');
 
-    if (openingLeft && leftOpen) { closeFlyouts(); return; }
+    if ((openingLeft && leftOpen) || (openingRight && rightOpen)) { closeFlyouts(); return; }
 
     leftEl.classList.remove('open');
+    rightEl.classList.remove('open');
     hLeft.classList.remove('open');
+    hRight.classList.remove('open');
 
     if (openingLeft)  { leftEl.classList.add('open');  hLeft.classList.add('open'); }
+    if (openingRight) { rightEl.classList.add('open'); hRight.classList.add('open'); }
     backdrop.classList.add('visible');
   }
 
   function closeFlyouts() {
     document.getElementById('flyoutLeft').classList.remove('open');
+    document.getElementById('flyoutRight').classList.remove('open');
     document.getElementById('flyoutBackdrop').classList.remove('visible');
     document.getElementById('hamburgerLeft').classList.remove('open');
+    document.getElementById('hamburgerRight').classList.remove('open');
   }
 
   function setLeftTab(tab) {
@@ -1194,7 +1283,7 @@ window.Chatty = (function() {
     duration = duration || 2800;
     const el = document.createElement('div');
     el.className = `toast ${type}`;
-    const icons = { success: '✓', error: '✕', info: '✦' };
+    const icons = { success: '✓', error: '✕', info: '💬' };
     el.innerHTML = `<span>${icons[type]||'💬'}</span> ${escHtml(msg)}`;
     el.onclick = () => { el.classList.add('out'); setTimeout(()=>el.remove(), 250); };
     document.getElementById('toastContainer').appendChild(el);
@@ -1310,7 +1399,8 @@ window.Chatty = (function() {
     loadChat, deleteChat, renderChatSessionsList,
     copyMsg, toggleTheme, closeModal, toast,
     openRenameChatModal, saveRenameChat,
-    removeFile, downloadChat, branchChat, deleteMsg, manualMarkAllAsRead
+    removeFile, downloadChat, branchChat, deleteMsg, manualMarkAllAsRead,
+    scrollToMessage
   };
 })();
 

@@ -729,6 +729,9 @@ $allTasks = $pdo->query("SELECT id, name, args FROM scheduled_tasks ORDER BY nam
         <button class="ft-tab" data-tab="queue" role="tab" title="Queue"><span class="ft-tab-icon">☰</span></button>
         <button class="ft-tab" data-tab="logs" role="tab" title="Logs"><span class="ft-tab-icon">📒</span></button>
         <button class="ft-tab" data-tab="chatty" role="tab" title="Chatty"><span class="ft-tab-icon">💬</span></button>
+        <button class="ft-tab" data-tab="polly" role="tab" title="Polly"><span class="ft-tab-icon">🌱</span></button>
+
+        
         <button class="ft-tab" data-tab="clipboard" role="tab" title="Clipboard"><span class="ft-tab-icon">📋</span></button>
         
         <!-- Creatives & Entities Tab -->
@@ -808,6 +811,15 @@ $allTasks = $pdo->query("SELECT id, name, args FROM scheduled_tasks ORDER BY nam
         <div class="ft-tab-content ft-iframe-content" id="ft-tab-chatty" role="tabpanel">
             <iframe data-src="chatty.php" allowfullscreen></iframe>
         </div>
+        
+       
+        <!-- ── POLLY TAB (Iframe logic) ── -->
+        <div class="ft-tab-content ft-iframe-content" id="ft-tab-polly" role="tabpanel">
+            <iframe data-src="view_polly.php" allowfullscreen></iframe>
+        </div>
+        
+        
+        
 
         <!-- ── CLIPBOARD TAB ── -->
         <div class="ft-tab-content" id="ft-tab-clipboard" role="tabpanel">

@@ -578,7 +578,7 @@ class AIProvider
             // Anthropic models strictly fail if this exceeds their cap (typically 8192).
             // DeepSeek, Llama, and others will now get an incredible ~400,000 output token cap.
             if (strpos(strtolower($model), 'claude') !== false) {
-                $payload['max_tokens'] = 8192;
+                $payload['max_tokens'] = 64000;
             } else {
                 $payload['max_tokens'] = /*409600*/ 128000; 
             }
