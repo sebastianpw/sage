@@ -11,8 +11,213 @@ header('Content-Type: application/json; charset=utf-8');
 
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
+// Defensive check to ensure category table exists
+try {
+    $pdo->query("SELECT 1 FROM narrative_sequence_categories LIMIT 1");
+} catch (Exception $e) {
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS narrative_sequence_categories (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch (Exception $ex) {}
+}
+
 try {
     switch ($action) {
+
+        case 'get_sequence_categories':
+            try {
+                $stmt = $pdo->query("SELECT id, name FROM narrative_sequence_categories ORDER BY name ASC");
+                $cats = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                echo json_encode(['success' => true, 'data' => $cats]);
+            } catch (Exception $e) {
+                echo json_encode(['success' => true, 'data' => []]);
+            }
+            break;
+
+        case 'list_sequence_categories':
+            $page = max(1, (int)($_GET['page'] ?? 1));
+            $perPage = max(1, min(100, (int)($_GET['per_page'] ?? 8)));
+            $search = trim($_GET['search'] ?? '');
+
+            $where = ["1=1"];
+            $params = [];
+            if ($search !== '') {
+                $where[] = "c.name LIKE ?";
+                $params[] = "%$search%";
+            }
+            $whereSql = implode(' AND ', $where);
+
+            try {
+                $countStmt = $pdo->prepare("SELECT COUNT(*) FROM narrative_sequence_categories c WHERE $whereSql");
+                $countStmt->execute($params);
+                $total = (int)$countStmt->fetchColumn();
+
+                $offset = ($page - 1) * $perPage;
+
+                $hasCatCol = false;
+                try {
+                    $pdo->query("SELECT category_id FROM narrative_sequences LIMIT 1");
+                    $hasCatCol = true;
+                } catch (Exception $e) {}
+
+                $countSub = $hasCatCol 
+                    ? "(SELECT COUNT(*) FROM narrative_sequences ns WHERE ns.category_id = c.id)" 
+                    : "0";
+
+                $sql = "SELECT c.id, c.name, $countSub AS seq_count 
+                        FROM narrative_sequence_categories c 
+                        WHERE $whereSql 
+                        ORDER BY c.name ASC 
+                        LIMIT $perPage OFFSET $offset";
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute($params);
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                echo json_encode([
+                    'success' => true,
+                    'data' => $rows,
+                    'meta' => [
+                        'total' => $total,
+                        'page' => $page,
+                        'total_pages' => max(1, ceil($total / $perPage))
+                    ]
+                ]);
+            } catch (Exception $e) {
+                echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+            }
+            break;
+
+        case 'create_sequence_category':
+            $name = trim($_POST['name'] ?? '');
+            if (!$name) throw new Exception('Category name is required.');
+
+            $stmt = $pdo->prepare("INSERT INTO narrative_sequence_categories (name) VALUES (?)");
+            $stmt->execute([$name]);
+            $newCatId = (int)$pdo->lastInsertId();
+
+            echo json_encode(['success' => true, 'id' => $newCatId, 'name' => $name]);
+            break;
+
+        case 'update_sequence_category':
+            $id = (int)($_POST['id'] ?? 0);
+            $name = trim($_POST['name'] ?? '');
+            if (!$id || !$name) throw new Exception('Category ID and name are required.');
+
+            $stmt = $pdo->prepare("UPDATE narrative_sequence_categories SET name = ? WHERE id = ?");
+            $stmt->execute([$name, $id]);
+
+            echo json_encode(['success' => true, 'id' => $id, 'name' => $name]);
+            break;
+
+        case 'delete_sequence_category':
+            $id = (int)($_POST['id'] ?? 0);
+            if (!$id) throw new Exception('Category ID is required.');
+
+            $pdo->beginTransaction();
+            try {
+                $pdo->query("SELECT category_id FROM narrative_sequences LIMIT 1");
+                $upd = $pdo->prepare("UPDATE narrative_sequences SET category_id = NULL WHERE category_id = ?");
+                $upd->execute([$id]);
+            } catch (Exception $e) {}
+
+            $stmt = $pdo->prepare("DELETE FROM narrative_sequence_categories WHERE id = ?");
+            $stmt->execute([$id]);
+            $pdo->commit();
+
+            echo json_encode(['success' => true]);
+            break;
+
+        case 'search_sequences':
+            $q = trim($_GET['q'] ?? '');
+            $sql = "SELECT id, name FROM narrative_sequences";
+            $params = [];
+            if ($q !== '') {
+                $sql .= " WHERE name LIKE ? OR id = ?";
+                $params[] = "%$q%";
+                $params[] = (int)$q;
+            }
+            $sql .= " ORDER BY id DESC LIMIT 20";
+            
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $res = [];
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $res[] = [
+                    'id' => $row['id'],
+                    'label' => $row['name'] ?: 'Untitled Sequence'
+                ];
+            }
+            echo json_encode(['status' => 'success', 'data' => $res]);
+            break;
+
+        case 'get_sequences_list':
+            $page = max(1, (int)($_GET['page'] ?? 1));
+            $perPage = 30;
+            $search = trim($_GET['search'] ?? '');
+            $categoryId = (int)($_GET['category_id'] ?? 0);
+
+            $where = ["1=1"];
+            $params = [];
+
+            if ($search !== '') {
+                $where[] = "(name LIKE ? OR id = ?)";
+                $params[] = "%$search%";
+                $params[] = (int)$search;
+            }
+
+            $hasCat = false;
+            try {
+                $pdo->query("SELECT category_id FROM narrative_sequences LIMIT 1");
+                $hasCat = true;
+            } catch (Exception $e) { }
+
+            if ($hasCat && $categoryId > 0) {
+                $where[] = "category_id = ?";
+                $params[] = $categoryId;
+            }
+
+            $whereSql = implode(' AND ', $where);
+
+            try {
+                $countStmt = $pdo->prepare("SELECT COUNT(*) FROM narrative_sequences WHERE $whereSql");
+                $countStmt->execute($params);
+                $total = (int)$countStmt->fetchColumn();
+
+                $offset = ($page - 1) * $perPage;
+                
+                $catCol = $hasCat ? ", category_id" : "";
+                $stmt = $pdo->prepare("SELECT id, name, created_at, sequence_data $catCol FROM narrative_sequences WHERE $whereSql ORDER BY id DESC LIMIT $perPage OFFSET $offset");
+                $stmt->execute($params);
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                $data = [];
+                foreach ($rows as $row) {
+                    $sData = json_decode($row['sequence_data'] ?? '[]', true) ?: [];
+                    $data[] = [
+                        'id' => $row['id'],
+                        'name' => $row['name'] ?: 'Untitled Sequence',
+                        'created_at' => date('Y-m-d', strtotime($row['created_at'])),
+                        'skt_count' => count($sData),
+                        'category_id' => $hasCat ? (int)($row['category_id'] ?? 0) : 0
+                    ];
+                }
+
+                echo json_encode([
+                    'success' => true,
+                    'data' => $data,
+                    'meta' => [
+                        'total' => $total,
+                        'page' => $page,
+                        'total_pages' => max(1, ceil($total / $perPage))
+                    ]
+                ]);
+            } catch (Exception $e) {
+                echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+            }
+            break;
 
         case 'add_overlay':
             $sketchId = (int)($_POST['sketch_id'] ?? 0);
@@ -46,7 +251,6 @@ try {
                 $stmt = $pdo->prepare("UPDATE sketch_overlay_texts SET text_content = ? WHERE id = ? AND language_code = 'en'");
                 $stmt->execute([$text, $overlayId]);
             } else {
-                // Determine if a translation record already exists
                 $stmt = $pdo->prepare("SELECT id FROM sketch_overlay_texts WHERE sketch_id = ? AND language_code = ? AND display_order = ?");
                 $stmt->execute([$sketchId, $lang, $displayOrder]);
                 $existingId = $stmt->fetchColumn();
@@ -66,13 +270,11 @@ try {
             $overlayId = (int)($_POST['overlay_id'] ?? 0);
             if (!$overlayId) throw new Exception('Overlay ID required');
 
-            // Find the display order of the English record being deleted
             $stmt = $pdo->prepare("SELECT sketch_id, display_order FROM sketch_overlay_texts WHERE id = ? AND language_code = 'en'");
             $stmt->execute([$overlayId]);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($row) {
-                // Delete all language versions for this block
                 $delStmt = $pdo->prepare("DELETE FROM sketch_overlay_texts WHERE sketch_id = ? AND display_order = ?");
                 $delStmt->execute([$row['sketch_id'], $row['display_order']]);
             }
@@ -89,8 +291,6 @@ try {
             if (empty($ids)) throw new Exception('No valid IDs in order');
 
             $pdo->beginTransaction();
-            // Need to update the display_order of the 'en' block AND all matching translation blocks.
-            // First, determine old display_orders to map them correctly for translations.
             $stmt = $pdo->prepare("SELECT id, display_order FROM sketch_overlay_texts WHERE sketch_id = ? AND language_code = 'en'");
             $stmt->execute([$sketchId]);
             $oldOrders = [];
@@ -104,13 +304,11 @@ try {
             foreach ($ids as $newIndex => $overlayId) {
                 if (isset($oldOrders[$overlayId])) {
                     $oldIndex = $oldOrders[$overlayId];
-                    // Temporarily set old index to a negative space to avoid unique constraint collisions if any were added
                     $uTr->execute([-$newIndex - 1000, $sketchId, $oldIndex]);
                 }
                 $uEn->execute([$newIndex, $overlayId]);
             }
 
-            // Restore negative spaces to correct new index
             $uTrFinal = $pdo->prepare("UPDATE sketch_overlay_texts SET display_order = ? WHERE sketch_id = ? AND language_code != 'en' AND display_order = ?");
             foreach ($ids as $newIndex => $overlayId) {
                 $uTrFinal->execute([$newIndex, $sketchId, -$newIndex - 1000]);
@@ -120,8 +318,7 @@ try {
             echo json_encode(['success' => true]);
             break;
             
-            
-case 'export_overlay_texts':
+        case 'export_overlay_texts':
             $overwrite = (isset($_POST['overwrite']) && $_POST['overwrite'] === '1');
             $beatsJson = $_POST['beats'] ?? '[]';
             $beats = json_decode($beatsJson, true);
@@ -135,11 +332,8 @@ case 'export_overlay_texts':
 
             $pdo->beginTransaction();
 
-            // Check if any English overlay exists for the sketch
             $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM sketch_overlay_texts WHERE sketch_id = ? AND language_code = 'en'");
-            // Delete all overlays (including translations) for the sketch if replacing
             $delStmt = $pdo->prepare("DELETE FROM sketch_overlay_texts WHERE sketch_id = ?");
-            // Insert the new beat summary as the primary English overlay
             $insStmt = $pdo->prepare("INSERT INTO sketch_overlay_texts (sketch_id, text_content, language_code, display_order) VALUES (?, ?, 'en', 0)");
 
             foreach ($beats as $b) {
@@ -158,7 +352,6 @@ case 'export_overlay_texts':
                         $skipped++;
                         continue;
                     }
-                    // Overwrite: delete all existing overlay texts for this sketch
                     $delStmt->execute([$sketchId]);
                 }
 
@@ -169,7 +362,6 @@ case 'export_overlay_texts':
             $pdo->commit();
             echo json_encode(['success' => true, 'inserted' => $inserted, 'skipped' => $skipped]);
             break;
-            
 
         // ── Sequence Overlay Texts (1:1 per sequence per language) ─────────
         case 'get_sequence_overlay':

@@ -51,7 +51,7 @@ if (!$seqId) {
     
     .su-modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:300000; display:none; align-items:center; justify-content:center; backdrop-filter:blur(2px); }
     .su-modal-backdrop.active { display:flex; }
-    .su-modal-box { width:100%; max-width:440px; background:var(--pl-surface); border:1px solid var(--pl-border); border-radius:8px; padding:20px; box-shadow:0 10px 40px rgba(0,0,0,.5); margin:16px; }
+    .su-modal-box { width:100%; max-width:440px; max-height:90vh; overflow-y:auto; background:var(--pl-surface); border:1px solid var(--pl-border); border-radius:8px; padding:20px; box-shadow:0 10px 40px rgba(0,0,0,.5); margin:16px; }
     .su-modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; }
     .su-modal-title { font-size:1rem; font-weight:bold; font-family:'Space Mono',monospace; color:var(--pl-teal); text-transform:uppercase; letter-spacing:1px; }
     .su-modal-close { background:transparent; border:none; color:var(--pl-text-dim); cursor:pointer; font-size:1.2rem; }
@@ -87,6 +87,9 @@ if (!$seqId) {
     .ff-dropdown.open { display: block; }
     .ff-dropdown-item { padding: 8px 10px; font-size: 0.75rem; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.03); color: var(--pl-text); display: flex; justify-content: space-between; align-items:center; }
     .ff-dropdown-item:hover { background: rgba(58,181,200,0.1); color: var(--pl-teal); }
+
+    /* Category modal with higher z-index to overlay new/edit modals cleanly */
+    #categoryManageModal.su-modal-backdrop { z-index: 350000 !important; }
     </style>
 
     <div style="max-width:800px;margin:60px auto;padding:20px;">
@@ -101,10 +104,13 @@ if (!$seqId) {
                 <input type="text" id="mainSeqSearch" class="su-input" placeholder="Search sequences... (type for quick jump)" oninput="debounceMainSearch(this.value)" autocomplete="off">
                 <div id="mainSeqDrop" class="ff-dropdown" style="top:40px;"></div>
             </div>
-            <div style="flex:1; min-width: 150px; max-width: 200px;">
-                <select id="mainSeqCat" class="su-input" onchange="goToMainPage(1)">
+            <div style="flex:1; min-width: 170px; max-width: 240px; display:flex; gap:6px; align-items:center;">
+                <select id="mainSeqCat" class="su-input" style="flex:1;" onchange="goToMainPage(1)">
                     <option value="">All Categories</option>
                 </select>
+                <button type="button" class="pl-btn pl-btn-secondary" style="padding:7px 10px;" onclick="openCategoryManageModal()" title="Manage Categories">
+                    <i class="bi bi-gear"></i>
+                </button>
             </div>
             <div style="display:flex; align-items:center; gap:8px; margin-left:auto;">
                 <button class="pl-btn pl-btn-secondary" onclick="resetMainFilter()" title="Clear filters & reset">↻ Reset</button>
@@ -134,6 +140,33 @@ if (!$seqId) {
                     <label style="display:block;font-family:'Space Mono',monospace;font-size:.7rem;color:var(--pl-text-dim);margin-bottom:5px;text-transform:uppercase;letter-spacing:1px;">Sequence Name</label>
                     <input type="text" id="newSeqName" class="su-input" placeholder="e.g. Act 1 — The Awakening"
                            onkeydown="if(event.key==='Enter') submitNew()">
+                </div>
+                <div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                        <label style="font-family:'Space Mono',monospace;font-size:.7rem;color:var(--pl-text-dim);text-transform:uppercase;letter-spacing:1px;">Category</label>
+                        <button type="button" onclick="openCategoryManageModal()" style="background:none; border:none; color:var(--pl-teal); cursor:pointer; font-size:0.7rem; font-family:'Space Mono',monospace;">Manage ⚙</button>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <select id="newSeqCat" class="su-input" style="flex:1;">
+                            <option value="0">No Category</option>
+                        </select>
+                        <button type="button" class="pl-btn pl-btn-secondary" style="padding:7px 10px;" onclick="openCategoryManageModal()" title="Manage Categories"><i class="bi bi-gear"></i></button>
+                    </div>
+                </div>
+                <div style="border-top:1px solid var(--pl-border); padding-top:12px; margin-top:4px;">
+                    <label style="display:block;font-family:'Space Mono',monospace;font-size:.7rem;color:var(--pl-amber);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">🎬 Cinemagic Assignment (Optional)</label>
+                    <select id="newSeqCmSelect" class="su-input" onchange="toggleNewCmCustom(this.value)">
+                        <option value="">— No Cinemagic —</option>
+                        <option value="__new__">＋ Create New Cinemagic…</option>
+                    </select>
+                </div>
+                <div id="newSeqCmNewWrap" style="display:none;">
+                    <label style="display:block;font-family:'Space Mono',monospace;font-size:.65rem;color:var(--pl-text-dim);margin-bottom:4px;text-transform:uppercase;">New Cinemagic Name</label>
+                    <input type="text" id="newSeqCmNewName" class="su-input" placeholder="e.g. Volume 1: Origins">
+                </div>
+                <div id="newSeqCmLabelWrap" style="display:none;">
+                    <label style="display:block;font-family:'Space Mono',monospace;font-size:.65rem;color:var(--pl-text-dim);margin-bottom:4px;text-transform:uppercase;">Chapter Label (Optional)</label>
+                    <input type="text" id="newSeqCmChapter" class="su-input" placeholder="e.g. Chapter 1">
                 </div>
             </div>
             <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">
@@ -178,15 +211,75 @@ if (!$seqId) {
                     <input type="text" id="editSeqName" class="su-input" onkeydown="if(event.key==='Enter') submitEdit()">
                 </div>
                 <div>
-                    <label style="display:block;font-family:'Space Mono',monospace;font-size:.7rem;color:var(--pl-text-dim);margin-bottom:5px;text-transform:uppercase;letter-spacing:1px;">Category</label>
-                    <select id="editSeqCat" class="su-input">
-                        <option value="0">No Category</option>
-                    </select>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                        <label style="font-family:'Space Mono',monospace;font-size:.7rem;color:var(--pl-text-dim);text-transform:uppercase;letter-spacing:1px;">Category</label>
+                        <button type="button" onclick="openCategoryManageModal()" style="background:none; border:none; color:var(--pl-teal); cursor:pointer; font-size:0.7rem; font-family:'Space Mono',monospace;">Manage ⚙</button>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <select id="editSeqCat" class="su-input" style="flex:1;">
+                            <option value="0">No Category</option>
+                        </select>
+                        <button type="button" class="pl-btn pl-btn-secondary" style="padding:7px 10px;" onclick="openCategoryManageModal()" title="Manage Categories"><i class="bi bi-gear"></i></button>
+                    </div>
+                </div>
+
+                <div style="border-top:1px solid var(--pl-border); padding-top:12px; margin-top:4px;">
+                    <label style="display:block;font-family:'Space Mono',monospace;font-size:.7rem;color:var(--pl-amber);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">🎬 Cinemagic Collections</label>
+                    
+                    <div id="editCmBadges" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; min-height:24px;">
+                        <span style="font-size:0.75rem; color:var(--pl-text-dim); font-style:italic;">Loading memberships…</span>
+                    </div>
+
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
+                        <select id="editCmSelect" class="su-input" style="flex:2; min-width:140px;">
+                            <option value="">— Select Cinemagic —</option>
+                        </select>
+                        <input type="text" id="editCmChapter" class="su-input" placeholder="Chapter label" style="flex:1; min-width:90px;">
+                        <button type="button" class="pl-btn pl-btn-secondary" style="border-color:var(--pl-amber); color:var(--pl-amber);" onclick="assignEditCm()">+ Assign</button>
+                    </div>
+
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                        <input type="text" id="editCmNewName" class="su-input" placeholder="New Cinemagic name…" style="flex:2; min-width:140px;">
+                        <button type="button" class="pl-btn pl-btn-secondary" style="white-space:nowrap;" onclick="createAndAssignEditCm()">Create &amp; Assign</button>
+                    </div>
                 </div>
             </div>
             <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">
                 <button onclick="closeEditModal()" class="pl-btn pl-btn-secondary">Cancel</button>
                 <button onclick="submitEdit()" class="pl-btn pl-btn-teal">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Manager Modal (High z-index: 350000) -->
+    <div id="categoryManageModal" class="su-modal-backdrop" onmousedown="if(event.target===this)closeCategoryManageModal()">
+        <div class="su-modal-box" style="max-width:480px;">
+            <div class="su-modal-header">
+                <div class="su-modal-title" style="color:var(--pl-teal);"><i class="bi bi-tags"></i> Manage Categories</div>
+                <button onclick="closeCategoryManageModal()" class="su-modal-close">✕</button>
+            </div>
+
+            <!-- Create Category Input -->
+            <div style="display:flex; gap:8px; margin-bottom:14px;">
+                <input type="text" id="catCreateInput" class="su-input" placeholder="New category name…" onkeydown="if(event.key==='Enter') createCategoryAjax()">
+                <button class="pl-btn pl-btn-teal" style="flex-shrink:0;" onclick="createCategoryAjax()">＋ Add</button>
+            </div>
+
+            <!-- Category Search / Filter -->
+            <div style="position:relative; margin-bottom:12px;">
+                <input type="text" id="catFilterInput" class="su-input" placeholder="Filter categories…" oninput="debounceCategorySearch(this.value)" style="font-size:0.75rem; padding:6px 10px;">
+            </div>
+
+            <!-- Paginated Categories List Container -->
+            <div id="catListContainer" style="display:flex; flex-direction:column; gap:6px; min-height:140px; margin-bottom:14px;">
+                <div style="text-align:center; padding:20px; color:var(--pl-text-dim); font-size:0.8rem;">Loading categories…</div>
+            </div>
+
+            <!-- Pagination Bar for Categories -->
+            <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--pl-border); padding-top:12px;">
+                <button class="pl-btn pl-btn-secondary" id="catPrevBtn" onclick="changeCategoryPage(-1)">« Prev</button>
+                <span id="catPaginationLabel" style="font-size:0.75rem; color:var(--pl-text-dim); font-family:'Space Mono',monospace;">Page 1 of 1</span>
+                <button class="pl-btn pl-btn-secondary" id="catNextBtn" onclick="changeCategoryPage(1)">Next »</button>
             </div>
         </div>
     </div>
@@ -264,9 +357,11 @@ if (!$seqId) {
     // --- MAIN LIST LOGIC ---
     let curMainPage = 1;
     let totalMainPages = 1;
+    let allCinemagicsCache = [];
 
     document.addEventListener('DOMContentLoaded', () => {
         restoreMainState();
+        loadCinemagicsList();
         loadMainCategories().then(() => {
             const stored = localStorage.getItem('narseq_list_state');
             if (stored) {
@@ -306,18 +401,56 @@ if (!$seqId) {
     }
 
     function loadMainCategories() {
+        const activeMain = document.getElementById('mainSeqCat').value;
+        const activeNew = document.getElementById('newSeqCat') ? document.getElementById('newSeqCat').value : '0';
+        const activeEdit = document.getElementById('editSeqCat') ? document.getElementById('editSeqCat').value : '0';
+
         return fetch('narseq_api.php?action=get_sequence_categories')
             .then(r=>r.json()).then(res => {
+                const mainSel = document.getElementById('mainSeqCat');
+                const newSel = document.getElementById('newSeqCat');
+                const editSel = document.getElementById('editSeqCat');
+
+                mainSel.innerHTML = '<option value="">All Categories</option>';
+                if (newSel) newSel.innerHTML = '<option value="0">No Category</option>';
+                if (editSel) editSel.innerHTML = '<option value="0">No Category</option>';
+
                 if(res.success && res.data && res.data.length > 0) {
-                    const sel = document.getElementById('mainSeqCat');
                     res.data.forEach(c => {
                         const opt = document.createElement('option');
                         opt.value = c.id;
                         opt.textContent = c.name;
-                        sel.appendChild(opt);
+                        mainSel.appendChild(opt);
+
+                        if (newSel) {
+                            const optN = document.createElement('option');
+                            optN.value = c.id;
+                            optN.textContent = c.name;
+                            newSel.appendChild(optN);
+                        }
+                        if (editSel) {
+                            const optE = document.createElement('option');
+                            optE.value = c.id;
+                            optE.textContent = c.name;
+                            editSel.appendChild(optE);
+                        }
                     });
                 }
+                mainSel.value = activeMain || '';
+                if (newSel) newSel.value = activeNew || '0';
+                if (editSel) editSel.value = activeEdit || '0';
             }).catch(e=>console.log('Categories not initialized or unavailable'));
+    }
+
+    function loadCinemagicsList() {
+        return fetch('narseq_api.php?action=get_cinemagics')
+            .then(r => r.json())
+            .then(res => {
+                if (res.success && res.data) {
+                    allCinemagicsCache = res.data;
+                }
+                return allCinemagicsCache;
+            }).catch(e => []);
     }
 
     function goToMainPage(p) {
@@ -447,8 +580,51 @@ if (!$seqId) {
             });
     }
     
+    function toggleNewCmCustom(val) {
+        const newWrap = document.getElementById('newSeqCmNewWrap');
+        const labelWrap = document.getElementById('newSeqCmLabelWrap');
+        if (val === '__new__') {
+            newWrap.style.display = 'block';
+            labelWrap.style.display = 'block';
+        } else if (val !== '') {
+            newWrap.style.display = 'none';
+            labelWrap.style.display = 'block';
+        } else {
+            newWrap.style.display = 'none';
+            labelWrap.style.display = 'none';
+        }
+    }
+
     function openNewModal() {
         document.getElementById('newSeqName').value = '';
+        
+        // Sync categories to new modal select
+        const newCatSelect = document.getElementById('newSeqCat');
+        newCatSelect.innerHTML = '<option value="0">No Category</option>';
+        document.querySelectorAll('#mainSeqCat option').forEach(opt => {
+            if (opt.value !== '') {
+                const newOpt = document.createElement('option');
+                newOpt.value = opt.value;
+                newOpt.textContent = opt.textContent;
+                newCatSelect.appendChild(newOpt);
+            }
+        });
+        const mainCatVal = document.getElementById('mainSeqCat').value;
+        newCatSelect.value = mainCatVal || '0';
+
+        // Populate Cinemagics in new modal select
+        const cmSel = document.getElementById('newSeqCmSelect');
+        cmSel.innerHTML = '<option value="">— No Cinemagic —</option><option value="__new__">＋ Create New Cinemagic…</option>';
+        allCinemagicsCache.forEach(cm => {
+            const opt = document.createElement('option');
+            opt.value = cm.id;
+            opt.textContent = '#' + cm.id + ' ' + cm.name;
+            cmSel.appendChild(opt);
+        });
+        document.getElementById('newSeqCmNewName').value = '';
+        document.getElementById('newSeqCmChapter').value = '';
+        toggleNewCmCustom('');
+
         document.getElementById('newModal').classList.add('active');
         setTimeout(() => document.getElementById('newSeqName').focus(), 50);
     }
@@ -459,9 +635,25 @@ if (!$seqId) {
         const name = document.getElementById('newSeqName').value.trim();
         if (!name) return Toast.show('Name required', 'warn');
 
+        const catId = document.getElementById('newSeqCat').value;
+        const cmChoice = document.getElementById('newSeqCmSelect').value;
+        let cmId = '';
+        let newCmName = '';
+        if (cmChoice === '__new__') {
+            newCmName = document.getElementById('newSeqCmNewName').value.trim();
+            if (!newCmName) return Toast.show('Cinemagic name required', 'warn');
+        } else if (cmChoice !== '') {
+            cmId = cmChoice;
+        }
+        const chapterLabel = document.getElementById('newSeqCmChapter').value.trim();
+
         const fd = new URLSearchParams();
         fd.append('action', 'create_sequence');
         fd.append('name', name);
+        fd.append('category_id', catId);
+        if (cmId) fd.append('cinemagic_id', cmId);
+        if (newCmName) fd.append('new_cinemagic_name', newCmName);
+        if (chapterLabel) fd.append('chapter_label', chapterLabel);
 
         fetch('narseq_api.php', { method: 'POST', body: fd })
             .then(r => r.json())
@@ -472,7 +664,109 @@ if (!$seqId) {
     }
 
     // --- EDIT & DELETE LOGIC ---
+    let activeEditSeqId = 0;
+
+    function loadEditCmMemberships(seqId) {
+        const badgesCont = document.getElementById('editCmBadges');
+        badgesCont.innerHTML = '<span style="font-size:0.75rem; color:var(--pl-text-dim); font-style:italic;">Loading memberships…</span>';
+
+        fetch(`narseq_api.php?action=get_sequence_cinemagics&sequence_id=${seqId}`)
+            .then(r => r.json())
+            .then(res => {
+                if (res.success && res.data && res.data.length > 0) {
+                    badgesCont.innerHTML = res.data.map(cm => `
+                        <span style="display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border:1px solid var(--pl-border); border-radius:4px; background:var(--pl-card); font-family:'Space Mono',monospace; font-size:0.7rem; color:var(--pl-text);">
+                            <span>#${cm.id} ${cm.name} ${cm.chapter_label ? `<span style="color:var(--pl-teal);">[${cm.chapter_label}]</span>` : ''}</span>
+                            <button type="button" onclick="removeEditCm(${cm.id})" title="Remove from Cinemagic" style="background:none; border:none; color:#ff4444; cursor:pointer; font-size:0.8rem; padding:0 0 0 4px; line-height:1;">✕</button>
+                        </span>
+                    `).join('');
+                } else {
+                    badgesCont.innerHTML = '<span style="font-size:0.75rem; color:var(--pl-text-dim); font-style:italic;">Not in any Cinemagic yet.</span>';
+                }
+            }).catch(() => {
+                badgesCont.innerHTML = '<span style="font-size:0.75rem; color:#ff4444;">Could not load Cinemagics.</span>';
+            });
+    }
+
+    function assignEditCm() {
+        if (!activeEditSeqId) return;
+        const cmId = document.getElementById('editCmSelect').value;
+        const label = document.getElementById('editCmChapter').value.trim();
+        if (!cmId) return Toast.show('Please select a Cinemagic', 'warn');
+
+        const fd = new URLSearchParams();
+        fd.append('action', 'assign_to_cinemagic');
+        fd.append('cinemagic_id', cmId);
+        fd.append('sequence_id', activeEditSeqId);
+        fd.append('chapter_label', label);
+
+        fetch('narseq_api.php', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) {
+                    Toast.show('Assigned to Cinemagic', 'success');
+                    document.getElementById('editCmChapter').value = '';
+                    loadEditCmMemberships(activeEditSeqId);
+                } else {
+                    Toast.show(res.message || 'Assignment failed', 'error');
+                }
+            });
+    }
+
+    function createAndAssignEditCm() {
+        if (!activeEditSeqId) return;
+        const name = document.getElementById('editCmNewName').value.trim();
+        if (!name) return Toast.show('Cinemagic name required', 'warn');
+
+        const fd = new URLSearchParams();
+        fd.append('action', 'create_cinemagic');
+        fd.append('name', name);
+        fd.append('sequence_id', activeEditSeqId);
+
+        fetch('narseq_api.php', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) {
+                    Toast.show('Cinemagic created & assigned', 'success');
+                    document.getElementById('editCmNewName').value = '';
+                    loadCinemagicsList().then(() => {
+                        const sel = document.getElementById('editCmSelect');
+                        sel.innerHTML = '<option value="">— Select Cinemagic —</option>';
+                        allCinemagicsCache.forEach(cm => {
+                            const opt = document.createElement('option');
+                            opt.value = cm.id;
+                            opt.textContent = '#' + cm.id + ' ' + cm.name;
+                            sel.appendChild(opt);
+                        });
+                    });
+                    loadEditCmMemberships(activeEditSeqId);
+                } else {
+                    Toast.show(res.message || 'Creation failed', 'error');
+                }
+            });
+    }
+
+    function removeEditCm(cmId) {
+        if (!activeEditSeqId) return;
+        const fd = new URLSearchParams();
+        fd.append('action', 'remove_from_cinemagic');
+        fd.append('cinemagic_id', cmId);
+        fd.append('sequence_id', activeEditSeqId);
+
+        fetch('narseq_api.php', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) {
+                    Toast.show('Removed from Cinemagic', 'info');
+                    loadEditCmMemberships(activeEditSeqId);
+                } else {
+                    Toast.show(res.message || 'Remove failed', 'error');
+                }
+            });
+    }
+
     function openEditModal(id, name, catId) {
+        activeEditSeqId = id;
         document.getElementById('editSeqId').value = id;
         document.getElementById('editSeqName').value = name;
         
@@ -489,12 +783,27 @@ if (!$seqId) {
         });
         editCatSelect.value = catId || 0;
 
+        // Populate Cinemagic options
+        const cmSel = document.getElementById('editCmSelect');
+        cmSel.innerHTML = '<option value="">— Select Cinemagic —</option>';
+        allCinemagicsCache.forEach(cm => {
+            const opt = document.createElement('option');
+            opt.value = cm.id;
+            opt.textContent = '#' + cm.id + ' ' + cm.name;
+            cmSel.appendChild(opt);
+        });
+        document.getElementById('editCmChapter').value = '';
+        document.getElementById('editCmNewName').value = '';
+
+        loadEditCmMemberships(id);
+
         document.getElementById('editModal').classList.add('active');
         setTimeout(() => document.getElementById('editSeqName').focus(), 50);
     }
 
     function closeEditModal() {
         document.getElementById('editModal').classList.remove('active');
+        activeEditSeqId = 0;
     }
 
     function submitEdit() {
@@ -540,6 +849,174 @@ if (!$seqId) {
             });
     }
 
+    // --- CATEGORY MANAGER MODAL LOGIC ---
+    let curCatPage = 1;
+    let totalCatPages = 1;
+    let catSearchTimer = null;
+
+    function openCategoryManageModal() {
+        document.getElementById('catCreateInput').value = '';
+        document.getElementById('catFilterInput').value = '';
+        document.getElementById('categoryManageModal').classList.add('active');
+        curCatPage = 1;
+        loadCategoryManagerList();
+        setTimeout(() => document.getElementById('catCreateInput').focus(), 50);
+    }
+
+    function closeCategoryManageModal() {
+        document.getElementById('categoryManageModal').classList.remove('active');
+    }
+
+    function changeCategoryPage(delta) {
+        const target = curCatPage + delta;
+        if (target >= 1 && target <= totalCatPages) {
+            curCatPage = target;
+            loadCategoryManagerList();
+        }
+    }
+
+    function debounceCategorySearch(val) {
+        clearTimeout(catSearchTimer);
+        catSearchTimer = setTimeout(() => {
+            curCatPage = 1;
+            loadCategoryManagerList();
+        }, 300);
+    }
+
+    function loadCategoryManagerList() {
+        const search = document.getElementById('catFilterInput').value.trim();
+        const cont = document.getElementById('catListContainer');
+        cont.innerHTML = '<div style="text-align:center; padding:15px; color:var(--pl-text-dim); font-size:0.8rem;">Loading…</div>';
+
+        fetch(`narseq_api.php?action=list_sequence_categories&page=${curCatPage}&per_page=8&search=${encodeURIComponent(search)}`)
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) {
+                    totalCatPages = res.meta.total_pages;
+                    curCatPage = res.meta.page;
+                    document.getElementById('catPaginationLabel').textContent = `Page ${curCatPage} of ${totalCatPages}`;
+                    document.getElementById('catPrevBtn').disabled = (curCatPage <= 1);
+                    document.getElementById('catNextBtn').disabled = (curCatPage >= totalCatPages);
+
+                    if (!res.data.length) {
+                        cont.innerHTML = '<div style="text-align:center; padding:15px; color:var(--pl-text-dim); font-size:0.8rem;">No categories found.</div>';
+                        return;
+                    }
+
+                    cont.innerHTML = res.data.map(c => {
+                        const safeName = c.name.replace(/"/g, '&quot;').replace(/'/g, "\\'");
+                        return `
+                        <div style="display:flex; align-items:center; justify-content:space-between; padding:7px 10px; background:var(--pl-card); border:1px solid var(--pl-border); border-radius:4px; gap:8px;">
+                            <div style="flex:1; min-width:0; display:flex; align-items:center; gap:8px;">
+                                <input type="text" class="su-input cat-name-input" value="${safeName}" style="padding:4px 8px; font-size:0.8rem; display:none;" onkeydown="if(event.key==='Enter') saveCatInline(${c.id}, this)">
+                                <span class="cat-name-display" style="font-size:0.8rem; color:var(--pl-text); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${c.name}</span>
+                                <span style="font-size:0.65rem; color:var(--pl-text-dim); flex-shrink:0;">(${c.seq_count || 0} seq)</span>
+                            </div>
+                            <div style="display:flex; gap:4px; flex-shrink:0;">
+                                <button type="button" class="pl-btn pl-btn-secondary cat-edit-btn" style="padding:4px 8px; font-size:0.75rem;" onclick="startCatInline(this)"><i class="bi bi-pencil"></i></button>
+                                <button type="button" class="pl-btn pl-btn-teal cat-save-btn" style="padding:4px 8px; font-size:0.75rem; display:none;" onclick="saveCatInline(${c.id}, this)"><i class="bi bi-check-lg"></i></button>
+                                <button type="button" class="pl-btn pl-btn-secondary cat-cancel-btn" style="padding:4px 8px; font-size:0.75rem; display:none;" onclick="cancelCatInline(this, '${safeName}')"><i class="bi bi-x-lg"></i></button>
+                                <button type="button" class="pl-btn pl-btn-secondary" style="padding:4px 8px; font-size:0.75rem; color:#ff4444; border-color:rgba(255,68,68,0.3);" onclick="deleteCategoryAjax(${c.id}, '${safeName}')"><i class="bi bi-trash"></i></button>
+                            </div>
+                        </div>`;
+                    }).join('');
+                } else {
+                    cont.innerHTML = `<div style="text-align:center; padding:15px; color:#ff4444; font-size:0.8rem;">Error: ${res.message}</div>`;
+                }
+            }).catch(() => {
+                cont.innerHTML = '<div style="text-align:center; padding:15px; color:#ff4444; font-size:0.8rem;">Network error</div>';
+            });
+    }
+
+    function createCategoryAjax() {
+        const inp = document.getElementById('catCreateInput');
+        const name = inp.value.trim();
+        if (!name) return Toast.show('Category name required', 'warn');
+
+        const fd = new URLSearchParams();
+        fd.append('action', 'create_sequence_category');
+        fd.append('name', name);
+
+        fetch('narseq_api.php', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) {
+                    Toast.show(`Category "${name}" created`, 'success');
+                    inp.value = '';
+                    loadCategoryManagerList();
+                    loadMainCategories();
+                } else {
+                    Toast.show(res.message || 'Creation failed', 'error');
+                }
+            });
+    }
+
+    function startCatInline(btn) {
+        const row = btn.closest('div').parentElement;
+        row.querySelector('.cat-name-display').style.display = 'none';
+        const input = row.querySelector('.cat-name-input');
+        input.style.display = 'block';
+        input.focus();
+        row.querySelector('.cat-edit-btn').style.display = 'none';
+        row.querySelector('.cat-save-btn').style.display = 'inline-block';
+        row.querySelector('.cat-cancel-btn').style.display = 'inline-block';
+    }
+
+    function cancelCatInline(btn, origVal) {
+        const row = btn.closest('div').parentElement;
+        const input = row.querySelector('.cat-name-input');
+        input.value = origVal;
+        input.style.display = 'none';
+        row.querySelector('.cat-name-display').style.display = 'block';
+        row.querySelector('.cat-edit-btn').style.display = 'inline-block';
+        row.querySelector('.cat-save-btn').style.display = 'none';
+        row.querySelector('.cat-cancel-btn').style.display = 'none';
+    }
+
+    function saveCatInline(id, el) {
+        const row = el.closest('div').parentElement;
+        const newName = row.querySelector('.cat-name-input').value.trim();
+        if (!newName) return Toast.show('Name cannot be empty', 'warn');
+
+        const fd = new URLSearchParams();
+        fd.append('action', 'update_sequence_category');
+        fd.append('id', id);
+        fd.append('name', newName);
+
+        fetch('narseq_api.php', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) {
+                    Toast.show('Category updated', 'success');
+                    row.querySelector('.cat-name-display').textContent = newName;
+                    cancelCatInline(row.querySelector('.cat-cancel-btn'), newName);
+                    loadMainCategories();
+                } else {
+                    Toast.show(res.message || 'Update failed', 'error');
+                }
+            });
+    }
+
+    function deleteCategoryAjax(id, name) {
+        if (!confirm(`Delete category "${name}"? Sequences assigned to it will become uncategorized.`)) return;
+
+        const fd = new URLSearchParams();
+        fd.append('action', 'delete_sequence_category');
+        fd.append('id', id);
+
+        fetch('narseq_api.php', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) {
+                    Toast.show('Category deleted', 'info');
+                    loadCategoryManagerList();
+                    loadMainCategories();
+                } else {
+                    Toast.show(res.message || 'Delete failed', 'error');
+                }
+            });
+    }
+
     // --- BANG! DIRECT RENDER LOGIC ---
     let activeBrSeqId = null;
 
@@ -547,14 +1024,9 @@ if (!$seqId) {
         activeBrSeqId = id;
         document.getElementById('bangRenderMeta').innerHTML = `<b>#${id} — ${name}</b><br><span style="color:var(--pl-text-dim); font-size:0.75rem;">Sequence contains ${frameCount} frames</span>`;
         
-        
-        
         // In openBangRenderModal(): read from localStorage (fallback to 1024 / 1536)
-document.getElementById('brWidth').value = localStorage.getItem('bang_w') || 1024;
-document.getElementById('brHeight').value = localStorage.getItem('bang_h') || 1536;
-
-
-        
+        document.getElementById('brWidth').value = localStorage.getItem('bang_w') || 1024;
+        document.getElementById('brHeight').value = localStorage.getItem('bang_h') || 1536;
 
         const rc = Math.ceil(Math.sqrt(frameCount));
         document.getElementById('brRows').value = Math.max(1, Math.ceil(frameCount / rc)) || 3;
@@ -585,10 +1057,9 @@ document.getElementById('brHeight').value = localStorage.getItem('bang_h') || 15
         const cols = parseInt(document.getElementById('brCols').value) || 3;
         const gutter = parseInt(document.getElementById('brGutter').value) || 10;
         
-        
         // In submitBangRender(): persist before sending
-localStorage.setItem('bang_w', width);
-localStorage.setItem('bang_h', height);
+        localStorage.setItem('bang_w', width);
+        localStorage.setItem('bang_h', height);
 
         document.getElementById('bangRenderIndicator').style.display = 'block';
         document.getElementById('bangRenderForm').style.display = 'none';
@@ -2331,5 +2802,3 @@ function closeEntityModal() {
 $content = ob_get_clean();
 $spw->renderLayout($content, $pageTitle, $spw->getProjectPath() . '/templates/curation.php');
 ?>
-
-

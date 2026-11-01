@@ -299,21 +299,32 @@ if (isset($_REQUEST['action'])) {
             }
             $exportedSketches[] = $item;
         }
-
+        
+        
+        
+        
         $usedEntities = [];
         if (!empty($usedTagsMap)) {
             $tagsList = array_keys($usedTagsMap);
             $inTags = implode(',', array_fill(0, count($tagsList), '?'));
-            $stmtEnt = $pdo->prepare("SELECT tag_name, canonical_name, entity_type, description FROM continuity_entities WHERE UPPER(tag_name) IN ($inTags)");
+            // ADDED img2img_frame_id to SELECT
+            $stmtEnt = $pdo->prepare("SELECT tag_name, canonical_name, entity_type, description, img2img_frame_id FROM continuity_entities WHERE UPPER(tag_name) IN ($inTags)");
             $stmtEnt->execute($tagsList);
             foreach ($stmtEnt->fetchAll(PDO::FETCH_ASSOC) as $e) {
-                $usedEntities[strtoupper($e['tag_name'])] = [
+                $entData = [
                     'canonical_name' => $e['canonical_name'],
                     'entity_type'    => $e['entity_type'],
                     'description'    => $e['description']
                 ];
+                // Embed frame ID if it exists so it exports properly in object notation
+                if (!empty($e['img2img_frame_id'])) {
+                    $entData['img2img_frame_id'] = (int)$e['img2img_frame_id'];
+                }
+                $usedEntities[strtoupper($e['tag_name'])] = $entData;
             }
         }
+
+
 
         $exportPayload = [
             'export_meta' => [

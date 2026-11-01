@@ -11,6 +11,19 @@ header('Content-Type: application/json; charset=utf-8');
 
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
+// Defensive check to ensure category table exists
+try {
+    $pdo->query("SELECT 1 FROM narrative_sequence_categories LIMIT 1");
+} catch (Exception $e) {
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS narrative_sequence_categories (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch (Exception $ex) {}
+}
+
 try {
     switch ($action) {
 
@@ -87,9 +100,182 @@ try {
                 $cats = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 echo json_encode(['success' => true, 'data' => $cats]);
             } catch (Exception $e) {
-                // Table might not exist yet; gracefully fallback
                 echo json_encode(['success' => true, 'data' => []]);
             }
+            break;
+
+        case 'list_sequence_categories':
+            $page = max(1, (int)($_GET['page'] ?? 1));
+            $perPage = max(1, min(100, (int)($_GET['per_page'] ?? 8)));
+            $search = trim($_GET['search'] ?? '');
+
+            $where = ["1=1"];
+            $params = [];
+            if ($search !== '') {
+                $where[] = "c.name LIKE ?";
+                $params[] = "%$search%";
+            }
+            $whereSql = implode(' AND ', $where);
+
+            try {
+                $countStmt = $pdo->prepare("SELECT COUNT(*) FROM narrative_sequence_categories c WHERE $whereSql");
+                $countStmt->execute($params);
+                $total = (int)$countStmt->fetchColumn();
+
+                $offset = ($page - 1) * $perPage;
+
+                // Check if narrative_sequences has category_id column
+                $hasCatCol = false;
+                try {
+                    $pdo->query("SELECT category_id FROM narrative_sequences LIMIT 1");
+                    $hasCatCol = true;
+                } catch (Exception $e) {}
+
+                $countSub = $hasCatCol 
+                    ? "(SELECT COUNT(*) FROM narrative_sequences ns WHERE ns.category_id = c.id)" 
+                    : "0";
+
+                $sql = "SELECT c.id, c.name, $countSub AS seq_count 
+                        FROM narrative_sequence_categories c 
+                        WHERE $whereSql 
+                        ORDER BY c.name ASC 
+                        LIMIT $perPage OFFSET $offset";
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute($params);
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                echo json_encode([
+                    'success' => true,
+                    'data' => $rows,
+                    'meta' => [
+                        'total' => $total,
+                        'page' => $page,
+                        'total_pages' => max(1, ceil($total / $perPage))
+                    ]
+                ]);
+            } catch (Exception $e) {
+                echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+            }
+            break;
+
+        case 'create_sequence_category':
+            $name = trim($_POST['name'] ?? '');
+            if (!$name) throw new Exception('Category name is required.');
+
+            $stmt = $pdo->prepare("INSERT INTO narrative_sequence_categories (name) VALUES (?)");
+            $stmt->execute([$name]);
+            $newCatId = (int)$pdo->lastInsertId();
+
+            echo json_encode(['success' => true, 'id' => $newCatId, 'name' => $name]);
+            break;
+
+        case 'update_sequence_category':
+            $id = (int)($_POST['id'] ?? 0);
+            $name = trim($_POST['name'] ?? '');
+            if (!$id || !$name) throw new Exception('Category ID and name are required.');
+
+            $stmt = $pdo->prepare("UPDATE narrative_sequence_categories SET name = ? WHERE id = ?");
+            $stmt->execute([$name, $id]);
+
+            echo json_encode(['success' => true, 'id' => $id, 'name' => $name]);
+            break;
+
+        case 'delete_sequence_category':
+            $id = (int)($_POST['id'] ?? 0);
+            if (!$id) throw new Exception('Category ID is required.');
+
+            $pdo->beginTransaction();
+            try {
+                $pdo->query("SELECT category_id FROM narrative_sequences LIMIT 1");
+                $upd = $pdo->prepare("UPDATE narrative_sequences SET category_id = NULL WHERE category_id = ?");
+                $upd->execute([$id]);
+            } catch (Exception $e) {}
+
+            $stmt = $pdo->prepare("DELETE FROM narrative_sequence_categories WHERE id = ?");
+            $stmt->execute([$id]);
+            $pdo->commit();
+
+            echo json_encode(['success' => true]);
+            break;
+
+        case 'get_cinemagics':
+            try {
+                $stmt = $pdo->query("SELECT id, name FROM cinemagics ORDER BY name ASC");
+                $cms = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                echo json_encode(['success' => true, 'data' => $cms]);
+            } catch (Exception $e) {
+                echo json_encode(['success' => true, 'data' => []]);
+            }
+            break;
+
+        case 'get_sequence_cinemagics':
+            $seqId = (int)($_GET['sequence_id'] ?? 0);
+            if (!$seqId) throw new Exception('Sequence ID required.');
+            try {
+                $stmt = $pdo->prepare("
+                    SELECT c.id, c.name, cs.sort_order, cs.chapter_label
+                    FROM cinemagics c
+                    JOIN cinemagics_2_sequences cs ON cs.cinemagic_id = c.id
+                    WHERE cs.sequence_id = ?
+                    ORDER BY c.name ASC
+                ");
+                $stmt->execute([$seqId]);
+                $cms = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                echo json_encode(['success' => true, 'data' => $cms]);
+            } catch (Exception $e) {
+                echo json_encode(['success' => true, 'data' => []]);
+            }
+            break;
+
+        case 'assign_to_cinemagic':
+            $cinemagicId = (int)($_POST['cinemagic_id'] ?? 0);
+            $sequenceId  = (int)($_POST['sequence_id']  ?? 0);
+            $sortOrder   = (int)($_POST['sort_order']   ?? 0);
+            $label       = trim($_POST['chapter_label'] ?? '');
+            if (!$cinemagicId || !$sequenceId) throw new Exception('cinemagic_id and sequence_id required');
+
+            $stmt = $pdo->prepare(
+                "INSERT INTO cinemagics_2_sequences (cinemagic_id, sequence_id, sort_order, chapter_label)
+                 VALUES (?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order), chapter_label = VALUES(chapter_label)"
+            );
+            $stmt->execute([$cinemagicId, $sequenceId, $sortOrder, $label ?: null]);
+            echo json_encode(['success' => true]);
+            break;
+
+        case 'remove_from_cinemagic':
+            $cinemagicId = (int)($_POST['cinemagic_id'] ?? 0);
+            $sequenceId  = (int)($_POST['sequence_id']  ?? 0);
+            if (!$cinemagicId || !$sequenceId) throw new Exception('cinemagic_id and sequence_id required');
+
+            $stmt = $pdo->prepare("DELETE FROM cinemagics_2_sequences WHERE cinemagic_id = ? AND sequence_id = ?");
+            $stmt->execute([$cinemagicId, $sequenceId]);
+            echo json_encode(['success' => true]);
+            break;
+
+        case 'create_cinemagic':
+            $name = trim($_POST['name'] ?? '');
+            $desc = trim($_POST['description'] ?? '');
+            $sequenceId = (int)($_POST['sequence_id'] ?? 0);
+            $label = trim($_POST['chapter_label'] ?? '');
+            if (!$name) throw new Exception('Name required');
+
+            $pdo->beginTransaction();
+            $stmt = $pdo->prepare("INSERT INTO cinemagics (name, description) VALUES (?, ?)");
+            $stmt->execute([$name, $desc]);
+            $newCmId = (int)$pdo->lastInsertId();
+
+            if ($sequenceId > 0) {
+                $maxSortStmt = $pdo->prepare("SELECT COALESCE(MAX(sort_order), -1) FROM cinemagics_2_sequences WHERE cinemagic_id = ?");
+                $maxSortStmt->execute([$newCmId]);
+                $nextSort = (int)$maxSortStmt->fetchColumn() + 1;
+
+                $insC2s = $pdo->prepare("INSERT INTO cinemagics_2_sequences (cinemagic_id, sequence_id, sort_order, chapter_label) VALUES (?, ?, ?, ?)");
+                $insC2s->execute([$newCmId, $sequenceId, $nextSort, $label ?: null]);
+            }
+            $pdo->commit();
+
+            echo json_encode(['success' => true, 'cinemagic_id' => $newCmId, 'name' => $name]);
             break;
             
         case 'edit_sequence':
@@ -411,13 +597,45 @@ try {
             
         case 'create_sequence':
             $name = trim($_POST['name'] ?? '');
+            $catId = (int)($_POST['category_id'] ?? 0);
+            $cinemagicId = (int)($_POST['cinemagic_id'] ?? 0);
+            $newCmName = trim($_POST['new_cinemagic_name'] ?? '');
+            $chapterLabel = trim($_POST['chapter_label'] ?? '');
+
             if (!$name) throw new Exception('Name is required.');
 
-            $ins = $pdo->prepare(
-                "INSERT INTO narrative_sequences (name, sequence_data) VALUES (?, '[]')"
-            );
-            $ins->execute([$name]);
+            $hasCat = false;
+            try { $pdo->query("SELECT category_id FROM narrative_sequences LIMIT 1"); $hasCat = true; } catch (Exception $e) {}
+
+            $catVal = $catId > 0 ? $catId : null;
+
+            $pdo->beginTransaction();
+
+            if ($hasCat && $catVal) {
+                $ins = $pdo->prepare("INSERT INTO narrative_sequences (name, sequence_data, category_id) VALUES (?, '[]', ?)");
+                $ins->execute([$name, $catVal]);
+            } else {
+                $ins = $pdo->prepare("INSERT INTO narrative_sequences (name, sequence_data) VALUES (?, '[]')");
+                $ins->execute([$name]);
+            }
             $newId = (int)$pdo->lastInsertId();
+
+            if ($newCmName !== '') {
+                $insCm = $pdo->prepare("INSERT INTO cinemagics (name) VALUES (?)");
+                $insCm->execute([$newCmName]);
+                $cinemagicId = (int)$pdo->lastInsertId();
+            }
+
+            if ($cinemagicId > 0) {
+                $maxSortStmt = $pdo->prepare("SELECT COALESCE(MAX(sort_order), -1) FROM cinemagics_2_sequences WHERE cinemagic_id = ?");
+                $maxSortStmt->execute([$cinemagicId]);
+                $nextSort = (int)$maxSortStmt->fetchColumn() + 1;
+
+                $insC2s = $pdo->prepare("INSERT INTO cinemagics_2_sequences (cinemagic_id, sequence_id, sort_order, chapter_label) VALUES (?, ?, ?, ?)");
+                $insC2s->execute([$cinemagicId, $newId, $nextSort, $chapterLabel ?: null]);
+            }
+
+            $pdo->commit();
 
             echo json_encode(['success' => true, 'new_sequence_id' => $newId]);
             break;

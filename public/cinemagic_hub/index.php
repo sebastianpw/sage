@@ -573,7 +573,7 @@ input:checked + .toggle-slider:before { background: var(--amber); transform: tra
                     <div class="form-group">
                         <label class="form-label">PyAPI Base URL</label>
                         <input type="text" class="form-control" id="pdf-pyapi-url"
-                               placeholder="http://localhost:8009" value="http://localhost:8009">
+                               placeholder="http://192.168.x.x:8009">
                         <small style="color:var(--text-muted);font-size:11px;margin-top:2px;">
                             Persisted in localStorage. Use phone (8009) or tablet for heavier jobs.
                         </small>
