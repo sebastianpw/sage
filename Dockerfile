@@ -15,11 +15,11 @@ COPY . /var/www/sage
 # 1. Run Composer
 RUN composer install --no-interaction --optimize-autoloader --no-scripts
 
-# 2. Setup a dummy .env.local for the build process so init_db.sh doesn't fail
+# 2. Setup a dummy .env.local for the build process so init_docker.sh doesn't fail
 #RUN cp .env.example .env.local || true
 
 # 3. Run the massive init script! (Using echo "YES" to bypass the safety prompt)
-RUN echo "YES" | /bin/bash /var/www/sage/rollout/init_db.sh
+RUN echo "YES" | /bin/bash /var/www/sage/rollout/init_docker.sh
 
 # 4. Stop MariaDB cleanly so the populated data is safely committed into the image layer
 RUN pkill -f mariadbd || true && sleep 3
