@@ -145,7 +145,7 @@
       "tags": ["cnetaux"]
     },
     "svc": {
-      "active": true,
+      "active": false,
       "module": "services.svc_service",
       "router_var": "router",
       "prefix": "/svc",
@@ -215,14 +215,14 @@
       "tags": ["voicepool"]
     },
     "qwen3tts": {
-      "active": true,
+      "active": false,
       "module": "services.qwen3tts_service",
       "router_var": "router",
       "prefix": "",
       "tags": ["qwen3tts"]
     },
     "local_lm": {
-      "active": true,
+      "active": false,
       "module": "services.local_ollama_service",
       "router_var": "router",
       "prefix": "/local_ollama",

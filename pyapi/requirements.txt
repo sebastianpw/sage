@@ -1,9 +1,11 @@
 # ==========================================
-# SAGE 2.0 PyAPI - Complete Requirements
-# Optimized for GitHub Codespaces / Powerful CPU
+# SAGE3 PyAPI - CPU-only Requirements
+# Verified on GitHub Codespaces (CPU), Python 3.11
+# All versions below are what actually installed clean
+# with zero CUDA/NVIDIA packages.
 # ==========================================
 
-# --- Core API, Network & Base Config (From V1) ---
+# --- Core API, Network & Base Config ---
 fastapi
 uvicorn
 gunicorn
@@ -30,7 +32,7 @@ pymysql
 mysql-connector-python
 bloom-filter2
 
-# --- Google Auth & Kaggle (From V1) ---
+# --- Google Auth & Kaggle ---
 kaggle
 google
 google-auth
@@ -39,34 +41,44 @@ google-api-python-client
 protobuf
 six
 
-# --- Media: Image, Video & PDF Publishing (V2 Upgrades) ---
+# --- Media: Image, Video & PDF ---
 pillow
 opencv-python-headless
 imageio[ffmpeg]
 imageio-ffmpeg
 pdf2image
 reportlab
+yt-dlp
 
-# --- Media: Audio & Speech (V2 Upgrades) ---
+# --- Media: Audio & Speech ---
 librosa
 soundfile
 pydub
 piper-tts
-qwen-tts
-so-vits-svc-fork
 
-# --- Machine Learning, Math & Clustering (V2 Upgrades) ---
-# Numpy is strictly pinned to prevent rembg/controlnet_aux compatibility clashes
+# --- Machine Learning, Math & Clustering ---
 numpy==2.2.6
 scipy
 scikit-learn
 networkx
+fa2
 
-# --- AI Engines & Local Models (V2 Upgrades) ---
+# --- PyTorch: MUST be installed from CPU wheel index ---
+# Do NOT remove --index-url: on Linux the default PyPI torch
+# wheel is the CUDA build and pulls ~3GB of nvidia-* packages.
+--index-url https://download.pytorch.org/whl/cpu
 torch
 torchaudio
+torchvision
+--index-url https://pypi.org/simple
+
+# --- AI Engines & Local Models (CPU) ---
 onnxruntime
-rembg==2.0.67
+rembg[cpu]==2.0.67
 controlnet_aux
 fastembed
 ollama
+
+# --- Deliberately excluded for CPU environment ---
+# qwen-tts        -> requires NVIDIA GPU / FlashAttention-2 in practice
+# so-vits-svc-fork -> GPU-oriented; impractical on CPU, pulls its own torch
