@@ -1,9 +1,26 @@
 # ==========================================
 # SAGE3 PyAPI - CPU-only Requirements
 # Verified on GitHub Codespaces (CPU), Python 3.11
-# All versions below are what actually installed clean
-# with zero CUDA/NVIDIA packages.
+# Single-file install: pip install -r requirements.txt
+#
+# IMPORTANT:
+# - "--extra-index-url" (not "--index-url") is used so pip searches
+#   both PyPI and the PyTorch CPU index in the same run.
+# - torch/torchaudio/torchvision are pinned with the "+cpu" suffix,
+#   which only exists on the PyTorch CPU index. This forces pip to
+#   select the CPU wheels deterministically and prevents it from
+#   falling back to the CUDA build on PyPI.
+# - The pinned versions (2.15.0 / 2.11.1 / 0.29.2) are RC-cycle
+#   builds currently published on the PyTorch test channel.
+#   If you later move to stable releases, switch the index below
+#   to https://download.pytorch.org/whl/cpu and drop the +cpu pins
+#   (or update to the matching stable versions).
+# - Do NOT add a second "--index-url" line anywhere in this file:
+#   it would reset the index for the entire install and cause the
+#   CUDA torch wheel to be pulled in.
 # ==========================================
+
+--extra-index-url https://download.pytorch.org/whl/test/cpu
 
 # --- Core API, Network & Base Config ---
 fastapi
@@ -63,18 +80,14 @@ scikit-learn
 networkx
 fa2
 
-# --- PyTorch: MUST be installed from CPU wheel index ---
-# Do NOT remove --index-url: on Linux the default PyPI torch
-# wheel is the CUDA build and pulls ~3GB of nvidia-* packages.
---index-url https://download.pytorch.org/whl/cpu
-torch
-torchaudio
-torchvision
---index-url https://pypi.org/simple
+# --- PyTorch (CPU builds, pinned via "+cpu" local version) ---
+torch==2.15.0+cpu
+torchaudio==2.11.1+cpu
+torchvision==0.29.2+cpu
 
 # --- AI Engines & Local Models (CPU) ---
 onnxruntime
-rembg[cpu]==2.0.67
+rembg==2.0.67
 controlnet_aux
 fastembed
 ollama
