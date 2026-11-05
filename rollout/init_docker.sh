@@ -5,6 +5,10 @@
 
 set -euo pipefail
 
+# ← [Point 1] Never write pip downloads to cache (applies to any pip invocation)
+export PIP_NO_CACHE_DIR=1
+export PIP_DISABLE_PIP_VERSION_CHECK=1
+
 # ===============================
 # SAGE DEV BANNER
 # ===============================
@@ -41,6 +45,41 @@ fi
 
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ← [Point 4] Hoist PYAPI_DIR so the trap can reference it, and install cleanup trap
+PYAPI_DIR="$SCRIPT_DIR/../pyapi"
+
+cleanup() {
+  local exit_code=$?
+  echo "🧹 Cleanup…"
+
+  # pip cache (both the venv's and the global user cache)
+  "$PYAPI_DIR/venv/bin/pip" cache purge 2>/dev/null || true
+  rm -rf "$HOME/.cache/pip"            2>/dev/null || true
+  rm -rf /root/.cache/pip              2>/dev/null || true
+
+  # apt caches
+  apt-get clean                        2>/dev/null || true
+  rm -rf /var/lib/apt/lists/*          2>/dev/null || true
+  rm -rf /var/cache/apt/archives/*.deb 2>/dev/null || true
+
+  # python bytecode
+  find "$PYAPI_DIR" -type d -name '__pycache__' -prune -exec rm -rf {} + 2>/dev/null || true
+  find "$PYAPI_DIR" -type f -name '*.pyc' -delete 2>/dev/null || true
+
+  # downloaded artifacts that slipped through
+  rm -f "$SCRIPT_DIR/../zrok_"*.tar.gz 2>/dev/null || true
+  rm -f "$SCRIPT_DIR/zrok_"*.tar.gz    2>/dev/null || true
+  rm -f ./zrok_*.tar.gz                2>/dev/null || true
+
+  # logs (safe: only truncate, don't delete)
+  find /var/log -type f -exec truncate -s 0 {} \; 2>/dev/null || true
+
+  echo "Cleanup done (exit=$exit_code)."
+  exit "$exit_code"
+}
+trap cleanup EXIT
+
 DB_DATADIR=$("$SCRIPT_DIR/../bash/db_name.sh" datadir)
 
 # Load .env.local variables
@@ -94,13 +133,17 @@ create_db_if_not_exists() {
 if ! command -v mariadb &> /dev/null && ! command -v mysql &> /dev/null; then
     echo "MariaDB not found, installing..."
     apt update
-    DEBIAN_FRONTEND=noninteractive apt install -y mariadb-server
+    DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends mariadb-server   # ← [Point 3]
 else
     echo "MariaDB is already installed."
 fi
 
 # install packages
-DEBIAN_FRONTEND=noninteractive apt install -y ffmpeg jq python3-venv python3-pip 
+DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends ffmpeg jq python3-venv python3-pip   # ← [Point 3]
+
+# ← [Point 3] Drop apt caches to keep image small
+apt-get clean
+rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
 
 
 
@@ -109,14 +152,13 @@ DEBIAN_FRONTEND=noninteractive apt install -y ffmpeg jq python3-venv python3-pip
 
 
 # Setup Kaggle FastAPI module venv
-PYAPI_DIR="$SCRIPT_DIR/../pyapi"
-
+# ← [Point 4] PYAPI_DIR now defined above; keep cd here
 cd "$PYAPI_DIR" || { echo "Could not cd into $PYAPI_DIR"; exit 1; }
 
 if [ ! -d "venv" ]; then
     echo "Creating Python venv for FastAPI Kaggle wrapper..."
     python3 -m venv venv
-    "$PYAPI_DIR/venv/bin/pip" install -r requirements.txt
+    "$PYAPI_DIR/venv/bin/pip" install --no-cache-dir -r requirements.txt   # ← [Point 1]
     echo "venv created and dependencies installed."
 else
     echo "Python venv already exists. Skipping setup."
@@ -138,11 +180,9 @@ export KAGGLE_CONFIG_DIR="$KAGGLE_TOKEN_DIR"
 
 
 # install zrok
-curl -LO https://github.com/openziti/zrok/releases/download/v1.1.10/zrok_1.1.10_linux_amd64.tar.gz
-
-tar -xzf zrok_1.1.10_linux_amd64.tar.gz
-
-mv zrok /usr/local/bin/
+# ← [Point 2] Pipe directly to tar — no tarball ever written to disk
+curl -sSL https://github.com/openziti/zrok/releases/download/v1.1.10/zrok_1.1.10_linux_amd64.tar.gz \
+  | tar -xz -C /usr/local/bin/ zrok
 chmod +x /usr/local/bin/zrok
 
 # install chroma vector db
@@ -246,6 +286,9 @@ mysql -h "$WN_HOST" -P "${WN_PORT:-3306}" -u "$WN_USER" -p"$WN_PASS" "$WN_DB" < 
 
 echo "Structure and data imports finished."
 
+# ← Remove imported SQL files to shrink image (typically a few hundred MB)
+rm -f "$SCRIPT_DIR"/*.sql
+
 
 
 cat << "EOF"
@@ -261,6 +304,3 @@ EOF
 
 
 echo "Rollout complete. (Re)Starting servers. Fasten your seat belt."
-
-
-
