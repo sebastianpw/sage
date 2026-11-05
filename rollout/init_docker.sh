@@ -262,6 +262,5 @@ EOF
 
 echo "Rollout complete. (Re)Starting servers. Fasten your seat belt."
 
-("$SCRIPT_DIR/../bash/restart_docker.sh")
 
 

@@ -60,6 +60,12 @@ echo "======================================================="
 echo "✅ All Docker services started! Container is fully ready."
 echo "======================================================="
 
+# Ensure log directories and files exist so tail doesn't crash
+mkdir -p /var/www/sage/logs
+mkdir -p /var/log/nginx
+touch /var/www/sage/logs/error.log
+touch /var/log/nginx/error.log
+
 # 7. Keep the container alive forever and stream logs to stdout
 tail -f /var/www/sage/logs/error.log /var/log/nginx/error.log /dev/null
 
