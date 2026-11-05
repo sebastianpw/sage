@@ -13,6 +13,12 @@ $redirectUri = $creds['redirect_uris'][0];
 // scope + params
 $scope = 'openid email profile';
 
+// Append Drive scope if requested for the gdriver tool
+// Reverted to drive.metadata.readonly to match your Google Cloud Console config
+if (!empty($_GET['drive'])) {
+    $scope .= ' https://www.googleapis.com/auth/drive.metadata.readonly';
+}
+
 // create a random state for CSRF protection and store it in session
 $state = bin2hex(random_bytes(8));
 $_SESSION['oauth2state'] = $state;

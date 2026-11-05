@@ -11,7 +11,7 @@ if (!$userId) { header('Location: /login.php'); exit; }
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=0.7, viewport-fit=cover">
 <title>Chatty — General Chat</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -281,9 +281,28 @@ html, body {
 .msg-action-btn:hover { color: var(--violet); }
 .msg-action-btn.delete-btn:hover { color: var(--red); }
 
-.ai-section-body { font-size: 0.84rem; color: var(--text); line-height: 1.75; }
+.ai-section-body, .user-section-body { font-size: 0.84rem; line-height: 1.75; }
+.ai-section-body { color: var(--text); }
+.user-section-body { color: var(--text-bright); }
 
-.msg-loading .msg-bubble { display: flex; align-items: center; gap: 10px; padding: 14px 16px; }
+/* CODE BLOCKS */
+.code-block-wrapper { position: relative; margin: 12px 0; }
+.code-copy-btn {
+  position: absolute; top: 6px; right: 6px;
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text-dim); border-radius: 4px; padding: 4px 8px;
+  font-family: var(--mono); font-size: 0.65rem; cursor: pointer;
+  display: flex; align-items: center; gap: 6px; transition: all 0.15s;
+}
+.code-copy-btn:hover { color: var(--violet); border-color: var(--violet); }
+.code-block-wrapper pre {
+  background: var(--bg); padding: 12px; padding-top: 38px;
+  border-radius: var(--radius); overflow-x: auto; margin: 0;
+  border: 1px solid var(--border);
+}
+.code-block-wrapper code { font-family: var(--mono); font-size: 0.8rem; }
+
+.msg-loading .msg-bubble { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 16px; }
 .typing-dots span {
   display: inline-block; width: 6px; height: 6px; border-radius: 50%;
   background: var(--blue); margin: 0 2px; animation: typing 1.2s ease-in-out infinite;
@@ -291,6 +310,13 @@ html, body {
 .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
 .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
 @keyframes typing { 0%,80%,100% { transform: translateY(0); opacity: 0.4; } 40% { transform: translateY(-6px); opacity: 1; } }
+
+.bubble-stop-btn {
+  background: transparent; border: 1px solid var(--border); color: var(--text-dim);
+  border-radius: var(--radius); font-family: var(--mono); font-size: 0.68rem; padding: 3px 8px;
+  cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.15s;
+}
+.bubble-stop-btn:hover { border-color: var(--red); color: var(--red); background: var(--red-dim); }
 
 /* ── INPUT BAR ──────────────────────────────────────────────────────────── */
 .wi-input-bar { padding: 12px 16px; border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; display: flex; flex-direction: column; }
@@ -311,14 +337,11 @@ html, body {
   cursor: pointer; transition: all 0.15s; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center; font-size: 16px;
 }
-.btn-send:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); }
-.btn-send:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-.btn-send .spin-sm {
-  width: 16px; height: 16px; border: 2px solid rgba(0,0,0,0.3);
-  border-top-color: #000; border-radius: 50%; animation: spin 0.7s linear infinite; display: none;
+.btn-send:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.btn-send.loading {
+  background: var(--red); color: #fff;
 }
-.btn-send.loading i { display: none; }
-.btn-send.loading .spin-sm { display: block; }
+.btn-send.loading:hover { background: #b91c1c; }
 
 .btn-icon {
   width: 44px; height: 44px; border-radius: var(--radius);
@@ -398,7 +421,6 @@ html, body {
 
 .sep { height: 1px; background: var(--border); margin: 10px 0; }
 
-@keyframes spin { to { transform: rotate(360deg); } }
 @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes toastOut { to { opacity: 0; transform: translateY(8px); } }
 @keyframes modalIn { from { opacity: 0; transform: scale(0.96) translateY(-8px); } to { opacity: 1; transform: none; } }
@@ -540,9 +562,8 @@ html, body {
 
       <textarea class="wi-textarea" id="msgInput" placeholder="Type a message..." rows="1"></textarea>
 
-      <button class="btn-send" id="btnSendMain" onclick="Chatty.sendMessage()" title="Send">
+      <button class="btn-send" id="btnSendMain" onclick="Chatty.handleSendOrStop()" title="Send">
         <i class="bi bi-send-fill" id="sendIcon"></i>
-        <div class="spin-sm"></div>
       </button>
     </div>
   </div>
@@ -634,6 +655,7 @@ window.Chatty = (function() {
   // Background polling state
   let _isPolling = false;
   let _pollTimer = null;
+  let _pollStartTime = 0;
   
   let _globalPollTimer = null;
   let _muteNotifs = false;
@@ -728,15 +750,50 @@ window.Chatty = (function() {
   function startPolling(sessionId, originalMsgCount) {
     if (_pollTimer) clearInterval(_pollTimer);
     _isPolling = true;
+    _pollStartTime = Date.now();
     _pollTimer = setInterval(async () => {
         if (_chatSessionId !== sessionId) {
-            clearInterval(_pollTimer);
-            _pollTimer = null;
-            _isPolling = false;
+            stopWaitingLocal();
             return;
         }
+
+        // Safety timeout: 30 minutes max waiting
+        if (Date.now() - _pollStartTime > 30 * 60 * 1000) {
+            stopWaitingLocal();
+            toast('Generation reached safety timeout', 'error');
+            return;
+        }
+
         await loadChat(sessionId, true);
     }, 3000);
+  }
+
+  function stopWaitingLocal() {
+    if (_pollTimer) {
+      clearInterval(_pollTimer);
+      _pollTimer = null;
+    }
+    _isPolling = false;
+    _isLoading = false;
+    setMainButtonLoading(false);
+    const bubble = document.querySelector('.msg-loading');
+    if (bubble) bubble.remove();
+  }
+
+  async function stopWaiting() {
+    stopWaitingLocal();
+    try {
+      await api({ action: 'stop_waiting', chat_session_id: _chatSessionId });
+    } catch(e) {}
+    toast('Generation stopped', 'info');
+  }
+
+  function handleSendOrStop() {
+    if (_isLoading || _isPolling) {
+      stopWaiting();
+      return;
+    }
+    sendMessage();
   }
 
   function redrawConversation() {
@@ -829,8 +886,8 @@ window.Chatty = (function() {
     setMainButtonLoading(true);
 
     const ts = Date.now();
-    renderUserMsg({ role: 'user', content: text, ts: ts }); // Temporary visual without actions
-    const loadingEl = addLoadingBubble();
+    renderUserMsg({ role: 'user', content: text, ts: ts });
+    addLoadingBubble();
 
     try {
       const data = await api({
@@ -853,18 +910,46 @@ window.Chatty = (function() {
       
     } catch (e) {
       toast('Error: ' + e.message, 'error');
-      loadingEl.remove();
-      _isLoading = false;
-      setMainButtonLoading(false);
-      await loadChat(_chatSessionId, true); // Sync DB state on error
+      stopWaitingLocal();
+      await loadChat(_chatSessionId, true);
+    }
+  }
+
+  async function retryMessage(msgId) {
+    if (_isLoading || _isPolling) return;
+    _isLoading = true;
+    setMainButtonLoading(true);
+    addLoadingBubble();
+
+    try {
+      await api({
+        action: 'retry_message',
+        chat_session_id: _chatSessionId,
+        msg_id: msgId
+      });
+      startPolling(_chatSessionId, _conversation.length);
+    } catch(e) {
+      toast('Retry error: ' + e.message, 'error');
+      stopWaitingLocal();
     }
   }
 
   function setMainButtonLoading(loading) {
     const btn = document.getElementById('btnSendMain');
-    if (!btn) return;
-    btn.classList.toggle('loading', loading);
-    btn.disabled = loading;
+    const icon = document.getElementById('sendIcon');
+    if (!btn || !icon) return;
+
+    if (loading) {
+      btn.classList.add('loading');
+      btn.title = "Stop Waiting / Cancel";
+      icon.className = "bi bi-stop-fill";
+      btn.disabled = false;
+    } else {
+      btn.classList.remove('loading');
+      btn.title = "Send";
+      icon.className = "bi bi-send-fill";
+      btn.disabled = false;
+    }
   }
 
   async function branchChat(msgId) {
@@ -885,6 +970,7 @@ window.Chatty = (function() {
     try {
         await api({ action: 'delete_msg', msg_id: msgId, chat_session_id: _chatSessionId });
         _conversation = _conversation.filter(m => String(m.id) !== String(msgId));
+        stopWaitingLocal();
         redrawConversation();
         toast('Message deleted', 'info');
     } catch(e) {
@@ -956,6 +1042,10 @@ window.Chatty = (function() {
         <button onclick="Chatty.copyMsg(this)" data-content="${escAttr(msg.content)}" class="msg-action-btn" title="Copy text">
           <i class="bi bi-clipboard"></i>
         </button>
+        ${msg.role === 'user' ? `
+        <button onclick="Chatty.retryMessage('${msg.id}')" class="msg-action-btn" title="Regenerate / Send again">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>` : ''}
         <button onclick="Chatty.branchChat('${msg.id}')" class="msg-action-btn" title="Branch from here">
           <i class="bi bi-diagram-2"></i>
         </button>
@@ -969,11 +1059,7 @@ window.Chatty = (function() {
 
   function renderUserMsg(msg) {
     const conv = document.getElementById('conversation');
-    let rawText = msg.display_content || msg.content || '';
-    let htmlText = escHtml(rawText);
-    
-    htmlText = htmlText.replace(/=== FILE: (.*?) ===[\s\S]*?====================/g, '<div class="file-chip" style="margin: 4px 0;"><i class="bi bi-file-text"></i> $1 (attached)</div>');
-    htmlText = htmlText.replace(/\n/g, '<br>');
+    const rendered = renderUserContent(msg.display_content || msg.content || '');
 
     const msgNode = document.createElement('div');
     msgNode.className = 'msg msg-user';
@@ -984,11 +1070,43 @@ window.Chatty = (function() {
            <span class="msg-timestamp">${formatTime(msg.ts)}</span>
            ${getActionHtml(msg)}
         </div>
-        ${htmlText}
+        ${rendered}
       </div>
     `;
     conv.appendChild(msgNode);
     conv.scrollTop = conv.scrollHeight;
+  }
+
+  function renderUserContent(text) {
+    let html = escHtml(text);
+
+    // 1. Convert attached files chips
+    html = html.replace(/=== FILE: (.*?) ===[\s\S]*?====================/g, '<div class="file-chip" style="margin: 4px 0;"><i class="bi bi-file-text"></i> $1 (attached)</div>');
+
+    // 2. Extract code blocks safely
+    const codeBlocks = [];
+    html = html.replace(/```([\s\S]*?)```/g, function(m, p1) {
+        const placeholder = `__USER_CODEBLOCK_${codeBlocks.length}__`;
+        codeBlocks.push(p1);
+        return placeholder;
+    });
+
+    // 3. Format inline code and basic formatting
+    html = html.replace(/`([^`\n]+)`/g, '<code style="background:var(--bg);padding:2px 4px;border-radius:4px;">$1</code>');
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong style="color:var(--text-bright)">$1</strong>');
+    
+    // 4. Newlines to breaks
+    html = html.replace(/\n/g, '<br>');
+
+    // 5. Restore code blocks with framing and copy button
+    html = html.replace(/__USER_CODEBLOCK_(\d+)__/g, function(m, idx) {
+        return '<div class="code-block-wrapper">' +
+               '<button class="code-copy-btn" onclick="Chatty.copyCode(this)" title="Copy Code"><i class="bi bi-clipboard"></i> Copy</button>' +
+               '<pre><code>' + codeBlocks[idx] + '</code></pre>' +
+               '</div>';
+    });
+
+    return `<div class="user-section-body">${html}</div>`;
   }
 
   function renderAiMsg(msg) {
@@ -1014,32 +1132,49 @@ window.Chatty = (function() {
 
   function renderAiContent(text) {
     let html = escHtml(text);
+    
+    // 1. Extract code blocks safely
+    const codeBlocks = [];
     html = html.replace(/```([\s\S]*?)```/g, function(m, p1) {
-        return '<pre style="background:var(--bg);padding:10px;border-radius:var(--radius);overflow-x:auto;"><code>' + p1 + '</code></pre>';
+        const placeholder = `__CODEBLOCK_${codeBlocks.length}__`;
+        codeBlocks.push(p1);
+        return placeholder;
     });
+
+    // 2. Format inline code and markdown
     html = html.replace(/`([^`\n]+)`/g, '<code style="background:var(--bg);padding:2px 4px;border-radius:4px;">$1</code>');
     html = html.replace(/\*\*([^*]+)\*\*/g, '<strong style="color:var(--text-bright)">$1</strong>');
     html = html.replace(/^(#{1,6})\s+(.+)$/gm, '<div style="font-family:var(--mono);color:var(--violet);margin:10px 0 6px;font-weight:bold;">$2</div>');
     html = html.replace(/^[•\-]\s+(.+)$/gm, '<div style="margin-left: 10px; border-left: 2px solid var(--violet); padding-left: 8px;">$1</div>');
     
-    let parts = html.split(/(<pre[\s\S]*?<\/pre>)/);
-    for(let i=0; i<parts.length; i++) {
-        if(!parts[i].startsWith('<pre')) {
-            parts[i] = parts[i].replace(/\n/g, '<br>');
-        }
-    }
-    return `<div class="ai-section-body">${parts.join('')}</div>`;
+    // 3. Newlines to breaks
+    html = html.replace(/\n/g, '<br>');
+
+    // 4. Restore code blocks with framing and copy button
+    html = html.replace(/__CODEBLOCK_(\d+)__/g, function(m, idx) {
+        return '<div class="code-block-wrapper">' +
+               '<button class="code-copy-btn" onclick="Chatty.copyCode(this)" title="Copy Code"><i class="bi bi-clipboard"></i> Copy</button>' +
+               '<pre><code>' + codeBlocks[idx] + '</code></pre>' +
+               '</div>';
+    });
+    
+    return `<div class="ai-section-body">${html}</div>`;
   }
 
   function addLoadingBubble() {
-    if (document.querySelector('.msg-loading')) return document.querySelector('.msg-loading');
+    let msgNode = document.querySelector('.msg-loading');
+    if (msgNode) return msgNode;
+
     const conv = document.getElementById('conversation');
-    const msgNode = document.createElement('div');
+    msgNode = document.createElement('div');
     msgNode.className = 'msg msg-ai msg-loading';
     msgNode.innerHTML = `
       <div class="msg-avatar ai-av">AI</div>
       <div class="msg-bubble">
         <div class="typing-dots"><span></span><span></span><span></span></div>
+        <button class="bubble-stop-btn" onclick="Chatty.stopWaiting()" title="Cancel generation">
+          <i class="bi bi-x-circle"></i> Stop
+        </button>
       </div>`;
     conv.appendChild(msgNode);
     conv.scrollTop = conv.scrollHeight;
@@ -1070,7 +1205,7 @@ window.Chatty = (function() {
       <div class="delta-item ${c.id === _chatSessionId ? 'active-chat' : ''}" onclick="Chatty.loadChat('${c.id}')">
         <div class="delta-date">${new Date(c.updated_at).toLocaleDateString()}</div>
         <div class="delta-topic">${escHtml(c.title || 'Chat')}</div>
-        <button class="item-delete-btn" style="right: 30px;" onclick="Chatty.openRenameChatModal(event, '${c.id}', '${escAttr(c.title || '')}')" title="Rename Session">
+        <button class="item-delete-btn" style="right: 30px;" onclick="Chatty.openRenameChatModal(event, '${c.id}')" title="Rename Session">
           <i class="bi bi-pencil"></i>
         </button>
         <button class="item-delete-btn" onclick="Chatty.deleteChat(event, '${c.id}')" title="Delete Session">
@@ -1079,11 +1214,19 @@ window.Chatty = (function() {
       </div>`).join('');
     renderPager('chatSessionsList', _chatSessionsPg);
   }
-
-  function openRenameChatModal(e, id, currentTitle) {
+  
+  function openRenameChatModal(e, id, legacyTitle) {
     e.stopPropagation();
-    document.getElementById('renameChatId').value = id;
-    document.getElementById('renameChatTitle').value = currentTitle;
+    const session = _chatSessions.find(c => String(c.id) === String(id));
+    let finalTitle = '';
+    if (session && session.title) {
+        finalTitle = session.title;
+    } else if (legacyTitle && legacyTitle !== 'undefined') {
+        finalTitle = legacyTitle;
+    }
+    
+    document.getElementById('renameChatId').value = id || '';
+    document.getElementById('renameChatTitle').value = finalTitle;
     document.getElementById('renameChatModal').classList.add('open');
   }
 
@@ -1110,8 +1253,8 @@ window.Chatty = (function() {
       const data = await api({ action: 'load_chat', session_id: id }, 'GET');
       
       if (silent && _chatSessionId === id && data.conversation) {
-          if (data.conversation.length === _conversation.length) {
-              return; // No new messages to refresh, prevent DOM thrashing
+          if (data.conversation.length === _conversation.length && data.is_generating) {
+              return; // Generating in progress, keep polling
           }
       }
       
@@ -1129,42 +1272,37 @@ window.Chatty = (function() {
 
       redrawConversation();
       
+      const isActivelyGenerating = !!data.is_generating;
+      const lastMsg = _conversation[_conversation.length - 1];
+      const isRecent = lastMsg && (Date.now() - (lastMsg.ts || 0) < 30 * 60 * 1000);
+
       if (_isPolling && silent) {
-          const lastMsg = _conversation[_conversation.length - 1];
-          if (lastMsg && lastMsg.role === 'user') {
-              addLoadingBubble(); // Re-add bubble because redrawConversation cleared it
+          if (lastMsg && lastMsg.role === 'user' && isActivelyGenerating) {
+              addLoadingBubble();
           } else {
-              clearInterval(_pollTimer);
-              _pollTimer = null;
-              _isPolling = false;
-              _isLoading = false;
-              setMainButtonLoading(false);
+              stopWaitingLocal();
           }
       }
 
       if (_isChattyVisible) {
           markAllAsRead();
       } else {
-          checkUnreadGlobal(); // pop the notification badge instantly to Sage
+          checkUnreadGlobal();
       }
 
       renderChatSessionsList();
       if (!silent) closeFlyouts();
       if (!silent) toast('Chat loaded', 'info');
       
-      // Auto resume polling if loaded chat is waiting for an AI reply
+      // Auto-resume polling ONLY if genuinely generating and recent
       if (!silent && _conversation.length > 0) {
-          const lastMsg = _conversation[_conversation.length - 1];
-          if (lastMsg.role === 'user') {
+          if (lastMsg && lastMsg.role === 'user' && isActivelyGenerating && isRecent) {
               addLoadingBubble();
               _isLoading = true;
               setMainButtonLoading(true);
               startPolling(_chatSessionId, _conversation.length);
           } else {
-              if (_pollTimer) clearInterval(_pollTimer);
-              _isPolling = false;
-              _isLoading = false;
-              setMainButtonLoading(false);
+              stopWaitingLocal();
           }
       }
     } catch (e) {
@@ -1210,10 +1348,7 @@ window.Chatty = (function() {
     if (!force && _conversation.length > 0 &&
         !confirm('Start a new blank chat? Your current chat will be saved in the "Chats" tab.')) return;
 
-    if (_pollTimer) clearInterval(_pollTimer);
-    _isPolling = false;
-    _isLoading = false;
-    setMainButtonLoading(false);
+    stopWaitingLocal();
 
     _conversation = [];
     _chatSessionId = generateUUID();
@@ -1268,6 +1403,23 @@ window.Chatty = (function() {
     navigator.clipboard?.writeText(text).then(() => toast('Copied', 'success', 1500)).catch(() => {});
   }
 
+  function copyCode(btn) {
+    const codeEl = btn.parentElement.querySelector('code');
+    if (!codeEl) return;
+    const text = codeEl.textContent;
+    navigator.clipboard?.writeText(text).then(() => {
+        const oldHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check2"></i> Copied';
+        btn.style.color = 'var(--green)';
+        btn.style.borderColor = 'var(--green)';
+        setTimeout(() => {
+            btn.innerHTML = oldHtml;
+            btn.style.color = '';
+            btn.style.borderColor = '';
+        }, 2000);
+    }).catch(() => toast('Copy failed', 'error'));
+  }
+
   function toggleTheme() {
     const html = document.documentElement;
     const curr = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
@@ -1292,7 +1444,7 @@ window.Chatty = (function() {
 
   function formatTime(ts) { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
   function escHtml(s) { if (s === null || s === undefined) return ''; const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
-  function escAttr(s) { return escHtml(s).replace(/"/g, '&quot;'); }
+  function escAttr(s) { return escHtml(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function autoResizeTextarea(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 200) + 'px'; }
 
   // ── Init ─────────────────────────────────────────────────────────────
@@ -1340,13 +1492,17 @@ window.Chatty = (function() {
           _conversation = data.state.conversation;
           redrawConversation();
           
-          // Resume polling if the browser was closed mid-generation
+          const isActivelyGenerating = !!data.state.is_generating;
           const lastMsg = _conversation[_conversation.length - 1];
-          if (lastMsg.role === 'user') {
+          const isRecent = lastMsg && (Date.now() - (lastMsg.ts || 0) < 30 * 60 * 1000);
+
+          if (lastMsg && lastMsg.role === 'user' && isActivelyGenerating && isRecent) {
               addLoadingBubble();
               _isLoading = true;
               setMainButtonLoading(true);
               startPolling(_chatSessionId, _conversation.length);
+          } else {
+              stopWaitingLocal();
           }
         }
       }
@@ -1362,14 +1518,22 @@ window.Chatty = (function() {
     const msgInput = document.getElementById('msgInput');
     msgInput.addEventListener('input', () => autoResizeTextarea(msgInput));
     
-    // Allow 'Enter' to create new lines naturally.
-    // Only intercept Ctrl+Enter (or Cmd+Enter on Mac) as a quick-send shortcut for desktop users.
     msgInput.addEventListener('keydown', e => {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { 
           e.preventDefault(); 
-          sendMessage(); 
+          handleSendOrStop(); 
       }
     });
+
+    const renameInput = document.getElementById('renameChatTitle');
+    if (renameInput) {
+        renameInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveRenameChat();
+            }
+        });
+    }
       
     document.getElementById('fileInput').addEventListener('change', (e) => {
         for (let f of e.target.files) attachFile(f);
@@ -1389,15 +1553,13 @@ window.Chatty = (function() {
 
     const theme = document.documentElement.getAttribute('data-theme');
     document.getElementById('themeBtn').querySelector('i').className = theme === 'light' ? 'bi bi-sun' : 'bi bi-moon-stars';
-    
-    
   }
 
   return {
-    init, sendMessage, toggleFlyout, closeFlyouts,
+    init, sendMessage, handleSendOrStop, stopWaiting, retryMessage, toggleFlyout, closeFlyouts,
     saveSettings, clearConversation,
     loadChat, deleteChat, renderChatSessionsList,
-    copyMsg, toggleTheme, closeModal, toast,
+    copyMsg, copyCode, toggleTheme, closeModal, toast,
     openRenameChatModal, saveRenameChat,
     removeFile, downloadChat, branchChat, deleteMsg, manualMarkAllAsRead,
     scrollToMessage
@@ -1410,5 +1572,6 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 </script>
+
 </body>
 </html>

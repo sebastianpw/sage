@@ -421,6 +421,7 @@ input:checked + .toggle-slider:before { background: var(--amber); transform: tra
                             <select class="form-control" id="series-pdf-page-size">
                                 <option value="A4">Standard A4 (Upright)</option>
                                 <option value="A4_landscape">Standard A4 (Landscape)</option>
+                                <option value="A4_auto">A4 Auto (Mixed Orientation)</option>
                                 <option value="square">A4 Width Square (210x210mm)</option>
                             </select>
                             
@@ -1823,3 +1824,5 @@ function fmtBytes(b) {
 
 </body>
 </html>
+
+

@@ -395,14 +395,19 @@ if ($importSeqId) {
     $seqDataStr = $stmt->fetchColumn();
     if ($seqDataStr) {
         $seqData = json_decode($seqDataStr, true) ?: [];
-        $fallbackStmt = $pdo->prepare("SELECT f.id, f.filename, f.name FROM frames f JOIN frames_2_sketches fs ON f.id = fs.from_id WHERE fs.to_id = ? ORDER BY f.id DESC LIMIT 1");
+        $fallbackStmt = $pdo->prepare("
+            SELECT id, filename, name FROM frames WHERE entity_type = 'sketches' AND entity_id = ?
+            UNION
+            SELECT f.id, f.filename, f.name FROM frames f JOIN frames_2_sketches fs ON f.id = fs.from_id WHERE fs.to_id = ?
+            ORDER BY id DESC LIMIT 1
+        ");
         $frameStmt = $pdo->prepare("SELECT id, filename, name FROM frames WHERE id = ?");
         foreach ($seqData as $item) {
             $fId = is_array($item) ? (!empty($item['frame_id']) ? (int)$item['frame_id'] : null) : null;
             $sId = is_array($item) ? (!empty($item['sketch_id']) ? (int)$item['sketch_id'] : null) : (int)$item;
             $frameRow = null;
             if ($fId) { $frameStmt->execute([$fId]); $frameRow = $frameStmt->fetch(PDO::FETCH_ASSOC); }
-            if (!$frameRow && $sId) { $fallbackStmt->execute([$sId]); $frameRow = $fallbackStmt->fetch(PDO::FETCH_ASSOC); }
+            if (!$frameRow && $sId) { $fallbackStmt->execute([$sId, $sId]); $frameRow = $fallbackStmt->fetch(PDO::FETCH_ASSOC); }
             if ($frameRow) $importedFrames[] = $frameRow;
         }
     }
@@ -624,6 +629,7 @@ body { font-family: var(--font-body); background: var(--bg-void); color: var(--t
 .compose-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 300000; display: none; align-items: flex-end; justify-content: center; }
 .compose-modal-backdrop.active { display: flex; }
 .compose-modal { width: 100%; max-width: 800px; background: var(--bg-raised); border: 1px solid var(--border); border-bottom: none; border-radius: 14px 14px 0 0; box-shadow: 0 -8px 40px rgba(0,0,0,0.6); animation: slideUp 0.22s ease; height: 65vh; max-height: 85vh; resize: vertical; overflow: hidden; display: flex; flex-direction: column; }
+.compose-modal input, .compose-modal textarea, .compose-modal select { font-size: 16px !important; }
 .cm-handle { text-align: center; padding: 10px 0 4px; cursor: pointer; flex-shrink:0; }
 .cm-handle-bar { display: inline-block; width: 40px; height: 4px; background: var(--border); border-radius: 2px; }
 .cm-header { padding: 6px 16px 10px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); flex-shrink: 0; }
@@ -644,7 +650,7 @@ body { font-family: var(--font-body); background: var(--bg-void); color: var(--t
 .forge-tab-pane { display: none; flex-direction: column; gap: 8px; }
 .forge-tab-pane.active { display: flex; }
 .ff-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--muted); letter-spacing: 1px; }
-.ff-dropdown { border: 1px solid var(--border); border-radius: 4px; background: var(--card); max-height: 140px; overflow-y: auto; display: none; }
+.ff-dropdown { border: 1px solid var(--border); border-radius: 4px; background: var(--card); max-height: 140px; overflow-y: auto; display: none; position: absolute; z-index: 100; width: calc(100% - 24px); left: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); overscroll-behavior: contain; touch-action: pan-y; }
 .ff-dropdown.open { display: block; }
 .ff-dropdown-item { padding: 8px 10px; font-size: 0.75rem; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.03); color: var(--text); display: flex; justify-content: space-between; align-items:center; }
 .ff-dropdown-item:hover { background: rgba(58,181,200,0.1); }
@@ -797,7 +803,7 @@ body { font-family: var(--font-body); background: var(--bg-void); color: var(--t
             </div>
             <div class="layers-order-row" style="display:flex; gap:8px; padding:8px 14px; border-bottom:1px solid var(--border);">
                 <button class="btn btn-secondary" style="flex:1; justify-content:center;" onclick="selectedNode && selectedNode.moveUp(); contentLayer.batchDraw(); renderLayerList(); saveState();">▲ Layer Up</button>
-                <button class="btn btn-secondary" style="flex:1; justify-content:center;" onclick="selectedNode && selectedNode.moveDown(); contentLayer.batchDraw(); renderLayerList(); saveState();">▼ Layer Down</button>
+                <button class="btn btn-secondary" style="flex:1; justify-content:center;" onclick="selectedNode && selectedNode.moveDown(); contentLayer.batchDraw(); renderLayerList(); saveState();">▼ Down</button>
             </div>
             <div class="layers-list" id="layersList" style="height: 150px !important;"></div>
         </div>
@@ -979,7 +985,7 @@ body { font-family: var(--font-body); background: var(--bg-void); color: var(--t
                 <!-- SEQ -->
                 <div class="forge-tab-pane" id="pane-seq">
                     <label class="ff-label">Narrative Sequence</label>
-                    <input type="text" id="ffSearch-seq" class="prop-input" placeholder="Search sequences..." oninput="ffDebounceSearch('seq', this.value)">
+                    <input type="text" id="ffSearch-seq" class="prop-input" placeholder="Search sequences..." onfocus="ffDebounceSearch('seq', this.value)" oninput="ffDebounceSearch('seq', this.value)">
                     <div class="ff-dropdown" id="ffDrop-seq"></div>
                 </div>
                 <!-- STORYBOARD -->
@@ -991,7 +997,7 @@ body { font-family: var(--font-body); background: var(--bg-void); color: var(--t
                 <!-- MAP RUN -->
                 <div class="forge-tab-pane" id="pane-map_run">
                     <label class="ff-label">Map Run</label>
-                    <input type="text" id="ffSearch-map_run" class="prop-input" placeholder="Search map runs..." oninput="ffDebounceSearch('map_run', this.value)">
+                    <input type="text" id="ffSearch-map_run" class="prop-input" placeholder="Search map runs..." onfocus="ffDebounceSearch('map_run', this.value)" oninput="ffDebounceSearch('map_run', this.value)">
                     <div class="ff-dropdown" id="ffDrop-map_run"></div>
                 </div>
                 <!-- VECTOR -->
@@ -3354,10 +3360,15 @@ let ffTotalPages = 1;
 let ffDebounceTimer;
 
 function openForgeModal() {
+    window.lockViewportZoom && window.lockViewportZoom();
     document.getElementById('ffBackdrop').classList.add('active');
     runForgeSearch(1);
 }
-function closeForgeModal() { document.getElementById('ffBackdrop').classList.remove('active'); assigningToPanel = null; }
+function closeForgeModal() { 
+    document.getElementById('ffBackdrop').classList.remove('active'); 
+    assigningToPanel = null; 
+    window.restoreViewportZoom && window.restoreViewportZoom();
+}
 
 function switchForgeTab(tabId) {
     document.querySelectorAll('.forge-sidebar-btn').forEach(b => b.classList.remove('active'));
@@ -3371,12 +3382,11 @@ function ffDebounceSearch(slot, q) {
     clearTimeout(ffDebounceTimer);
     ffDebounceTimer = setTimeout(() => {
         const dd = document.getElementById(`ffDrop-${slot}`);
-        if (!q && slot !== 'storyboard') { dd.classList.remove('open'); return; }
+        if (!q && !['storyboard', 'map_run', 'seq'].includes(slot)) { dd.classList.remove('open'); return; }
         dd.innerHTML = '<div style="padding:8px 10px;font-size:0.75rem;color:var(--muted);">Searching...</div>';
         dd.classList.add('open');
         
-        let url = `filter_forge_api.php?action=list_filter_options&mode=${slot}&q=${encodeURIComponent(q || '')}&entity_type=sketches`;
-        if (slot === 'storyboard') url = `narseq_api.php?action=list_storyboards&q=${encodeURIComponent(q || '')}`;
+        let url = `narseq_filter_forge_api.php?action=list_filter_options&mode=${slot}&q=${encodeURIComponent(q || '')}&entity_type=sketches`;
         
         fetch(url)
             .then(r => r.json())
@@ -3611,13 +3621,12 @@ function runForgeSearch(page) {
     p.set('page', page);
 
     let hasFilter = false;
-    let useNarseqApi = false;
 
     if (ffState.fuzz) { p.set('fuzz_id', ffState.fuzz.id); hasFilter = true; }
     if (ffState.doc) { p.set('doc_id', ffState.doc.id); hasFilter = true; }
     if (ffState.kg) { p.set('kg_node_id', ffState.kg.id); hasFilter = true; }
     if (ffState.seq) { p.set('seq_id', ffState.seq.id); hasFilter = true; }
-    if (ffState.storyboard) { p.set('storyboard_id', ffState.storyboard.id); hasFilter = true; useNarseqApi = true; }
+    if (ffState.storyboard) { p.set('storyboard_id', ffState.storyboard.id); hasFilter = true; }
     if (ffState.map_run) { p.set('map_run_id', ffState.map_run.id); hasFilter = true; }
     if (ffState.vectorText) { p.set('vector_text', ffState.vectorText); hasFilter = true; }
     if (ffState.textSearch) { p.set('search', ffState.textSearch); hasFilter = true; }
@@ -3625,14 +3634,13 @@ function runForgeSearch(page) {
     if (ffState.frameId) { p.set('frame_id', ffState.frameId); hasFilter = true; }
 
     if (!hasFilter) { p.set('sort', 'newest'); p.set('sort_by', 'id'); p.set('sort_order', 'desc'); }
-    if (useNarseqApi) p.set('action', 'list_storyboard_frames');
 
     const grid = document.getElementById('ffResultGrid');
     grid.innerHTML = '<div class="forge-result-empty">Searching Forge...</div>';
     document.getElementById('ffPagination').style.display = 'none';
     document.getElementById('ffResultMeta').textContent = 'Searching...';
 
-    const endpoint = useNarseqApi ? 'narseq_api.php?' : 'filter_forge_api.php?';
+    const endpoint = 'narseq_filter_forge_api.php?';
 
     fetch(endpoint + p.toString())
         .then(async r => { if (!r.ok) throw new Error(); return r.json(); })
@@ -3666,13 +3674,18 @@ function runForgeSearch(page) {
     const vmeta = document.getElementById('bangViewportMeta');
     if (!vmeta) return;
     const originalContent = vmeta.getAttribute('content');
-    const noZoomContent   = originalContent.replace(/,?\s*user-scalable=[^,]*/i, '')
-                                           .replace(/,?\s*maximum-scale=[^,]*/i, '')
-                          + ', maximum-scale=1, user-scalable=no';
+    const noZoomContent   = 'width=device-width, initial-scale=0.5, maximum-scale=0.5, minimum-scale=0.5, user-scalable=no';
 
     window.lockViewportZoom    = () => vmeta.setAttribute('content', noZoomContent);
     window.restoreViewportZoom = () => vmeta.setAttribute('content', originalContent);
 })();
+
+// Close dropdowns on outside click
+document.addEventListener('click', e => {
+    if (!e.target.closest('.forge-tab-pane')) {
+        document.querySelectorAll('.ff-dropdown.open').forEach(dd => dd.classList.remove('open'));
+    }
+});
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {

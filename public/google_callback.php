@@ -173,6 +173,7 @@ $_SESSION['user_id'] = $user['id'];
 $_SESSION['username'] = $user['username'];
 $_SESSION['role'] = $user['role'] ?? 'user';
 $_SESSION['login_type'] = 'google';
+$_SESSION['google_access_token'] = $token;
 
 // persist cookie
 $lifetime = 60 * 60 * 24 * 30;

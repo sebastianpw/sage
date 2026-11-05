@@ -54,9 +54,10 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS `chatty_session_settings` (
   KEY `idx_chatty_session_settings_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
-// Zero-touch migration for new notification columns
+// Zero-touch migrations for notification and generation tracking columns
 try { $pdo->exec("ALTER TABLE chatty_settings ADD COLUMN mute_notifications TINYINT(1) DEFAULT 0"); } catch (\Exception $e) {}
 try { $pdo->exec("ALTER TABLE chatty_settings ADD COLUMN last_read_msg_id INT(11) DEFAULT 0"); } catch (\Exception $e) {}
+try { $pdo->exec("ALTER TABLE chatty_chat_sessions ADD COLUMN is_generating TINYINT(1) DEFAULT 0"); } catch (\Exception $e) {}
 
 $data = json_decode(file_get_contents('php://input'), true) ?: [];
 $action = $_GET['action'] ?? $data['action'] ?? '';
@@ -74,10 +75,15 @@ if ($action === 'load_state') {
     $currentSessionId = $chatSessions[0]['id'] ?? null;
     
     $sessSettingsRow = [];
+    $isGenerating = false;
     if ($currentSessionId) {
         $stmt = $pdo->prepare("SELECT * FROM chatty_session_settings WHERE user_id = ? AND session_id = ?");
         $stmt->execute([$userId, $currentSessionId]);
         $sessSettingsRow = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        $stmt = $pdo->prepare("SELECT is_generating FROM chatty_chat_sessions WHERE session_id = ? AND user_id = ?");
+        $stmt->execute([$currentSessionId, $userId]);
+        $isGenerating = (bool)$stmt->fetchColumn();
     }
     
     $settings = [
@@ -106,7 +112,8 @@ if ($action === 'load_state') {
             'settings' => $settings,
             'chat_sessions' => $chatSessions,
             'chat_session_id' => $currentSessionId,
-            'conversation' => $conversation
+            'conversation' => $conversation,
+            'is_generating' => $isGenerating
         ]
     ]);
     exit;
@@ -205,7 +212,27 @@ if ($action === 'load_chat') {
         'system_prompt' => $sessSettingsRow['system_prompt'] ?? $globalSettings['system_prompt'] ?? ''
     ];
 
-    echo json_encode(['success' => true, 'conversation' => $conversation, 'settings' => $settings]);
+    $stmt = $pdo->prepare("SELECT is_generating FROM chatty_chat_sessions WHERE session_id = ? AND user_id = ?");
+    $stmt->execute([$sessionId, $userId]);
+    $isGenerating = (bool)$stmt->fetchColumn();
+
+    echo json_encode([
+        'success' => true,
+        'conversation' => $conversation,
+        'settings' => $settings,
+        'is_generating' => $isGenerating
+    ]);
+    exit;
+}
+
+// ── STOP WAITING / CANCEL GENERATION ────────────────────────────────────
+if ($action === 'stop_waiting') {
+    $sessionId = $data['chat_session_id'] ?? $_GET['chat_session_id'] ?? '';
+    if ($sessionId) {
+        $pdo->prepare("UPDATE chatty_chat_sessions SET is_generating = 0 WHERE session_id = ? AND user_id = ?")
+            ->execute([$sessionId, $userId]);
+    }
+    echo json_encode(['success' => true]);
     exit;
 }
 
@@ -283,7 +310,7 @@ if ($action === 'branch_chat') {
     $title = $stmt->fetchColumn() ?: 'Branched Chat';
     $title .= ' (Branch)';
     
-    $stmt = $pdo->prepare("INSERT INTO chatty_chat_sessions (session_id, user_id, title, updated_at) VALUES (?, ?, ?, NOW())");
+    $stmt = $pdo->prepare("INSERT INTO chatty_chat_sessions (session_id, user_id, title, updated_at, is_generating) VALUES (?, ?, ?, NOW(), 0)");
     $stmt->execute([$newSessionId, $userId, $title]);
     
     $stmt = $pdo->prepare("INSERT INTO chatty_conversation (user_id, session_id, role, content, ts) SELECT user_id, ?, role, content, ts FROM chatty_conversation WHERE session_id = ? AND user_id = ? AND id <= ? ORDER BY id ASC");
@@ -307,8 +334,44 @@ if ($action === 'delete_msg') {
     }
     
     $pdo->prepare("DELETE FROM chatty_conversation WHERE id = ? AND session_id = ? AND user_id = ?")->execute([$msgId, $sessionId, $userId]);
+    $pdo->prepare("UPDATE chatty_chat_sessions SET is_generating = 0 WHERE session_id = ? AND user_id = ?")->execute([$sessionId, $userId]);
     
     echo json_encode(['success' => true]);
+    exit;
+}
+
+// ── RETRY MESSAGE ───────────────────────────────────────────────────────
+if ($action === 'retry_message') {
+    $sessionId = $data['chat_session_id'] ?? '';
+    $msgId = (int)($data['msg_id'] ?? 0);
+
+    if (!$sessionId || !$msgId) {
+        echo json_encode(['error' => 'Missing session or message id']);
+        exit;
+    }
+
+    // Delete any assistant replies following this user prompt to restart clean
+    $pdo->prepare("DELETE FROM chatty_conversation WHERE session_id = ? AND user_id = ? AND id > ?")->execute([$sessionId, $userId, $msgId]);
+
+    // Mark session as actively generating
+    $pdo->prepare("UPDATE chatty_chat_sessions SET is_generating = 1, updated_at = NOW() WHERE session_id = ? AND user_id = ?")
+        ->execute([$sessionId, $userId]);
+
+    // Trigger async generation
+    $pyapiUrl = rtrim($GLOBALS['WORDNET_PYAPI_URL'] ?? 'http://127.0.0.1:8009', '/');
+    $ch = curl_init($pyapiUrl . '/aiprovider/chatty_bg');
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+        'session_id' => $sessionId,
+        'user_id' => $userId
+    ]));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+    curl_exec($ch);
+    curl_close($ch);
+
+    echo json_encode(['success' => true, 'status' => 'processing']);
     exit;
 }
 
@@ -384,13 +447,14 @@ if ($action === 'send_message') {
         $title = mb_substr($titleRaw, 0, 40);
         
         $stmt = $pdo->prepare("
-            INSERT INTO chatty_chat_sessions (session_id, user_id, title, updated_at)
-            VALUES (?, ?, ?, NOW())
-            ON DUPLICATE KEY UPDATE title=VALUES(title)
+            INSERT INTO chatty_chat_sessions (session_id, user_id, title, updated_at, is_generating)
+            VALUES (?, ?, ?, NOW(), 1)
+            ON DUPLICATE KEY UPDATE title=VALUES(title), is_generating=1
         ");
         $stmt->execute([$sessionId, $userId, $title]);
     } else {
-        $pdo->prepare("UPDATE chatty_chat_sessions SET updated_at = NOW() WHERE session_id = ? AND user_id = ?")->execute([$sessionId, $userId]);
+        $pdo->prepare("UPDATE chatty_chat_sessions SET updated_at = NOW(), is_generating = 1 WHERE session_id = ? AND user_id = ?")
+            ->execute([$sessionId, $userId]);
     }
 
     // TRIGGER ASYNC GENERATION VIA PYAPI BACKGROUND TASKS
@@ -403,7 +467,7 @@ if ($action === 'send_message') {
     ]));
     curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 5); // 5 seconds connect/execute limit to fire off the background task
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
     curl_exec($ch);
     curl_close($ch);
 

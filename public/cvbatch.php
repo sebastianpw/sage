@@ -424,7 +424,7 @@ window.CVBatchApp = (function() {
 
     function resolveSequenceSketches(seqId, seqName) {
         const banner = document.getElementById('seqResolvedBanner');
-        if (banner) { banner.style.display = 'flex'; banner.innerHTML = '<i class="bi bi-hourglass-split"></i> Resolving sketches from sequence…'; }
+        if (banner) { banner.style.display = 'flex'; banner.innerHTML = '<i class="bi bi-hourglass-split"></i> Resolving frames from sequence…'; }
         resolvedSketchIds = [];
         fetch('cvbatch_api.php', {
             method: 'POST', headers: {'Content-Type':'application/json'},
@@ -434,7 +434,8 @@ window.CVBatchApp = (function() {
             resolvedSketchIds = res.sketches || [];
             if (banner) {
                 banner.style.display = 'flex';
-                banner.innerHTML = `<i class="bi bi-check2-circle"></i> <strong>${resolvedSketchIds.length}</strong> sketch(es) resolved from <em>${seqName}</em> <button class="su-banner-clear" onclick="CVBatchApp.clearSequenceResolution()">Clear</button>`;
+                const frameCount = res.frame_count || resolvedSketchIds.length;
+                banner.innerHTML = `<i class="bi bi-check2-circle"></i> <strong>${resolvedSketchIds.length}</strong> sketch(es) (${frameCount} concrete frames) resolved from <em>${seqName}</em> <button class="su-banner-clear" onclick="CVBatchApp.clearSequenceResolution()">Clear</button>`;
             }
         });
     }
@@ -559,6 +560,7 @@ window.CVBatchApp = (function() {
             frame_ranges: frameRanges,
             map_run_ids: selectedMapRuns.map(m => m.id),
             export_mode: currentMode,
+            sequence_id: selectedSequence ? selectedSequence.id : null,
             
             // Raw UI selections to restore later
             selected_sketches: selectedSketches,
@@ -734,7 +736,7 @@ window.CVBatchApp = (function() {
     function startBatch() {
         const config = buildConfigPayload();
         
-        if (!config.sketch_ids.length && !config.sketch_ranges.length && !config.map_run_ids.length && !config.frame_ranges.length) {
+        if (!config.sketch_ids.length && !config.sketch_ranges.length && !config.map_run_ids.length && !config.frame_ranges.length && !(config.export_mode === 'sequence' && config.selected_sequence)) {
             if(window.Toast) Toast.show('Please select at least one source configuration.', 'warn');
             else alert('Please select at least one source configuration.');
             return;
@@ -1148,7 +1150,7 @@ window.addEventListener('message', function(e) {
                 <h3 class="scene-title"><i class="bi bi-collection-play"></i> Select Narrative Sequence</h3>
             </div>
             <p style="font-size:.8rem; color:var(--pl-text-dim); margin:0 0 12px; line-height:1.5;">
-                Resolves all sketches that are part of the selected narrative sequence via its JSON structure.
+                Resolves all sketches and concrete frame assignments from the selected narrative sequence.
             </p>
             <div class="su-ac-wrap">
                 <input type="text" id="seqSearch" class="su-input" placeholder="Search narrative sequence by ID or name…" oninput="CVBatchApp.searchSequences(this.value)">

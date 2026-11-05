@@ -9,10 +9,6 @@
 require_once __DIR__ . '/bootstrap.php';
 global $pdo;
 
-// ── 1. DB INITIALIZATION & MIGRATIONS ──
-
-
-
 // ── 1. DB INITIALIZATION & PRE-SEEDING ──
 
 // Profile settings table
@@ -80,6 +76,7 @@ if ($stmt->fetchColumn() == 0) {
         "custom_tabs" => [],
         "panel_height" => 81,
         "cb_area" => "global",
+        "shortcut_cols" => 4,
         "creatives_visibility" => [
             "vehicles" => false,
             "artifacts" => false,
@@ -122,9 +119,6 @@ if ($stmt->fetchColumn() == 0) {
         $insertWrap->execute($w);
     }
 }
-
-
-
 
 // ── 2. API HANDLER ──
 if (isset($_GET['sage_api'])) {
@@ -222,8 +216,6 @@ if (isset($_GET['sage_api'])) {
         exit;
     }
     
-    
-    
     if ($action === 'copy_shortcuts') {
         $src = trim($_POST['source_profile'] ?? '');
         $dst = trim($_POST['dest_profile'] ?? '');
@@ -246,8 +238,11 @@ if (isset($_GET['sage_api'])) {
             if (!$dstRow) throw new Exception("Destination profile not found");
             $dstSettings = json_decode($dstRow['settings_json'], true) ?? [];
 
-            // Overwrite shortcuts in destination profile
+            // Overwrite shortcuts and shortcut columns in destination profile
             $dstSettings['shortcuts'] = $srcShortcuts;
+            if (isset($srcSettings['shortcut_cols'])) {
+                $dstSettings['shortcut_cols'] = $srcSettings['shortcut_cols'];
+            }
 
             $upd = $pdo->prepare("UPDATE sage_settings SET settings_json = ? WHERE profile_name = ?");
             $upd->execute([json_encode($dstSettings, JSON_UNESCAPED_UNICODE), $dst]);
@@ -258,7 +253,6 @@ if (isset($_GET['sage_api'])) {
         }
         exit;
     }
-    
     
     if ($action === 'copy_wrappers') {
         $src = trim($_POST['source_profile'] ?? '');
@@ -439,17 +433,83 @@ $allTasks = $pdo->query("SELECT id, name, args FROM scheduled_tasks ORDER BY nam
     .ft-iframe-content iframe { flex: 1; width: 100%; height: 100%; border: none; background: var(--ft-bg); display: block; }
 
     /* ── SHORTCUTS TAB ── */
-    .ft-shortcuts-grid-wrap { flex: 1; overflow-y: auto; padding: 20px; }
-    .ft-shortcuts-grid { display: grid; gap: 14px; grid-template-columns: repeat(3, 1fr); }
-    @media (min-width: 480px) { .ft-shortcuts-grid { grid-template-columns: repeat(4, 1fr); } }
-    @media (min-width: 768px) { .ft-shortcuts-grid { grid-template-columns: repeat(6, 1fr); } }
-    @media (min-width: 1024px) { .ft-shortcuts-grid { grid-template-columns: repeat(8, 1fr); } }
+    .ft-shortcuts-grid-wrap { flex: 1; overflow-y: auto; padding: 20px; transition: padding 0.15s ease; }
+    .ft-shortcuts-grid { 
+        display: grid; 
+        gap: var(--sc-gap, 12px); 
+        grid-template-columns: repeat(var(--sc-cols, 4), 1fr); 
+    }
+    @media (min-width: 768px) { 
+        .ft-shortcuts-grid { 
+            grid-template-columns: repeat(var(--sc-cols-tablet, 6), 1fr); 
+        } 
+    }
+    @media (min-width: 1024px) { 
+        .ft-shortcuts-grid { 
+            grid-template-columns: repeat(var(--sc-cols-desktop, 8), 1fr); 
+        } 
+    }
+
+    /* Column / Button Size Presets */
+    .ft-shortcuts-grid[data-cols="3"] {
+        --sc-cols: 3;
+        --sc-cols-tablet: 5;
+        --sc-cols-desktop: 6;
+        --sc-gap: 14px;
+        --sc-btn-gap: 8px;
+        --sc-btn-padding: 18px 8px;
+        --sc-min-h: 88px;
+        --sc-icon-size: 28px;
+        --sc-label-size: 0.70rem;
+        --sc-label-spacing: 0.8px;
+    }
+    .ft-shortcuts-grid[data-cols="4"],
+    .ft-shortcuts-grid:not([data-cols]) {
+        --sc-cols: 4;
+        --sc-cols-tablet: 6;
+        --sc-cols-desktop: 8;
+        --sc-gap: 12px;
+        --sc-btn-gap: 8px;
+        --sc-btn-padding: 16px 8px;
+        --sc-min-h: 82px;
+        --sc-icon-size: 24px;
+        --sc-label-size: 0.65rem;
+        --sc-label-spacing: 0.8px;
+    }
+    .ft-shortcuts-grid[data-cols="5"] {
+        --sc-cols: 5;
+        --sc-cols-tablet: 7;
+        --sc-cols-desktop: 10;
+        --sc-gap: 8px;
+        --sc-btn-gap: 6px;
+        --sc-btn-padding: 10px 4px;
+        --sc-min-h: 68px;
+        --sc-icon-size: 22px;
+        --sc-label-size: 0.58rem;
+        --sc-label-spacing: 0.4px;
+    }
+    .ft-shortcuts-grid[data-cols="6"] {
+        --sc-cols: 6;
+        --sc-cols-tablet: 8;
+        --sc-cols-desktop: 12;
+        --sc-gap: 6px;
+        --sc-btn-gap: 4px;
+        --sc-btn-padding: 8px 3px;
+        --sc-min-h: 60px;
+        --sc-icon-size: 19px;
+        --sc-label-size: 0.52rem;
+        --sc-label-spacing: 0.2px;
+    }
 
     .ft-shortcut-btn {
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        gap: 8px; padding: 18px 8px; background: var(--ft-card); border: 1px solid var(--ft-border);
+        gap: var(--sc-btn-gap, 8px); 
+        padding: var(--sc-btn-padding, 16px 8px); 
+        background: var(--ft-card); border: 1px solid var(--ft-border);
         border-radius: var(--ft-radius); cursor: pointer; transition: all 0.15s; text-decoration: none;
-        -webkit-tap-highlight-color: transparent; min-height: 85px; position: relative; overflow: hidden;
+        -webkit-tap-highlight-color: transparent; 
+        min-height: var(--sc-min-h, 82px); 
+        position: relative; overflow: hidden;
     }
     .ft-shortcut-btn::before {
         content: ''; position: absolute; inset: 0;
@@ -459,10 +519,17 @@ $allTasks = $pdo->query("SELECT id, name, args FROM scheduled_tasks ORDER BY nam
     .ft-shortcut-btn:hover { border-color: var(--ft-amber); transform: translateY(-2px); }
     .ft-shortcut-btn:hover::before { opacity: 1; }
     .ft-shortcut-btn:active { transform: scale(0.95); }
-    .ft-shortcut-icon { font-size: 26px; line-height: 1; }
+    .ft-shortcut-icon { 
+        font-size: var(--sc-icon-size, 24px); 
+        line-height: 1; 
+    }
     .ft-shortcut-label {
-        font-family: var(--ft-mono); font-size: 0.65rem; font-weight: 700;
-        text-transform: uppercase; letter-spacing: 0.8px; color: var(--ft-text-dim); text-align: center; line-height: 1.2; word-break: break-word;
+        font-family: var(--ft-mono); 
+        font-size: var(--sc-label-size, 0.65rem); 
+        font-weight: 700;
+        text-transform: uppercase; 
+        letter-spacing: var(--sc-label-spacing, 0.8px); 
+        color: var(--ft-text-dim); text-align: center; line-height: 1.2; word-break: break-word;
     }
     .ft-shortcut-btn:hover .ft-shortcut-label { color: var(--ft-amber); }
 
@@ -686,9 +753,7 @@ $allTasks = $pdo->query("SELECT id, name, args FROM scheduled_tasks ORDER BY nam
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes modalIn { from { opacity: 0; transform: scale(0.96) translateY(-10px); } to { opacity: 1; transform: none; } }
 
-    
     .ft-shortcut-modal-overlay { position: fixed; inset: 0; background: var(--ft-bg); z-index: 99999; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; padding: 0; }
-    
     .ft-shortcut-modal-overlay.open { opacity: 1; pointer-events: all; }
     .ft-shortcut-modal-box { width: 100%; height: 100%; background: var(--ft-bg); display: flex; flex-direction: column; transform: scale(0.98); transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1); position: relative; padding-top: 50px; }
     .ft-shortcut-modal-overlay.open .ft-shortcut-modal-box { transform: scale(1); }
@@ -729,9 +794,8 @@ $allTasks = $pdo->query("SELECT id, name, args FROM scheduled_tasks ORDER BY nam
         <button class="ft-tab" data-tab="queue" role="tab" title="Queue"><span class="ft-tab-icon">☰</span></button>
         <button class="ft-tab" data-tab="logs" role="tab" title="Logs"><span class="ft-tab-icon">📒</span></button>
         <button class="ft-tab" data-tab="chatty" role="tab" title="Chatty"><span class="ft-tab-icon">💬</span></button>
-        <button class="ft-tab" data-tab="polly" role="tab" title="Polly"><span class="ft-tab-icon">🌱</span></button>
+        <button class="ft-tab" data-tab="polli" role="tab" title="Polly"><span class="ft-tab-icon">🌱</span></button>
 
-        
         <button class="ft-tab" data-tab="clipboard" role="tab" title="Clipboard"><span class="ft-tab-icon">📋</span></button>
         
         <!-- Creatives & Entities Tab -->
@@ -812,14 +876,10 @@ $allTasks = $pdo->query("SELECT id, name, args FROM scheduled_tasks ORDER BY nam
             <iframe data-src="chatty.php" allowfullscreen></iframe>
         </div>
         
-       
         <!-- ── POLLY TAB (Iframe logic) ── -->
-        <div class="ft-tab-content ft-iframe-content" id="ft-tab-polly" role="tabpanel">
-            <iframe data-src="view_polly.php" allowfullscreen></iframe>
+        <div class="ft-tab-content ft-iframe-content" id="ft-tab-polli" role="tabpanel">
+            <iframe data-src="view_polli.php" allowfullscreen></iframe>
         </div>
-        
-        
-        
 
         <!-- ── CLIPBOARD TAB ── -->
         <div class="ft-tab-content" id="ft-tab-clipboard" role="tabpanel">
@@ -1014,9 +1074,6 @@ $allTasks = $pdo->query("SELECT id, name, args FROM scheduled_tasks ORDER BY nam
                         </div>
                     </div>
                     
-                    
-                    
-                    
                     <!-- Section: Copy Shortcuts -->
                     <div class="ft-settings-section">
                         <div class="ft-settings-section-title">🔄 Copy All Shortcuts</div>
@@ -1035,7 +1092,6 @@ $allTasks = $pdo->query("SELECT id, name, args FROM scheduled_tasks ORDER BY nam
                             </div>
                         </div>
                     </div>
-                    
                     
                     <!-- Section: Copy Wrappers -->
                     <div class="ft-settings-section">
@@ -1059,6 +1115,21 @@ $allTasks = $pdo->query("SELECT id, name, args FROM scheduled_tasks ORDER BY nam
                     <!-- Section: Shortcuts Manager -->
                     <div class="ft-settings-section">
                         <div class="ft-settings-section-title">⚡ Shortcuts</div>
+                        
+                        <!-- Grid Column / Button Size Setting Row -->
+                        <div class="ft-setting-row" style="margin-bottom:12px;">
+                            <div class="ft-setting-label">
+                                Button Grid Columns &amp; Size
+                                <div class="ft-setting-sub">Columns on mobile screen (3: Large, 4: Medium, 5: Compact, 6: Dense)</div>
+                            </div>
+                            <select id="sage-sc-cols-select" class="ft-add-input" style="max-width:180px; flex:none;" onchange="SageApp.onShortcutColsChange(this.value)">
+                                <option value="3">3 Columns (Large)</option>
+                                <option value="4">4 Columns (Medium)</option>
+                                <option value="5">5 Columns (Compact)</option>
+                                <option value="6">6 Columns (Dense)</option>
+                            </select>
+                        </div>
+
                         <div class="ft-add-shortcut-form" id="ft-add-shortcut-form">
                             <div class="ft-add-form-row">
                                 <input type="text" class="ft-add-input icon" id="ft-sc-new-icon" placeholder="⚗" maxlength="4" title="Emoji icon">
@@ -1115,7 +1186,7 @@ $allTasks = $pdo->query("SELECT id, name, args FROM scheduled_tasks ORDER BY nam
                         </button>
                     </div>
 
-                    <!-- NEW SECTION: Creatives & Entities Visibility -->
+                    <!-- SECTION: Creatives & Entities Visibility -->
                     <div class="ft-settings-section">
                         <div class="ft-settings-section-title">💡 Creatives & Entities Visibility</div>
                         <p style="font-size:0.7rem; color:var(--ft-text-dim); font-family:var(--ft-mono); margin-bottom:12px;">
@@ -1143,9 +1214,6 @@ $allTasks = $pdo->query("SELECT id, name, args FROM scheduled_tasks ORDER BY nam
 
 <!-- ── MODALS OVERLAYS ── -->
 
-
-
-
 <!-- Fullscreen shortcut modal overlay -->
 <div class="ft-shortcut-modal-overlay" id="ft-shortcut-modal" onclick="SageApp.shortcutModal.closeOnBg(event)">
     <div class="ft-shortcut-modal-box">
@@ -1157,8 +1225,6 @@ $allTasks = $pdo->query("SELECT id, name, args FROM scheduled_tasks ORDER BY nam
         </div>
     </div>
 </div>
-
-
 
 <!-- Scheduler Wrapper Edit Modal -->
 <div class="forge-modal-overlay" id="sageWrapperModal" onclick="if(event.target===this) this.classList.remove('open')">
@@ -1225,7 +1291,6 @@ $allTasks = $pdo->query("SELECT id, name, args FROM scheduled_tasks ORDER BY nam
 
 <!-- Toast -->
 <div class="ft-toast" id="ft-toast"></div>
-
 
 <!-- ══════════════════════════════════════════════════════════════════════════
      SAGE APP JAVASCRIPT
@@ -1437,18 +1502,36 @@ window.SageApp = {
             document.getElementById('sage-copy-dst').innerHTML = copyOptions;
             document.getElementById('sage-copy-src').value = _currentProfile;
             
-            
             document.getElementById('sage-copy-sc-src').innerHTML = copyOptions;
             document.getElementById('sage-copy-sc-dst').innerHTML = copyOptions;
             document.getElementById('sage-copy-sc-src').value = _currentProfile;
-            
-            
-            
-            
         }
     },
 
-async loadSettings(profile, isUserAction = false) {
+    onShortcutColsChange(val) {
+        const cols = parseInt(val, 10) || 4;
+        _settings.shortcut_cols = cols;
+        this.applyShortcutCols(cols);
+        toast(`Columns set to ${cols} (Save Profile to persist)`);
+    },
+
+    applyShortcutCols(cols) {
+        const c = parseInt(cols, 10) || 4;
+        const grid = document.getElementById('ft-shortcuts-grid');
+        if (grid) {
+            grid.setAttribute('data-cols', c);
+        }
+        const wrap = document.querySelector('.ft-shortcuts-grid-wrap');
+        if (wrap) {
+            wrap.style.padding = (c >= 5) ? '12px 8px' : '20px';
+        }
+        const sel = document.getElementById('sage-sc-cols-select');
+        if (sel && sel.value != c) {
+            sel.value = c;
+        }
+    },
+
+    async loadSettings(profile, isUserAction = false) {
         const r = await fetch(API_URL + 'get_settings&profile_name=' + encodeURIComponent(profile));
         const d = await r.json();
         if (d.ok) {
@@ -1456,6 +1539,7 @@ async loadSettings(profile, isUserAction = false) {
             if (!_settings.shortcuts) _settings.shortcuts = [];
             if (!_settings.custom_tabs) _settings.custom_tabs = [];
             if (!_settings.creatives_visibility) _settings.creatives_visibility = {};
+            if (!_settings.shortcut_cols) _settings.shortcut_cols = 4;
             
             _cbArea = _settings.cb_area || 'global';
             document.getElementById('ft-cb-area-input').value = _cbArea;
@@ -1463,6 +1547,7 @@ async loadSettings(profile, isUserAction = false) {
             _currentProfile = profile;
             localStorage.setItem('sage_profile', profile);
             
+            this.applyShortcutCols(_settings.shortcut_cols || 4);
             this.renderShortcutsGrid();
             this.renderCustomTabs();
             this.settings.render();
@@ -1471,7 +1556,6 @@ async loadSettings(profile, isUserAction = false) {
             if (document.querySelector('.ft-tab.active').dataset.tab === 'clipboard') this.cb.load();
             if (this.scheduler) this.scheduler.loadWrappers();
             
-            // Only notify if explicitly loaded by user action
             if (isUserAction) {
                 toast('Loaded: ' + profile);
             }
@@ -1485,12 +1569,13 @@ async loadSettings(profile, isUserAction = false) {
         await this.loadSettings(sel.value, true);
     },
 
-    
-
     async saveSettings(profileOverride) {
         const profile = profileOverride || _currentProfile;
         const cbInput = document.getElementById('ft-cb-area-input');
         if (cbInput) _settings.cb_area = cbInput.value.trim() || 'global';
+
+        const colsSelect = document.getElementById('sage-sc-cols-select');
+        if (colsSelect) _settings.shortcut_cols = parseInt(colsSelect.value, 10) || 4;
         
         const r = await fetch(API_URL + 'save_settings', {
             method: 'POST',
@@ -1507,6 +1592,7 @@ async loadSettings(profile, isUserAction = false) {
                 this.scheduler.loadWrappers();
             }
             _cbArea = _settings.cb_area;
+            this.applyShortcutCols(_settings.shortcut_cols || 4);
             this.renderShortcutsGrid();
             this.renderCustomTabs();
             this.applyCreativesVisibility();
@@ -1548,8 +1634,6 @@ async loadSettings(profile, isUserAction = false) {
         }
     },
     
-    
-    
     async copyShortcuts() {
         const src = document.getElementById('sage-copy-sc-src').value;
         const dst = document.getElementById('sage-copy-sc-dst').value;
@@ -1567,7 +1651,6 @@ async loadSettings(profile, isUserAction = false) {
         
         if (d.ok) {
             toast('Shortcuts copied! ✓');
-            // If the active profile was the target, reload to immediately see the changes
             if (dst === _currentProfile) {
                 await this.loadSettings(_currentProfile);
             }
@@ -1575,7 +1658,6 @@ async loadSettings(profile, isUserAction = false) {
             toast('Copy failed: ' + (d.error || ''), true);
         }
     },
-    
 
     applyCreativesVisibility() {
         const visibility = _settings.creatives_visibility || {};
@@ -1589,6 +1671,8 @@ async loadSettings(profile, isUserAction = false) {
     renderShortcutsGrid() {
         const grid = document.getElementById('ft-shortcuts-grid');
         grid.innerHTML = '';
+        this.applyShortcutCols(_settings.shortcut_cols || 4);
+
         const visible = _settings.shortcuts.filter(s => s.visible !== false);
         if (!visible.length) {
             grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--ft-text-dim);font-family:var(--ft-mono);font-size:0.85rem;font-style:italic;">No shortcuts active in this profile.</div>';
@@ -1788,7 +1872,6 @@ async loadSettings(profile, isUserAction = false) {
                 display_order: i
             }));
 
-            // 1. Immediately sync in-memory wrapper objects so modal is accurate right away
             orders.forEach(o => {
                 const item = this.wrappers.find(x => x.id === o.id);
                 if (item) {
@@ -1796,10 +1879,8 @@ async loadSettings(profile, isUserAction = false) {
                 }
             });
 
-            // 2. Keep local array sorted in memory
             this.wrappers.sort((a, b) => (parseInt(a.display_order) || 0) - (parseInt(b.display_order) || 0));
 
-            // 3. Persist to DB and re-fetch to ensure 100% synchronization
             try {
                 const r = await fetch(API_URL + 'reorder_wrappers', {
                     method: 'POST',

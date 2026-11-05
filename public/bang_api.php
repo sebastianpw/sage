@@ -13,7 +13,7 @@ use App\Core\FramesManager;
 use App\Core\SpwBase;
 
 $spw = SpwBase::getInstance();
-// Fix: Reliably bind PDO so CRUD operations do not encounter fatal errors.
+// Bind PDO explicitly 
 $pdo = $spw->getPDO();
 
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
@@ -369,13 +369,12 @@ try {
                 throw new Exception('Sequence is empty or contains invalid data');
             }
 
-            // 2. Resolve all frames preserving sequence order & distinct frame instances
+            // 2. Resolve all frames preserving sequence order & exact frame_ids
             $sketchFramesStmt = $pdo->prepare("
-                SELECT f.id, f.filename, f.name 
-                FROM frames f 
-                JOIN frames_2_sketches fs ON f.id = fs.from_id 
-                WHERE fs.to_id = ? 
-                ORDER BY f.id ASC
+                SELECT id, filename, name FROM frames WHERE entity_type = 'sketches' AND entity_id = ?
+                UNION
+                SELECT f.id, f.filename, f.name FROM frames f JOIN frames_2_sketches fs ON f.id = fs.from_id WHERE fs.to_id = ?
+                ORDER BY id DESC
             ");
             $frameStmt = $pdo->prepare("SELECT id, filename, name FROM frames WHERE id = ?");
             $usedSketchFrameIndices = [];
@@ -399,7 +398,7 @@ try {
                 }
 
                 if (!$frameRow && $sketchId) {
-                    $sketchFramesStmt->execute([$sketchId]);
+                    $sketchFramesStmt->execute([$sketchId, $sketchId]);
                     $allFrames = $sketchFramesStmt->fetchAll(PDO::FETCH_ASSOC);
                     if (!empty($allFrames)) {
                         $idx = $usedSketchFrameIndices[$sketchId] ?? 0;
@@ -420,7 +419,8 @@ try {
             $pdo->beginTransaction();
 
             // 3. Create composite & link frames
-            $compName = "Import: " . $seq['name'];
+            // Safely truncate name to prevent database constraint exceptions
+            $compName = mb_substr("Import: " . $seq['name'], 0, 100);
             $compDesc = "Auto-imported from Narrative Sequence #$seqId";
             $cStmt = $pdo->prepare("INSERT INTO composites (name, description) VALUES (?, ?)");
             $cStmt->execute([$compName, $compDesc]);
@@ -441,6 +441,8 @@ try {
 
             // 5. Build grid panel elements with automatic cover scale
             $publicPathAbs = rtrim($spw->getProjectPath() . '/public', '/');
+            
+            // FIX: Ensure $gutter variable is properly referenced
             $cw = ($width - ($cols + 1) * $gutter) / $cols;
             $ch = ($height - ($rows + 1) * $gutter) / $rows;
             $elements = [];
@@ -707,7 +709,7 @@ try {
             $pdo->beginTransaction();
 
             // 2. Create the new composite
-            $compName = "Import: " . $seq['name'];
+            $compName = mb_substr("Import: " . $seq['name'], 0, 100);
             $compDesc = "Auto-imported from Narrative Sequence #$seqId";
             $cStmt = $pdo->prepare("INSERT INTO composites (name, description) VALUES (?, ?)");
             $cStmt->execute([$compName, $compDesc]);
@@ -721,13 +723,12 @@ try {
             $stmtCanv->execute([$newCompId, $compName, $width, $height]);
             $newCanvasId = (int)$pdo->lastInsertId();
 
-            // 4. Resolve frames and link them (advancing through all frames per sketch if needed)
+            // 4. Resolve frames and link them strictly preserving concrete frame_ids
             $sketchFramesStmt = $pdo->prepare("
-                SELECT f.id 
-                FROM frames f 
-                JOIN frames_2_sketches fs ON f.id = fs.from_id 
-                WHERE fs.to_id = ? 
-                ORDER BY f.id ASC
+                SELECT id, filename, name FROM frames WHERE entity_type = 'sketches' AND entity_id = ?
+                UNION
+                SELECT f.id, f.filename, f.name FROM frames f JOIN frames_2_sketches fs ON f.id = fs.from_id WHERE fs.to_id = ?
+                ORDER BY id DESC
             ");
             $usedSketchFrameIndices = [];
             $linkStmt = $pdo->prepare("INSERT IGNORE INTO composite_frames (composite_id, frame_id) VALUES (?, ?)");
@@ -744,7 +745,7 @@ try {
                 }
 
                 if (!$frameId && $sketchId) {
-                    $sketchFramesStmt->execute([$sketchId]);
+                    $sketchFramesStmt->execute([$sketchId, $sketchId]);
                     $allFrames = $sketchFramesStmt->fetchAll(PDO::FETCH_COLUMN);
                     if (!empty($allFrames)) {
                         $idx = $usedSketchFrameIndices[$sketchId] ?? 0;
@@ -772,7 +773,8 @@ try {
             throw new Exception("Unknown action: $action");
     }
 
-} catch (Exception $e) {
+// Safely trap everything natively and print it out to avoid mystery crashes
+} catch (\Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     http_response_code(500);
     echo json_encode(['success' => false, 'message' => $e->getMessage()]);
@@ -797,12 +799,12 @@ function _syncElementIndex(PDO $pdo, int $arrId, int $canvasId, array $scene): v
             $uid     = $el['uid']      ?? uniqid('el_', true);
             $type    = $el['type']     ?? 'image';
             
-            // Fix: Enforce Strict MySQL Enum Mapping mapping sub-shapes cleanly back to allowed format.
+            // Map shapes strictly to SQL ENUM format
             if (in_array($type, ['shout', 'thought', 'whisper'])) {
                 $type = 'balloon';
             }
             if (in_array($type, ['panel', 'speed_lines', 'impact_frame'])) {
-                $type = 'shape'; // Prevent ENUM failures
+                $type = 'shape'; 
             }
             
             $frameId = !empty($el['frame_id']) ? (int)$el['frame_id'] : null;

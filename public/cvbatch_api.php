@@ -195,7 +195,7 @@ try {
         exit;
     }
 
-    // ── Resolve Narrative Sequence → Sketch IDs ──
+    // ── Resolve Narrative Sequence → Concrete Frames & Sketches ──
     if ($action === 'resolve_sequence_sketches') {
         header('Content-Type: application/json; charset=utf-8');
         $seqId = (int)($input['sequence_id'] ?? 0);
@@ -212,11 +212,29 @@ try {
             exit;
         }
 
-        $sketchIdMap = [];
+        $seqData = [];
         if (!empty($seq['sequence_data'])) {
             $seqData = json_decode($seq['sequence_data'], true);
-            if (is_array($seqData)) {
-                _extractSketchIdsFromSequenceData($seqData, $sketchIdMap);
+        }
+        if (!is_array($seqData)) $seqData = [];
+
+        $sketchIdMap = [];
+        $seqItems = [];
+        $frameCount = 0;
+
+        foreach ($seqData as $entry) {
+            $sid = null;
+            $fid = null;
+            if (is_numeric($entry)) {
+                $sid = (int)$entry;
+            } elseif (is_array($entry)) {
+                $sid = !empty($entry['sketch_id']) ? (int)$entry['sketch_id'] : (!empty($entry['sketchId']) ? (int)$entry['sketchId'] : null);
+                $fid = !empty($entry['frame_id']) ? (int)$entry['frame_id'] : (!empty($entry['frameId']) ? (int)$entry['frameId'] : null);
+            }
+            if ($sid || $fid) {
+                $seqItems[] = ['sketch_id' => $sid, 'frame_id' => $fid];
+                if ($sid) $sketchIdMap[$sid] = true;
+                if ($fid) $frameCount++;
             }
         }
 
@@ -240,7 +258,13 @@ try {
             $sketches = $stmtS->fetchAll(PDO::FETCH_ASSOC);
         }
 
-        echo json_encode(['ok' => true, 'sketches' => $sketches, 'sequence_id' => $seqId]);
+        echo json_encode([
+            'ok'          => true,
+            'sketches'    => $sketches,
+            'items'       => $seqItems,
+            'frame_count' => $frameCount,
+            'sequence_id' => $seqId
+        ]);
         exit;
     }
 
@@ -352,6 +376,33 @@ try {
         $config = $input['config'] ?? [];
         
         $frameIds = [];
+        $exportMode = $config['export_mode'] ?? 'standard';
+        
+        // 0. Narrative Sequence Mode: strictly resolve each entry's concrete frame_id
+        if ($exportMode === 'sequence') {
+            $seqId = (int)($config['selected_sequence']['id'] ?? $config['sequence_id'] ?? 0);
+            if ($seqId > 0) {
+                $stmt = $pdo->prepare("SELECT sequence_data FROM narrative_sequences WHERE id = ?");
+                $stmt->execute([$seqId]);
+                $seqDataStr = $stmt->fetchColumn();
+                $seqData = $seqDataStr ? json_decode($seqDataStr, true) : [];
+                if (is_array($seqData)) {
+                    foreach ($seqData as $entry) {
+                        $sId = is_array($entry) ? (!empty($entry['sketch_id']) ? (int)$entry['sketch_id'] : null) : (is_numeric($entry) ? (int)$entry : null);
+                        $fId = is_array($entry) && !empty($entry['frame_id']) ? (int)$entry['frame_id'] : null;
+
+                        if ($fId) {
+                            $frameIds[] = (int)$fId;
+                        } elseif ($sId) {
+                            $resolvedFid = getLatestFrameForSketch($pdo, $sId);
+                            if ($resolvedFid) {
+                                $frameIds[] = (int)$resolvedFid;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         
         // 1. Explicit Frame Ranges
         $frameRanges = $config['frame_ranges'] ?? [];
@@ -403,30 +454,32 @@ try {
                 }
                 
                 if ($fId) {
-                    $frameIds[] = $fId;
+                    $frameIds[] = (int)$fId;
                 }
             }
         }
         
-        // 3. Sketches (manual, range, sequence, plush are already in sketch_ids)
-        $allSketchIds = $config['sketch_ids'] ?? [];
-        $sketchRanges = $config['sketch_ranges'] ?? [];
-        foreach ($sketchRanges as $r) {
-            $start = (int)($r['start'] ?? 0);
-            $end = (int)($r['end'] ?? 0);
-            if ($start > 0 && $end >= $start) {
-                $stmt = $pdo->prepare("SELECT id FROM sketches WHERE id BETWEEN ? AND ?");
-                $stmt->execute([$start, $end]);
-                $allSketchIds = array_merge($allSketchIds, $stmt->fetchAll(PDO::FETCH_COLUMN));
+        // 3. Sketches (manual, range, plush) - only processed when not purely in sequence mode
+        if ($exportMode !== 'sequence') {
+            $allSketchIds = $config['sketch_ids'] ?? [];
+            $sketchRanges = $config['sketch_ranges'] ?? [];
+            foreach ($sketchRanges as $r) {
+                $start = (int)($r['start'] ?? 0);
+                $end = (int)($r['end'] ?? 0);
+                if ($start > 0 && $end >= $start) {
+                    $stmt = $pdo->prepare("SELECT id FROM sketches WHERE id BETWEEN ? AND ?");
+                    $stmt->execute([$start, $end]);
+                    $allSketchIds = array_merge($allSketchIds, $stmt->fetchAll(PDO::FETCH_COLUMN));
+                }
             }
-        }
-        
-        $allSketchIds = array_unique($allSketchIds);
-        foreach ($allSketchIds as $sId) {
-            if (!$sId) continue;
-            $fId = getLatestFrameForSketch($pdo, $sId);
-            if ($fId) {
-                $frameIds[] = $fId;
+            
+            $allSketchIds = array_unique($allSketchIds);
+            foreach ($allSketchIds as $sId) {
+                if (!$sId) continue;
+                $fId = getLatestFrameForSketch($pdo, $sId);
+                if ($fId) {
+                    $frameIds[] = (int)$fId;
+                }
             }
         }
         
@@ -438,7 +491,7 @@ try {
     }
 
     // ── Analyze Single Frame Endpoint ──
-    if ($action === 'analyze_frame') {
+if ($action === 'analyze_frame') {
         header('Content-Type: application/json; charset=utf-8');
 
         $fId = (int)($input['frame_id'] ?? 0);
@@ -558,3 +611,6 @@ try {
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
 }
+
+
+

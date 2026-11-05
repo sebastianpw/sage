@@ -85,7 +85,7 @@ try {
         if ($firstUserIdx !== -1 && $firstUserIdx !== 0) {
             $apiMessages[$firstUserIdx]['content'] = [
                 ['type' => 'text', 'text' => $apiMessages[$firstUserIdx]['content'], 'cache_control' => ['type' => 'ephemeral']]
-        ];
+            ];
         }
         $historyCount = count($apiMessages);
         $secondToLastIdx = $historyCount - 2;
@@ -143,8 +143,13 @@ try {
     bg_log("Successfully inserted response into DB. Job done.");
 } catch (\Exception $e) {
     bg_log("FAILED to insert into DB: " . $e->getMessage());
-    // Emergency save to disk so data is never lost
     $emergencyFile = PROJECT_ROOT . "/temp/emergency_chat_{$sessionId}.txt";
     file_put_contents($emergencyFile, $aiText);
     bg_log("Emergency saved response to: $emergencyFile");
+} finally {
+    // ALWAYS reset the is_generating flag so the frontend poller knows this session is finished
+    try {
+        $stmt = $pdo->prepare("UPDATE chatty_chat_sessions SET is_generating = 0 WHERE session_id = ? AND user_id = ?");
+        $stmt->execute([$sessionId, $userId]);
+    } catch (\Throwable $ex) {}
 }

@@ -32,7 +32,7 @@ function resolveFrameThumb(array $row, int $frameId = 0): string {
 if (!$seqId) {
     ob_start();
     ?>
-        <?php // echo $eruda ?? '';?>
+        <?php  echo $eruda ?? '';?>
 
     <link rel="stylesheet" href="/css/base.css">
     <link rel="stylesheet" href="/css/toast.css">

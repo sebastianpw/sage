@@ -400,18 +400,14 @@ def _build_pdf_for_language(
     from reportlab.lib.units import mm
     from reportlab.platypus import (
         BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer,
-        Image as RLImage, PageBreak
+        Image as RLImage, PageBreak, NextPageTemplate
     )
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
-    PAGE_W, PAGE_H = A4
-    
-    # Strictly define page dimensions BEFORE generating layout frames
-    if getattr(meta, 'pdf_page_size', 'A4').lower() == 'square':
-        PAGE_H = PAGE_W
-    elif getattr(meta, 'pdf_page_size', 'A4').lower() == 'a4_landscape':
-        PAGE_W, PAGE_H = PAGE_H, PAGE_W
+    PAGE_W_PORTRAIT, PAGE_H_PORTRAIT = A4
+    PAGE_W_LANDSCAPE, PAGE_H_LANDSCAPE = PAGE_H_PORTRAIT, PAGE_W_PORTRAIT
+    SQ_W, SQ_H = PAGE_W_PORTRAIT, PAGE_W_PORTRAIT
     
     # ── PDF Layout Profiles ───────────────────────────────────────────────────
     layout_style = meta.pdf_layout
@@ -454,10 +450,7 @@ def _build_pdf_for_language(
         page_color  = "#6b6b80"
         line_width  = 0.5
 
-    # ── Dynamic Margins ──
     MARGIN  = 0 if is_bleed else 14 * mm
-    BODY_W  = PAGE_W - 2 * MARGIN
-    FRAME_H = PAGE_H - 2 * MARGIN - (0 if is_bleed else 6 * mm)
 
     # ── Font selection ────────────────────────────────────────────────────────
     use_custom = _register_fonts()
@@ -507,32 +500,78 @@ def _build_pdf_for_language(
         spaceBefore=4, spaceAfter=2,
     )
 
-    # ── Document ──────────────────────────────────────────────────────────────
-    def draw_page_bg(canvas_obj, doc):
-        canvas_obj.saveState()
-        canvas_obj.setFillColor(colors.HexColor(bg_color))
-        canvas_obj.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
-        
-        if not is_bleed:
-            canvas_obj.setStrokeColor(colors.HexColor(line_color))
-            canvas_obj.setLineWidth(line_width)
-            canvas_obj.line(MARGIN, 8 * mm, PAGE_W - MARGIN, 8 * mm)
-            canvas_obj.setFont(f_title, 10)
-            canvas_obj.setFillColor(colors.HexColor(page_color))
-            canvas_obj.drawCentredString(PAGE_W / 2, 5 * mm, str(doc.page))
-            
-        canvas_obj.restoreState()
+    # ── Page Dimensions & Templates ───────────────────────────────────────────
+    pdf_page_size = getattr(meta, 'pdf_page_size', 'A4').lower()
+    is_auto = (pdf_page_size == 'a4_auto')
+    
+    if pdf_page_size == 'square':
+        pw_p, ph_p = SQ_W, SQ_H
+        pw_l, ph_l = SQ_W, SQ_H
+    elif pdf_page_size == 'a4_landscape':
+        pw_p, ph_p = PAGE_W_LANDSCAPE, PAGE_H_LANDSCAPE
+        pw_l, ph_l = PAGE_W_LANDSCAPE, PAGE_H_LANDSCAPE
+    else: 
+        # A4 or A4_Auto
+        pw_p, ph_p = PAGE_W_PORTRAIT, PAGE_H_PORTRAIT
+        # The trick to perfectly full-zoom landscape images in standard PDF viewers without bumping/re-scaling:
+        # Create a "short" page with the exact identical width of the Portrait Page, but scaled height.
+        pw_l, ph_l = PAGE_W_PORTRAIT, PAGE_W_PORTRAIT * (PAGE_W_PORTRAIT / PAGE_H_PORTRAIT)
 
-    frame_main = Frame(
-        MARGIN, MARGIN + (0 if is_bleed else 6 * mm),
-        BODY_W, FRAME_H,
-        id="main",
-        leftPadding=0, bottomPadding=0, rightPadding=0, topPadding=0
-    )
-    page_tpl = PageTemplate(id="main", frames=[frame_main], onPage=draw_page_bg)
+    # Dynamically generates a background-drawing hook baked with exact physical page bounds per-template
+    def make_draw_page_bg(pw, ph, bg_color, line_color, line_width, f_title, page_color, is_bleed):
+        def draw_page_bg(canvas_obj, doc):
+            canvas_obj.saveState()
+            canvas_obj.setFillColor(colors.HexColor(bg_color))
+            canvas_obj.rect(0, 0, pw, ph, fill=1, stroke=0)
+            if not is_bleed:
+                margin = 14 * mm
+                canvas_obj.setStrokeColor(colors.HexColor(line_color))
+                canvas_obj.setLineWidth(line_width)
+                canvas_obj.line(margin, 8 * mm, pw - margin, 8 * mm)
+                canvas_obj.setFont(f_title, 10)
+                canvas_obj.setFillColor(colors.HexColor(page_color))
+                canvas_obj.drawCentredString(pw / 2, 5 * mm, str(doc.page))
+            canvas_obj.restoreState()
+        return draw_page_bg
 
+    def create_page_template(name, pw, ph):
+        bw = pw - 2 * MARGIN
+        fh = ph - 2 * MARGIN - (0 if is_bleed else 6 * mm)
+        frame_main = Frame(
+            MARGIN, MARGIN + (0 if is_bleed else 6 * mm),
+            bw, fh, id=name, leftPadding=0, bottomPadding=0, rightPadding=0, topPadding=0
+        )
+        on_page_func = make_draw_page_bg(pw, ph, bg_color, line_color, line_width, f_title, page_color, is_bleed)
+        return PageTemplate(id=name, frames=[frame_main], onPage=on_page_func, pagesize=(pw, ph))
+
+    tpl_portrait = create_page_template("portrait", pw_p, ph_p)
+    tpl_landscape = create_page_template("landscape", pw_l, ph_l)
+    
+    # Analyze cover for doc init mapping
+    cover_img_path = None
+    if meta.cover_frame_id is not None:
+        cover_img_path = _image_path(job_id, meta.cover_frame_id)
+
+    is_upright_cover = False
+    is_square_cover = False
+    if cover_img_path:
+        try:
+            ir = ImageReader(str(cover_img_path))
+            orig_cw, orig_ch = ir.getSize()
+            is_upright_cover = orig_ch > orig_cw
+            is_square_cover = orig_ch == orig_cw
+        except Exception:
+            pass
+
+    if is_auto and cover_img_path and not is_upright_cover and not is_square_cover:
+        doc_pw, doc_ph = pw_l, ph_l
+        page_templates = [tpl_landscape, tpl_portrait]
+    else:
+        doc_pw, doc_ph = pw_p, ph_p
+        page_templates = [tpl_portrait, tpl_landscape]
+    
     doc = BaseDocTemplate(
-        str(out_path), pagesize=(PAGE_W, PAGE_H), pageTemplates=[page_tpl],
+        str(out_path), pagesize=(doc_pw, doc_ph), pageTemplates=page_templates,
         title=f"{meta.series_title} — {actual_seq_name}",
         author="SAGE AI", subject=lang.upper(),
         leftMargin=MARGIN, rightMargin=MARGIN,
@@ -542,29 +581,23 @@ def _build_pdf_for_language(
     story = []
 
     # ── Cover / Intro page ────────────────────────────────────────────────────
-    cover_img_path = None
-    if meta.cover_frame_id is not None:
-        cover_img_path = _image_path(job_id, meta.cover_frame_id)
-
-    is_upright_cover = False
-    is_square_cover = False
-
     if cover_img_path:
         try:
             img = RLImage(str(cover_img_path))
-            is_upright_cover = img.imageHeight > img.imageWidth
-            is_square_cover = img.imageHeight == img.imageWidth
+            
+            cur_body_w = doc_pw - 2 * MARGIN
+            cur_frame_h = doc_ph - 2 * MARGIN - (0 if is_bleed else 6 * mm)
 
             cover_pad  = 0 if is_bleed else 6
-            cover_max_w = BODY_W - (2 * cover_pad)
-            cover_max_h = FRAME_H - (2 * cover_pad)
+            cover_max_w = cur_body_w - (2 * cover_pad)
+            cover_max_h = cur_frame_h - (2 * cover_pad)
 
-            if is_upright_cover or getattr(meta, 'pdf_page_size', 'A4').lower() == 'square':
+            if is_upright_cover or pdf_page_size == 'square':
                 max_h = cover_max_h
             elif getattr(meta, 'pdf_full_landscape', False) and not is_upright_cover and not is_square_cover:
                 max_h = cover_max_h
             else:
-                max_h = PAGE_H * 0.42
+                max_h = doc_ph * 0.42
 
             scale = min(cover_max_w / img.imageWidth, max_h / img.imageHeight)
             img.drawWidth  = img.imageWidth  * scale
@@ -573,17 +606,17 @@ def _build_pdf_for_language(
             img.hAlign = 'CENTER'
             story.append(img)
 
-            if not is_upright_cover and getattr(meta, 'pdf_page_size', 'A4').lower() != 'square' and not getattr(meta, 'pdf_full_landscape', False):
+            if not is_upright_cover and pdf_page_size != 'square' and not getattr(meta, 'pdf_full_landscape', False):
                 story.append(Spacer(1, 8 * mm))
 
         except Exception as e:
             logger.warning("Cover image load failed for job %s: %s", job_id, e)
 
     # Only show the text intro if the cover isn't filling the page OR if there was no cover at all
-    # On Square format, cover fills the page always, so text is skipped.
-    if not ((is_upright_cover and meta.pdf_full_upright) or (not is_upright_cover and not is_square_cover and getattr(meta, 'pdf_full_landscape', False)) or getattr(meta, 'pdf_page_size', 'A4').lower() == 'square'):
+    if not ((is_upright_cover and meta.pdf_full_upright) or (not is_upright_cover and not is_square_cover and getattr(meta, 'pdf_full_landscape', False)) or pdf_page_size == 'square'):
         if is_bleed and ((is_upright_cover and meta.pdf_full_upright) or (not is_upright_cover and not is_square_cover and getattr(meta, 'pdf_full_landscape', False))):
-            # If it's bleed, an upright cover or full landscape cover filled the page, push text to next page
+            if is_auto:
+                story.append(NextPageTemplate("portrait"))
             story.append(PageBreak())
             
         story.append(Paragraph(meta.series_title, style_title))
@@ -596,15 +629,12 @@ def _build_pdf_for_language(
                 if line.strip():
                     story.append(Paragraph(line.strip(), style_desc))
 
-    story.append(PageBreak())
-
     # ── Frame pages ───────────────────────────────────────────────────────────
     for idx, frame in enumerate(meta.frames):
         img_path = _image_path(job_id, frame.frame_id)
         
         is_upright = False
         is_square = False
-        img_w = BODY_W # Default fallback
         
         if img_path:
             try:
@@ -615,11 +645,29 @@ def _build_pdf_for_language(
             except Exception:
                 pass
 
+        tpl_id = 'portrait'
+        cur_pw, cur_ph = pw_p, ph_p
+        
+        if is_auto and not is_upright and not is_square:
+            tpl_id = 'landscape'
+            cur_pw, cur_ph = pw_l, ph_l
+            
+        cur_body_w = cur_pw - 2 * MARGIN
+        cur_frame_h = cur_ph - 2 * MARGIN - (0 if is_bleed else 6 * mm)
+        
+        # Enforce page template orientation switch right before spawning the new frame page
+        if is_auto:
+            story.append(NextPageTemplate(tpl_id))
+            
+        story.append(PageBreak())
+
         if meta.pdf_disable_texts:
             texts = []
         else:
             texts = frame.overlay_texts.get(lang) or frame.overlay_texts.get("en") or []
             texts = [line for line in texts if line.strip()]
+
+        img_w = cur_body_w # Default fallback
 
         if img_path:
             try:
@@ -628,20 +676,20 @@ def _build_pdf_for_language(
                 else:
                     fuki_list = frame.fuki_texts.get(lang) or frame.fuki_texts.get("en") or []
                 
-                if (is_upright and meta.pdf_full_upright) or (not is_upright and not is_square and getattr(meta, 'pdf_full_landscape', False)) or getattr(meta, 'pdf_page_size', 'A4').lower() == 'square':
-                    fp_max_h = FRAME_H - 0.1 # Safely fill the frame exactly
+                if (is_upright and meta.pdf_full_upright) or (not is_upright and not is_square and getattr(meta, 'pdf_full_landscape', False)) or pdf_page_size == 'square':
+                    fp_max_h = cur_frame_h - 0.1 # Safely fill the frame exactly
                 else:
-                    fp_max_h = PAGE_H * 0.55
+                    fp_max_h = cur_ph * 0.55
                 
                 img_flowable = FrameImageWithFuki(
                     img_path=str(img_path), 
                     fuki_list=fuki_list, 
-                    body_w=BODY_W - 0.1, 
-                    default_max_h=PAGE_H * 0.55,
+                    body_w=cur_body_w - 0.1, 
+                    default_max_h=cur_ph * 0.55,
                     full_page_max_h=fp_max_h,
                     pdf_full_upright=meta.pdf_full_upright,
                     pdf_full_landscape=getattr(meta, 'pdf_full_landscape', False),
-                    pdf_page_size=getattr(meta, 'pdf_page_size', 'A4')
+                    pdf_page_size=pdf_page_size
                 )
                 img_w = img_flowable.width
                 story.append(img_flowable)
@@ -649,15 +697,15 @@ def _build_pdf_for_language(
                 logger.warning("Frame image load failed frame_id=%d: %s", frame.frame_id, e)
         
         if texts:
-            if (is_upright and meta.pdf_full_upright) or (not is_upright and not is_square and getattr(meta, 'pdf_full_landscape', False)) or getattr(meta, 'pdf_page_size', 'A4').lower() == 'square':
-                # Push text to the next page to leave the image alone on its page
+            if (is_upright and meta.pdf_full_upright) or (not is_upright and not is_square and getattr(meta, 'pdf_full_landscape', False)) or pdf_page_size == 'square':
+                if is_auto:
+                    story.append(NextPageTemplate("portrait"))
                 story.append(PageBreak())
             else:
-                # Keep text on the same page, under the image
                 story.append(Spacer(1, 10))
             
             # Calculate exactly how much margin is needed so the text is the exact same width as the image
-            extra_margin = max(0, (BODY_W - img_w) / 2.0)
+            extra_margin = max(0, (cur_body_w - img_w) / 2.0)
             
             dynamic_style = ParagraphStyle(
                 f"Overlay_{idx}",
@@ -669,10 +717,6 @@ def _build_pdf_for_language(
             for line in texts:
                 md_line = _markdown_to_reportlab(line.strip())
                 story.append(Paragraph(md_line, dynamic_style))
-
-        # Always ensure the NEXT frame (image + text) starts fresh at the top of a new page.
-        if idx < len(meta.frames) - 1:
-            story.append(PageBreak())
 
     doc.build(story)
 
