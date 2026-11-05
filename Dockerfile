@@ -13,7 +13,7 @@ WORKDIR /var/www/sage
 COPY . /var/www/sage
 
 # 1. Run Composer
-RUN composer install --no-interaction --optimize-autoloader
+RUN composer install --no-interaction --optimize-autoloader --no-scripts
 
 # 2. Setup a dummy .env.local for the build process so init_db.sh doesn't fail
 #RUN cp .env.example .env.local || true
