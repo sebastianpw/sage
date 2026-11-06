@@ -5,13 +5,17 @@ DB_DATADIR=$("$SCRIPT_DIR/db_name.sh" datadir)
 
 echo "🚀 Starting E2B custom boot sequence..."
 
-# 🟢 FIX PERMISSIONS (Prevents mkdir Permission Denied errors)
+# 🟢 FIX PERMISSIONS (Prevents mkdir & file_put_contents errors)
 echo "Fixing directory permissions..."
+mkdir -p /var/www/sage/logs
+mkdir -p /var/www/sage/syslogs
+mkdir -p /var/www/sage/public/media/magazines
+
 chmod -R 777 /var/www/sage/public || true
 chmod -R 777 /var/www/sage/token || true
+chmod -R 777 /var/www/sage/logs || true
+chmod -R 777 /var/www/sage/syslogs || true
 chown -R application:application /var/www/sage || chown -R www-data:www-data /var/www/sage || true
-mkdir -p /var/www/sage/public/media/magazines
-chmod -R 777 /var/www/sage/public/media || true
 
 # 1. Start MariaDB
 if [ "${DOCKERIZED:-0}" != "1" ]; then
