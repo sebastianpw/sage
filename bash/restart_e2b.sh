@@ -5,24 +5,30 @@ DB_DATADIR=$("$SCRIPT_DIR/db_name.sh" datadir)
 
 echo "🚀 Starting E2B custom boot sequence..."
 
-# 1. Start MariaDB (if not already running via systemd)
+# 🟢 FIX PERMISSIONS (Prevents mkdir Permission Denied errors)
+echo "Fixing directory permissions..."
+chmod -R 777 /var/www/sage/public || true
+chmod -R 777 /var/www/sage/token || true
+chown -R application:application /var/www/sage || chown -R www-data:www-data /var/www/sage || true
+mkdir -p /var/www/sage/public/media/magazines
+chmod -R 777 /var/www/sage/public/media || true
+
+# 1. Start MariaDB
 if [ "${DOCKERIZED:-0}" != "1" ]; then
     if ! pgrep -x mariadbd > /dev/null; then
         echo "Starting MariaDB..."
         mariadbd-safe --datadir="$DB_DATADIR" &
         sleep 5
-    else
-        echo "MariaDB is already running."
     fi
 fi
 
-# 2. Restart PHP Scheduler (Kill old, start new)
+# 2. Restart PHP Scheduler
 echo "Restarting SAGE Scheduler..."
 pkill -f "scheduler_start.php" || true
 sleep 1
 "$SCRIPT_DIR/scheduler_startup.sh" &
 
-# 3. Start Python API in background (run_server.sh handles killing the old one)
+# 3. Start Python API
 (
     cd "$SCRIPT_DIR/../pyapi" || exit
     bash run_server.sh >> "$SCRIPT_DIR/../syslogs/pyapi_boot.log" 2>&1
@@ -35,7 +41,5 @@ mkdir -p "$KAGGLE_DIR"
 chmod 777 "$KAGGLE_DIR"
 if [ ! -f "$KAGGLE_FILE" ]; then echo "{}" > "$KAGGLE_FILE"; fi
 chmod 777 "$KAGGLE_FILE"
-
-# 5. NGINX and PHP-FPM are intentionally skipped! Supervisord handles them.
 
 echo "✅ E2B custom boot sequence finished. Handing over to supervisord..."

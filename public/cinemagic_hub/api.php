@@ -68,10 +68,12 @@ try {
             http_response_code(403); die('Forbidden'); 
         }
         $abs = $publicPathAbs . '/' . $relPath;
-        if (!file_exists($abs) || !str_ends_with(strtolower($abs), '.pdf')) { 
+        $ext = strtolower(pathinfo($abs, PATHINFO_EXTENSION));
+        if (!file_exists($abs) || !in_array($ext, ['pdf', 'zip'])) { 
             http_response_code(404); die('Not found'); 
         }
-        header('Content-Type: application/pdf');
+        $mime = ($ext === 'zip') ? 'application/zip' : 'application/pdf';
+        header('Content-Type: ' . $mime);
         header('Content-Disposition: attachment; filename="' . basename($abs) . '"');
         header('Content-Length: ' . filesize($abs));
         readfile($abs);
@@ -393,7 +395,7 @@ try {
         case 'get_pdf_jobs':
             $seriesId = (int)($_POST['series_id'] ?? 0);
             $stmt = $pdo->prepare(
-                "SELECT id, sequence_id, languages, status, error_message, created_at, updated_at
+                "SELECT id, series_id, sequence_id, languages, status, result_zip, error_message, pyapi_job_id, pyapi_url, created_at, updated_at
                    FROM magazine_pdf_jobs
                   WHERE series_id = :sid
                   ORDER BY created_at DESC
@@ -412,5 +414,3 @@ try {
     if ($action === 'export_series_zip' || in_array($action, $previewActions)) die($e->getMessage());
     echo json_encode(['success' => false, 'error' => $e->getMessage()]);
 }
-
-

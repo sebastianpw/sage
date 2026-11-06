@@ -574,9 +574,10 @@ input:checked + .toggle-slider:before { background: var(--amber); transform: tra
                     <div class="form-group">
                         <label class="form-label">PyAPI Base URL</label>
                         <input type="text" class="form-control" id="pdf-pyapi-url"
-                               placeholder="http://192.168.x.x:8009">
+                               value="http://localhost:8009"
+                               placeholder="http://localhost:8009">
                         <small style="color:var(--text-muted);font-size:11px;margin-top:2px;">
-                            Persisted in localStorage. Use phone (8009) or tablet for heavier jobs.
+                            Persisted in localStorage. Default is local port 8009.
                         </small>
                     </div>
 
@@ -693,7 +694,6 @@ input:checked + .toggle-slider:before { background: var(--amber); transform: tra
     </div>
 </div>
 
-
 <!-- Episode Meta Bottom Sheet Modal -->
 <div class="sb-picker-backdrop" id="epMetaBackdrop" onmousedown="if(event.target===this) closeEpisodeMetaModal()">
     <div class="sb-picker-sheet" style="max-width:600px; margin:auto; padding-bottom: 20px;">
@@ -766,11 +766,18 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshCurrent();
     initLangs();
     
-    const savedPy = localStorage.getItem('sage_pyapi_url');
-    if (savedPy) document.getElementById('pdf-pyapi-url').value = savedPy;
-    document.getElementById('pdf-pyapi-url').addEventListener('change', function() {
-        localStorage.setItem('sage_pyapi_url', this.value.trim());
-    });
+    let savedPy = localStorage.getItem('sage_pyapi_url');
+    if (!savedPy) {
+        savedPy = 'http://localhost:8009';
+        localStorage.setItem('sage_pyapi_url', savedPy);
+    }
+    const pyInput = document.getElementById('pdf-pyapi-url');
+    if (pyInput) {
+        pyInput.value = savedPy;
+        pyInput.addEventListener('change', function() {
+            localStorage.setItem('sage_pyapi_url', this.value.trim() || 'http://localhost:8009');
+        });
+    }
     
     const savedBase = localStorage.getItem('sage_sitemap_base');
     if (savedBase) document.getElementById('sitemap-base-url').value = savedBase;
@@ -1225,10 +1232,13 @@ async function loadGallerySeriesSelect() {
         sel.innerHTML = '<option value="">— No series found —</option>';
         return;
     }
-    const currentVal = sel.value;
+    const currentVal = sel.value || (pdfExport.seriesId ? String(pdfExport.seriesId) : '');
     sel.innerHTML = '<option value="">— Select a series —</option>' +
         data.series.map(s => `<option value="${s.id}">${escHtml(s.title)}</option>`).join('');
-    if (currentVal) sel.value = currentVal;
+    if (currentVal) {
+        sel.value = currentVal;
+        loadGalleryPdfs();
+    }
 }
 
 async function loadGalleryPdfs() {
@@ -1535,8 +1545,7 @@ async function loadPdfEpisodeList(seriesId) {
 }
 
 async function submitPdfExportJob() {
-    const pyapiUrl = document.getElementById('pdf-pyapi-url').value.trim().replace(/\/$/, '');
-    if (!pyapiUrl) return toast('Enter PyAPI base URL first', 'error');
+    const pyapiUrl = document.getElementById('pdf-pyapi-url').value.trim().replace(/\/$/, '') || 'http://localhost:8009';
 
     const seqId = parseInt(document.getElementById('pdf-sequence-select').value);
     if (!seqId) return toast('Select an episode first', 'error');
@@ -1620,25 +1629,64 @@ async function refreshPdfJobs() {
     }
 
     container.innerHTML = data.jobs.map(job => {
-        const pyJobId = Object.entries(pdfExport.activeJobs).find(([, v]) => v.job_db_id == job.id)?.[0];
-        const isActive = !!pyJobId;
-        const isReady  = isActive && pdfExport.activeJobs[pyJobId]?.ready;
+        const pyJobId = job.pyapi_job_id || Object.entries(pdfExport.activeJobs).find(([, v]) => v.job_db_id == job.id)?.[0];
+        
+        // Auto-resume polling if page was refreshed or left while job was pending/processing
+        if ((job.status === 'pending' || job.status === 'processing') && job.pyapi_job_id) {
+            const pyapiUrl = job.pyapi_url || document.getElementById('pdf-pyapi-url').value.trim() || 'http://localhost:8009';
+            if (!pdfExport.activeJobs[job.pyapi_job_id]) {
+                pdfExport.activeJobs[job.pyapi_job_id] = {
+                    job_db_id: job.id,
+                    pyapi_url: pyapiUrl,
+                    ready: false
+                };
+                schedulePdfPoll(job.pyapi_job_id);
+            }
+        }
 
-        return `<div class="pdf-job-row">
-            <div style="flex:1;min-width:0;">
-                <div style="font-size:12px;font-weight:600;color:var(--text-bright);
-                            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                    Seq #${job.sequence_id} &middot; ${escHtml(job.languages)}
+        const isActive = !!pyJobId && (job.status === 'pending' || job.status === 'processing');
+
+        // Render download buttons when job is done
+        let downloadButtons = '';
+        if (job.status === 'done') {
+            const langs = (job.languages || 'en').split(',').map(l => l.trim()).filter(Boolean);
+            const buttons = langs.map(l => {
+                const pdfRel = `media/magazines/series_${job.series_id}/magazine_seq${job.sequence_id}_${l}.pdf`;
+                return `<a class="btn-primary" style="padding:4px 10px;font-size:10px;text-decoration:none;" 
+                           href="api.php?action=download_pdf&path=${encodeURIComponent(pdfRel)}" 
+                           download>PDF (${escHtml(l.toUpperCase())})</a>`;
+            }).join(' ');
+
+            const zipRel = job.result_zip ? `media/magazines/series_${job.series_id}/magazine_seq${job.sequence_id}_bundle.zip` : '';
+            const zipBtn = zipRel ? `<a class="btn-secondary" style="padding:4px 10px;font-size:10px;text-decoration:none;" 
+                                        href="api.php?action=download_pdf&path=${encodeURIComponent(zipRel)}" 
+                                        download>ZIP</a>` : '';
+
+            downloadButtons = `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+                ${buttons} ${zipBtn}
+            </div>`;
+        }
+
+        return `<div class="pdf-job-row" style="flex-direction:column;align-items:stretch;gap:8px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:12px;font-weight:600;color:var(--text-bright);
+                                white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                        Seq #${job.sequence_id} &middot; ${escHtml(job.languages)}
+                    </div>
+                    <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${escHtml(job.created_at)}</div>
+                    ${job.error_message
+                        ? `<div style="font-size:10px;color:var(--red);margin-top:2px;">${escHtml(job.error_message)}</div>`
+                        : ''}
                 </div>
-                <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${escHtml(job.created_at)}</div>
-                ${job.error_message
-                    ? `<div style="font-size:10px;color:var(--red);margin-top:2px;">${escHtml(job.error_message)}</div>`
-                    : ''}
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span class="pdf-status-badge ${job.status}">${job.status.toUpperCase()}</span>
+                    ${isActive
+                        ? `<div class="spinner" style="width:16px;height:16px;margin:0;"></div>`
+                        : ''}
+                </div>
             </div>
-            <span class="pdf-status-badge ${job.status}">${job.status.toUpperCase()}</span>
-            ${((job.status === 'processing' || job.status === 'pending') && isActive)
-                ? `<div class="spinner" style="width:16px;height:16px;margin:0;"></div>`
-                : ''}
+            ${downloadButtons}
         </div>`;
     }).join('');
 }
@@ -1783,7 +1831,6 @@ async function saveCinemagicCover(seriesId, cmId, coverUrl) {
     const res = await api({ action: 'save_cinemagic_cover', series_id: seriesId, cinemagic_id: cmId, cover_image_url: coverUrl });
     if (res.success) {
         toast('Cinemagic Cover saved successfully!', 'success');
-        // Silent reload of the seasons data to lock it in
         await reloadSeasonsData(seriesId, document.getElementById('has-seasons-toggle').checked);
     } else {
         toast(res.error || 'Failed to save cover', 'error');
@@ -1824,5 +1871,3 @@ function fmtBytes(b) {
 
 </body>
 </html>
-
-

@@ -97,6 +97,11 @@ class CinemagicHubManager
                 ADD COLUMN IF NOT EXISTS `season_id` INT(11) DEFAULT NULL,
                 ADD COLUMN IF NOT EXISTS `cover_image_url` VARCHAR(512) DEFAULT NULL;
             ");
+            $this->pdo->exec("
+                ALTER TABLE `magazine_pdf_jobs`
+                ADD COLUMN IF NOT EXISTS `pyapi_job_id` VARCHAR(64) DEFAULT NULL,
+                ADD COLUMN IF NOT EXISTS `pyapi_url` VARCHAR(255) DEFAULT NULL;
+            ");
         } catch (\Exception $e) {}
     }
 
@@ -585,9 +590,6 @@ class CinemagicHubManager
         $xml .= '</urlset>';
         return $xml;
     }
-    
-    
-    
 
     // ── Asset / Frame Picker ──────────────────────────────────────────────────────
 
@@ -692,7 +694,7 @@ class CinemagicHubManager
     private function resolveImageUrl(
         string $filename,
         string $urlPrefix = '',
-        bool $makeLocalRelative = false,
+        bool   $makeLocalRelative = false,
         string $repoAssetPath = ''
     ): string {
         if ($filename === '') return '';
@@ -1071,7 +1073,6 @@ class CinemagicHubManager
         ];
     }
 
-
     public function renderEpisodeHtml(array $epData): string
     {
         $title       = htmlspecialchars($epData['name']);
@@ -1287,7 +1288,6 @@ HTML;
             }
         }
 
-
         $socialLinksHtml = '';
         if (!empty($epData['social_links'])) {
             $icons = [
@@ -1489,9 +1489,6 @@ window.addEventListener('resize', () => {
 </html>
 HTML;
     }
-
-
-
 
     public function renderSeriesIndexHtml(
         int    $seriesId,
@@ -1898,7 +1895,6 @@ HTML;
 HTML;
     }
 
-
     // ── Rollout and Export Zip Generation ─────────────────────────────────────────
 
     public function exportSeriesZip(int $seriesId, string $publicPathAbs, bool $excludeAssets = false): ?string
@@ -1925,9 +1921,7 @@ HTML;
         $seasonFilter = $hasSeasons ? " AND sc.season_id IS NOT NULL " : "";
 
         $epStmt = $this->pdo->prepare("
-            
             SELECT ns.id, ns.name, c.name as season_name, sc.cover_image_url AS cm_cover_image_url, c.id AS cinemagic_id
-
             FROM cinemagic_series_2_cinemagics sc
             JOIN cinemagics_2_sequences cs ON cs.cinemagic_id = sc.cinemagic_id
             JOIN narrative_sequences ns ON ns.id = cs.sequence_id
@@ -2060,7 +2054,6 @@ HTML;
 
         $epStmt = $this->pdo->prepare("
             SELECT ns.id, ns.name, c.name as season_name, sc.cover_image_url AS cm_cover_image_url, c.id AS cinemagic_id
-            
             FROM cinemagic_series_2_cinemagics sc
             JOIN cinemagics_2_sequences cs ON cs.cinemagic_id = sc.cinemagic_id
             JOIN narrative_sequences ns ON ns.id = cs.sequence_id
@@ -2185,8 +2178,6 @@ HTML;
 
         return ['success' => true];
     }
-    
-    
 
     public function getPdfExportData(int $seriesId, int $sequenceId): array
     {
@@ -2377,7 +2368,6 @@ HTML;
             if (!empty(trim($row['description_overlay']))) $locDescs[$l] = trim($row['description_overlay']);
         }
 
-        
         $finalSeqName = $locNames['en'] ?? $seq['name'];
         $finalSeqDesc = $locDescs['en'] ?? $seq['description'];
 
@@ -2405,9 +2395,8 @@ HTML;
         ];
     }
 
-
     /**
-     * Replaces JS client logic: packages local files and JSON into a robust PHP cURL request directly to PyAPI.
+     * Packages local files and JSON into a robust PHP cURL request directly to PyAPI.
      */
     public function submitPdfJobToPyAPI(int $seriesId, int $sequenceId, array $langs, string $pyapiUrl, string $publicPathAbs): array
     {
@@ -2423,7 +2412,6 @@ HTML;
             return ['success' => false, 'error' => 'Series not found'];
         }
 
-
         // Pydantic strictly checks the schema, ensure we strip internal PHP markers like 'filename' and 'image_url'
         $safeFrames = [];
         foreach ($exportData['frames'] as $f) {
@@ -2436,8 +2424,7 @@ HTML;
             ];
         }
         
-        
-       $jobMeta = [
+        $jobMeta = [
             'series_title'             => $series['title'],
             'sequence_name'            => $exportData['sequence_name'],
             'sequence_id'              => $sequenceId,
@@ -2460,7 +2447,6 @@ HTML;
             'pdf_page_size'            => $series['pdf_page_size'] ?? 'A4'
         ];
 
-        
         // Manually build raw multipart/form-data to enforce the exact field name "images" for Python List[UploadFile]
         $boundary = "----SAGEFormBoundary" . bin2hex(random_bytes(16));
         $body = "";
@@ -2542,10 +2528,10 @@ HTML;
         }
 
         $stmt = $this->pdo->prepare(
-            "INSERT INTO magazine_pdf_jobs (series_id, sequence_id, languages, status)
-             VALUES (?, ?, ?, 'pending')"
+            "INSERT INTO magazine_pdf_jobs (series_id, sequence_id, languages, status, pyapi_job_id, pyapi_url)
+             VALUES (?, ?, ?, 'pending', ?, ?)"
         );
-        $stmt->execute([$seriesId, $sequenceId, implode(',', $langs)]);
+        $stmt->execute([$seriesId, $sequenceId, implode(',', $langs), $pyData['job_id'], $pyapiUrl]);
         $jobDbId = (int)$this->pdo->lastInsertId();
 
         return [
@@ -2566,21 +2552,39 @@ HTML;
         $job = $stmt->fetch(\PDO::FETCH_ASSOC);
         if (!$job) return;
 
-        $seriesId = $job['series_id'];
+        $seriesId = (int)$job['series_id'];
+        $seqId    = (int)$job['sequence_id'];
 
         $zipUrl = rtrim($pyapiUrl, '/') . "/magazine-pdf/download/{$pyJobId}";
         
         $ch = curl_init($zipUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
         $zipData = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr  = curl_error($ch);
         curl_close($ch);
 
-        if (!$zipData || $httpCode >= 400) return;
+        if (!$zipData || $httpCode >= 400) {
+            $errDetail = "Failed to download PDF zip from PyAPI (HTTP {$httpCode}: {$curlErr})";
+            error_log("fetchAndStorePdfJob: " . $errDetail);
+            $this->pdo->prepare("UPDATE magazine_pdf_jobs SET error_message = ? WHERE id = ?")
+                ->execute([$errDetail, $jobDbId]);
+            return;
+        }
 
-        $targetDir = rtrim($publicPathAbs, '/') . "/media/magazines/series_{$seriesId}";
-        if (!is_dir($targetDir)) @mkdir($targetDir, 0777, true);
+        $magBaseDir = rtrim($publicPathAbs, '/') . "/media/magazines";
+        if (!is_dir($magBaseDir)) {
+            @mkdir($magBaseDir, 0777, true);
+            @chmod($magBaseDir, 0777);
+        }
+
+        $targetDir = $magBaseDir . "/series_{$seriesId}";
+        if (!is_dir($targetDir)) {
+            @mkdir($targetDir, 0777, true);
+            @chmod($targetDir, 0777);
+        }
 
         $tempZip = sys_get_temp_dir() . "/mag_tmp_{$pyJobId}.zip";
         file_put_contents($tempZip, $zipData);
@@ -2589,6 +2593,21 @@ HTML;
         if ($zip->open($tempZip) === true) {
             $zip->extractTo($targetDir);
             $zip->close();
+
+            foreach (glob($targetDir . '/*.pdf') ?: [] as $pdfFile) {
+                @chmod($pdfFile, 0666);
+            }
+
+            $finalZipRel = "media/magazines/series_{$seriesId}/magazine_seq{$seqId}_bundle.zip";
+            @copy($tempZip, rtrim($publicPathAbs, '/') . '/' . $finalZipRel);
+            @chmod(rtrim($publicPathAbs, '/') . '/' . $finalZipRel, 0666);
+
+            $stmtUp = $this->pdo->prepare("UPDATE magazine_pdf_jobs SET result_zip = ?, status = 'done', error_message = NULL WHERE id = ?");
+            $stmtUp->execute([$finalZipRel, $jobDbId]);
+        } else {
+            error_log("fetchAndStorePdfJob: Failed to extract zip for job {$jobDbId}");
+            $this->pdo->prepare("UPDATE magazine_pdf_jobs SET error_message = 'Failed to extract PDF ZIP archive' WHERE id = ?")
+                ->execute([$jobDbId]);
         }
         @unlink($tempZip);
 
@@ -2597,6 +2616,7 @@ HTML;
         $ch = curl_init($cleanupUrl);
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "DELETE");
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         curl_exec($ch);
         curl_close($ch);
     }
